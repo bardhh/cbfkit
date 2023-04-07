@@ -1,9 +1,9 @@
-import numpy as np
-import matplotlib.pyplot as plt
 import control as control
 import cvxopt as cvxopt
-from matplotlib.patches import Ellipse
+import matplotlib.pyplot as plt
+import numpy as np
 import numpy.random as rnd
+from matplotlib.patches import Ellipse
 
 
 def nimble_ant_c(x, params):
@@ -43,11 +43,7 @@ def nimble_ant_c(x, params):
         g2 = 2 * (x[1] - curr_bs[1]) / curr_bs[3] ** 2  # (2*x_1 - cy)/rad_y^2
 
         # ((2*x_0 - cx)/rad_x)^2 + ((2*x_1 - cy)/rad_y)^2 - 1
-        g3 = (
-            ((x[0] - curr_bs[0]) / curr_bs[2]) ** 2
-            + ((x[1] - curr_bs[1]) / curr_bs[3]) ** 2
-            - 1
-        )
+        g3 = ((x[0] - curr_bs[0]) / curr_bs[2]) ** 2 + ((x[1] - curr_bs[1]) / curr_bs[3]) ** 2 - 1
 
         G.append([-g1, -g2])
         h.append([g3])

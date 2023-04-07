@@ -3,9 +3,7 @@ import platform
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FuncAnimation, PillowWriter
-from matplotlib.patches import Ellipse
-from sympy import Matrix, Mul, Symbol, cos, diff, exp, lambdify, log, sin, sqrt, srepr, symbols
+from sympy import Matrix, cos, sin, symbols
 
 from cbfkit.tutorial import cbf as cbf
 from cbfkit.tutorial import cbf_utils, sys_and_ctrl
