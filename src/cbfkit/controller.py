@@ -1,12 +1,13 @@
 # Bardh Hoxha, Tom Yamaguchi
 
 
-from gazebo_msgs.srv import GetWorldProperties, GetModelState, GetModelStateRequest
+import math
+
+import cvxopt as cvxopt
+import matplotlib.pyplot as plt
 import numpy as np
 import rospy
-import matplotlib.pyplot as plt
-import cvxopt as cvxopt
-import math
+from gazebo_msgs.srv import GetModelState, GetModelStateRequest, GetWorldProperties
 
 # def print_cli(x_min, x_max, value):
 #     # calculate total length of CLI based on the range between x_min and x_max
@@ -217,9 +218,9 @@ class Controller:
 
         # Adding map constraints
         for j in range(len(my_map.constraint.h)):
-            A[
-                len(unsafe_list) + 2 * len(u_s) + j, np.arange(len(u_s))
-            ] = my_map.constraint.LHS[j](x_r)[0]
+            A[len(unsafe_list) + 2 * len(u_s) + j, np.arange(len(u_s))] = my_map.constraint.LHS[j](
+                x_r
+            )[0]
             A[len(unsafe_list) + 2 * len(u_s) + j, len(u_s) + len(unsafe_list) + j] = -1
             b[len(unsafe_list) + 2 * len(u_s) + j] = my_map.constraint.RHS[j](x_r)
 
@@ -231,9 +232,7 @@ class Controller:
         for j in range(len(unsafe_list)):
             # ff[len(u_s)+j] = 3      # To reward not using the slack variables when not required
             if unsafe_list[j].constraint.type is "exp":
-                H[
-                    len(u_s) + j, len(u_s) + j
-                ] = 20  # Use for exponential barrier functions
+                H[len(u_s) + j, len(u_s) + j] = 20  # Use for exponential barrier functions
             else:
                 H[
                     len(u_s) + j, len(u_s) + j
@@ -319,9 +318,9 @@ class Controller:
 
         # Adding map constraints
         for j in range(len(my_map.constraint.h)):
-            A[
-                len(unsafe_list) + 2 * len(u_s) + j, np.arange(len(u_s))
-            ] = my_map.constraint.LHS[j](x_r)[0]
+            A[len(unsafe_list) + 2 * len(u_s) + j, np.arange(len(u_s))] = my_map.constraint.LHS[j](
+                x_r
+            )[0]
             A[len(unsafe_list) + 2 * len(u_s) + j, len(u_s) + len(unsafe_list) + j] = -1
             b[len(unsafe_list) + 2 * len(u_s) + j] = my_map.constraint.RHS[j](x_r)
 
@@ -334,9 +333,7 @@ class Controller:
         A[len(unsafe_list) + 2 * len(u_s) + len(my_map.constraint.h), -1] = -1
         b[len(unsafe_list) + 2 * len(u_s) + len(my_map.constraint.h)] = 0
         A[len(unsafe_list) + 2 * len(u_s) + len(my_map.constraint.h) + 1, -1] = 1
-        b[len(unsafe_list) + 2 * len(u_s) + len(my_map.constraint.h) + 1] = (
-            np.finfo(float).eps + 1
-        )
+        b[len(unsafe_list) + 2 * len(u_s) + len(my_map.constraint.h) + 1] = np.finfo(float).eps + 1
 
         H = np.zeros((num_qp_var, num_qp_var))
         H[0, 0] = 0.1
@@ -346,9 +343,7 @@ class Controller:
         for j in range(len(unsafe_list)):
             # ff[len(u_s)+j] = 3      # To reward not using the slack variables when not required
             if unsafe_list[j].constraint.type is "exp":
-                H[
-                    len(u_s) + j, len(u_s) + j
-                ] = 20  # Use for exponential barrier functions
+                H[len(u_s) + j, len(u_s) + j] = 20  # Use for exponential barrier functions
             else:
                 H[
                     len(u_s) + j, len(u_s) + j

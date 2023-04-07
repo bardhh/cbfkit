@@ -1,7 +1,8 @@
 # Bardh Hoxha, Tom Yamaguchi
 from typing import Callable
-from sympy import symbols, Matrix, sin, cos, lambdify, exp, sqrt, log, diff
+
 import numpy as np
+from sympy import Matrix, cos, diff, exp, lambdify, log, sin, sqrt, symbols
 
 
 class ConstraintFunction(object):
@@ -138,9 +139,7 @@ class ZeroingCbf(Cbf):
             [ego.states, agent.states, agent.inputs],
             (cf_d.T * Matrix([ego.f, agent.f]))[0],
         )
-        self._lgb = lambdify(
-            [ego.states, agent.states], Matrix(cf_d[: ego.nDim]).T * ego.g
-        )
+        self._lgb = lambdify([ego.states, agent.states], Matrix(cf_d[: ego.nDim]).T * ego.g)
 
     def _compute_lhs_rhs(self, ego, agent):
         """
@@ -192,9 +191,7 @@ class StochasticCbf(Cbf):
             [ego.states, agent.states, agent.inputs],
             (cf_d.T * Matrix([ego.f, agent.f]))[0],
         )
-        self._lgb = lambdify(
-            [ego.states, agent.states], Matrix(cf_d[: ego.nDim]).T * ego.g
-        )
+        self._lgb = lambdify([ego.states, agent.states], Matrix(cf_d[: ego.nDim]).T * ego.g)
 
     def _compute_lhs_rhs(self, ego, agent):
         """
@@ -220,9 +217,7 @@ class StochasticCbf(Cbf):
             + (cf_d.T * Matrix([ego.f, agent.f]))[0]
             + 0.5
             * np.matrix.trace(
-                Matrix([ego.sigma, agent.sigma]).T
-                @ cf_2d
-                @ Matrix([ego.sigma, agent.sigma])
+                Matrix([ego.sigma, agent.sigma]).T @ cf_2d @ Matrix([ego.sigma, agent.sigma])
             ),
         )
         self.constraint.LHS = lambdify(
@@ -259,9 +254,7 @@ class RiskAwareCbf(Cbf):
             [ego.states, agent.states, agent.inputs],
             (cf_d.T * Matrix([ego.f, agent.f]))[0],
         )
-        self._lgb = lambdify(
-            [ego.states, agent.states], Matrix(cf_d[: ego.nDim]).T * ego.g
-        )
+        self._lgb = lambdify([ego.states, agent.states], Matrix(cf_d[: ego.nDim]).T * ego.g)
 
     def _compute_lhs_rhs(self, ego, agent):
         """
@@ -280,8 +273,7 @@ class RiskAwareCbf(Cbf):
         # account for actions of other agents
         self.constraint.RHS = lambdify(
             [ego.states, agent.states, agent.inputs],
-            -self.alpha * self.integrated_barrier_value
-            + (cf_d.T * Matrix([ego.f, agent.f]))[0],
+            -self.alpha * self.integrated_barrier_value + (cf_d.T * Matrix([ego.f, agent.f]))[0],
         )
         self.constraint.LHS = lambdify(
             [ego.states, agent.states], (-Matrix(cf_d[: ego.nDim]).T * ego.g)
@@ -333,6 +325,4 @@ class GoalLyap(object):
         self.set = goal_set_func
         self.goal_center = goal_center
         GoalSym = goal_set_func(ego.states)
-        self.Lyap = lambdify(
-            [ego.states, ego.inputs], GoalSym.diff(ego.states).T * ego.dx
-        )
+        self.Lyap = lambdify([ego.states, ego.inputs], GoalSym.diff(ego.states).T * ego.dx)

@@ -1,13 +1,15 @@
-from sympy import symbols
-import numpy as np
-import matplotlib.pyplot as plt
+import platform
+
 import control as control
-from cbfkit.tutorial import cbf as cbf, cbf_utils, sys_and_ctrl
 import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Ellipse
-from sympy import symbols, Matrix, sin, cos, lambdify, exp, sqrt, log, diff, Mul, srepr
-import platform
+from sympy import Matrix, Mul, cos, diff, exp, lambdify, log, sin, sqrt, srepr, symbols
+
+from cbfkit.tutorial import cbf as cbf
+from cbfkit.tutorial import cbf_utils, sys_and_ctrl
 
 # import conditional if system is mac m1
 if platform.system() == "Darwin" and platform.machine() == "arm64":
@@ -96,13 +98,9 @@ plt.gca().spines["right"].set_visible(False)
 (line1,) = ax.plot([], [], lw=2)
 (line2,) = ax.plot([], [], lw=2)
 
-ell = Ellipse(
-    (x[2][i - 1], x[3][i - 1]), bad_sets[0][0], bad_sets[0][1], color="g", alpha=0.3
-)
+ell = Ellipse((x[2][i - 1], x[3][i - 1]), bad_sets[0][0], bad_sets[0][1], color="g", alpha=0.3)
 
-goal_square = plt.Rectangle(
-    x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5
-)
+goal_square = plt.Rectangle(x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5)
 
 
 def init():

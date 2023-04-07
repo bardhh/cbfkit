@@ -1,4 +1,4 @@
-from sympy import symbols, Matrix
+from sympy import Matrix, symbols
 
 
 def strList2SympyMatrix(str_list):

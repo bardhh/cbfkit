@@ -1,13 +1,15 @@
-from sympy import symbols
-import numpy as np
-import matplotlib.pyplot as plt
+import platform
+
 import control as control
-from cbfkit.tutorial import cbf as cbf, cbf_utils, sys_and_ctrl
 import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Ellipse
-from sympy import symbols, Matrix, sin, cos, lambdify, exp, sqrt, log, diff, Mul, srepr
-import platform
+from sympy import Matrix, Mul, cos, diff, exp, lambdify, log, sin, sqrt, srepr, symbols
+
+from cbfkit.tutorial import cbf as cbf
+from cbfkit.tutorial import cbf_utils, sys_and_ctrl
 
 # import conditional if system is mac m1
 if platform.system() == "Darwin" and platform.machine() == "arm64":
@@ -113,9 +115,7 @@ for i in range(0, nrObs):
         )
     )
 
-goal_square = plt.Rectangle(
-    x_goal - np.array([0.5, 0.5]), 0.5, 0.5, color="r", alpha=0.5
-)
+goal_square = plt.Rectangle(x_goal - np.array([0.5, 0.5]), 0.5, 0.5, color="r", alpha=0.5)
 
 time_text = ax.text(0.02, 0.95, "", transform=ax.transAxes)
 
