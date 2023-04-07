@@ -1,2 +1,2 @@
 # cbfkit
-Toolbox for Robotics Control
+Toolbox for CBF of Robotic Systems
