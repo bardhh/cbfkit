@@ -1,20 +1,13 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
-from numpy.lib.function_base import append
-import numpy.random as rnd
-from sympy import symbols, Matrix, sin, cos, lambdify, exp, sqrt, log, diff, Mul, srepr
-from sympy.diffgeom import LieDerivative
-from sympy.diffgeom.rn import R2_r
 import math
 import random
+
 import matplotlib.animation as animation
-from matplotlib.patches import Ellipse
 import matplotlib.pyplot as plt
+import numpy as np
+from sympy import Matrix, cos, sin, symbols
 
 
 def n_omni_robots_f(t, x, u, params):
-
     # f = np.zeros((3, 3))
     f = []
     sum_1 = 0
@@ -125,9 +118,7 @@ bad_sets = example(3)
 # Parameters for reference controller
 ctrl_param = [5]
 
-xr0, xr1, xr2, cx, cy, rad_x, rad_y, xr2_dot, u = symbols(
-    "xr0 xr1 xr2 cx cy rad_x rad_y xr2_dot u"
-)
+xr0, xr1, xr2, cx, cy, rad_x, rad_y, xr2_dot, u = symbols("xr0 xr1 xr2 cx cy rad_x rad_y xr2_dot u")
 
 B = ((xr0 - cx) / rad_x) ** 2 + ((xr1 - cy) / rad_y) ** 2 - 1
 # B = (xr0 - cx)**2 + (xr1 - cx)**2 - 1
@@ -185,7 +176,6 @@ x_0 = np.vstack([x1, x2, x3, x4])
 
 for idxi, i in enumerate(xx):
     for idxk, k in enumerate(yy):
-
         print(round(i, 2), "\t", round(k, 2), "\t... ", end="", flush=True)
         # x_0 = np.array([i, k, 0])
 
@@ -228,6 +218,7 @@ plt.gca().spines["right"].set_visible(False)
 (line4,) = ax.plot([], [], lw=2)
 
 lines = [line1, line2, line3, line4]
+
 
 # animate path of two robots
 def animate(i):

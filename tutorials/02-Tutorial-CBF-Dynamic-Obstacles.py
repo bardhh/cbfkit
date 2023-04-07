@@ -4,12 +4,11 @@ import control as control
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Ellipse
-from sympy import Matrix, Mul, cos, diff, exp, lambdify, log, sin, sqrt, srepr, symbols
+from sympy import Matrix, symbols
 
 from cbfkit.tutorial import cbf as cbf
-from cbfkit.tutorial import cbf_utils, sys_and_ctrl
+from cbfkit.tutorial import sys_and_ctrl
 
 # import conditional if system is mac m1
 if platform.system() == "Darwin" and platform.machine() == "arm64":

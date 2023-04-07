@@ -1,15 +1,15 @@
-from sympy import symbols
-import numpy as np
-import matplotlib.pyplot as plt
+import platform
+
 import control as control
-from examples.tutorials.cbflib import tut_scbf, sys_and_ctrl
 
 # from cbfkit.examples.tutorials.cbflib import tut_scbf, sys_and_ctrl
 import matplotlib.animation as animation
-from matplotlib.animation import FuncAnimation, PillowWriter
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.patches import Ellipse
-from sympy import symbols, Matrix, sin, cos, lambdify, exp, sqrt, log, diff, Mul, srepr
-import platform
+from sympy import Matrix, cos, exp, sin, symbols
+
+from examples.tutorials.cbflib import sys_and_ctrl, tut_scbf
 
 # import conditional if system is mac m1
 if platform.system() == "Darwin" and platform.machine() == "arm64":
@@ -150,17 +150,11 @@ xo_sim[:, 0] = xo_0
 for i in range(len(T) - 1):
     xr_sim[:, i + 1] = (
         xr_sim[:, i]
-        + dt
-        * (
-            np.array(
-                sys_and_ctrl.approx_unicycle_agent_f(T[i], xr_sim[:, i], [], params)
-            )
-        ).T
+        + dt * (np.array(sys_and_ctrl.approx_unicycle_agent_f(T[i], xr_sim[:, i], [], params))).T
     )
     xo_sim[:, i + 1] = (
         xo_sim[:, i]
-        + dt
-        * (np.array(sys_and_ctrl.simple_agent_left_f(T[i], xo_sim[:, i], [], params))).T
+        + dt * (np.array(sys_and_ctrl.simple_agent_left_f(T[i], xo_sim[:, i], [], params))).T
     )
 
 print("\n*Simulation Done. See plot for animation...")
@@ -175,9 +169,7 @@ plt.gca().spines["right"].set_visible(False)
 
 ell = Ellipse((xo_sim[0][0], xo_sim[0][0]), 1, 1, color="g", alpha=0.3)
 
-goal_square = plt.Rectangle(
-    x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5
-)
+goal_square = plt.Rectangle(x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5)
 
 
 def init():
