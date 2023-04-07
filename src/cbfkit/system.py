@@ -1,12 +1,10 @@
 import numpy as np
 import rospy
-from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Vector3
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist
 
 # ROS others
 import tf
+from geometry_msgs.msg import PoseStamped, Twist, Vector3
+from nav_msgs.msg import Odometry
 
 
 class System:
@@ -62,9 +60,7 @@ class System:
             if np.array(C).shape != np.eye(self.nDim).shape or not np.allclose(
                 np.eye(self.nDim), C
             ):
-                assert (
-                    np.array(C).shape[1] == self.nDim
-                ), "inappropriate C shape"  # y = CX
+                assert np.array(C).shape[1] == self.nDim, "inappropriate C shape"  # y = CX
                 self.full_observability = False
         else:
             self.C = np.eye(self.nDim)
@@ -119,9 +115,7 @@ class StochasticSystem(System):
         System (_type_): _description_
     """
 
-    def __init__(
-        self, name, states, inputs, f, g=None, C=None, input_range=None, G=None, D=None
-    ):
+    def __init__(self, name, states, inputs, f, g=None, C=None, input_range=None, G=None, D=None):
         super().__init__(name, states, inputs, f, g, C, input_range)
         if G is None and D is None:
             raise ValueError("Did you mean to create a deterministic system?")
@@ -156,9 +150,7 @@ class ClosedLoopSystem(object):
             raise ValueError("sim_time must be non-negative")
         self.sim_time = sim_time
         self.dt = dt
-        T = [
-            t * dt for t in range(int(sim_time / dt) + 1)
-        ]  # Create a list of time steps
+        T = [t * dt for t in range(int(sim_time / dt) + 1)]  # Create a list of time steps
         for t in T:
             self.step(self.dt)  # Take a simulation step with the given time step
 
@@ -181,16 +173,12 @@ class ConnectedSystem(object):
         self.ego = ego_system
         self.cbf_list = cbf_list
         self.ros_used = ros_used
-        self.vw_publisher = rospy.Publisher(
-            "/hsrb/command_velocity", Twist, queue_size=10
-        )
+        self.vw_publisher = rospy.Publisher("/hsrb/command_velocity", Twist, queue_size=10)
 
         # # subscliber to get odometry of HSR & agents
         #! TEMPORARY FIX!!!
 
-        rospy.Subscriber(
-            "/transformed_hsr", Odometry, self.tOdometry_callback, queue_size=10
-        )
+        rospy.Subscriber("/transformed_hsr", Odometry, self.tOdometry_callback, queue_size=10)
 
         # rospy.Subscriber('/hsrb/odom_ground_truth', Odometry,
         #                  self.tOdometry_callback, queue_size=10)

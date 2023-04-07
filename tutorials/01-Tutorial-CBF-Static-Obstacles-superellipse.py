@@ -1,10 +1,12 @@
-from sympy import symbols
-import numpy as np
-import matplotlib.pyplot as plt
-from cbfkit.tutorial import cbf as cbf, cbf_utils, sys_and_ctrl
-import matplotlib.animation as animation
-from sympy import symbols, Matrix
 import platform
+
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+import numpy as np
+from sympy import Matrix, symbols
+
+from cbfkit.tutorial import cbf as cbf
+from cbfkit.tutorial import cbf_utils, sys_and_ctrl
 
 # import conditional if system is mac m1
 if platform.system() == "Darwin" and platform.machine() == "arm64":
@@ -56,9 +58,7 @@ solvers.options["show_progress"] = False
 x_0 = np.array([0.5, 1.5])
 
 # Simulate system
-print(
-    f"\nComputing trajectories for the initial condition:\nx_0\t x_1\n{x_0[0]}\t {x_0[1]}"
-)
+print(f"\nComputing trajectories for the initial condition:\nx_0\t x_1\n{x_0[0]}\t {x_0[1]}")
 
 # Check if initial condition is inside the bad set
 assert all(
@@ -71,9 +71,7 @@ x[:, 0] = x_0
 
 # Simulate system
 for i in range(len(T) - 1):
-    x[:, i + 1] = x[:, i] + dt * np.array(
-        sys_and_ctrl.nimble_ant_f(T[i], x[:, i], [], params)
-    )
+    x[:, i + 1] = x[:, i] + dt * np.array(sys_and_ctrl.nimble_ant_f(T[i], x[:, i], [], params))
 
 print("\n*Simulation Done. See plot for animation...")
 
@@ -89,9 +87,7 @@ plt.gca().spines["top"].set_visible(False)
 plt.gca().spines["right"].set_visible(False)
 
 (line1,) = ax.plot([], [], lw=2)
-goal_square = plt.Rectangle(
-    x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5
-)
+goal_square = plt.Rectangle(x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5)
 
 
 def init():

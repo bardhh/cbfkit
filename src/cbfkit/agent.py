@@ -3,12 +3,11 @@
 import argparse
 
 import rospy
-from std_msgs.msg import String
-from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Odometry
-from std_msgs.msg import Header
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import GetModelState, GetModelStateRequest, SetModelState
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Header, String
 
 freq = 10  # Hz
 speed = -0.2  # m/s
@@ -17,15 +16,9 @@ speed = -0.2  # m/s
 class Agent(object):
     def __init__(self, model_name):
         rospy.wait_for_service("/gazebo/get_model_state")
-        self.get_model_srv = rospy.ServiceProxy(
-            "/gazebo/get_model_state", GetModelState
-        )
-        self.set_model_srv = rospy.ServiceProxy(
-            "/gazebo/set_model_state", SetModelState
-        )
-        self.pub = rospy.Publisher(
-            "/" + model_name + "pose", PoseStamped, queue_size=10
-        )
+        self.get_model_srv = rospy.ServiceProxy("/gazebo/get_model_state", GetModelState)
+        self.set_model_srv = rospy.ServiceProxy("/gazebo/set_model_state", SetModelState)
+        self.pub = rospy.Publisher("/" + model_name + "pose", PoseStamped, queue_size=10)
 
         self.model = GetModelStateRequest()
         self.model.model_name = model_name

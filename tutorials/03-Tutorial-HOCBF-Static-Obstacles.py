@@ -1,25 +1,14 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
-from sympy import symbols, Matrix, sin, cos
-import matplotlib.animation as animation
-from matplotlib.animation import FuncAnimation, PillowWriter
-from cbfkit.tutorial import cbf as cbf, cbf_utils, sys_and_ctrl
 import platform
-from sympy import (
-    symbols,
-    Matrix,
-    sin,
-    cos,
-    lambdify,
-    exp,
-    sqrt,
-    log,
-    diff,
-    Mul,
-    srepr,
-    Symbol,
-)
+
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.patches import Ellipse
+from sympy import Matrix, Mul, Symbol, cos, diff, exp, lambdify, log, sin, sqrt, srepr, symbols
+
+from cbfkit.tutorial import cbf as cbf
+from cbfkit.tutorial import cbf_utils, sys_and_ctrl
 
 # import conditional if system is mac m1
 if platform.system() == "Darwin" and platform.machine() == "arm64":
@@ -37,9 +26,7 @@ bad_sets = cbf_utils.example(3)
 ctrl_param = [10]
 
 # Symbols and equations for the CBF
-xr0, xr1, xr2, cx, cy, rad_x, rad_y, xr2_dot, u = symbols(
-    "xr0 xr1 xr2 cx cy rad_x rad_y xr2_dot u"
-)
+xr0, xr1, xr2, cx, cy, rad_x, rad_y, xr2_dot, u = symbols("xr0 xr1 xr2 cx cy rad_x rad_y xr2_dot u")
 symbs = (cx, cy, rad_x, rad_y, xr0, xr1, xr2)
 
 # Barrier function - distance of robot to obstacle
@@ -97,9 +84,7 @@ for idxj, j in enumerate(bad_sets):
 x = np.zeros((np.size(x_0), len(T)))
 x[:, 0] = x_0
 for i in range(len(T) - 1):
-    x[:, i + 1] = x[:, i] + dt * np.array(
-        sys_and_ctrl.unicycle_f(T[i], x[:, i], [], params)
-    )
+    x[:, i + 1] = x[:, i] + dt * np.array(sys_and_ctrl.unicycle_f(T[i], x[:, i], [], params))
 
 # Animate
 fig, ax = plt.subplots()
@@ -109,9 +94,7 @@ plt.xlim(-1, 6)
 plt.ylim(-1, 6)
 
 (line1,) = ax.plot([], [], lw=2)
-goal_square = plt.Rectangle(
-    x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5
-)
+goal_square = plt.Rectangle(x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5)
 
 
 def init():

@@ -1,13 +1,15 @@
 # This code is a Python program that simulates the movement of a robot in an environment with obstacles. It uses the Sympy, Numpy, Matplotlib, and Control libraries to perform calculations and generate visualizations. The program defines a goal for the robot to reach, as well as undesired areas in ellipse format that the robot should avoid. It also sets parameters for a reference controller and initializes a CBF (Control Barrier Function) to ensure safety during the simulation. The program then simulates the system and generates an animation of the robot's movement towards the goal while avoiding the obstacles. Finally, it displays the animation and exits.
 
-from sympy import symbols
-import numpy as np
-import matplotlib.pyplot as plt
-import control as control
-from cbfkit.tutorial import cbf as cbf, cbf_utils, sys_and_ctrl
-import matplotlib.animation as animation
-from sympy import symbols, Matrix
 import platform
+
+import control as control
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+import numpy as np
+from sympy import Matrix, symbols
+
+from cbfkit.tutorial import cbf as cbf
+from cbfkit.tutorial import cbf_utils, sys_and_ctrl
 
 # import conditional if system is mac m1
 if platform.system() == "Darwin" and platform.machine() == "arm64":
@@ -34,9 +36,7 @@ f = 0
 g = Matrix([0, 0, 1.0])
 
 # Initialize CBF
-my_CBF = cbf.CBF(
-    B, f, g, states=(x_0, x_1), bad_sets=bad_sets, symbs=symbs, degree=1, alpha=0.6
-)
+my_CBF = cbf.CBF(B, f, g, states=(x_0, x_1), bad_sets=bad_sets, symbs=symbs, degree=1, alpha=0.6)
 
 # Simulation settings
 T_max = 20
@@ -74,9 +74,7 @@ x[:, 0] = x_0
 
 # Simulate system
 for i in range(len(T) - 1):
-    x[:, i + 1] = x[:, i] + dt * np.array(
-        sys_and_ctrl.nimble_ant_f(T[i], x[:, i], [], params)
-    )
+    x[:, i + 1] = x[:, i] + dt * np.array(sys_and_ctrl.nimble_ant_f(T[i], x[:, i], [], params))
 
 print("\n*Simulation Done. See plot for animation...")
 
@@ -92,9 +90,7 @@ plt.gca().spines["top"].set_visible(False)
 plt.gca().spines["right"].set_visible(False)
 
 (line1,) = ax.plot([], [], lw=2)
-goal_square = plt.Rectangle(
-    x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5
-)
+goal_square = plt.Rectangle(x_goal - np.array([0.5, 0.5]), 0.2, 0.2, color="r", alpha=0.5)
 
 
 def init():
