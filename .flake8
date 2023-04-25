@@ -22,11 +22,6 @@ exclude =
     # Ignore ANTLR grammar files
     *.g4,
     # Ignore ANTLR generated python modules
-    src/staliro/parser/stlLexer.py,
-    src/staliro/parser/stlParser.py,
-    src/staliro/parser/stlParserListener.py,
-    src/staliro/parser/stlParserVisitor.py,
-    src/staliro/parser/stlTptlParserVisitorTranslator.py,
     docs/conf.py
 
 max-line-length = 100

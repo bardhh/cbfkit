@@ -1,46 +1,26 @@
-from sympy import Matrix, exp
+import jax.numpy as jnp
+from jax.scipy.special import exp
 
 
-def careful_agent(states, inputs, radi, multi):
-    """This function defines agent model with the assumption that the agent maintains its velocities
-    in the x and y direction unless it is close to the ego when it slows down
+def careful_agent(inputs, radius, multiplier):
+    def dynamics(state):
+        # Define the constants
+        c = multiplier
 
-    Args:
-        states (Sympy matrix): vector of symbolic system states
-        inputs (Sympy matrix): vector of symbolic system inputs
+        # Compute the changes in x, y, and theta
+        delta_x = (state[0] - inputs[0]) * exp(c * (radius - (state[0] - inputs[0]) ** 2))
+        delta_y = (state[1] - inputs[1]) * exp(c * (radius - (state[1] - inputs[1]) ** 2))
+        delta_theta = 1 / (1 + (delta_y / delta_x) ** 2)
 
-    Returns:
-        f (symbolic expressions): to describe model of the system as dx = f
-    """
-    if states.shape[0] != 3 or inputs.shape[0] != 2:
-        raise ValueError("agent_break model has 3 states and 3 inputs")
+        # Return the changes as a JAX array
+        return jnp.array([delta_x, delta_y, delta_theta])
 
-    c = multi
-    dx = (states[0] - inputs[0]) * exp(c * (radi - (states[0] - inputs[0]) ** 2))
-    dy = (states[1] - inputs[1]) * exp(c * (radi - (states[1] - inputs[1]) ** 2))
-    dtheta = 1 / (1 + (dy / dx) ** 2)
-
-    f = Matrix([dx, dy, dtheta])
-    return f
+    return dynamics
 
 
-def careless_agent(states, inputs):
-    """This function defines agent model with the assumption that the agent maintains its velocities
-    in the x and y direction unless it is close to the ego when it slows down
+def careless_agent(inputs):
+    def dynamics(state):
+        # Return the inputs as the changes in x, y, and theta for the careless agent
+        return jnp.array(inputs)
 
-    Args:
-        states (Sympy matrix): vector of symbolic system states
-        inputs (Sympy matrix): vector of symbolic system inputs
-
-    Returns:
-        f (symbolic expressions): to describe model of the system as dx = f
-    """
-    if states.shape[0] != 3 or inputs.shape[0] != 3:
-        raise ValueError("careless_agent model has 3 states and 3 inputs")
-
-    dx = inputs[0]
-    dy = inputs[1]
-    dtheta = inputs[2]
-
-    f = Matrix([dx, dy, dtheta])
-    return f
+    return dynamics
