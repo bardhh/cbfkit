@@ -1,11 +1,13 @@
-from sympy import exp
 import time
+
 import numpy as np
-from cbfkit.models.bicycle import appr_unicycle
-from cbfkit.models.human import careless_agent
-from cbfkit.system import *
-from cbfkit.controller import *
+from sympy import exp
+
 from cbfkit.cbf import *
+from cbfkit.controller import *
+from cbfkit.models.human import careless_agent
+from cbfkit.models.unicycle import appr_unicycle
+from cbfkit.old_system import *
 from cbfkit.utils import strList2SympyMatrix
 
 # check if rospy is installed, if not, raise error
@@ -61,6 +63,7 @@ if __name__ == "__main__":
     print(f"{agent_1.system_details()}\n")
 
     unsafe_radius = 1
+
     # Define h such that h(x)<=0 defines unsafe region
     def h(x, y, unsafe_radius):
         return (x[0] - y[0]) ** 2 + (x[1] - y[1]) ** 2 - (unsafe_radius + l) ** 2
@@ -109,9 +112,7 @@ if __name__ == "__main__":
     rospy.init_node("HSR")
     cbf_list = [cbf_1, cbf_2]
     connected_HSR = ConnectedSystem(ego_system, cbf_list)
-    my_cbf_controller = Controller(
-        connected_HSR, goal_func, corridor_map, 5, "reference_control"
-    )
+    my_cbf_controller = Controller(connected_HSR, goal_func, corridor_map, 5, "reference_control")
     # [sec] we can change controll priod with this parameter.
     control_period = 0.05
     time.sleep(1)
