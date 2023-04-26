@@ -99,24 +99,34 @@ test = ["pytest", "pytest-timeout"]
 
 [[package]]
 name = "cvxopt"
-version = "1.3.0.1"
+version = "1.2.7"
 description = "Convex optimization package"
 category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 files = [
-    {file = "cvxopt-1.3.0.1-cp310-cp310-win32.whl", hash = "sha256:429895c9cdd33b97ba1354b1d7a9d73c7179934d8649920a64d1d114062695dc"},
-    {file = "cvxopt-1.3.0.1-cp310-cp310-win_amd64.whl", hash = "sha256:eddb2c1ee863c7dd7edd3401cdb036c9c8d7779e2b1fe434b34b8d2b04bcebfc"},
-    {file = "cvxopt-1.3.0.1-cp311-cp311-win32.whl", hash = "sha256:3be9cca4538346abc2d3534a8667b3e03e047067cbc8d7cf2ae3fa81b4da619b"},
-    {file = "cvxopt-1.3.0.1-cp311-cp311-win_amd64.whl", hash = "sha256:a43aee498e47f2acb4eaffd2405da2a54915019bf09951d412f0deb0906383e9"},
-    {file = "cvxopt-1.3.0.1-cp36-cp36m-win32.whl", hash = "sha256:34c5d6fe2af6a5b1aa2bbaebb3880152923717eca699b8689052d1439c15dd71"},
-    {file = "cvxopt-1.3.0.1-cp36-cp36m-win_amd64.whl", hash = "sha256:122e805decffbdd104d9096b8b21f0ce35ba7b5e8b961f3f23eb9b7fe1cdbec5"},
-    {file = "cvxopt-1.3.0.1-cp37-cp37m-win32.whl", hash = "sha256:77ac45a262c767cb1d614e51672821edf260af6798370b05a07e0181c80a52e2"},
-    {file = "cvxopt-1.3.0.1-cp37-cp37m-win_amd64.whl", hash = "sha256:9e9219e8fb0af22013c150dfbd6e38167b38f61bc2e0d269d19b6137772055a9"},
-    {file = "cvxopt-1.3.0.1-cp38-cp38-win32.whl", hash = "sha256:615e947e2c9ff74dc4b0dbede6414e1f6106590bc3caa52c690cdc2bcd6e4569"},
-    {file = "cvxopt-1.3.0.1-cp38-cp38-win_amd64.whl", hash = "sha256:517554aa443a4818d9fe01e73f8bd420b6acad0086019d0b03469d2a8810f21e"},
-    {file = "cvxopt-1.3.0.1-cp39-cp39-win32.whl", hash = "sha256:d1bbc011d5d83c913972e1bd30358f4fa56defa0be13fea956612ff2168f2b91"},
-    {file = "cvxopt-1.3.0.1-cp39-cp39-win_amd64.whl", hash = "sha256:f5acf720235014d69e4ee68a7682f2fef7ef30c705933d9b758c2edffd2a5bcf"},
+    {file = "cvxopt-1.2.7-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:dd87afaa82bc4f0b4436eeeee0c0c86cd504bf519d7b0fe28057be7479676b51"},
+    {file = "cvxopt-1.2.7-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b2c30772b8d0cd4ae528af60c3ac732c07670c65f0539746f9a30eb14c5d7a17"},
+    {file = "cvxopt-1.2.7-cp35-cp35m-macosx_10_6_intel.whl", hash = "sha256:803a1c2bdce5f15fe0f20f0a26e39a251cede121091317f91ef1bcfd73f7ef38"},
+    {file = "cvxopt-1.2.7-cp35-cp35m-win32.whl", hash = "sha256:0cdf9abac90cdd727558f57588e776f6cdb12362f6adf2cb4d2b6d629d9125c8"},
+    {file = "cvxopt-1.2.7-cp35-cp35m-win_amd64.whl", hash = "sha256:6cd7e6cd626e202b085995e63805b645567bfe3bd133cdc2cdb89b9842062081"},
+    {file = "cvxopt-1.2.7-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:4ed667bd82f91b832d33f14f535deb66c8eb0a3ad0c5f9e9cbd0a10523ff79bc"},
+    {file = "cvxopt-1.2.7-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ec6e46c3392adaae455286aab02daf03ccf3878a543de4c18f11ea6e1131c74b"},
+    {file = "cvxopt-1.2.7-cp36-cp36m-win32.whl", hash = "sha256:ac02d62a311b84d3b88ea8472052d85e72714e96024608542d48eb04a788b4d7"},
+    {file = "cvxopt-1.2.7-cp36-cp36m-win_amd64.whl", hash = "sha256:2c292500d8252d6895ab998f84d7c1724a272ee4e9851ca74b2947429cb2b087"},
+    {file = "cvxopt-1.2.7-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:c91ae903b69cc1bed7a58ea1bbc74f19daec9f03a7d09c41abb21c5328d2ea58"},
+    {file = "cvxopt-1.2.7-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:bc0d997e8ca3fb8eab733cc7c32eff8137890637de24f7b0d892ad185fbc54e6"},
+    {file = "cvxopt-1.2.7-cp37-cp37m-win32.whl", hash = "sha256:22fb842920fcaf8adb9a60cf9af9401363b32430150986d7191e9504b0235254"},
+    {file = "cvxopt-1.2.7-cp37-cp37m-win_amd64.whl", hash = "sha256:b55ebc43095ca29b4c835bdc22f2a2c4df06ccbbb9fa6a7e6096dceefd412b4f"},
+    {file = "cvxopt-1.2.7-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:6c6fa32cc49eaa89f8ed00c03e4717854827e0753c7da0026e934d5c24c5dd28"},
+    {file = "cvxopt-1.2.7-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8002390c4a8b55fbf4011cf6e663f0b219459edf2423e9791e393b92e41cf8c8"},
+    {file = "cvxopt-1.2.7-cp38-cp38-win32.whl", hash = "sha256:1381315f68f728a3fab4eba1c2352605f074b10494ebe8fe008b0947ce13b589"},
+    {file = "cvxopt-1.2.7-cp38-cp38-win_amd64.whl", hash = "sha256:712975afb3ed3d14dea2ab1eca774b70f2b58db61a88e70708c912e15339113c"},
+    {file = "cvxopt-1.2.7-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:fac53f7d2814278475ecd9f2f22e997a92fbf7f044672caee946d9773c79fef9"},
+    {file = "cvxopt-1.2.7-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:03bbfe48b9d6148064cc5af9cfb288de3c99cbe93601aa2de65c61d3c7253bad"},
+    {file = "cvxopt-1.2.7-cp39-cp39-win32.whl", hash = "sha256:97262506af8c5fffadcabb4b0ed9caa67ab94c46e08e16b563736a274f7b8601"},
+    {file = "cvxopt-1.2.7-cp39-cp39-win_amd64.whl", hash = "sha256:b6604befe48283f6d71a31d10a6a286e13c11644dd34e108d873293aa5ccec8d"},
+    {file = "cvxopt-1.2.7.tar.gz", hash = "sha256:3f9db1f4d4e820aaea81d6fc21054c89dc6327c84f935dd5a1eda1af11e1d504"},
 ]
 
 [[package]]
@@ -175,6 +185,37 @@ zipp = {version = ">=3.1.0", markers = "python_version < \"3.10\""}
 [package.extras]
 docs = ["furo", "jaraco.packaging (>=9)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
 testing = ["flake8 (<5)", "pytest (>=6)", "pytest-black (>=0.3.7)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=1.3)", "pytest-flake8", "pytest-mypy (>=0.9.1)"]
+
+[[package]]
+name = "jax"
+version = "0.4.8"
+description = "Differentiate, compile, and transform Numpy code."
+category = "main"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "jax-0.4.8.tar.gz", hash = "sha256:08116481f7336db16c24812bfb5e6f9786915f4c2f6ff4028331fa69e7535202"},
+]
+
+[package.dependencies]
+ml_dtypes = ">=0.0.3"
+numpy = ">=1.21"
+opt_einsum = "*"
+scipy = ">=1.7"
+
+[package.extras]
+australis = ["protobuf (>=3.13,<4)"]
+ci = ["jaxlib (==0.4.7)"]
+cpu = ["jaxlib (==0.4.7)"]
+cuda = ["jaxlib (==0.4.7+cuda11.cudnn86)"]
+cuda11-cudnn82 = ["jaxlib (==0.4.7+cuda11.cudnn82)"]
+cuda11-cudnn86 = ["jaxlib (==0.4.7+cuda11.cudnn86)"]
+cuda11-local = ["jaxlib (==0.4.7+cuda11.cudnn86)"]
+cuda11-pip = ["jaxlib (==0.4.7+cuda11.cudnn86)", "nvidia-cublas-cu11 (>=11.11)", "nvidia-cuda-nvcc-cu11 (>=11.8)", "nvidia-cuda-runtime-cu11 (>=11.8)", "nvidia-cudnn-cu11 (>=8.6)", "nvidia-cufft-cu11 (>=10.9)", "nvidia-cusolver-cu11 (>=11.4)", "nvidia-cusparse-cu11 (>=11.7)"]
+cuda12-local = ["jaxlib (==0.4.7+cuda12.cudnn88)"]
+cuda12-pip = ["jaxlib (==0.4.7+cuda12.cudnn88)", "nvidia-cublas-cu12", "nvidia-cuda-nvcc-cu12", "nvidia-cuda-runtime-cu12", "nvidia-cudnn-cu12", "nvidia-cufft-cu12", "nvidia-cusolver-cu12", "nvidia-cusparse-cu12"]
+minimum-jaxlib = ["jaxlib (==0.4.7)"]
+tpu = ["jaxlib (==0.4.7)", "libtpu-nightly (==0.1.dev20230327)", "requests"]
 
 [[package]]
 name = "jaxlib"
@@ -493,6 +534,25 @@ files = [
 ]
 
 [[package]]
+name = "opt-einsum"
+version = "3.3.0"
+description = "Optimizing numpys einsum function"
+category = "main"
+optional = false
+python-versions = ">=3.5"
+files = [
+    {file = "opt_einsum-3.3.0-py3-none-any.whl", hash = "sha256:2455e59e3947d3c275477df7f5205b30635e266fe6dc300e3d9f9646bfcea147"},
+    {file = "opt_einsum-3.3.0.tar.gz", hash = "sha256:59f6475f77bbc37dcf7cd748519c0ec60722e91e63ca114e68821c0c54a46549"},
+]
+
+[package.dependencies]
+numpy = ">=1.7"
+
+[package.extras]
+docs = ["numpydoc", "sphinx (==1.2.3)", "sphinx-rtd-theme", "sphinxcontrib-napoleon"]
+tests = ["pytest", "pytest-cov", "pytest-pep8"]
+
+[[package]]
 name = "packaging"
 version = "23.1"
 description = "Core utilities for Python packages"
@@ -723,4 +783,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.12"
-content-hash = "35881075e4ebcb9c85e5c66bea982b277abd02947f0f7cfda761cde7c92b9c7f"
+content-hash = "032376c6efe8b256ecc7143cc4b48d060f9ba931cd9905902d9c67f4a642f218"
