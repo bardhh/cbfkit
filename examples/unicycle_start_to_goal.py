@@ -3,6 +3,8 @@ import jax.numpy as jnp
 import cbfkit.models.unicycle as unicycle
 import cbfkit.system as system
 
+from cbfkit.cbf_controller import control_barrier_function_controller
+
 approx_unicycle_dynamics = unicycle.approx_unicycle_dynamics(l=1.0)
 init_state = jnp.array([0.0, 0.0, jnp.pi])
 desired_state = jnp.array([2, 4, 0])
@@ -16,12 +18,21 @@ approx_uniycle_nom_controller = unicycle.approx_unicycle_nominal_controller(
 #     state=init_state, dynamics=bicycle_dynamics, controller=bicycle_nom_controller, dt=0.1
 # )
 
+
+cbf_controller = control_barrier_function_controller(
+    nominal_input=approx_uniycle_nom_controller,
+    dynamics_func=approx_unicycle_dynamics,
+    barrier_func=unicycle.barrier_function,
+    barrier_jacobian=unicycle.barrier_jacobian,
+)
+
 dt = 0.05
 
 bicycle_states = system.simulate(
     state=init_state,
     dynamics=approx_unicycle_dynamics,
-    controller=approx_uniycle_nom_controller,
+    # controller=approx_uniycle_nom_controller,
+    controller=cbf_controller,
     dt=dt,
     num_steps=200,
 )
