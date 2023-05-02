@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 import matplotlib
-matplotlib.use('TkAgg')
+
+matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 import numpy as np
 from jax import jit
@@ -70,6 +71,7 @@ def approx_unicycle_nominal_controller(dynamics, Kp_pos, Kp_theta, desired_state
     """
     Create a proportional-only controller for the given unicycle dynamics.
 
+    :param dynamics: approximate unicycle dynamics ode
     :param Kp_pos: Position proportional gain.
     :param Kp_theta: Orientation proportional gain.
     :param l: Wheelbase of the unicycle.
@@ -98,6 +100,28 @@ def approx_unicycle_nominal_controller(dynamics, Kp_pos, Kp_theta, desired_state
         return unicycle_control_inputs
 
     return controller
+
+
+#! CONTROL BARRIER FUNCTIONS
+CX, CY, R = 1.0, 2.0, 0.5
+
+
+@jit
+def h(x, cx, cy, r):
+    return (x[0] - cx) ** 2 + (x[1] - cy) ** 2 - r**2
+
+
+@jit
+def dhdx(x, cx, cy, r):
+    return jacfwd(barrier_function)(x, cx, cy, r)
+
+
+def barrier_function(x):
+    return h(x, CX, CY, R)
+
+
+def barrier_jacobian(x):
+    return dhdx(x, CX, CY, R)
 
 
 #! PLOTTING
