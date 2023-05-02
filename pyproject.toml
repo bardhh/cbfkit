@@ -19,6 +19,7 @@ jaxlib = { extras = ["gpu"], version = "^0.4.7" }
 jax = "^0.4.7"
 tail-recursion = "^1.1.1"
 tail-recursive = "^2.1.0"
+black = "^23.3.0"
 
 [build-system]
 requires = ["poetry-core"]
