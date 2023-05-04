@@ -4,7 +4,7 @@ import matplotlib
 matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 import numpy as np
-from jax import jit
+from jax import jit, jacfwd
 from matplotlib.animation import FuncAnimation
 
 
@@ -113,7 +113,7 @@ def h(x, cx, cy, r):
 
 @jit
 def dhdx(x, cx, cy, r):
-    return jacfwd(barrier_function)(x, cx, cy, r)
+    return jacfwd(h)(x, cx, cy, r)
 
 
 def barrier_function(x):
@@ -148,6 +148,16 @@ def plot_trajectory(
             color="r",
             fill=False,
             linestyle="--",
+            linewidth=1,
+        )
+    )
+    ax.add_patch(
+        plt.Circle(
+            (CX, CY),
+            R,
+            color="k",
+            fill=True,
+            linestyle="-",
             linewidth=1,
         )
     )
@@ -199,6 +209,16 @@ def animate(
             color="r",
             fill=False,
             linestyle="--",
+            linewidth=1,
+        )
+    )
+    ax.add_patch(
+        plt.Circle(
+            (CX, CY),
+            R,
+            color="k",
+            fill=True,
+            linestyle="-",
             linewidth=1,
         )
     )
