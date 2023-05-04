@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from jax import jit, jacfwd
 from matplotlib.animation import FuncAnimation
+from .barrier_functions import CX, CY, R
 
 
 #! DYNAMICS
@@ -103,7 +104,9 @@ def approx_unicycle_nominal_controller(dynamics, Kp_pos, Kp_theta, desired_state
 
 
 #! CONTROL BARRIER FUNCTIONS
-CX, CY, R = 1.0, 2.0, 0.5
+CX1, CY1, R1 = 1.0, 2.0, 0.5
+CX2, CY2, R2 = 2.0, 2.0, 0.75
+CX3, CY3, R3 = 0.0, 3.0, 1.0
 
 
 @jit
@@ -212,16 +215,17 @@ def animate(
             linewidth=1,
         )
     )
-    ax.add_patch(
-        plt.Circle(
-            (CX, CY),
-            R,
-            color="k",
-            fill=True,
-            linestyle="-",
-            linewidth=1,
+    for x, y, r in zip(CX, CY, R):
+        ax.add_patch(
+            plt.Circle(
+                (x, y),
+                r,
+                color="k",
+                fill=True,
+                linestyle="-",
+                linewidth=1,
+            )
         )
-    )
 
     (trajectory,) = ax.plot([], [], label="Trajectory")
 
