@@ -8,6 +8,10 @@ from cbfkit.cbf_controller import (
     adaptive_control_barrier_function_controller,
 )
 
+from cbfkit.risk_aware_cbf_controller import (
+    risk_aware_cbf_controller,
+)
+
 approx_unicycle_dynamics = unicycle.approx_unicycle_dynamics(l=1.0)
 init_state = jnp.array([0.0, 0.0, jnp.pi])
 desired_state = jnp.array([2, 4, 0])
@@ -22,11 +26,12 @@ approx_uniycle_nom_controller = unicycle.approx_unicycle_nominal_controller(
 # )
 
 
-cbf_controller = adaptive_control_barrier_function_controller(
+cbf_controller = risk_aware_cbf_controller(
     nominal_input=approx_uniycle_nom_controller,
     dynamics_func=approx_unicycle_dynamics,
     barrier_funcs=unicycle.barrier_functions,
     barrier_jacobians=unicycle.barrier_jacobians,
+    barrier_hessians=unicycle.barrier_hessians,
 )
 
 dt = 0.05
