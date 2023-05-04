@@ -10,8 +10,8 @@ from scipy.linalg import block_diag
 def control_barrier_function_controller(
     nominal_input: Callable,
     dynamics_func: Callable,
-    barrier_func: Callable,
-    barrier_jacobian: Callable,
+    barrier_funcs: Callable,
+    barrier_jacobians: Callable,
     control_limits: DeviceArray = jnp.array([100.0, 100.0]),
     alpha: float = 1,
     R: DeviceArray = None,
@@ -36,6 +36,9 @@ def control_barrier_function_controller(
     if R is None:
         R = jnp.eye(len(control_limits), dtype=float)
 
+    M = len(control_limits)
+    L = len(barrier_funcs)
+
     # @jit
     def controller(x):
         dynamics_f, dynamics_g = dynamics_func(x)
@@ -46,12 +49,15 @@ def control_barrier_function_controller(
         f = matrix(arr(-2 * R @ nominal_input(x), dtype=float))
 
         # Formulate the input constraints
-        Au = block_diag_matrix(len(control_limits))
+        Au = block_diag_matrix(M)
         bu = interleave_arrays(control_limits, control_limits)
 
         # Formulate CBF constraint(s)
-        Acbf = -barrier_jacobian(x) @ dynamics_g
-        bcbf = barrier_jacobian(x) @ dynamics_f + alpha * barrier_func(x)
+        Acbf = jnp.zeros((L, M))
+        bcbf = jnp.zeros((L,))
+        for ib, (bf, bj) in enumerate(zip(barrier_funcs, barrier_jacobians)):
+            Acbf = Acbf.at[ib, :].set(-bj(x) @ dynamics_g)
+            bcbf = bcbf.at[ib].set(bj(x) @ dynamics_f + alpha * bf(x))
 
         # Formulate complete set of inequality constraints
         A = matrix(arr(jnp.vstack([Au, Acbf]), dtype=float))
@@ -61,7 +67,7 @@ def control_barrier_function_controller(
         sol = qp_solver(H, f, A, b)
 
         # Saturate the solution if necessary
-        u = jnp.squeeze(jnp.array(sol[: len(control_limits)]))
+        u = jnp.squeeze(jnp.array(sol[:M]))
         u = jnp.clip(u, -control_limits, control_limits)
 
         return u

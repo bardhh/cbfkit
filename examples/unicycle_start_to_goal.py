@@ -22,8 +22,8 @@ approx_uniycle_nom_controller = unicycle.approx_unicycle_nominal_controller(
 cbf_controller = control_barrier_function_controller(
     nominal_input=approx_uniycle_nom_controller,
     dynamics_func=approx_unicycle_dynamics,
-    barrier_func=unicycle.barrier_function,
-    barrier_jacobian=unicycle.barrier_jacobian,
+    barrier_funcs=unicycle.barrier_functions,
+    barrier_jacobians=unicycle.barrier_jacobians,
 )
 
 dt = 0.05
