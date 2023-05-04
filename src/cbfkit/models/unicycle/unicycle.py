@@ -10,7 +10,7 @@ from .barrier_functions import CX, CY, R
 
 
 #! DYNAMICS
-def accel_unicycle_dynamics():
+def accel_unicycle_dynamics(stochastic=False):
     """
     Returns a function that computes the unicycle model dynamics.
     """
@@ -29,13 +29,17 @@ def accel_unicycle_dynamics():
         x, y, v, theta = state
         f = jnp.array([v * jnp.cos(theta), v * jnp.sin(theta), 0, 0])
         g = jnp.array([[0, 0], [0, 0], [0, 1], [1, 0]])
+        s = jnp.eye(4) * 0.1
 
-        return f, g
+        if not stochastic:
+            return f, g
+        else:
+            return f, g, s
 
     return dynamics
 
 
-def approx_unicycle_dynamics(l=1.0):
+def approx_unicycle_dynamics(l=1.0, stochastic=False):
     """
     Returns a function that represents the approximate unicycle dynamics, which computes
     the drift vector 'f' and control matrix 'g' based on the given state.
@@ -61,8 +65,12 @@ def approx_unicycle_dynamics(l=1.0):
                 [0, 1],
             ]
         )
+        s = jnp.eye(3) * 0.05
 
-        return f, g
+        if not stochastic:
+            return f, g
+        else:
+            return f, g, s
 
     return dynamics
 
@@ -93,7 +101,7 @@ def approx_unicycle_nominal_controller(dynamics, Kp_pos, Kp_theta, desired_state
         control_input_theta = Kp_theta * error_theta
 
         # Convert position and orientation control inputs into unicycle control inputs (v, w)
-        _, g = dynamics(state)
+        g = dynamics(state)[1]
         unicycle_control_inputs = jnp.linalg.pinv(g) @ jnp.hstack(
             (control_inputs_pos, control_input_theta)
         )

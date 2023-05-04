@@ -152,9 +152,9 @@ def adaptive_risk_aware_cbf_controller(
 
     #! TO DO -- Implement Programmatically
     T = 10.0
-    rhod = 0.1
-    eta = 0.0
-    gamma = 0.1
+    rhod = 0.001
+    eta = 0.001
+    gamma = 0.01
 
     def integrate(state, derivative, dt=0.05):
         return state + derivative * dt
@@ -218,6 +218,7 @@ def adaptive_risk_aware_cbf_controller(
             INTEGRATOR_STATE = INTEGRATOR_STATE.at[ib].set(
                 integrate(INTEGRATOR_STATE[ib], derivative)
             )
+            print(f"IS[{ib}]: {INTEGRATOR_STATE[ib]}")
 
         return u
 
@@ -244,13 +245,14 @@ def qp_solver(H, f, A, b, G=None, h=None):
     q = matrix(f)
     A = matrix(A)
     b = matrix(b)
+    options = {"show_progress": False}
 
     if G is None and h is None:
-        sol = solvers.qp(P, q, A, b)
+        sol = solvers.qp(P, q, A, b, options=options)
     else:
         G = matrix(G)
         h = matrix(h)
-        sol = solvers.qp(P, q, G=G, h=h, A=A, b=b)
+        sol = solvers.qp(P, q, G=G, h=h, A=A, b=b, options=options)
 
     return sol["x"]
 
@@ -273,4 +275,4 @@ def risk_aware_jacobian_transform(h, dhdx):
 
 
 def risk_aware_hessian_transform(h, dhdx, d2hdx2):
-    return jnp.exp(-h) * (dhdx.T @ dhdx - d2hdx2)
+    return jnp.exp(-h) * (jnp.matmul(dhdx[:, None], dhdx[None, :]) - d2hdx2)
