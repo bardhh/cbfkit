@@ -1,12 +1,24 @@
 import jax.numpy as jnp
-from jax import jit
+from jax import jit, random
 from tail_recursion import tail_recursive
+
+key = random.PRNGKey(0)
 
 
 def step(state, dynamics, controller, dt):
-    f, g = dynamics(state)
     u = controller(state)
-    return jnp.add(state, jnp.multiply(dt, jnp.add(f, jnp.matmul(g, u))))
+    dyn = dynamics(state)
+    if len(dyn) == 2:
+        f, g = dynamics(state)
+        xdot = jnp.add(f, jnp.matmul(g, u))
+        dx = jnp.multiply(dt, xdot)
+    elif len(dyn) == 3:
+        f, g, s = dynamics(state)
+        dw = random.normal(key, shape=(s.shape[1],))
+        xdot = jnp.add(f, jnp.matmul(g, u))
+        dx = jnp.add(jnp.multiply(dt, xdot), jnp.matmul(s, dw))
+
+    return jnp.add(state, dx)
 
 
 def simulate_iter(state, dynamics, controller, dt, num_steps):

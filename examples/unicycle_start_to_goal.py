@@ -13,7 +13,7 @@ from cbfkit.risk_aware_cbf_controller import (
     adaptive_risk_aware_cbf_controller,
 )
 
-approx_unicycle_dynamics = unicycle.approx_unicycle_dynamics(l=1.0)
+approx_unicycle_dynamics = unicycle.approx_unicycle_dynamics(l=1.0, stochastic=True)
 init_state = jnp.array([0.0, 0.0, jnp.pi])
 desired_state = jnp.array([2, 4, 0])
 
