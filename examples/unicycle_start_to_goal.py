@@ -3,7 +3,10 @@ import jax.numpy as jnp
 import cbfkit.models.unicycle as unicycle
 import cbfkit.system as system
 
-from cbfkit.cbf_controller import control_barrier_function_controller
+from cbfkit.cbf_controller import (
+    control_barrier_function_controller,
+    adaptive_control_barrier_function_controller,
+)
 
 approx_unicycle_dynamics = unicycle.approx_unicycle_dynamics(l=1.0)
 init_state = jnp.array([0.0, 0.0, jnp.pi])
@@ -19,7 +22,7 @@ approx_uniycle_nom_controller = unicycle.approx_unicycle_nominal_controller(
 # )
 
 
-cbf_controller = control_barrier_function_controller(
+cbf_controller = adaptive_control_barrier_function_controller(
     nominal_input=approx_uniycle_nom_controller,
     dynamics_func=approx_unicycle_dynamics,
     barrier_funcs=unicycle.barrier_functions,
