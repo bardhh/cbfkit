@@ -47,6 +47,12 @@ barrier_jacobians = [
     obstacle_avoidance_bj_3,
 ]
 
+barrier_hessians = [
+    obstacle_avoidance_bh_1,
+    obstacle_avoidance_bh_2,
+    obstacle_avoidance_bh_3,
+]
+
 CX = [CX1, CX2, CX3]
 CY = [CY1, CY2, CY3]
 R = [R1, R2, R3]
