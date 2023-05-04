@@ -4,6 +4,7 @@ from jax import grad, jit
 from jax.interpreters.xla import DeviceArray
 from kvxopt import matrix, solvers
 from numpy import array as arr
+from scipy.linalg import block_diag
 
 
 def control_barrier_function_controller(
@@ -35,7 +36,7 @@ def control_barrier_function_controller(
     if R is None:
         R = jnp.eye(len(control_limits), dtype=float)
 
-    @jit
+    # @jit
     def controller(x):
         dynamics_f, dynamics_g = dynamics_func(x)
 
@@ -49,18 +50,18 @@ def control_barrier_function_controller(
         bu = interleave_arrays(control_limits, control_limits)
 
         # Formulate CBF constraint(s)
-        Acbf = -barrier_jacobian(x) @ dynamics_g(x)
-        bcbf = barrier_jacobian(x) @ dynamics_f(x) + alpha * barrier_func(x)
+        Acbf = -barrier_jacobian(x) @ dynamics_g
+        bcbf = barrier_jacobian(x) @ dynamics_f + alpha * barrier_func(x)
 
         # Formulate complete set of inequality constraints
-        A = matrix(jnp.vstack([Au, Acbf]))
-        b = matrix(jnp.vstack([bu, bcbf]))
+        A = matrix(arr(jnp.vstack([Au, Acbf]), dtype=float))
+        b = matrix(arr(jnp.hstack([bu, bcbf]), dtype=float))
 
         # Solve the QP
         sol = qp_solver(H, f, A, b)
 
         # Saturate the solution if necessary
-        u = jnp.array(sol[: len(control_limits)])
+        u = jnp.squeeze(jnp.array(sol[: len(control_limits)]))
         u = jnp.clip(u, -control_limits, control_limits)
 
         return u
@@ -90,7 +91,7 @@ def qp_solver(H, f, A, b, G=None, h=None):
     b = matrix(b)
 
     if G is None and h is None:
-        sol = solvers.qp(P, q, A=A, b=b)
+        sol = solvers.qp(P, q, A, b)
     else:
         G = matrix(G)
         h = matrix(h)
@@ -101,7 +102,7 @@ def qp_solver(H, f, A, b, G=None, h=None):
 
 def block_diag_matrix(n_blocks):
     block = jnp.array([1, -1])
-    return block_diag(*([block] * n_blocks)).T
+    return jnp.array([block_diag(*([block] * n_blocks)).T])[0, :, :]
 
 
 def interleave_arrays(a, b):
