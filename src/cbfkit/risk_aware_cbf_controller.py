@@ -45,16 +45,17 @@ def risk_aware_cbf_controller(
     L = len(barrier_funcs)
     INTEGRATOR_STATE = jnp.zeros((L,))
 
-    #! HARD CODED -- NEEDS TO CHANGE
+    #! TO DO -- Implement Programmatically
     T = 10.0
     rhod = 0.1
     eta = 0.0
-    gamma = 
+    gamma = 0.1
 
     def integrate(state, derivative, dt=0.05):
         return state + derivative * dt
 
     def controller(x):
+        global INTEGRATOR_STATE
         dynamics = dynamics_func(x)
         N = len(dynamics[0])
         if len(dynamics) == 2:
@@ -77,13 +78,14 @@ def risk_aware_cbf_controller(
         bcbf = jnp.zeros((L,))
         trace_term = jnp.zeros((L,))
         for ib, (bf, bj, bh) in enumerate(zip(barrier_funcs, barrier_jacobians, barrier_hessians)):
-            func = risk_aware_barrier_transform(bf(x))
-            jaco = risk_aware_jacobian_transform(bj(x))
-            hess = risk_aware_hessian_transform(bh(x))
-            trace_term = trace_term.at[ib].set(0.5 * jnp.trace(dynamics_s.T @ bh(x) @ dynamics_s))
+            bf_val, bj_val, bh_val = bf(x), bj(x), bh(x)
+            func = risk_aware_barrier_transform(bf_val)
+            jaco = risk_aware_jacobian_transform(bf_val, bj_val)
+            hess = risk_aware_hessian_transform(bf_val, bj_val, bh_val)
+            trace_term = trace_term.at[ib].set(0.5 * jnp.trace(dynamics_s.T @ hess @ dynamics_s))
             h = 1 - INTEGRATOR_STATE[ib] - gamma - (jnp.sqrt(2) * T * eta) * erfinv(1 - rhod)
             Acbf = Acbf.at[ib, :].set(jaco @ dynamics_g)
-            bcbf = bcbf.at[ib].set(alpha * h - jaco @ dynamics_f - trace_term)
+            bcbf = bcbf.at[ib].set(alpha * h - jaco @ dynamics_f - trace_term[ib])
 
         # Formulate complete set of inequality constraints
         A = matrix(arr(jnp.vstack([Au, Acbf]), dtype=float))
@@ -98,9 +100,12 @@ def risk_aware_cbf_controller(
 
         # Update integrator state
         for ib, (bf, bj, bh) in enumerate(zip(barrier_funcs, barrier_jacobians, barrier_hessians)):
-            derivative = bj @ (dynamics_f + dynamics_g @ u) + trace_term[ib]
-            integrator_state = integrator_state.at[ib].set(
-                integrate(integrator_state[ib], derivative)
+            derivative = (
+                risk_aware_jacobian_transform(bf(x), bj(x)) @ (dynamics_f + dynamics_g @ u)
+                + trace_term[ib]
+            )
+            INTEGRATOR_STATE = INTEGRATOR_STATE.at[ib].set(
+                integrate(INTEGRATOR_STATE[ib], derivative)
             )
 
         return u
@@ -108,11 +113,12 @@ def risk_aware_cbf_controller(
     return controller
 
 
-def adaptive_control_barrier_function_controller(
+def adaptive_risk_aware_cbf_controller(
     nominal_input: Callable,
     dynamics_func: Callable,
     barrier_funcs: Callable,
     barrier_jacobians: Callable,
+    barrier_hessians: Callable,
     control_limits: DeviceArray = jnp.array([100.0, 100.0]),
     alpha: float = 1,
     R: DeviceArray = None,
@@ -134,16 +140,36 @@ def adaptive_control_barrier_function_controller(
     Returns:
     u: Optimal control input
     """
+    global INTEGRATOR_STATE
     M = len(control_limits)
     L = len(barrier_funcs)
+    INTEGRATOR_STATE = jnp.zeros((L,))
 
     if R is None:
         u_weights = jnp.array(M * [1])
         a_weights = jnp.array(L * [100])
         R = jnp.diag(jnp.hstack([u_weights, a_weights]))
 
+    #! TO DO -- Implement Programmatically
+    T = 10.0
+    rhod = 0.1
+    eta = 0.0
+    gamma = 0.1
+
+    def integrate(state, derivative, dt=0.05):
+        return state + derivative * dt
+
     def controller(x):
-        dynamics_f, dynamics_g = dynamics_func(x)
+        global INTEGRATOR_STATE
+        dynamics = dynamics_func(x)
+        N = len(dynamics[0])
+        if len(dynamics) == 2:
+            # Deterministic Model
+            dynamics_f, dynamics_g = dynamics
+            dynamics_s = jnp.zeros((N, N))
+        elif len(dynamics) == 3:
+            # Stochastic Model
+            dynamics_f, dynamics_g, dynamics_s = dynamics
 
         unom = nominal_input(x)
         anom = jnp.array(L * [alpha])
@@ -160,10 +186,17 @@ def adaptive_control_barrier_function_controller(
         # Formulate CBF constraint(s)
         Acbf = jnp.zeros((L, M + L))
         bcbf = jnp.zeros((L,))
-        for ib, (bf, bj) in enumerate(zip(barrier_funcs, barrier_jacobians)):
-            Acbf = Acbf.at[ib, :M].set(-bj(x) @ dynamics_g)
-            Acbf = Acbf.at[ib, M + ib].set(-bf(x))
-            bcbf = bcbf.at[ib].set(bj(x) @ dynamics_f)
+        trace_term = jnp.zeros((L,))
+        for ib, (bf, bj, bh) in enumerate(zip(barrier_funcs, barrier_jacobians, barrier_hessians)):
+            bf_val, bj_val, bh_val = bf(x), bj(x), bh(x)
+            func = risk_aware_barrier_transform(bf_val)
+            jaco = risk_aware_jacobian_transform(bf_val, bj_val)
+            hess = risk_aware_hessian_transform(bf_val, bj_val, bh_val)
+            trace_term = trace_term.at[ib].set(0.5 * jnp.trace(dynamics_s.T @ hess @ dynamics_s))
+            h = 1 - INTEGRATOR_STATE[ib] - gamma - (jnp.sqrt(2) * T * eta) * erfinv(1 - rhod)
+            Acbf = Acbf.at[ib, :M].set(jaco @ dynamics_g)
+            Acbf = Acbf.at[ib, M + ib].set(-h)
+            bcbf = bcbf.at[ib].set(-jaco @ dynamics_f - trace_term[ib])
 
         # Formulate complete set of inequality constraints
         A = matrix(arr(jnp.vstack([Au, Acbf]), dtype=float))
@@ -175,6 +208,16 @@ def adaptive_control_barrier_function_controller(
         # Saturate the solution if necessary
         u = jnp.squeeze(jnp.array(sol[:M]))
         u = jnp.clip(u, -control_limits, control_limits)
+
+        # Update integrator state
+        for ib, (bf, bj, bh) in enumerate(zip(barrier_funcs, barrier_jacobians, barrier_hessians)):
+            derivative = (
+                risk_aware_jacobian_transform(bf(x), bj(x)) @ (dynamics_f + dynamics_g @ u)
+                + trace_term[ib]
+            )
+            INTEGRATOR_STATE = INTEGRATOR_STATE.at[ib].set(
+                integrate(INTEGRATOR_STATE[ib], derivative)
+            )
 
         return u
 
@@ -220,11 +263,14 @@ def block_diag_matrix(n_blocks):
 def interleave_arrays(a, b):
     return jnp.ravel(jnp.column_stack((a, b)))
 
+
 def risk_aware_barrier_transform(h):
     return jnp.exp(-h)
 
+
 def risk_aware_jacobian_transform(h, dhdx):
     return -jnp.exp(-h) * dhdx
+
 
 def risk_aware_hessian_transform(h, dhdx, d2hdx2):
     return jnp.exp(-h) * (dhdx.T @ dhdx - d2hdx2)
