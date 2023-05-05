@@ -1,11 +1,21 @@
-import jax.numpy as jnp
 from typing import Callable
+
+import jax.numpy as jnp
 from jax import grad, jit
 from jax.interpreters.xla import DeviceArray
 from kvxopt import matrix, solvers
 from numpy import array as arr
 from scipy.linalg import block_diag
 from scipy.special import erfinv
+
+from ..solvers import qp_solver
+from .utils import (
+    block_diag_matrix,
+    interleave_arrays,
+    stochastic_barrier_transform,
+    stochastic_hessian_transform,
+    stochastic_jacobian_transform,
+)
 
 global INTEGRATOR_STATE
 
@@ -79,9 +89,8 @@ def risk_aware_cbf_controller(
         trace_term = jnp.zeros((L,))
         for ib, (bf, bj, bh) in enumerate(zip(barrier_funcs, barrier_jacobians, barrier_hessians)):
             bf_val, bj_val, bh_val = bf(x), bj(x), bh(x)
-            func = risk_aware_barrier_transform(bf_val)
-            jaco = risk_aware_jacobian_transform(bf_val, bj_val)
-            hess = risk_aware_hessian_transform(bf_val, bj_val, bh_val)
+            jaco = stochastic_jacobian_transform(bf_val, bj_val)
+            hess = stochastic_hessian_transform(bf_val, bj_val, bh_val)
             trace_term = trace_term.at[ib].set(0.5 * jnp.trace(dynamics_s.T @ hess @ dynamics_s))
             h = 1 - INTEGRATOR_STATE[ib] - gamma - (jnp.sqrt(2) * T * eta) * erfinv(1 - rhod)
             Acbf = Acbf.at[ib, :].set(jaco @ dynamics_g)
@@ -101,7 +110,7 @@ def risk_aware_cbf_controller(
         # Update integrator state
         for ib, (bf, bj, bh) in enumerate(zip(barrier_funcs, barrier_jacobians, barrier_hessians)):
             derivative = (
-                risk_aware_jacobian_transform(bf(x), bj(x)) @ (dynamics_f + dynamics_g @ u)
+                stochastic_jacobian_transform(bf(x), bj(x)) @ (dynamics_f + dynamics_g @ u)
                 + trace_term[ib]
             )
             INTEGRATOR_STATE = INTEGRATOR_STATE.at[ib].set(
@@ -189,9 +198,8 @@ def adaptive_risk_aware_cbf_controller(
         trace_term = jnp.zeros((L,))
         for ib, (bf, bj, bh) in enumerate(zip(barrier_funcs, barrier_jacobians, barrier_hessians)):
             bf_val, bj_val, bh_val = bf(x), bj(x), bh(x)
-            func = risk_aware_barrier_transform(bf_val)
-            jaco = risk_aware_jacobian_transform(bf_val, bj_val)
-            hess = risk_aware_hessian_transform(bf_val, bj_val, bh_val)
+            jaco = stochastic_jacobian_transform(bf_val, bj_val)
+            hess = stochastic_hessian_transform(bf_val, bj_val, bh_val)
             trace_term = trace_term.at[ib].set(0.5 * jnp.trace(dynamics_s.T @ hess @ dynamics_s))
             h = 1 - INTEGRATOR_STATE[ib] - gamma - (jnp.sqrt(2) * T * eta) * erfinv(1 - rhod)
             Acbf = Acbf.at[ib, :M].set(jaco @ dynamics_g)
@@ -212,7 +220,7 @@ def adaptive_risk_aware_cbf_controller(
         # Update integrator state
         for ib, (bf, bj, bh) in enumerate(zip(barrier_funcs, barrier_jacobians, barrier_hessians)):
             derivative = (
-                risk_aware_jacobian_transform(bf(x), bj(x)) @ (dynamics_f + dynamics_g @ u)
+                stochastic_jacobian_transform(bf(x), bj(x)) @ (dynamics_f + dynamics_g @ u)
                 + trace_term[ib]
             )
             INTEGRATOR_STATE = INTEGRATOR_STATE.at[ib].set(
@@ -223,56 +231,3 @@ def adaptive_risk_aware_cbf_controller(
         return u
 
     return controller
-
-
-def qp_solver(H, f, A, b, G=None, h=None):
-    """
-    Solve a quadratic program using the cvxopt solver.
-
-    Args:
-    H: quadratic cost matrix.
-    f: linear cost vector.
-    A: linear constraint matrix.
-    b: linear constraint vector.
-    G: quadratic constraint matrix.
-    h: quadratic constraint vector.
-
-    Returns:
-    sol['x']: Solution to the QP
-    """
-    # Use the cvxopt library to solve the quadratic program
-    P = matrix(H)
-    q = matrix(f)
-    A = matrix(A)
-    b = matrix(b)
-    options = {"show_progress": False}
-
-    if G is None and h is None:
-        sol = solvers.qp(P, q, A, b, options=options)
-    else:
-        G = matrix(G)
-        h = matrix(h)
-        sol = solvers.qp(P, q, G=G, h=h, A=A, b=b, options=options)
-
-    return sol["x"]
-
-
-def block_diag_matrix(n_blocks):
-    block = jnp.array([1, -1])
-    return jnp.array([block_diag(*([block] * n_blocks)).T])[0, :, :]
-
-
-def interleave_arrays(a, b):
-    return jnp.ravel(jnp.column_stack((a, b)))
-
-
-def risk_aware_barrier_transform(h):
-    return jnp.exp(-h)
-
-
-def risk_aware_jacobian_transform(h, dhdx):
-    return -jnp.exp(-h) * dhdx
-
-
-def risk_aware_hessian_transform(h, dhdx, d2hdx2):
-    return jnp.exp(-h) * (jnp.matmul(dhdx[:, None], dhdx[None, :]) - d2hdx2)
