@@ -226,8 +226,7 @@ def adaptive_risk_aware_cbf_controller(
             INTEGRATOR_STATE = INTEGRATOR_STATE.at[ib].set(
                 integrate(INTEGRATOR_STATE[ib], derivative)
             )
-            print(f"IS[{ib}]: {INTEGRATOR_STATE[ib]}")
-
+            
         return u
 
     return controller

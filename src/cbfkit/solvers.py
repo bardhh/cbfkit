@@ -1,4 +1,4 @@
-from cvxopt import matrix, solvers
+from kvxopt import matrix, solvers
 
 
 def qp_solver(H, f, A, b, G=None, h=None):
