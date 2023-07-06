@@ -23,7 +23,7 @@ from .utils import (
     stochastic_jacobian_transform,
 )
 
-global INTEGRATOR_STATES, RB, RV, ETAB, ETAV
+global INTEGRATOR_STATES, RB, ETAB
 
 
 def risk_aware_cbf_controller(
