@@ -1,13 +1,17 @@
-import jax.numpy as jnp
 from typing import Callable
+
+import jax.numpy as jnp
 from jax import grad, jit
 from jax.interpreters.xla import DeviceArray
 from kvxopt import matrix, solvers
 from numpy import array as arr
 from scipy.linalg import block_diag
 
+from ..solvers import qp_solver
+from .utils import block_diag_matrix, interleave_arrays
 
-def control_barrier_function_controller(
+
+def cbf_controller(
     nominal_input: Callable,
     dynamics_func: Callable,
     barrier_funcs: Callable,
@@ -73,7 +77,7 @@ def control_barrier_function_controller(
     return controller
 
 
-def adaptive_control_barrier_function_controller(
+def adaptive_cbf_controller(
     nominal_input: Callable,
     dynamics_func: Callable,
     barrier_funcs: Callable,
@@ -144,37 +148,6 @@ def adaptive_control_barrier_function_controller(
         return u
 
     return controller
-
-
-def qp_solver(H, f, A, b, G=None, h=None):
-    """
-    Solve a quadratic program using the cvxopt solver.
-
-    Args:
-    H: quadratic cost matrix.
-    f: linear cost vector.
-    A: linear constraint matrix.
-    b: linear constraint vector.
-    G: quadratic constraint matrix.
-    h: quadratic constraint vector.
-
-    Returns:
-    sol['x']: Solution to the QP
-    """
-    # Use the cvxopt library to solve the quadratic program
-    P = matrix(H)
-    q = matrix(f)
-    A = matrix(A)
-    b = matrix(b)
-
-    if G is None and h is None:
-        sol = solvers.qp(P, q, A, b)
-    else:
-        G = matrix(G)
-        h = matrix(h)
-        sol = solvers.qp(P, q, G=G, h=h, A=A, b=b)
-
-    return sol["x"]
 
 
 def block_diag_matrix(n_blocks):
