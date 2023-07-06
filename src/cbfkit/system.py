@@ -1,42 +1,70 @@
 import jax.numpy as jnp
-from jax import jit, random
-from tail_recursion import tail_recursive
+from jax import random, Array
+from typing import Any, Dict, Iterator, Optional, Tuple, List
+from cbfkit.utils.logger import log, write_log
+from cbfkit.utils.numerical_integration import forward_euler as integrator
+from cbfkit.utils.user_types import ControllerCallable, DynamicsCallable, NumSteps, State, Time
 
-key = random.PRNGKey(0)
-
-
-def step(state, dynamics, controller, dt):
-    u = controller(state)
-    dyn = dynamics(state)
-    if len(dyn) == 2:
-        f, g = dynamics(state)
-        xdot = jnp.add(f, jnp.matmul(g, u))
-        dx = jnp.multiply(dt, xdot)
-    elif len(dyn) == 3:
-        f, g, s = dynamics(state)
-        dw = random.normal(key, shape=(s.shape[1],))
-        xdot = jnp.add(f, jnp.matmul(g, u))
-        dx = jnp.add(jnp.multiply(dt, xdot), jnp.matmul(s, dw))
-
-    return jnp.add(state, dx)
+global KEY
+KEY = random.PRNGKey(0)
 
 
-def simulate_iter(state, dynamics, controller, dt, num_steps):
-    for _ in range(num_steps):
-        state = step(state, dynamics, controller, dt)
-        yield state
+# This function computes the next state of a dynamical system given its current state,
+# dynamics, controller, and time step.
+def step(
+    t: Time, state: State, dynamics: DynamicsCallable, controller: ControllerCallable, dt: Time
+) -> Tuple[State, Dict[str, Any]]:
+    global KEY
+    u, data = controller(t, state)
+    f, g, s = dynamics(state)
+
+    # Deterministic Dynamics
+    if s is None:
+        xdot = f + jnp.matmul(g, u)
+
+    # Stochastic Dynamics
+    else:
+        KEY, subkey = random.split(KEY)
+        dw = random.normal(subkey, shape=(s.shape[1],))
+        xdot = f + jnp.matmul(g, u) + jnp.matmul(s, dw)
+
+    new_state = integrator(state, xdot, dt)
+
+    return new_state, data
 
 
-def simulate(state, dynamics, controller, dt, num_steps):
-    return tuple(simulate_iter(state, dynamics, controller, dt, num_steps))
+# This generator function simulates the dynamical system for a given number of steps,
+# yielding the state at each step.
+def simulate_iter(
+    state: State,
+    dynamics: DynamicsCallable,
+    controller: ControllerCallable,
+    dt: Time,
+    num_steps: NumSteps,
+) -> Iterator[Tuple[State, List[str], List[Array]]]:
+    for s in range(num_steps):
+        state, data = step(dt * s, state, dynamics, controller, dt)
+        log(data)
+
+        yield state, list(data.keys()), list(data.values())
 
 
-# @tail_recursive
-# def simulate_system(state, dynamics, dt, num_steps, accumulator=None):
-#     if accumulator is None:
-#         accumulator = tuple()
+# This function simulates the dynamical system for a given number of steps,
+# returning a tuple of all states. Optionally, it can also write the logged data to a file.
+def simulate(
+    state: State,
+    dynamics: DynamicsCallable,
+    controller: ControllerCallable,
+    dt: Time,
+    num_steps: NumSteps,
+    filepath: Optional[str] = None,
+) -> Tuple[Array, List[str], List[Array]]:
+    simulation_data = tuple(simulate_iter(state, dynamics, controller, dt, num_steps))
+    if filepath is not None:
+        write_log(filepath)
 
-#     if num_steps == 0:
-#         return accumulator + (state,)
-#     new_state = step(state, dynamics, dt)
-#     recurse(new_state, dynamics, dt, num_steps - 1, accumulator + (new_state,))
+    state_trajectories = jnp.array([sim_data[0] for sim_data in simulation_data])
+    data_keys = simulation_data[0][1]
+    data_values = [sim_data[2] for sim_data in simulation_data]
+
+    return state_trajectories, data_keys, data_values  # type: ignore[return-value]
