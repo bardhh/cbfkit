@@ -5,6 +5,7 @@ description = "A Control Barrier Function Toolbox for Robotics Applications"
 authors = ["Bardh Hoxha <bardhh@gmail.com>"]
 license = "MIT"
 readme = "README.md"
+packages = [{include="cbfkit", from="src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.12"
