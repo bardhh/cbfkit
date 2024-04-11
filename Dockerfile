@@ -41,13 +41,13 @@ RUN python3.10 -m pip install poetry==$POETRY_VERSION
 # Expose the port that Jupyter Notebook will run on
 EXPOSE 8888
 
-WORKDIR /home/cbfkit_internal
+WORKDIR /home/cbfkit
 
 # Copy the project files
 COPY pyproject.toml poetry.lock ./
 
 # Set the PYTHONPATH to include /home and project directories
-ENV PYTHONPATH="/home:/home/cbfkit_internal:/home/cbfkit_internal/src:${PYTHONPATH}"
+ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 
 # Project initialization and conditionally install cvxopt if on x86 architecture
 RUN poetry install --no-interaction && \
