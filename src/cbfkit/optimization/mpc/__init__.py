@@ -1,0 +1,1 @@
+from .quadratic_cost_linear_dynamics import generate_mpc_solver_quadratic_cost_linear_dynamics

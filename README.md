@@ -1,31 +1,118 @@
-# CBFKit
+# CBFKit: A Control Barrier Function Toolbox for Robotics Applications
 
-A Control Barrier Function Toolbox for Robotics Applications.
+CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control for robotics applications, particularly in uncertain environments. The toolbox utilizes Control Barrier Functions (CBFs) to provide formal safety guarantees while offering flexibility and ease of use.
 
-## Description
+## Table of Contents
+- [Key Features](#key-features)
+- [Supported Models](#supported-models)
+- [Applications](#applications)
+- [Installation](#installation)
+- [Tutorials](#tutorials)
+- [ROS2](#ros2)
+- [Citing CBFKit](#citing-cbfkit)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
 
-CBFKit is a Python toolbox for control barrier functions (CBFs) for robotics applications. The toolbox includes functions for synthesizing controllers that satisfy the CBF conditions.
+## Key Features
+- **Generalized Framework:** Supports the design of CBFs for various robotic systems operating in both deterministic and stochastic settings.
+- **ROS Integration:** Seamlessly connects with ROS2, enabling multi-robot applications, environment and map encoding, and integration with motion planning algorithms.
+- **Diverse CBF Options:** Provides a variety of CBF formulations and algorithms to address different control scenarios.
+- **Model-based and Model-free Control:** Accommodates both model-based control strategies using system dynamics and model-free control approaches.
+- **Safety Guarantee:** CBFs provide mathematically rigorous guarantees of safety by ensuring the system remains within a defined safe operating region.
+- **Flexibility:** Allows users to specify custom safety constraints and barrier functions to tailor the control behavior to specific needs.
+- **Efficiency:** Leverages JAX for efficient automatic differentiation and jaxopt for fast quadratic program (QP) solving, enabling real-time control applications.
+- **Code Generation:** Simplifies model creation with automatic code generation for dynamics, controllers, and certificate functions.
+- **Usability:** Includes tutorials and examples for a smooth learning curve and rapid prototyping.
+
+## Supported Models
+CBFKit accommodates a range of control-affine system models:
+- **Deterministic Continuous-time ODEs:** $\dot{x} = f(x) + g(x)u$
+- **ODEs with Bounded Disturbances:** $\dot{x} = f(x) + g(x)u + Mw$
+- **Stochastic Differential Equations (SDEs):** $dx = (f(x) + g(x)u)dt + \sigma(x)dw$
+
+## Applications
+CBFKit can be applied to diverse robotics applications, including:
+- **Autonomous Navigation:** Ensure collision avoidance with static and dynamic obstacles.
+- **Human-Robot Interaction:** Guarantee safety during collaborative tasks and physical interaction.
+- **Manipulation:** Control robot arms while avoiding obstacles and joint limits.
+- **Multi-Robot Coordination:** Coordinate the movement of multiple robots while maintaining safe distances and avoiding collisions.
 
 ## Installation
+CBFKit is readily deployable via a Docker image. After setting up Docker (refer to the [official Docker documentation](https://docs.docker.com/get-started/) for detailed instructions), proceed with one of the following methods:
 
-To install CBFKit, you need to have Python 3.8 or later installed on your system. Then,  run the following command in the root directory of the repository:
+### 1. VS Code DevContainer Launch
+1. Open the project in VS Code.
+2. Click the green button at the bottom right of the window to launch the DevContainer.
+3. All necessary components are pre-installed for immediate use.
 
-```bash
-poetry install
-```
-
-## Usage
-
-To use CBFKit in your Python code, simply import it as follows:
-
-```python
-import cbfkit
-```
+### 2. Docker Command Line
+1. Build the image:
+   ```
+   docker build -t cbfkit:latest -f Dockerfile.$(uname -m) .
+   ```
+2. Run the container:
+   ```
+   docker run -it --name container-name -v .:/workspace cbfkit:latest
+   ```
 
 ## Tutorials
+Explore the `tutorials` directory to help you get started with CBFKit. Open the Python notebook in the `tutorials` directory to get started. The script `simulate_new_control_system.ipynb` automatically generates the controller, plant, and certificate function for a Van der Pol oscillator. It also generates ROS2 nodes for the plant, controller, sensor, and estimator. These serve as a starting point for developing your own CBF-based controller.
 
-To run the tutorials, please see the `tutorials` directory.
+Generated files/folders:
+```
+van_der_pol_oscillator
+ ┣ certificate_functions
+ ┃ ┣ barrier_functions
+ ┃ ┃ ┣ __init__.py
+ ┃ ┃ ┣ barrier_1.py
+ ┃ ┃ ┗ barrier_2.py
+ ┃ ┣ lyapunov_functions
+ ┃ ┃ ┣ __init__.py
+ ┃ ┃ ┗ lyapunov_1.py
+ ┃ ┗ __init__.py
+ ┣ controllers
+ ┃ ┣ __init__.py
+ ┃ ┣ controller_1.py
+ ┃ ┗ zero_controller.py
+ ┣ ros2
+ ┃ ┣ __init__.py
+ ┃ ┣ config.py
+ ┃ ┣ controller.py
+ ┃ ┣ estimator.py
+ ┃ ┣ plant_model.py
+ ┃ ┗ sensor.py
+ ┣ __init__.py
+ ┣ constants.py
+ ┣ plant.py
+ ┗ run_ros2_nodes.sh
+```
+
+## ROS2
+The ROS2 nodes are generated in the `ros2` directory. The nodes are generated for the plant, controller, sensor, and estimator.
+
+To run the nodes, execute the following command in the `van_der_pol_oscillator` directory:
+```bash
+bash run_ros2_nodes.sh
+```
+The generated nodes interact as follows:
+- The `plant_model` node simulates the physical system and publishes the system state.
+- The `sensor` node receives the system state and adds noise to simulate real-world measurements.
+- The `estimator` node receives the noisy measurements and estimates the true system state.
+- The `controller` node receives the estimated state and computes the control input based on the CBF formulation.
+
+## Citing CBFKit
+If you use CBFKit in your research, please cite the following paper:
+```bibtex
+@misc{black2024cbfkit,
+title={CBFKIT: A Control Barrier Function Toolbox for Robotics Applications},
+author={Mitchell Black and Georgios Fainekos and Bardh Hoxha and Hideki Okamoto and Danil Prokhorov},
+year={2024},
+eprint={2404.07158},
+archivePrefix={arXiv},
+primaryClass={cs.RO}
+}
+```
 
 ## License
-
-CBFKit is licensed under the MIT license. See the `LICENSE` file for more information.
+CBFKit is distributed under the BSD 3-Clause License. Refer to the `LICENSE` file for detailed terms.
