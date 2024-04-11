@@ -1,0 +1,49 @@
+{
+	"name": "CBFkit Docker container",
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "cbfkit_internal",
+	"workspaceFolder": "/home/cbfkit_internal",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"esbenp.prettier-vscode",
+				"redhat.vscode-yaml",
+				"aaron-bond.better-comments",
+				"shardulm94.trailing-spaces",
+				"ms-python.black-formatter",
+				"ms-toolsai.jupyter"
+			],
+			"configurations": [
+				{
+					"name": "Python: Current File",
+					"type": "python",
+					"request": "launch",
+					"program": "${file}",
+					"console": "integratedTerminal",
+					"justMyCode": true
+				}
+			],
+			"settings": {
+				"[python]": {
+					"editor.defaultFormatter": "ms-python.black-formatter",
+					"python.formatting.provider": "black",
+					"editor.formatOnSave": true,
+					"editor.codeActionsOnSave": {
+						"source.organizeImports": true
+					},
+					"python.formatting.blackArgs": [
+						"--line-length",
+						"88",
+						"--skip-magic-trailing-comma"
+					]
+				},
+				"nb_black.black_on_save": true,
+				"isort.args": [
+					"--profile",
+					"black"
+				]
+			}
+		}
+	}
+}
