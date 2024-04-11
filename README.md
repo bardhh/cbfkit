@@ -58,7 +58,7 @@ CBFKit is readily deployable via a Docker image. After setting up Docker (refer 
 
 ## Examples
 
-We provide several examples of how to use CBFkit to conduct full simulations of arbitrary dynamical systems, including a unicycle robot, fixed-wing aerial vehicle, and more, all of which may be found in the ```examples``` folder. Any file contained within ```examples``` or any of its subdirectories whose name takes the form of ```*main.py``` is an executable example.
+Several examples of how to use CBFkit to conduct full simulations of arbitrary dynamical systems are provided, including a unicycle robot, fixed-wing aerial vehicle, and more, all of which may be found in the ```examples``` folder. Any file contained within ```examples``` or any of its subdirectories whose name takes the form of ```*main.py``` is an executable example that may be referenced when a user is building their own application.
 
 See below for the script used to simulate a unicycle robot navigating toward a goal set amidst three ellipsoidal obstacles, which may be found at ```examples/unicycle/vanilla_cbf_start_to_goal_main.py```:
 

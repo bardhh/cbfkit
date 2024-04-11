@@ -76,7 +76,7 @@ x, u, z, p, data, data_keys = sim.execute(
 
 plot = 0
 animate = 1
-save = 0
+save = 1
 
 if plot:
     from examples.unicycle.start_to_goal.visualizations import plot_trajectory

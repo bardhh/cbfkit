@@ -1,21 +1,26 @@
 import matplotlib
 
-matplotlib.use("macosx")
+# matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.patches import Ellipse
 
 
 #! PLOTTING
 def plot_trajectory(
-    fig,
-    ax,
+    # fig,
+    # ax,
     states,
     desired_state,
     desired_state_radius=0.25,
+    obstacles=[],
+    ellipsoids=[],
     x_lim=(-4, 4),
     y_lim=(-4, 4),
     title="System Behavior",
 ):
+    fig, ax = plt.subplots()
+
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
 
@@ -30,27 +35,26 @@ def plot_trajectory(
             linewidth=1,
         )
     )
-    for x, y, r in zip(CX, CY, R):
+    # for x, y, r in zip(CX, CY, R):
+    #     ax.add_patch(
+    #         plt.Circle(
+    #             (x, y),
+    #             r,
+    #             color="k",
+    #             fill=True,
+    #             linestyle="-",
+    #             linewidth=1,
+    #         )
+    #     )
+    for obs, ell in zip(obstacles, ellipsoids):
         ax.add_patch(
-            plt.Circle(
-                (x, y),
-                r,
-                color="k",
-                fill=True,
-                linestyle="-",
-                linewidth=1,
+            Ellipse(
+                (obs[0], obs[1]),
+                width=ell[0] * 2,
+                height=ell[1] * 2,
+                facecolor="k",
             )
         )
-    # ax.add_patch(
-    #     plt.Circle(
-    #         (CX, CY),
-    #         R,
-    #         color="k",
-    #         fill=True,
-    #         linestyle="-",
-    #         linewidth=1,
-    #     )
-    # )
 
     ax.plot(states[:, 0], states[:, 1], label="Trajectory")
 
@@ -71,11 +75,13 @@ def animate(
     estimates,
     desired_state,
     desired_state_radius=0.1,
+    obstacles=[],
+    ellipsoids=[],
     x_lim=(-4, 4),
     y_lim=(-4, 4),
     dt=0.1,
     title="System Behavior",
-    save_animation=False,
+    save_animation=True,
     animation_filename="system_behavior.gif",
 ):
     def init():
@@ -110,6 +116,16 @@ def animate(
             linewidth=1,
         )
     )
+
+    for obs, ell in zip(obstacles, ellipsoids):
+        ax.add_patch(
+            Ellipse(
+                (obs[0], obs[1]),
+                width=ell[0] * 2,
+                height=ell[1] * 2,
+                facecolor="k",
+            )
+        )
 
     (trajectory,) = ax.plot([], [], label="Trajectory")
     (etrajectory,) = ax.plot([], [], label="Estimated Trajectory")
