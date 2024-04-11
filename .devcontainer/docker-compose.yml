@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  cbfkit_internal:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    volumes:
+      - ../:/home/cbfkit_internal
+    stdin_open: true
+    tty: true

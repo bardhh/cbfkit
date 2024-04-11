@@ -1,10 +1,11 @@
 {
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.black-formatter",
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-            "source.organizeImports": true
-        },
-      },
-      "isort.args":["--profile", "black"],
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "analysis.typeCheckingMode": "strict"
+  },
+  "cmake.configureOnOpen": false,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  }
 }
