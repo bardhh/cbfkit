@@ -24,6 +24,7 @@ CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control
 - **Efficiency:** Leverages JAX for efficient automatic differentiation and jaxopt for fast quadratic program (QP) solving, enabling real-time control applications.
 - **Code Generation:** Simplifies model creation with automatic code generation for dynamics, controllers, and certificate functions.
 - **Usability:** Includes tutorials and examples for a smooth learning curve and rapid prototyping.
+- **Functional Programming:** Built on functional programming principles, emphasizing data immutability and programmatic determinism. 
 
 ## Supported Models
 CBFKit accommodates a range of control-affine system models:
