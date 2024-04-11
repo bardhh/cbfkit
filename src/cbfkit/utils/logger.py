@@ -1,5 +1,32 @@
-import pandas as pd
+"""
+logger
+================
+
+This module provides functions required for logging simulation data.
+
+Functions
+---------
+log(new_data): adds the latest data to the log
+write_log(filepath): writes the data contained in the log to a .csv file
+extract_log(key): retrieves data corresponding to key from log
+
+Notes
+-----
+This is currently implemented inefficiently, as it is designed to work
+for any type of simulation with arbitrary data.
+
+Examples
+--------
+>>> import logger
+>>> data = {'x': 1, 'y':2}
+>>> logger.log(data)
+>>> fpath = "point.csv"
+>>> logger.write_log(fpath)
+>>> x = logger.extract_log("x")
+
+"""
 from typing import Dict, Any
+import pandas as pd
 
 # Main logger variable
 LOG = []
@@ -28,6 +55,11 @@ def write_log(filepath: str) -> None:
     None
 
     """
+    if filepath[-4:] != ".csv":
+        if filepath[-4] == ".":
+            raise ValueError("filepath must have no extension, or have extension `.csv`")
+        filepath += ".csv"
+
     df = pd.DataFrame.from_dict(LOG)
     df.to_csv(filepath)
 

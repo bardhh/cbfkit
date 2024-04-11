@@ -1,0 +1,22 @@
+The following is the template for module-level docstrings:
+
+"""
+title
+================
+
+Description of module
+
+Functions
+---------
+-function(a): description
+
+Notes
+-----
+Various notes here
+
+Examples
+--------
+>>> import title
+>>> run code
+
+"""
