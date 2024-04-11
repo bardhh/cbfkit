@@ -1,8 +1,8 @@
 {
 	"name": "CBFkit Docker container",
 	"dockerComposeFile": "docker-compose.yml",
-	"service": "cbfkit_internal",
-	"workspaceFolder": "/home/cbfkit_internal",
+	"service": "cbfkit",
+	"workspaceFolder": "/home/cbfkit",
 	"customizations": {
 		"vscode": {
 			"extensions": [
