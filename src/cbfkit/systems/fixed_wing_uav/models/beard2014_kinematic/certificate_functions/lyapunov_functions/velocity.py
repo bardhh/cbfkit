@@ -4,9 +4,12 @@ lyapunov_fcn_catalog.py
 This file contains a catalog of candidate lyapunov functions and their associated
 gradients, Hessians, etc., for use in control Lyapunov function-based controllers.
 """
+
 import jax.numpy as jnp
 from jax import jit, jacfwd, jacrev, Array
-from cbfkit.controllers.utils.certificate_packager import certificate_package
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    certificate_package,
+)
 
 
 # constants
@@ -42,10 +45,7 @@ def clf(goal: Array, r: float) -> Array:
 
         xdot_d, ydot_d, zdot_d = vg, (yg - y), (zg - z)
 
-        V = (
-            0.5 * (((xdot - xdot_d)) ** 2 + ((ydot - ydot_d)) ** 2 + ((zdot - zdot_d)) ** 2)
-            - r**2
-        )
+        V = 0.5 * (((xdot - xdot_d)) ** 2 + ((ydot - ydot_d)) ** 2 + ((zdot - zdot_d)) ** 2) - r**2
 
         return V
 
@@ -102,26 +102,3 @@ def clf_hess(goal: Array, r: float) -> Array:
 # Future-Focused CBF (Constant Velocity)
 ###############################################################################
 velocity = certificate_package(clf, clf_grad, clf_hess, N)
-
-
-# def velocity(goal: Array, r: float) -> LyapunovTuple:
-#     """Callable that generates Lyapunov function and its associated
-
-#     Args:
-#         goal (Array): goal position vector [xg, yg, zg]
-#         r (float): acceptable radius (in m) around goal location
-
-#     Returns:
-#         LyapunovTuple: _description_
-#     """
-#     v_func: LyapunovCallable = lambda t, x: V_vel(jnp.hstack([x, t]), goal, r)  # type: ignore[return-value]
-#     j_func: LyapunovJacobianCallable = lambda t, x: dV_vel_dx(jnp.hstack([x, t]), goal, r)[:N]  # type: ignore[return-value]
-#     h_func: LyapunovHessianCallable = lambda t, x: dV2_vel_dx2(jnp.hstack([x, t]), goal, r)[:N, :N]  # type: ignore[return-value]
-#     p_func: LyapunovPartialCallable = lambda t, x: dV_vel_dx(jnp.hstack([x, t]), goal, r)[-1]  # type: ignore[return-value]
-
-#     return (
-#         [v_func],
-#         [j_func],
-#         [h_func],
-#         [p_func],
-#     )

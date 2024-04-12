@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jax import jit, Array
+from jax import jit, Array, jacfwd
 from typing import Optional, Union, Callable
 from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
 from cbfkit.modeling.additive_disturbances import (
@@ -8,97 +8,6 @@ from cbfkit.modeling.additive_disturbances import (
 )
 
 g_accel = 9.81
-
-
-def sde_plant(sigma: Callable[[Array], Array], dt: float) -> DynamicsCallable:
-    """Plant model in stochastic differential equation (SDE) form.
-
-    dx = (f(x) + g(x)u)dt + s(x)dw
-
-    The nominal model characterized by this function may be found in Beard et al. 2014
-    "Fixed Wing UAV Path Following in Wind with Input Constraints".
-
-    States are the following:
-        x: x-position in inertial frame
-        y: y-position in inertial frame
-        z: z-position in inertial frame
-        v: airspeed
-        psi: yaw angle
-        gamma: flight path angle
-
-    Control inputs are the following:
-        a: rate of change of airspeed
-        omega: rate of change of gamma
-        tan(phi): tangent of the roll angle
-
-    Args:
-        sigma (Callable[Array, [Array]]): diffusion function in SDE
-
-    Returns:
-        plant (DynamicsCallable): plant model with additive, stochastic perturbation
-    """
-    return plant(generate_stochastic_perturbation(sigma, dt))
-
-
-def ode_perturbed_plant(perturbation: Callable[[Array], Array]) -> DynamicsCallable:
-    """Plant model in ordinary differential equation (ODE) form subject to
-    an additive, bounded perturbation (function of the state).
-
-    dx/dt = f(x) + g(x)u + p(x)
-
-    The nominal model characterized by this function may be found in Beard et al. 2014
-    "Fixed Wing UAV Path Following in Wind with Input Constraints".
-
-    States are the following:
-        x: x-position in inertial frame
-        y: y-position in inertial frame
-        z: z-position in inertial frame
-        v: airspeed
-        psi: yaw angle
-        gamma: flight path angle
-
-    Control inputs are the following:
-        a: rate of change of airspeed
-        omega: rate of change of gamma
-        tan(phi): tangent of the roll angle
-
-    Args:
-        perturbation (Callable[Array, [Array]]): additive perturbation to nominal dynamics
-
-    Returns:
-        plant (DynamicsCallable): plant model with additive, bounded perturbation
-    """
-    return plant(generate_bounded_perturbation(perturbation))
-
-
-def ode_plant() -> DynamicsCallable:
-    """Nominal plant model in ordinary differential equation (ODE) form.
-
-    dx/dt = f(x) + g(x)u
-
-    The model characterized by this function may be found in Beard et al. 2014
-    "Fixed Wing UAV Path Following in Wind with Input Constraints".
-
-    States are the following:
-        x: x-position in inertial frame
-        y: y-position in inertial frame
-        z: z-position in inertial frame
-        v: airspeed
-        psi: yaw angle
-        gamma: flight path angle
-
-    Control inputs are the following:
-        a: rate of change of airspeed
-        omega: rate of change of gamma
-        tan(phi): tangent of the roll angle
-
-    Args:
-        None
-
-    Returns:
-        plant (DynamicsCallable): nominal plant model
-    """
-    return plant()
 
 
 def plant() -> DynamicsCallable:
@@ -182,3 +91,13 @@ def plant() -> DynamicsCallable:
         return f, g
 
     return kinematics
+
+
+def plant_jacobians():
+
+    jacobian = jacfwd(plant())
+
+    def func(x: Array) -> Array:
+        return jacobian(x)
+
+    return func
