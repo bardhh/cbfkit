@@ -1,6 +1,8 @@
 import jax.numpy as jnp
 from jax import jit, jacfwd, jacrev, Array
-from cbfkit.controllers.utils.certificate_packager import certificate_package
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    certificate_package,
+)
 
 #! Circular Obstacle Avoidance
 N = 3
