@@ -186,7 +186,7 @@ x, u, z, p, data, data_keys = sim.execute(
 ```
 
 ## Citing CBFKit
-If you use CBFKit in your research, please cite the following paper:
+If you use CBFKit in your research, please cite the following [PAPER](https://arxiv.org/abs/2404.07158):
 ```bibtex
 @misc{black2024cbfkit,
 title={CBFKIT: A Control Barrier Function Toolbox for Robotics Applications},
