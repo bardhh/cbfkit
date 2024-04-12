@@ -4,9 +4,12 @@ position_ff.py
 This file contains a catalog of candidate lyapunov functions and their associated
 gradients, Hessians, etc., for use in control Lyapunov function-based controllers.
 """
+
 import jax.numpy as jnp
 from jax import jit, jacfwd, jacrev, Array
-from cbfkit.controllers.utils.certificate_packager import certificate_package
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    certificate_package,
+)
 
 # from cbfkit.utils.user_types import (
 #     CertificateCallable,
