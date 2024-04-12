@@ -8,6 +8,3 @@ y_rand = np.random.uniform(low=-y_max, high=y_max)
 a_rand = np.random.uniform(low=-jnp.pi, high=jnp.pi)
 initial_state = jnp.array([x_rand, y_rand, a_rand])
 desired_state = jnp.array([0.0, 0.0, 0])
-
-Q = 0.5 * jnp.eye(len(initial_state))
-R = None
