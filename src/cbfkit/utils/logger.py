@@ -25,6 +25,8 @@ Examples
 >>> x = logger.extract_log("x")
 
 """
+
+import os
 from typing import Dict, Any
 import pandas as pd
 
@@ -55,6 +57,9 @@ def write_log(filepath: str) -> None:
     None
 
     """
+    folder_path = "/".join(filepath.split("/")[:-1])
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
     if filepath[-4:] != ".csv":
         if filepath[-4] == ".":
             raise ValueError("filepath must have no extension, or have extension `.csv`")
