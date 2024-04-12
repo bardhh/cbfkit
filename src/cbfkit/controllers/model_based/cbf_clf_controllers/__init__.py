@@ -1,7 +1,7 @@
-from .risk_aware_cbf_clf_qp_control_law import risk_aware_cbf_clf_qp_controller
-from .risk_aware_path_integral_cbf_clf_qp_control_law import (
+from .risk_aware_cbf_clf_qp_control_laws import risk_aware_cbf_clf_qp_controller
+from .risk_aware_path_integral_cbf_clf_qp_control_laws import (
     risk_aware_path_integral_cbf_clf_qp_controller,
 )
-from .robust_cbf_clf_qp_control_law import robust_cbf_clf_qp_controller
-from .stochastic_cbf_clf_qp_control_law import stochastic_cbf_clf_qp_controller
-from .vanilla_cbf_clf_qp_control_law import vanilla_cbf_clf_qp_controller
+from .robust_cbf_clf_qp_control_laws import robust_cbf_clf_qp_controller
+from .stochastic_cbf_clf_qp_control_laws import stochastic_cbf_clf_qp_controller
+from .vanilla_cbf_clf_qp_control_laws import vanilla_cbf_clf_qp_controller

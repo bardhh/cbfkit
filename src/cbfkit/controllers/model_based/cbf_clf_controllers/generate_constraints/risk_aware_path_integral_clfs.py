@@ -14,6 +14,9 @@ from .unpack import unpack_for_clf
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params import (
+    RiskAwareParams,
+)
 
 
 ###################################################################################################
@@ -35,16 +38,16 @@ def generate_compute_ra_pi_clf_constraints(
     )
 
     # Check for Risk-Aware Params object
-    if "ra_params" not in kwargs:
-        raise ValueError("kwargs missing ra_params object!")
+    if "ra_clf_params" in kwargs:
+        ra_params = kwargs["ra_clf_params"]
+        r_buffer = float(
+            ra_params.eta * jnp.sqrt(2 * ra_params.t_max) * scipy.special.erfinv(ra_params.p_bound)
+        )
+    else:
+        ra_params = RiskAwareParams(sigma=lambda _: None)
+        r_buffer = 0.0
 
-    ra_params = kwargs["ra_params"]
-    r_buffer = float(
-        ra_params.ra_clf.eta
-        * jnp.sqrt(2 * ra_params.ra_clf.t_max)
-        * scipy.special.erfinv(ra_params.ra_clf.p_bound)
-    )
-    ra_params.ra_clf.integrator_states = jnp.zeros((n_lfs,))
+    ra_params.integrator_states = jnp.zeros((n_lfs,))
 
     @jit
     def compute_clf_constraints(t: float, x: State) -> Tuple[Array, Array]:
@@ -53,13 +56,13 @@ def generate_compute_ra_pi_clf_constraints(
         data = {}
         dyn_f, dyn_g = dyn_func(x)
         sigma = ra_params.sigma(x)
-        ra_params.ra_clf.integrator_states = lax.cond(
-            t == 0, lambda _: jnp.zeros((n_lfs,)), lambda _: ra_params.ra_clf.integrator_states, 0
+        ra_params.integrator_states = lax.cond(
+            t == 0, lambda _: jnp.zeros((n_lfs,)), lambda _: ra_params.integrator_states, 0
         )
 
         if n_lfs > 0:
             lf_x, lj_x, lh_x, dlf_t, _ = compute_lyapunov_values(t, x)
-            w_vals = ra_params.ra_clf.integrator_states + ra_params.ra_clf.gamma + r_buffer
+            w_vals = ra_params.integrator_states + ra_params.gamma + r_buffer
             lc_x = jnp.stack([lc(w_vals[ii]) for ii, lc in enumerate(conditions)])
             traces = jnp.array(
                 [0.5 * jnp.trace(jnp.matmul(jnp.matmul(sigma.T, lh_ii), sigma)) for lh_ii in lh_x]

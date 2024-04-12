@@ -20,7 +20,7 @@ Examples
 >>> import jax.numpy as jnp
 >>> import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
 >>> from cbfkit.controllers.utils import concatenate_certificates
->>> from cbfkit.controllers.utils.barrier_conditions.zeroing_barriers import linear_class_k
+>>> from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import linear_class_k
 >>> from cbfkit.controllers.model_based.cbf_clf_controllers import risk_aware_cbf_clf_qp_controller
 >>>
 >>> nominal_controller = unicycle.controllers.proportional_controller(k=1.0)
@@ -47,9 +47,16 @@ from .cbf_clf_qp_generator import cbf_clf_qp_generator
 from .generate_constraints import (
     generate_compute_ra_cbf_constraints,
     generate_compute_ra_clf_constraints,
+    generate_compute_estimate_feedback_ra_cbf_constraints,
+    generate_compute_estimate_feedback_ra_clf_constraints,
 )
 
 risk_aware_cbf_clf_qp_controller: ControllerCallable = cbf_clf_qp_generator(
     generate_compute_ra_cbf_constraints,
     generate_compute_ra_clf_constraints,
+)
+
+estimate_feedback_risk_aware_cbf_clf_qp_controller: ControllerCallable = cbf_clf_qp_generator(
+    generate_compute_estimate_feedback_ra_cbf_constraints,
+    generate_compute_estimate_feedback_ra_clf_constraints,
 )

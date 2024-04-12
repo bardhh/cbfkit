@@ -17,8 +17,8 @@ and CLFs for control.
 Examples
 --------
 >>> from jax import jacfwd, jacrev
->>> from cbfkit.controllers.utils.certificate_packager import certificate_package, concatenate_certificates
->>> from cbfkit.controllers.utils.barrier_conditions.zeroing_barriers import linear_class_k
+>>> from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package, concatenate_certificates
+>>> from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import linear_class_k
 >>> 
 >>> def cbf(limit):
 >>>     def func(x):

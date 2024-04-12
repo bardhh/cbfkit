@@ -47,7 +47,9 @@ from jax import random, jacfwd, jacrev, Array, jit
 import jax.numpy as jnp
 import jaxlib
 import numpy as np
-from cbfkit.controllers.utils.certificate_packager import certificate_package
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    certificate_package,
+)
 from cbfkit.utils.user_types import DynamicsCallable, CertificateCollection
 
 # For random sample generation

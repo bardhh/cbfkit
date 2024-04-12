@@ -18,7 +18,7 @@ The functions in this module are used for continuous-time, deterministic, nonlin
 Examples
 --------
 >>> from jax import jacfwd, jacrev
->>> from cbfkit.controllers.utils.certificate_packager import certificate_package, concatenate_certificates
+>>> from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package, concatenate_certificates
 >>> from cbfkit.controllers.utils.lyapunov_conditions import e_s, fxt_s
 >>> 
 >>> def clf(goal):
@@ -53,49 +53,6 @@ Examples
 
 from typing import Callable
 from jax import lax, Array
-
-
-def a_s() -> Callable[[Array], Array]:
-    """Generates function for computing RHS of Lyapunov conditions for Exponential stability:
-
-    Vdot <= 0
-
-    Args:
-        None
-
-    Returns:
-        Callable[[Array], Array]: AS Lyapunov conditions
-    """
-    return lambda V: 0.0
-
-
-def e_s(c: float) -> Callable[[Array], Array]:
-    """Generates function for computing RHS of Lyapunov conditions for Exponential stability:
-
-    Vdot <= -c1*V
-
-    Args:
-        c1 (float): convergence constant
-
-    Returns:
-        Callable[[Array], Array]: ES Lyapunov conditions
-    """
-    return lambda V: lax.cond(V > 0, lambda _fake: -c * V, lambda _fake: 0.0, 0)
-
-
-def ft_s(c: float, e: float) -> Callable[[Array], Array]:
-    """Generates function for computing RHS of Lyapunov conditions for FTS:
-
-    Vdot <= -c1*V**e1
-
-    Args:
-        c1 (float): convergence constant
-        e1 (float): exponential constant
-
-    Returns:
-        Callable[[Array], Array]: FTS Lyapunov conditions
-    """
-    return lambda V: lax.cond(V > 0, lambda _fake: -c * V**e, lambda _fake: 0.0, 0)
 
 
 def fxt_s(c1: float, c2: float, e1: float, e2: float) -> Callable[[Array], Array]:
