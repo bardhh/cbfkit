@@ -73,9 +73,6 @@ x, u, z, p, data, data_keys = sim.execute(
     sensor=sensor,
     estimator=estimator,
     filepath=file_path + "vanilla_cbf_results",
-    # perturbation: Optional[Union[PerturbationCallable, None]] = None,
-    # sigma: Optional[Union[Array, None]] = None,
-    # key: Optional[Union[random.PRNGKey, None]] = None,
 )
 
 plot = 0
