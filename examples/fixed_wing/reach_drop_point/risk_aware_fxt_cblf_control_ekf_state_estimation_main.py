@@ -10,7 +10,7 @@ from cbfkit.systems.fixed_wing_uav.models import beard2014_kinematic as fixed_wi
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.estimators import ct_ekf_dtmeas
 from cbfkit.integration import forward_euler as integrator
-
+from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
 from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_qp_control_laws import (
     estimate_feedback_risk_aware_cbf_clf_qp_controller,
 )
@@ -86,13 +86,8 @@ x, u, z, p, dkeys, dvalues = sim.execute(
     sensor=sensor,
     estimator=estimator,
     sigma=setup.R,
-    # perturbation=,
-    # sigma: Optional[Union[Array, None]] = None,
-    # key: Optional[Union[random.PRNGKey, None]] = None,
-    # filepath: Optional[str] = None,
-    # verbose: Optional[bool] = True,
+    perturbation=generate_stochastic_perturbation(sigma=lambda x: setup.Q, dt=setup.dt),
 )
-
 
 save_data = {
     "x": x,

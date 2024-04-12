@@ -30,12 +30,12 @@ ellipsoid_radii = [
 
 
 # FxTS parameters
-Tg = 50
+Tg = 100
 lookahead_time = 2.0
 alpha = 100
 e1 = 0.9
 e2 = 1.1
-c1 = 0.5
+c1 = 1.0
 c2 = 1 / ((e2 - 1) * (Tg - 1 / (c1 * (1 - e1))))
 if c2 < 0:
     raise ValueError(f"Parameter c2 < 0: c2 = {c2:.2f}")
@@ -44,7 +44,7 @@ if c2 < 0:
 QP_J = jnp.diag(jnp.array([100.0, 1.0, 1.0]))
 
 # Stochasticity Parameters
-Q = 0.5 * jnp.eye(len(initial_state))  # process noise
+Q = 0.05 * jnp.eye(len(initial_state))  # process noise
 R = 0.05 * jnp.eye(len(initial_state))  # measurement noise
 
 
@@ -55,6 +55,14 @@ eta_v = float(jnp.linalg.norm(jnp.dot(10 * jnp.ones((len(initial_state),)), Q)))
 epsilon = 4.0
 lambda_h = 1.0
 lambda_generator = 10.0
+
+# alpha = 100.0
+# pg = 0.5
+# gamma_v = 0.0
+# eta_v = 0.0
+# epsilon = 0.0
+# lambda_h = 0.0
+# lambda_generator = 0.0
 
 # save file
 n_trials = 100
