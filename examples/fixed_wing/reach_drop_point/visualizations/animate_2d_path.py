@@ -1,6 +1,6 @@
 import matplotlib
 
-matplotlib.use("macosx")
+# matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Ellipse
@@ -73,12 +73,15 @@ def animate(
     save_animation=False,
     animation_filename="system_behavior.gif",
 ):
+    speedup = 7
+
     def init():
         trajectory.set_data([], [])
         etrajectory.set_data([], [])
         return (trajectory,)
 
     def update(frame):
+        frame = int(frame * speedup)
         trajectory.set_data(states[:frame, 0], states[:frame, 1])
         etrajectory.set_data(estimates[:frame, 0], estimates[:frame, 1])
         _ = states[frame]
@@ -133,10 +136,19 @@ def animate(
     ax.grid()
 
     ani = FuncAnimation(
-        fig, update, frames=len(states), init_func=init, blit=True, interval=dt * 100
+        fig,
+        update,
+        frames=int(len(states) / speedup),
+        init_func=init,
+        blit=True,  # , interval=dt * 20
     )
 
     if save_animation:
+        if animation_filename[-4:] != ".gif":
+            if animation_filename[-3] == ".":
+                animation_filename = animation_filename[:-4]
+
+            animation_filename += ".gif"
         ani.save(animation_filename, writer="imagemagick", fps=15)
 
     plt.show()

@@ -30,12 +30,12 @@ ellipsoid_radii = [
 
 
 # FxTS parameters
-Tg = 10.0
+Tg = 50
 lookahead_time = 2.0
-alpha = 100.0
+alpha = 100
 e1 = 0.9
 e2 = 1.1
-c1 = 4.0
+c1 = 0.5
 c2 = 1 / ((e2 - 1) * (Tg - 1 / (c1 * (1 - e1))))
 if c2 < 0:
     raise ValueError(f"Parameter c2 < 0: c2 = {c2:.2f}")
@@ -49,10 +49,13 @@ R = 0.05 * jnp.eye(len(initial_state))  # measurement noise
 
 
 # RA-CLF Parameters
-pg = 0.85
+pg = 0.95
 gamma_v = 100.0
 eta_v = float(jnp.linalg.norm(jnp.dot(10 * jnp.ones((len(initial_state),)), Q)))
+epsilon = 4.0
+lambda_h = 1.0
+lambda_generator = 10.0
 
 # save file
 n_trials = 100
-pkl_file = f"examples/fixed_wing/reach_drop_point/ra_fxt_clbf/ekf_state_estimation/results/ra_fxt_clf_pg{int(pg * 100)}.pkl"
+pkl_file = f"examples/fixed_wing/reach_drop_point/results/ra_fxt_clf_pg{int(pg * 100)}.pkl"

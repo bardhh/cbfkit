@@ -39,7 +39,10 @@ def animate(
     obstacles: List[Array],
     r_obs: List[List[float]],
     dt: float = 0.01,
+    save_animation=False,
+    animation_filename="3d_animation.gif",
 ):
+    speedup = 7
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
     (traj,) = ax.plot(trajectory[0, 0], trajectory[0, 1], trajectory[0, 2])
@@ -53,16 +56,27 @@ def animate(
         y_ellipse = r[1] * jnp.sin(phi) * jnp.sin(theta) + obstacle[1]
         z_ellipse = r[2] * jnp.cos(phi) + obstacle[2]
 
-        ax.plot_surface(x_ellipse, y_ellipse, z_ellipse, color="r", alpha=0.6)
+        ax.plot_surface(x_ellipse, y_ellipse, z_ellipse, color="r", alpha=0.4)
 
     # Update function for animation
     def update(num):
+        num = int(num * speedup)
         traj.set_data(trajectory[:num, 0], trajectory[:num, 1])
         traj.set_3d_properties(trajectory[:num, 2])
         return (traj,)
 
     # Create animation
-    ani = FuncAnimation(fig, update, frames=len(trajectory), blit=True, interval=dt * 100)
+    ani = FuncAnimation(
+        fig, update, frames=int(len(trajectory) / speedup), blit=True
+    )  # , interval=dt * 20)
+
+    if save_animation:
+        if animation_filename[-4:] != ".gif":
+            if animation_filename[-3] == ".":
+                animation_filename = animation_filename[:-4]
+
+            animation_filename += ".gif"
+        ani.save(animation_filename, writer="imagemagick", fps=15)
 
     plt.show()
 
