@@ -273,7 +273,7 @@ def generate_model(
                 import jax.numpy as jnp
                 from jax import jit, jacfwd, jacrev, Array, lax
                 from typing import List, Callable
-                from cbfkit.controllers.utils.certificate_packager import certificate_package
+                from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package
 
                 N = {n_states}
 
@@ -409,7 +409,7 @@ def generate_model(
                 import jax.numpy as jnp
                 from jax import jit, jacfwd, jacrev, Array, lax
                 from typing import List, Callable
-                from cbfkit.controllers.utils.certificate_packager import certificate_package
+                from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package
 
                 N = {n_states}
 
@@ -978,7 +978,12 @@ def generate_model(
     # generate bash script for nodes
 
     # Paths for the ROS2 node scripts relative to the bash script's execution
-    node_scripts = ["ros2/plant_model.py", "ros2/sensor.py", "ros2/estimator.py", "ros2/controller.py"]
+    node_scripts = [
+        "ros2/plant_model.py",
+        "ros2/sensor.py",
+        "ros2/estimator.py",
+        "ros2/controller.py",
+    ]
 
     # The directory where the bash script will be saved
     bash_script_path = os.path.join(model_folder, "run_ros2_nodes.sh")
@@ -1004,6 +1009,8 @@ def generate_model(
     # Write the bash script contents to the file
     with open(bash_script_path, "w") as bash_file:
         bash_file.write(bash_script_contents)
+
+    os.chmod(bash_script_path, 0o755)
 
     print(f"Generated bash script to run ROS2 nodes at: {bash_script_path}")
 
