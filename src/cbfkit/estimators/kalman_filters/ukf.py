@@ -109,7 +109,7 @@ def predict_ct_dtmeas(
         # Predict x from sigma points
         sk = jnp.zeros(s.shape)
         for ii, ss in enumerate(s):
-            f, g, _ = dynamics(ss)
+            f, g = dynamics(ss)
             sk = sk.at[ii, :].set(integrate(ss, f + jnp.matmul(g, u), dt))
 
         # Compute predicted state estimate
