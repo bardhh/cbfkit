@@ -5,8 +5,12 @@ import cbfkit.simulation.simulator as sim
 from cbfkit.controllers.model_based.cbf_clf_controllers import (
     vanilla_cbf_clf_qp_controller as cbf_controller,
 )
-from cbfkit.controllers.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.utils.barrier_conditions import zeroing_barriers
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    concatenate_certificates,
+)
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions import (
+    zeroing_barriers,
+)
 
 # Simulation parameters
 tf = 10.0
