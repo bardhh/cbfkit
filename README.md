@@ -10,9 +10,7 @@ CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control
 - [Tutorials](#tutorials)
 - [ROS2](#ros2)
 - [Citing CBFKit](#citing-cbfkit)
-- [Contributing](#contributing)
 - [License](#license)
-- [Contact](#contact)
 
 ## Key Features
 - **Generalized Framework:** Supports the design of CBFs for various robotic systems operating in both deterministic and stochastic settings.
@@ -57,7 +55,7 @@ CBFKit is readily deployable via a Docker image. After setting up Docker (refer 
    docker run -it --name container-name -v .:/workspace cbfkit:latest
    ```
 
-## Tutorials
+## Start with Tutorials
 Explore the `tutorials` directory to help you get started with CBFKit. Open the Python notebook in the `tutorials` directory to get started. The script `simulate_new_control_system.ipynb` automatically generates the controller, plant, and certificate function for a Van der Pol oscillator. It also generates ROS2 nodes for the plant, controller, sensor, and estimator. These serve as a starting point for developing your own CBF-based controller.
 
 Generated files/folders:
