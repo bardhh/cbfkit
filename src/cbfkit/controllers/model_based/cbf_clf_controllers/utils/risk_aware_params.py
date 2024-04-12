@@ -34,51 +34,6 @@ from typing import Union, Optional, Callable
 from jax import Array
 
 
-class Params:
-    """
-    Object to compile various parameters relevant to risk-aware control with CBFs/CLFs.
-
-    Attributes:
-        integrator_states (Union[Array, None]): vector of integrator states for RA-PI control
-        t_max (Optional[Union[float, None]] = None): maximum system operation time (sec)
-        p_bound (Optional[Union[float, None]] = None): maximum tolerable risk of certificate function violation
-        gamma (Optional[Union[float, None]] = None): min/max value of certificate in set of initial conditions
-        eta (Optional[Union[float, None]] = None): maximum dF/dx * sigma(x) term within constraint set / outside goal set
-        epsilon (Optional[Union[float, None]] = None): probability of measurement bound holding
-        lambda_h (Optional[Union[float, None]] = None): Lipschitz constant of h function in measurement model
-
-    """
-
-    integrator_states: Union[Array, None] = None
-
-    def __init__(
-        self,
-        t_max: Optional[Union[float, None]] = None,
-        p_bound: Optional[Union[float, None]] = None,
-        gamma: Optional[Union[float, None]] = None,
-        eta: Optional[Union[float, None]] = None,
-        epsilon: Optional[Union[float, None]] = None,
-        lambda_h: Optional[Union[float, None]] = None,
-    ):
-        """
-        Constructor method for Params.
-
-        Args:
-            t_max (Optional[Union[float, None]] = None): maximum system operation time (sec)
-            p_bound (Optional[Union[float, None]] = None): maximum tolerable risk of certificate function violation
-            gamma (Optional[Union[float, None]] = None): min/max value of certificate in set of initial conditions
-            eta (Optional[Union[float, None]] = None): maximum dF/dx * sigma(x) term within constraint set / outside goal set
-            epsilon (Optional[Union[float, None]] = None): probability of measurement bound holding
-            lambda_h (Optional[Union[float, None]] = None): Lipschitz constant of h function in measurement model
-        """
-        self.t_max = t_max
-        self.p_bound = p_bound
-        self.gamma = gamma
-        self.eta = eta
-        self.epsilon = epsilon
-        self.lambda_h = lambda_h
-
-
 class RiskAwareParams:
     """
     Object to compile various parameters relevant to risk-aware control with CBFs and CLFs.
@@ -94,12 +49,12 @@ class RiskAwareParams:
     def __init__(
         self,
         t_max: Optional[Union[float, None]] = None,
-        p_bound_b: Optional[Union[float, None]] = None,
-        gamma_b: Optional[Union[float, None]] = None,
-        eta_b: Optional[Union[float, None]] = None,
-        p_bound_v: Optional[Union[float, None]] = None,
-        gamma_v: Optional[Union[float, None]] = None,
-        eta_v: Optional[Union[float, None]] = None,
+        p_bound: Optional[Union[float, None]] = None,
+        gamma: Optional[Union[float, None]] = None,
+        eta: Optional[Union[float, None]] = None,
+        epsilon: Optional[Union[float, None]] = None,
+        lambda_h: Optional[Union[float, None]] = None,
+        lambda_generator: Optional[Union[float, None]] = None,
         sigma: Optional[Union[Callable[[Array], Array], None]] = None,
         varsigma: Optional[Union[Callable[[Array], Array], None]] = None,
     ):
@@ -107,17 +62,21 @@ class RiskAwareParams:
 
         Args:
             t_max (Optional[Union[float, None]] = None): maximum system operation time (sec)
-            p_bound_b (Optional[Union[float, None]] = None): maximum tolerable risk of CBF constraint violation
-            gamma_b (Optional[Union[float, None]] = None): max value of CBF in set of initial conditions
-            eta_b (Optional[Union[float, None]] = None): maximum dB/dx * sigma(x) term within constraint set
-            p_bound_v (Optional[Union[float, None]] = None): minimum tolerable probability of reaching CLF goal set
-            gamma_v (Optional[Union[float, None]] = None): max value of CLF in set of initial conditions
-            eta_v (Optional[Union[float, None]] = None): maximum dV/dx * sigma(x) term outside goal set
+            p_bound (Optional[Union[float, None]] = None): maximum tolerable risk of CBF constraint violation
+            gamma (Optional[Union[float, None]] = None): max value of CBF in set of initial conditions
+            eta (Optional[Union[float, None]] = None): maximum dB/dx * sigma(x) term within constraint set
+            epsilon (Optional[Union[float, None]] = None): maximum dB/dx * sigma(x) term within constraint set
+            lambda_h (Optional[Union[float, None]] = None): maximum dB/dx * sigma(x) term within constraint set
+            lambda_generator (Optional[Union[float, None]] = None): maximum dB/dx * sigma(x) term within constraint set
             sigma (Optional[Union[Callable[[Array], Array], None]] = None): diffusion function in stochastic plant dynamics
             varsigma (Optional[Union[Callable[[Array], Array], None]] = None): diffusion function in stochastic measurement dynamics
         """
-        self.ra_cbf = Params(t_max, p_bound_b, gamma_b, eta_b)
-        self.ra_clf = Params(t_max, p_bound_v, gamma_v, eta_v)
-
+        self.t_max = t_max
+        self.p_bound = p_bound
+        self.gamma = gamma
+        self.eta = eta
+        self.epsilon = epsilon
+        self.lambda_h = lambda_h
+        self.lambda_generator = lambda_generator
         self.sigma = sigma
         self.varsigma = varsigma

@@ -17,8 +17,8 @@ These functions are typically used as arguments to a CertificatePackage object.
 Examples
 --------
 >>> from jax import jacfwd, jacrev
->>> from cbfkit.controllers.utils.certificate_packager import certificate_package, concatenate_certificates
->>> from cbfkit.controllers.utils.barrier_conditions.path_integral_barrier import right_hand_side
+>>> from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package, concatenate_certificates
+>>> from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.path_integral_barrier import right_hand_side
 >>> 
 >>> def cbf(limit):
 >>>     def func(x):
