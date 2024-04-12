@@ -28,8 +28,12 @@ from numpy import random
 from cbfkit.simulation import simulator as sim
 from cbfkit.simulation import monte_carlo
 from cbfkit.controllers.model_based.cbf_clf_controllers import vanilla_cbf_clf_qp_controller
-from cbfkit.controllers.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.utils.barrier_conditions.zeroing_barriers import linear_class_k
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    concatenate_certificates,
+)
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+    linear_class_k,
+)
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.estimators import ct_ekf_dtmeas
 from cbfkit.integration import forward_euler as integrator

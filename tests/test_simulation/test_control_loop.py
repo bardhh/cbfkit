@@ -29,8 +29,12 @@ from cbfkit.simulation.simulator import stepper
 from cbfkit.controllers.model_based.cbf_clf_controllers.vanilla_cbf_clf_qp_control_law import (
     vanilla_cbf_clf_qp_controller,
 )
-from cbfkit.controllers.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.utils.barrier_conditions.zeroing_barriers import linear_class_k
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    concatenate_certificates,
+)
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+    linear_class_k,
+)
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.estimators import ct_ekf_dtmeas
 from cbfkit.integration import forward_euler as integrator
