@@ -53,7 +53,7 @@ def cblf(
         v = control_lyap(state)
         b = jnp.array([b(state) for b in barriers])
 
-        return v / (1 - jnp.sum(1 / b))
+        return v / (1 - jnp.sum(jnp.exp(-b)))
 
     return func
 

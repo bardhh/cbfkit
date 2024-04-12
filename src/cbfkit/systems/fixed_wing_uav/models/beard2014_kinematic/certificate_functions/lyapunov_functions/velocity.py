@@ -45,7 +45,7 @@ def clf(goal: Array, r: float) -> Array:
 
         xdot_d, ydot_d, zdot_d = vg, (yg - y), (zg - z)
 
-        V = 0.5 * (((xdot - xdot_d)) ** 2 + ((ydot - ydot_d)) ** 2 + ((zdot - zdot_d)) ** 2) - r**2
+        V = 0.05 * (((xdot - xdot_d)) ** 2 + ((ydot - ydot_d)) ** 2 + ((zdot - zdot_d)) ** 2) - r**2
 
         return V
 

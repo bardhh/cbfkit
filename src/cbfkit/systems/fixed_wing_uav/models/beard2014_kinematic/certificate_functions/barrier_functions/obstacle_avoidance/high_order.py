@@ -29,6 +29,7 @@ def cbf(obstacle: Array, ellipsoid: List[float], alpha: float) -> Array:
 
     """
     x_o, y_o, z_o = obstacle
+    a1, a2, a3 = ellipsoid
 
     @jit
     def func(state_and_time: Array) -> Array:
@@ -44,9 +45,6 @@ def cbf(obstacle: Array, ellipsoid: List[float], alpha: float) -> Array:
         xo_dot = 0.0  # v_o * jnp.cos(psi_o) * jnp.cos(gamma_o)
         yo_dot = 0.0  # v_o * jnp.sin(psi_o) * jnp.cos(gamma_o)
         zo_dot = 0.0  # v_o * jnp.sin(gamma_o)
-
-        # Obstacle state
-        a1, a2, a3 = ellipsoid
 
         # dpos, dvel
         dx, dy, dz, dvx, dvy, dvz = (
