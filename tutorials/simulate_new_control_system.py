@@ -41,18 +41,24 @@ generate_model.generate_model(
 import cbfkit.simulation.simulator as sim
 
 # Access to CBF-CLF-QP control law
-from cbfkit.controllers.model_based.cbf_clf_controllers.vanilla_cbf_clf_qp_control_law import (
+from cbfkit.controllers.model_based.cbf_clf_controllers.vanilla_cbf_clf_qp_control_laws import (
     vanilla_cbf_clf_qp_controller,
 )
 
 # Necessary housekeeping for using multiple CBFs/CLFs
-from cbfkit.controllers.utils.certificate_packager import concatenate_certificates
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    concatenate_certificates,
+)
 
 # Suite of zeroing barrier function derivative conditions (forms of Class K functions)
-from cbfkit.controllers.utils.barrier_conditions import zeroing_barriers
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions import (
+    zeroing_barriers,
+)
 
 # Exponentially stable derivative condition for CLF
-from cbfkit.controllers.utils.lyapunov_conditions import e_s
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+    e_s,
+)
 
 # Assuming perfect, complete state information
 from cbfkit.sensors import perfect as sensor
@@ -75,7 +81,7 @@ def sigma(x):
 from tutorials import van_der_pol_oscillator
 
 # Simulation Parameters
-SAVE_FILE = "simulation_data"
+SAVE_FILE = f"tutorials/{model_name}/simulation_data"
 DT = 1e-2
 TF = 10.0
 N_STEPS = int(TF / DT) + 1
