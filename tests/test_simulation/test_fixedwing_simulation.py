@@ -34,7 +34,9 @@ from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_qp_co
 from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params import (
     RiskAwareParams,
 )
-from cbfkit.controllers.utils.certificate_packager import concatenate_certificates
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    concatenate_certificates,
+)
 from cbfkit.controllers.utils.lyapunov_conditions import fxt_s
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.estimators import ct_ekf_dtmeas
