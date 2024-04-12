@@ -28,7 +28,7 @@ from jax import jacfwd, Array
 
 import cbfkit.simulation.simulator as sim
 from cbfkit.controllers.model_based.cbf_clf_controllers import vanilla_cbf_clf_qp_controller
-from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_qp_control_law import (
+from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_qp_control_laws import (
     risk_aware_cbf_clf_qp_controller,
 )
 from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params import (
@@ -37,7 +37,9 @@ from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params 
 from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
     concatenate_certificates,
 )
-from cbfkit.controllers.utils.lyapunov_conditions import fxt_s
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.fixed_time_stability import (
+    fxt_s,
+)
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.estimators import ct_ekf_dtmeas
 from cbfkit.integration import forward_euler as integrator
