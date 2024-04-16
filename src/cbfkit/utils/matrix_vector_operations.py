@@ -28,6 +28,7 @@ Examples
 >>> double_a = block_diag_matrix(a_hat, a_hat)
 
 """
+
 import jax.numpy as jnp
 from jax import Array, jit, lax
 

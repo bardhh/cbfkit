@@ -80,3 +80,4 @@ class RiskAwareParams:
         self.lambda_generator = lambda_generator
         self.sigma = sigma
         self.varsigma = varsigma
+        self.integrator_states = None  # Initialized by controller
