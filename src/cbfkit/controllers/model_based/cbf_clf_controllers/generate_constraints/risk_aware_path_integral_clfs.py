@@ -24,8 +24,8 @@ from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params 
 def generate_compute_ra_pi_clf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
-    lyapunovs: CertificateCollection = ([], [], [], [], []),
     barriers: CertificateCollection = ([], [], [], [], []),
+    lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
 ) -> Callable[[float, State], Tuple[Array, Array, Dict[str, Any]]]:
     """
@@ -72,8 +72,8 @@ def generate_compute_ra_pi_clf_constraints(
             a_clf = a_clf.at[:, :n_con].set(jnp.matmul(lj_x, dyn_g))
             b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) - traces + lc_x)
             if relaxable:
-                a_clf = a_clf.at[:, -n_lfs:].set(-lc_x)
-                b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) - traces)
+                a_clf = a_clf.at[:, -n_lfs:].set(-jnp.ones((n_lfs,)))
+                b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) - traces + lc_x)
 
             # Check whether goal set reached
             complete = lax.cond(jnp.all(lf_x < 0), lambda _fake: True, lambda _fake: False, 0)

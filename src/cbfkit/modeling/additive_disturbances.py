@@ -1,6 +1,7 @@
 """
 #! docstring
 """
+
 from typing import Callable
 import jax.numpy as jnp
 from jax import Array, jit, random
