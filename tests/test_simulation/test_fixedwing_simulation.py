@@ -137,11 +137,11 @@ class TestFixedWingSimulation(unittest.TestCase):
 
     def test_fixed_wing_risk_aware_fxt_clf_controller(self):
         """Tests the fixed-wing UAV simulation with a RA-FxT-CLF controller."""
-        risk_aware_params = RiskAwareParams(
+        ra_clf_params = RiskAwareParams(
             t_max=1 / (C1 * (1 - E1)) + 1 / (C2 * (E2 - 1)),
-            p_bound_v=PG,
-            gamma_v=GAMMA_V,
-            eta_v=ETA_V,
+            p_bound=PG,
+            gamma=GAMMA_V,
+            eta=ETA_V,
             sigma=lambda _: Q,
             varsigma=lambda _: R,
         )
@@ -150,7 +150,7 @@ class TestFixedWingSimulation(unittest.TestCase):
             dynamics_func=DYNAMICS,
             lyapunovs=LYAPUNOVS,
             control_limits=ACTUATION_LIMITS,
-            ra_params=risk_aware_params,
+            ra_clf_params=ra_clf_params,
             relaxable_clf=True,
         )
         success, n_iter, xf = execute(controller)

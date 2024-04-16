@@ -26,7 +26,7 @@ from jax import jacfwd, random
 from numpy.random import uniform
 
 from cbfkit.simulation.simulator import stepper
-from cbfkit.controllers.model_based.cbf_clf_controllers.vanilla_cbf_clf_qp_control_law import (
+from cbfkit.controllers.model_based.cbf_clf_controllers.vanilla_cbf_clf_qp_control_laws import (
     vanilla_cbf_clf_qp_controller,
 )
 from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (

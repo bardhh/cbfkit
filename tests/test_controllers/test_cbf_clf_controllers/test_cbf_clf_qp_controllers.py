@@ -79,14 +79,18 @@ NOMINAL_CONTROLLER = unicycle.controllers.proportional_controller(
     Kp_theta=0.01,
     desired_state=GOAL,
 )
-RISK_AWARE_PARAMS = RiskAwareParams(
+RISK_AWARE_CBF_PARAMS = RiskAwareParams(
     t_max=5.0,
-    p_bound_b=0.25,
-    p_bound_v=0.75,
-    gamma_b=0.5,
-    gamma_v=10.0,
-    eta_b=10.0,
-    eta_v=10.0,
+    p_bound=0.25,
+    gamma=0.5,
+    eta=10.0,
+    sigma=lambda x: Q,
+)
+RISK_AWARE_CLF_PARAMS = RiskAwareParams(
+    t_max=5.0,
+    p_bound=0.75,
+    gamma=10.0,
+    eta=10.0,
     sigma=lambda x: Q,
 )
 
@@ -104,12 +108,14 @@ class TestCbfClfQpControllers(unittest.TestCase):
         from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.risk_aware_barrier import (
             right_hand_side,
         )
-        from cbfkit.controllers.utils.lyapunov_conditions import e_s
+        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+            e_s,
+        )
 
         # Barrier functions
         bars = [
             unicycle.certificate_functions.barrier_functions.obstacle_ca(
-                certificate_conditions=right_hand_side(RISK_AWARE_PARAMS.ra_cbf.p_bound, ALPHA),
+                certificate_conditions=right_hand_side(RISK_AWARE_CBF_PARAMS.p_bound, ALPHA),
                 obstacle=jnp.array([obs[0], obs[1], 0.0]),
                 ellipsoid=jnp.array([ell[0], ell[1]]),
             )
@@ -133,7 +139,8 @@ class TestCbfClfQpControllers(unittest.TestCase):
             dynamics_func=DYNAMICS,
             barriers=BARRIERS,
             lyapunovs=LYAPUNOVS,
-            ra_params=RISK_AWARE_PARAMS,
+            ra_cbf_params=RISK_AWARE_CBF_PARAMS,
+            ra_clf_params=RISK_AWARE_CLF_PARAMS,
         )
 
         u, _ = controller(0.0, jnp.zeros((N,)))
@@ -145,16 +152,18 @@ class TestCbfClfQpControllers(unittest.TestCase):
         from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.path_integral_barrier import (
             right_hand_side,
         )
-        from cbfkit.controllers.utils.lyapunov_conditions import e_s
+        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+            e_s,
+        )
 
         # Barrier functions
         bars = [
             unicycle.certificate_functions.barrier_functions.obstacle_ca(
                 certificate_conditions=right_hand_side(
-                    RISK_AWARE_PARAMS.ra_cbf.p_bound,
-                    RISK_AWARE_PARAMS.ra_cbf.gamma,
-                    RISK_AWARE_PARAMS.ra_cbf.eta,
-                    RISK_AWARE_PARAMS.ra_cbf.t_max,
+                    RISK_AWARE_CBF_PARAMS.p_bound,
+                    RISK_AWARE_CBF_PARAMS.gamma,
+                    RISK_AWARE_CBF_PARAMS.eta,
+                    RISK_AWARE_CBF_PARAMS.t_max,
                 ),
                 obstacle=jnp.array([obs[0], obs[1], 0.0]),
                 ellipsoid=jnp.array([ell[0], ell[1]]),
@@ -179,7 +188,8 @@ class TestCbfClfQpControllers(unittest.TestCase):
             dynamics_func=DYNAMICS,
             barriers=BARRIERS,
             lyapunovs=LYAPUNOVS,
-            ra_params=RISK_AWARE_PARAMS,
+            ra_cbf_params=RISK_AWARE_CBF_PARAMS,
+            ra_clf_params=RISK_AWARE_CLF_PARAMS,
         )
 
         u, _ = controller(0.0, jnp.zeros((N,)))
@@ -191,7 +201,9 @@ class TestCbfClfQpControllers(unittest.TestCase):
         from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
             linear_class_k,
         )
-        from cbfkit.controllers.utils.lyapunov_conditions import e_s
+        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+            e_s,
+        )
 
         # Barrier functions
         bars = [
@@ -233,7 +245,9 @@ class TestCbfClfQpControllers(unittest.TestCase):
         from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.stochastic_barrier import (
             right_hand_side,
         )
-        from cbfkit.controllers.utils.lyapunov_conditions import e_s
+        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+            e_s,
+        )
 
         # Barrier functions
         bars = [
@@ -277,7 +291,9 @@ class TestCbfClfQpControllers(unittest.TestCase):
         from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
             linear_class_k,
         )
-        from cbfkit.controllers.utils.lyapunov_conditions import e_s
+        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+            e_s,
+        )
 
         # Barrier functions
         bars = [

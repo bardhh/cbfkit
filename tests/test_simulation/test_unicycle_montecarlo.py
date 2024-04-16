@@ -61,7 +61,7 @@ Q = 0.5 * jnp.eye(N)  # process noise
 R = 0.05 * jnp.eye(N)  # measurement noise
 
 # Barrier function parameters
-ALPHA = 0.5
+ALPHA = 0.1
 GOAL = jnp.array([0.0, 0.0, 0])
 RAD = 0.05
 OBSTACLES = [
