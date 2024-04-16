@@ -203,10 +203,12 @@ def simulator(
 
             if "complete" in data.keys():
                 if data["complete"]:
+                    print("GOAL REACHED!")
                     break
 
             if "error" in data.keys():
                 if data["error"]:
+                    print("CONTROLLER ERROR")
                     break
 
     return simulate_iter

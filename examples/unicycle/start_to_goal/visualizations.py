@@ -8,8 +8,6 @@ from matplotlib.patches import Ellipse
 
 #! PLOTTING
 def plot_trajectory(
-    # fig,
-    # ax,
     states,
     desired_state,
     desired_state_radius=0.25,
@@ -18,8 +16,11 @@ def plot_trajectory(
     x_lim=(-4, 4),
     y_lim=(-4, 4),
     title="System Behavior",
+    fig=None,
+    ax=None,
 ):
-    fig, ax = plt.subplots()
+    if fig is None and ax is None:
+        fig, ax = plt.subplots()
 
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
@@ -61,7 +62,9 @@ def plot_trajectory(
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
     ax.set_title(title)
-    ax.legend()
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles[:2], labels[:2])
+    # ax.legend()
     ax.grid()
 
     # plt.show()

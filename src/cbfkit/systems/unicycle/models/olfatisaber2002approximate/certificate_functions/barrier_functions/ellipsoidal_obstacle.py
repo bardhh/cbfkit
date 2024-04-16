@@ -12,6 +12,7 @@ from jax import jit, jacfwd, jacrev, Array
 from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
     certificate_package,
 )
+import jax.numpy as jnp
 
 N = 3
 
@@ -36,9 +37,9 @@ def cbf(obstacle: Array, ellipsoid: Array) -> Array:
         x_o, y_o, _t = obstacle
         a1, a2 = ellipsoid
 
-        b = ((x_e - x_o) / a1) ** 2 + ((y_e - y_o) / a2) ** 2 - 1.0
+        b = ((x_e - x_o) / (a1)) ** 2 + ((y_e - y_o) / (a2)) ** 2 - 1.0
 
-        return b
+        return jnp.exp(-b)
 
     return func
 
