@@ -58,7 +58,7 @@ n_steps = int(tf / dt)
 
 X_MAX = 5.0
 Y_MAX = 5.0
-N_TRIALS = 5
+N_TRIALS = 50
 N_STEPS = int(tf / dt)
 N_STATES = len(initial_conditions.desired_state)
 N_CONTROLS = 2
@@ -93,7 +93,7 @@ ellipsoids = [
 ]
 barriers = [
     unicycle.certificate_functions.barrier_functions.obstacle_ca(
-        certificate_conditions=zeroing_barriers.linear_class_k(2.0),
+        certificate_conditions=zeroing_barriers.linear_class_k(1.0),
         obstacle=obs,
         ellipsoid=ell,
     )
@@ -102,16 +102,16 @@ barriers = [
 barrier_packages = concatenate_certificates(*barriers)
 risk_aware_barrier_params = RiskAwareParams(
     t_max=tf,
-    p_bound=0.1,
-    gamma=0.1,
-    eta=2.0,
-    sigma=lambda _: initial_conditions.R,
+    p_bound=0.01,
+    gamma=0.75,
+    eta=20.0,
+    sigma=lambda _: 1 * initial_conditions.R,
 )
 
 # Lyapunov function configuration
 lyapunovs = [
     unicycle.certificate_functions.lyapunov_functions.reach_goal(
-        certificate_conditions=e_s(2.0),
+        certificate_conditions=e_s(1.0),
         goal=initial_conditions.desired_state,
         radius=0.1,
     )
@@ -125,15 +125,15 @@ risk_aware_lyapunov_params = RiskAwareParams(
     sigma=lambda _: initial_conditions.R,
 )
 
-controller = risk_aware_path_integral_cbf_clf_qp_controller(
-    control_limits=jnp.array([100.0, 100.0]),
-    nominal_input=nominal_controller,
-    dynamics_func=approx_unicycle_dynamics,
-    barriers=barrier_packages,
-    lyapunovs=lyapunov_packages,
-    ra_cbf_params=risk_aware_barrier_params,
-    ra_clf_params=risk_aware_lyapunov_params,
-)
+# controller = risk_aware_path_integral_cbf_clf_qp_controller(
+#     control_limits=jnp.array([100.0, 100.0]),
+#     nominal_input=nominal_controller,
+#     dynamics_func=approx_unicycle_dynamics,
+#     barriers=barrier_packages,
+#     lyapunovs=lyapunov_packages,
+#     ra_cbf_params=risk_aware_barrier_params,
+#     ra_clf_params=risk_aware_lyapunov_params,
+# )
 
 
 # Define simulation function, including post-processing of data
@@ -146,6 +146,17 @@ def execute_simulation(ii: int) -> List[Array]:
         initial_conditions.desired_state[1] - y_rand, initial_conditions.desired_state[0] - x_rand
     ) + np.random.uniform(low=-jnp.pi / 4, high=jnp.pi / 4)
     init_state = jnp.array([x_rand, y_rand, a_rand])
+
+    controller = risk_aware_path_integral_cbf_clf_qp_controller(
+        control_limits=jnp.array([100.0, 100.0]),
+        nominal_input=nominal_controller,
+        dynamics_func=approx_unicycle_dynamics,
+        barriers=barrier_packages,
+        lyapunovs=lyapunov_packages,
+        relaxable_clf=True,
+        ra_cbf_params=risk_aware_barrier_params,
+        ra_clf_params=risk_aware_lyapunov_params,
+    )
 
     # Execute simulation
     x, u, z, p, data, data_keys = sim.execute(
@@ -184,10 +195,8 @@ if __name__ == "__main__":
         pool.join()
 
         # Convert the results to a NumPy array
-        state_record = np.array([result[0] for result in results])
-        control_record = np.array([result[1] for result in results])
-
-        print(state_record.shape)
+        state_record = [np.array(result[0]) for result in results]
+        control_record = [np.array(result[1]) for result in results]
 
         # Convert data to dict object
         save_data = {}
@@ -216,6 +225,8 @@ if __name__ == "__main__":
 
         for states in state_record:
             fig, ax = plot_trajectory(
+                fig=fig,
+                ax=ax,
                 states=states,
                 desired_state=initial_conditions.desired_state,
                 desired_state_radius=0.1,
@@ -226,14 +237,17 @@ if __name__ == "__main__":
                 title="System Behavior",
             )
 
-        fig, ax = plt.subplots()
-        for states in state_record:
-            print(states[:, 0])
-            print(states[:, 1])
-            ax.plot(states[:, 0], states[:, 1])
+        # fig, ax = plt.subplots()
+        # for states in state_record:
+        #     ax.plot(states[:, 0], states[:, 1])
+        # for controls in control_record:
+        #     ax.plot(jnp.linspace(0.0, tf, N_STEPS), controls[:, 0])
+        #     ax.plot(jnp.linspace(0.0, tf, N_STEPS), controls[:, 1])
         fig.savefig(save_path + file_name + ".png")
 
-    final_deviation = np.array(state_record[:, -1, :2] - initial_conditions.desired_state[:2])
+    final_deviation = np.array(
+        [rec[-1, :2] - initial_conditions.desired_state[:2] for rec in state_record]
+    )
     success_fraction = (
         len(final_deviation[np.where(jnp.linalg.norm(final_deviation, axis=1) < 0.25)]) / N_TRIALS
     )
