@@ -10,8 +10,9 @@ __pycache__/
 *.pkl
 *.csv
 
-# Video files
+# Video/image files
 *.gif
+*.png
 
 # ROS Build/Make folders
 build/
