@@ -104,7 +104,6 @@ def rectify_relative_degree(
         polynomial_coefficients = polynomial_coefficients_from_roots(roots)
 
         def cbf(**kwargs):
-
             @jit
             def func(x: Array) -> Array:
                 return jnp.sum(
@@ -152,6 +151,7 @@ def compute_function_list(
     func_list: Union[List[Callable[[float, Array], Array]], None] = None,
     subkey: Union[jaxlib.xla_extension.ArrayImpl, None] = None,
     n_samples: int = 10,
+    recursion: int = 0,
 ):
     """Computes the cascading list of derivatives/functions for rectifying the relative
     degree of the provided function.
@@ -194,7 +194,7 @@ def compute_function_list(
     def highorder_new_func(x: Array):
         return jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0]) + function(x)
 
-    if total == 0:
+    if total == 0 and recursion < 100:
         if form == "exponential":
             new_func = exponential_new_func
 
@@ -211,6 +211,7 @@ def compute_function_list(
             form,
             func_list,
             subkey,
+            recursion=recursion + 1,
         )
 
     return func_list
