@@ -33,6 +33,10 @@ DELIMITER = "/" if op_sys == "Darwin" or op_sys == "Linux" else "\\"
 INIT_CONTENTS = ""
 JAX_EXPRESSIONS = ["exp", "pi", "cos", "sin", "tan"]
 
+def transform_key(old_key):
+    # Remove spaces and type annotations
+    new_key = old_key.replace(" ", "").replace(":float", "")
+    return new_key
 
 def create_folder(directory: str, folder_name: str) -> None:
     """Creates a new folder called 'folder_name' at the location specified by 'directory'.
@@ -95,6 +99,7 @@ def generate_model(
     directory: str,
     model_name: str,
     drift_dynamics: Union[str, List[str]],
+    initial_state: Union[str, List[str]],
     control_matrix: Union[str, List[str]],
     barrier_funcs: Optional[Union[str, List, None]] = None,
     lyapunov_funcs: Optional[Union[str, List, None]] = None,
@@ -124,6 +129,8 @@ def generate_model(
     else:
         raise TypeError("drift_dynamics is not type str or list!")
 
+    dynamics = {transform_key(k): v for k, v in params["dynamics"].items()}
+    controller = {transform_key(k): v for k, v in params["controller"].items()}
     # Create model root folder
     model_folder = directory + DELIMITER + model_name
     if not os.path.exists(model_folder):
@@ -642,7 +649,7 @@ def generate_model(
     import jax.numpy as jnp
     import config
 
-    class VanDerPolOscillatorController(Node):
+    class {model_name}_Controller(Node):
 
         def __init__(self):
             super().__init__("{model_name}_controller")
@@ -690,7 +697,7 @@ def generate_model(
 
     def main(args=None):
         rclpy.init(args=args)
-        node = VanDerPolOscillatorController()
+        node = {model_name}_Controller()
         rclpy.spin(node)
         node.destroy_node()
         rclpy.shutdown()
@@ -722,7 +729,7 @@ def generate_model(
     import jax.numpy as jnp
     import config  # Import configurations
 
-    class VanDerPolOscillatorSensor(Node):
+    class {model_name}_Sensor(Node):
 
         def __init__(self):
             super().__init__("{model_name}_sensor")
@@ -753,7 +760,7 @@ def generate_model(
 
     def main(args=None):
         rclpy.init(args=args)
-        node = VanDerPolOscillatorSensor()
+        node = {model_name}_Sensor()
         rclpy.spin(node)
         node.destroy_node()
         rclpy.shutdown()
@@ -784,7 +791,7 @@ def generate_model(
     import jax.numpy as jnp
     import config
 
-    class VanDerPolOscillatorEstimator(Node):
+    class {model_name}_Estimator(Node):
 
         def __init__(self):
             super().__init__("{model_name}_estimator")
@@ -829,7 +836,7 @@ def generate_model(
 
     def main(args=None):
         rclpy.init(args=args)
-        node = VanDerPolOscillatorEstimator()
+        node = {model_name}_Estimator()
         rclpy.spin(node)
         node.destroy_node()
         rclpy.shutdown()
@@ -860,7 +867,7 @@ def generate_model(
     from jax import random
     import config  # Import configurations
 
-    class VanDerPolOscillatorPlant(Node):
+    class {model_name}_Plant(Node):
 
         def __init__(self):
             super().__init__("{model_name}_plant")
@@ -868,7 +875,7 @@ def generate_model(
             self.create_subscription(Float32MultiArray, "control_command", self.listener_callback, config.QUEUE_SIZE)
             self.dynamics = self.get_dynamics_by_name(config.PLANT_NAME, **config.PLANT_PARAMS)
             self.integrator = self.get_integrator_by_name(config.INTEGRATOR_NAME)
-            self.state = jnp.array([1.5, 0.25])  # Initial state
+            self.state = jnp.array({initial_state})  # Initial state
             self.dt = config.DT
             self.key = random.PRNGKey(0)  # Initialize random key
 
@@ -918,7 +925,7 @@ def generate_model(
 
     def main(args=None):
         rclpy.init(args=args)
-        node = VanDerPolOscillatorPlant()
+        node = {model_name}_Plant()
         rclpy.spin(node)
         node.destroy_node()
         rclpy.shutdown()
@@ -952,14 +959,14 @@ def generate_model(
     # Controller
     CONTROLLER_NAME = "controller_1"
     TIMER_INTERVAL = 0.1
-    CONTROLLER_PARAMS = {{'k_p': 1.0, 'epsilon': 0.5}}
+    CONTROLLER_PARAMS = {controller}
 
     # Estimator
     ESTIMATOR_NAME = "naive"
 
     # Plant
     PLANT_NAME = "plant"
-    PLANT_PARAMS = {{'epsilon': 0.5}}
+    PLANT_PARAMS = {dynamics}
     INTEGRATOR_NAME = "forward_euler"
     DT = 0.01
 
