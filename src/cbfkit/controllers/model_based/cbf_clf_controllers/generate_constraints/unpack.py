@@ -36,9 +36,10 @@ def unpack_for_cbf(
     # Check whether Lyapunov functions are relaxable
     if "relaxable_clf" not in kwargs:
         n_lfs = 0
-    elif kwargs["relaxable_clf"]:
+    else:
         n_lfs = len(lyapunovs[0])
-        n_con -= n_lfs
+        if kwargs["relaxable_clf"]:
+            n_con -= n_lfs
 
     # Check whether Barrier functions are tunable
     if "tunable_class_k" not in kwargs:
@@ -74,12 +75,13 @@ def unpack_for_clf(
     b_clf = jnp.zeros((n_lfs,))
     a_clf = jnp.zeros((n_lfs, n_con))
 
-    # Check for tunable barrier functions
+    # Check whether barrier functions are tunable
     if "tunable_class_k" not in kwargs:
         n_bfs = 0
-    elif kwargs["tunable_class_k"]:
+    else:
         n_bfs = len(barriers[0])
-        n_con -= n_bfs
+        if kwargs["tunable_class_k"]:
+            n_con -= n_bfs
 
     # Check whether Lyapunov functions are relaxable
     if "relaxable_clf" not in kwargs:

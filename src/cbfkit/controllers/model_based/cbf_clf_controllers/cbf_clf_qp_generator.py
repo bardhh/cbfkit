@@ -88,23 +88,23 @@ def cbf_clf_qp_generator(
         complete = False
         n_con = len(control_limits)
 
-        if "tunable_class_k" not in kwargs:
-            n_bfs = 0
-        elif kwargs["tunable_class_k"]:
-            b_funcs, _, _, _, _ = barriers
-            n_bfs = len(b_funcs)
-            control_limits = jnp.hstack([control_limits, 100 * jnp.ones((n_bfs,))])
+        n_bfs = 0
+        if "tunable_class_k" in kwargs:
+            if kwargs["tunable_class_k"]:
+                b_funcs, _, _, _, _ = barriers
+                n_bfs = len(b_funcs)
+                control_limits = jnp.hstack([control_limits, 1e2 * jnp.ones((n_bfs,))])
 
-        if "relaxable_clf" not in kwargs:
-            n_lfs = 0
-        elif kwargs["relaxable_clf"]:
-            l_funcs, _, _, _, _ = lyapunovs
-            n_lfs = len(l_funcs)
-            control_limits = jnp.hstack([control_limits, 1e9 * jnp.ones((n_lfs,))])
+        n_lfs = 0
+        if "relaxable_clf" in kwargs:
+            if kwargs["relaxable_clf"]:
+                l_funcs, _, _, _, _ = lyapunovs
+                n_lfs = len(l_funcs)
+                control_limits = jnp.hstack([control_limits, 1e9 * jnp.ones((n_lfs,))])
 
         if p_mat is None:
             p_mat = jnp.diag(
-                jnp.hstack([jnp.ones((n_con,)), 2e3 * jnp.ones((n_bfs,)), 2e3 * jnp.ones((n_lfs,))])
+                jnp.hstack([jnp.ones((n_con,)), 1e2 * jnp.ones((n_bfs,)), 2e3 * jnp.ones((n_lfs,))])
             )
 
         compute_input_constraints = generate_compute_input_constraints(control_limits)
