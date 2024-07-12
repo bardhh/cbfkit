@@ -63,7 +63,7 @@ def generate_compute_robust_cbf_constraints(
             a_cbf = a_cbf.at[:, :n_con].set(-jnp.matmul(bj_x, dyn_g))
             b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) - robustness_term(bj_x) + bc_x)
             if tunable:
-                a_cbf = a_cbf.at[:, n_con:n_bfs].set(-bc_x)
+                a_cbf = a_cbf.at[:, n_con:n_bfs].set(jnp.expand(-bc_x, axis=-1))
                 b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f))
 
             violated = lax.cond(jnp.any(bf_x < 0), lambda _fake: True, lambda _fake: False, 0)
