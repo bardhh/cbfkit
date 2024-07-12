@@ -145,10 +145,8 @@ def generate_model(
     )
 
     certificate_init_contents = textwrap.dedent(
-        """
-        from . import barrier_functions
-        from . import lyapunov_functions
-        """
+        ("from . import barrier_functions" if barrier_funcs is not None else "")
+        + ("from . import lyapunov_functions" if lyapunov_funcs is not None else "")
     )
 
     # Create proper init files
