@@ -2,17 +2,33 @@ from jax import Array, jit
 import jax.numpy as jnp
 from cbfkit.codegen.create_new_system import generate_mppi_model
 
-# Dynamics
-drift_dynamics = "[0, 0]"
-control_matrix = "[[1, 0], [0, 1]]"
+# Simulation Parameters
 target_directory = "./tutorials"
 model_name = "mppi_si"
+plot = True
+SAVE_FILE = f"tutorials/{model_name}/simulation_data"
+DT = 0.05  # 1e-2
+TF = 10  # 10.0
+N_STEPS = int(TF / DT) + 1
+INITIAL_STATE = jnp.array([1.5, 0.25])
+ACTUATION_LIMITS = jnp.array([5.0, 5.0])  # Box control input constraint, i.e., -100 <= u <= 100
+
+# Initialize params dict for all dynamics and constraint function related parameters
 params = {}
+
+# Define  Dynamics
+drift_dynamics = "[0, 0]"
+control_matrix = "[[1, 0], [0, 1]]"
+
+# Define stage and terminal cost functions
 goal = jnp.array([7, 7])  # .reshape(-1, 1)
 obstacle = jnp.array([5, 5])
 obstacle_radius = 0.6
+
+# MPPI stage and terminal cost functions: low cost when close to the goal and far away from the obstacles
 stage_cost_function = "(x[0]-goal[0])**2 + (x[1]-goal[1])**2 + 10.0/(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius)"
 terminal_cost_function = "(x[0]-goal[0])**2 + (x[1]-goal[1])**2 + 10.0/max(array([(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius),0.01]))"
+
 params["stage_cost_function"] = {
     "goal: float": goal,
     "obstacle: float": obstacle,
@@ -24,6 +40,7 @@ params["terminal_cost_function"] = {
     "obstacle_radius: float": obstacle_radius,
 }
 
+# Run script for automated genration of dynamics, cost functions python files
 generate_mppi_model.generate_model(
     directory=target_directory,
     model_name=model_name,
@@ -33,32 +50,22 @@ generate_mppi_model.generate_model(
     terminal_cost_function=terminal_cost_function,
     params=params,
 )
+
+
 # Provides access to execute (sim.execute)
 import cbfkit.simulation.simulator as sim
-
-# Access to CBF-CLF-QP control law
+# Access to MPPI control law
 from cbfkit.controllers_and_planners.model_based.mppi.vanilla_mppi_laws import (
     vanilla_mppi_controller,
 )
-
 # Assuming perfect, complete state information
 from cbfkit.sensors import perfect as sensor
-
 # With perfect sensing, we can use a naive estimate of the state
 from cbfkit.estimators import naive as estimator
-
 # Use forward-Euler numerical integration scheme
 from cbfkit.utils.numerical_integration import forward_euler as integrator
-
 from tutorials import mppi_si
 
-# Simulation Parameters
-SAVE_FILE = f"tutorials/{model_name}/simulation_data"
-DT = 0.05  # 1e-2
-TF = 10  # 10.0
-N_STEPS = int(TF / DT) + 1
-INITIAL_STATE = jnp.array([1.5, 0.25])
-ACTUATION_LIMITS = jnp.array([5.0, 5.0])  # Box control input constraint, i.e., -100 <= u <= 100
 
 
 mppi_args = {
@@ -74,6 +81,7 @@ mppi_args = {
 }
 
 # Dynamics function with epsilon parameter: returns f(x), g(x), d(x)
+# Load files generated with automated scripts before
 eps = 0.5
 dynamics = mppi_si.plant(
     epsilon=eps,
@@ -86,7 +94,7 @@ terminal_cost = mppi_si.cost_functions.terminal_cost_function.terminal_cost(
 )
 
 # Instantiate MPPI control law
-mppi_controller = vanilla_mppi_controller(
+mppi_controller = vanilla_mppi(
     control_limits=ACTUATION_LIMITS,
     dynamics_func=dynamics,
     stage_cost=stage_cost,
@@ -94,6 +102,7 @@ mppi_controller = vanilla_mppi_controller(
     mppi_args=mppi_args,
 )
 
+# Run the simulation
 x_, u_, z_, p_, data_keys_, data_items_ = sim.execute(
     x0=INITIAL_STATE,
     dt=DT,
@@ -111,9 +120,8 @@ x_, u_, z_, p_, data_keys_, data_items_ = sim.execute(
     },
 )
 
-plot = True
 if plot:
-    from tutorials.plot_mppi import animate
+    from tutorials.plot_helper.plot_mppi import animate
 
     animate(
         states=x_,

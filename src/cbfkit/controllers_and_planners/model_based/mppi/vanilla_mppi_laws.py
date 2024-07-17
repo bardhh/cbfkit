@@ -1,17 +1,17 @@
 """
-vanilla_cbf_clf_qp_controller.py
+vanilla_mppi_controller.py
 ================
 
-Defines the controller function for a CBF-CLF-QP control law for known, deterministic,
-continuous-time, control-affine, nonlinear dynamical systems.
+Defines the controller function for a Model Predictive Path Integral (MPPI) control law for known, deterministic,
+discrete-time, nonlinear dynamical systems.
 
 Functions
 ---------
--vanilla_cbf_clf_qp_controller: generates the function to compute the control solution to the CBF-CLF-QP
+-mppi_controller: generates the function to compute the control/planner solution to the MPPI
 
 Notes
 -----
-Relies on the cbf_clf_qp_generator function defined in cbf_clf_qp_generator.py
+Relies on the mppi_generator function defined in mppip_generator.py
 in the containing folder.
 
 Examples

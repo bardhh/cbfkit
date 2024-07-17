@@ -141,7 +141,7 @@ target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
 
 plot = True
 if plot:
-    from tutorials.plot_mppi_ffmpeg import animate
+    from tutorials.plot_helper.plot_mppi_ffmpeg import animate
 
     animate(
         states=x_,

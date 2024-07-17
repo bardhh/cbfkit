@@ -15,14 +15,25 @@ CBF-CLF-QP control laws.
 
 Examples
 --------
->>> from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.cbf_clf_qp_generator import cbf_clf_qp_generator
->>> from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.generate_constraints import (
->>>     generate_compute_zeroing_cbf_constraints,
->>>     generate_compute_vanilla_clf_constraints,
->>> )
->>> vanilla_cbf_clf_qp_controller = cbf_clf_qp_generator(
->>>     generate_compute_zeroing_cbf_constraints,
->>>     generate_compute_vanilla_clf_constraints,
+>>> import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
+>>> mppi_args = {
+>>>     "robot_state_dim": 2,
+>>>     "robot_control_dim": 2,
+>>>     "prediction_horizon": 80,
+>>>     "num_samples": 20000,
+>>>     "plot_samples": 30,
+>>>     "time_step": DT,
+>>>     "use_GPU": False,
+>>>     "costs_lambda": 0.03,
+>>>     "cost_perturbation": 0.1,
+>>> }
+>>> mppi_local_planner = mppi_planner.vanilla_mppi(
+>>>     control_limits=ACTUATION_LIMITS,
+>>>     dynamics_func=dynamics,
+>>>     trajectory_cost=None,
+>>>     stage_cost=stage_cost,
+>>>     terminal_cost=terminal_cost,
+>>>     mppi_args=mppi_args,
 >>> )
 """
 
@@ -46,22 +57,11 @@ from cbfkit.utils.user_types import (
     Key,
 )
 
-# from cbfkit.optimization.quadratic_program import solve as solve_qp
-# from .generate_constraints import (
-#     generate_compute_input_constraints,
-#     generate_compute_cbf_clf_constraints,
-# )
-
-
 def mppi_generator(
-    # generate_compute_stage_cost: GenerateComputeStageCostCallable,
-    # generate_compute_terminal_cost: GenerateComputeTerminalCostCallable,
 ) -> MppiGenerator:
     """Function for producing a generating function for MPPI laws of various forms.
 
     Args:
-        generate_compute_stage_cost (GenerateComputeCertificateConstraintCallable)
-        generate_compute_terminal_cost (GenerateComputeCertificateConstraintCallable)
 
     Returns:
         (MppiGenerator): function for generating MPPI control law
@@ -76,7 +76,7 @@ def mppi_generator(
         mppi_args: list,
         **kwargs: Dict[str, Any],
     ) -> ControllerCallable:
-        """Produces the function to deploy a CBF-CLF-QP control law.
+        """Produces the function to deploy a MPPI control law.
 
         Args:
             control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.]
@@ -84,10 +84,10 @@ def mppi_generator(
             stage_cost (DynamicsCallable): function to compute dynamics based on current state
             terminal-cost (DynamicsCallable): function to compute dynamics based on current state
 
-            **kwargs (Dict[str, Any]): keyword arguments, e.g., RiskAwareParams for RA-CBF-CLF-QP
+            **kwargs (Dict[str, Any]): keyword argumentsEEE
 
         Returns:
-            ControllerCallable: function for computing control input based on CBF-CLF-QP
+            ControllerCallable: function for computing control input based on MPPI
         """
         complete = False
         n_con = len(control_limits)
@@ -126,7 +126,7 @@ def mppi_generator(
 
         @jit
         def jittable_process(t: float, x: State, key: Key, data: list) -> ControllerCallableReturns:
-            """JIT-compatible portion of the CBF-CLF-QP control law.
+            """JIT-compatible portion of the MPPI control law.
 
             Args:
                 t (float): time (in sec)
