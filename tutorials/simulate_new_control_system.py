@@ -1,32 +1,23 @@
+import os
 from jax import Array, jit
 import jax.numpy as jnp
 from cbfkit.codegen.create_new_system import generate_model
 
 drift_dynamics = "[x[1], -x[0] + epsilon * (1 - x[0]**2) * x[1]]"
 control_matrix = "[[0], [1]]"
-target_directory = "./tutorials"
+
+file_path = os.path.dirname(os.path.abspath(__file__))
+target_directory = file_path + "/tutorials"
 model_name = "van_der_pol_oscillator"
 params = {"dynamics": {"epsilon: float": 0.5}}
-generate_model.generate_model(
-    directory=target_directory,
-    model_name=model_name,
-    drift_dynamics=drift_dynamics,
-    control_matrix=control_matrix,
-    params=params,
-)
+
 nominal_control_law = "x[0] * (1 - k_p) - epsilon * (1 - x[0]**2) * x[1]"
 params["controller"] = {"k_p: float": 1.0, "epsilon: float": 0.5}
-generate_model.generate_model(
-    directory=target_directory,
-    model_name=model_name,
-    drift_dynamics=drift_dynamics,
-    control_matrix=control_matrix,
-    nominal_controller=nominal_control_law,
-    params=params,
-)
+
 state_constraint_funcs = ["5 - x[0]", "x[0] + 7"]
 lyapunov_functions = "x[0]**2 + x[1]**2 - radius"
 params["clf"] = [{"radius: float": 1.0}]
+
 generate_model.generate_model(
     directory=target_directory,
     model_name=model_name,
@@ -117,7 +108,6 @@ nominal_controller = van_der_pol_oscillator.controllers.controller_1(k_p=1.0, ep
 # Instantiate CBF-CLF-QP control law
 cbf_clf_controller = vanilla_cbf_clf_qp_controller(
     control_limits=ACTUATION_LIMITS,
-    nominal_input=nominal_controller,
     dynamics_func=dynamics,
     barriers=barriers,
     lyapunovs=lyapunov,
@@ -130,8 +120,14 @@ sim.execute(
     dynamics=dynamics,
     perturbation=generate_stochastic_perturbation(sigma=sigma, dt=DT),
     integrator=integrator,
+    planner=None,
+    nominal_controller=nominal_controller,
     controller=cbf_clf_controller,
     sensor=sensor,
     estimator=estimator,
     filepath=SAVE_FILE,
+    planner_data={
+        "x_traj": jnp.zeros((2, 1)),
+    },  # pass in a dummy state since we need to pass planner_data
+    controller_data={},
 )
