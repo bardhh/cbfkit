@@ -4,7 +4,7 @@ import numpy as np
 
 from cbfkit.codegen.create_new_system import generate_model
 
-num_robots = 30
+num_robots = 10
 
 INITIAL_STATE = np.zeros(2 * num_robots)
 goals = np.zeros(2 * num_robots)
@@ -37,7 +37,10 @@ drift_dynamics = np.array2string(drift_dynamics, separator=",").replace("\n", ""
 control_matrix = np.array2string(control_matrix, separator=",").replace("\n", "")
 params = {}  # {"dynamics": {"epsilon: float": 0.5}}
 
-target_directory = "./tutorials/tutorials"
+import os
+
+file_path = os.path.dirname(os.path.abspath(__file__))
+target_directory = file_path + "/tutorials"
 model_name = "multi_augmented_single_integrators"
 
 # Nominal Control Law
@@ -75,7 +78,7 @@ for i in range(num_robots):
         }
     )
 
-
+print(f"hello9")
 generate_model.generate_model(
     directory=target_directory,
     model_name=model_name,
@@ -86,7 +89,7 @@ generate_model.generate_model(
     nominal_controller=nominal_control_law,
     params=params,
 )
-
+print(f"hello")
 # Provides access to execute (sim.execute)
 import cbfkit.simulation.simulator as sim
 
@@ -177,10 +180,16 @@ x, _u, _z, _p, dkeys, dvalues = sim.execute(
     num_steps=N_STEPS,
     dynamics=dynamics,
     integrator=integrator,
+    planner=None,
+    nominal_controller=nominal_controller,
     controller=cbf_clf_controller,
     sensor=sensor,
     estimator=estimator,
     filepath=SAVE_FILE,
+    planner_data={
+        "x_traj": jnp.zeros((2, 1)),
+    },  # pass in a dummy state since we need to pass planner_data
+    controller_data={},
 )
 
 plot = True

@@ -185,7 +185,8 @@ def stepper(
                 if planner_data["error"]:
                     return x, u, z, c, controller_data, planner_data
         else:
-            planner_data = {"u_traj": None, "prev_robustness": None}
+            planner_data["u_traj"] = None
+            # planner_data = {"u_traj": None, "prev_robustness": None, "x_traj": None}
         planner_data["prev_robustness"] = None
 
         # Nominal controller

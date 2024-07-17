@@ -2,8 +2,6 @@ import os
 from jax import Array, jit
 import jax.numpy as jnp
 from cbfkit.codegen.create_new_system import generate_model
-from typing import List, Callable
-
 
 
 # Simulation Parameters
@@ -161,7 +159,7 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
     num_steps=N_STEPS,
     dynamics=dynamics,
     integrator=integrator,
-    planner=mppi_local_planner,  # target_setpoint,  # ,  # ,  # None,  #
+    planner=mppi_local_planner,  # target_setpoint, # None,
     nominal_controller=None,  # nominal_controller,
     controller=cbf_clf_controller,
     sensor=sensor,

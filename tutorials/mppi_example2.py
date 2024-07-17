@@ -1,8 +1,11 @@
+'''
+In this example, rather than using auto-generation scripts, we pass the stage cost and terminal cost functions directly
+'''
+
 import os
 from jax import Array, jit
 import jax.numpy as jnp
 from cbfkit.codegen.create_new_system import generate_model
-from typing import List, Callable
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/tutorials"
@@ -11,58 +14,48 @@ model_name = "mppi_cbf_stl_v2"
 # Simulation Parameters
 SAVE_FILE = target_directory + f"/{model_name}/simulation_data"
 DT = 0.1  # 1e-2
-TF = 10  # 0  # 20  # 0  # 10.0
+TF = 10 
 N_STEPS = int(TF / DT) + 1
 INITIAL_STATE = jnp.array([0.0, 0.0])
 ACTUATION_LIMITS = jnp.array([5.0, 5.0])  # Box control input constraint, i.e., -100 <= u <= 100
 
-goal_radius = 0.5
 
-# Generate files automatically
+# Initialize params dict for all dynamics and constraint function related parameters
 params = {}
-drift_dynamics = "[0, 0]"  # Dynamics
-control_matrix = "[[1, 0], [0, 1]]"  # Dynamics
+
+# Define  Dynamics
+drift_dynamics = "[0, 0]"
+control_matrix = "[[1, 0], [0, 1]]"
+
+# Define functions
 goal = jnp.array([4, 4])
-goals = [goal]  # , goal3]
+goals = [goal] 
 goal_threshold = 0.5
+goal_radius = 0.5
 
 obstacle = jnp.array([3, 3])
 obstacle_radius = 0.6  # 1.0  # 0.6
 
-
+# Run script for automated genration of dynamics, cost functions python files
 generate_model.generate_model(
     directory=target_directory,
     model_name=model_name,
     drift_dynamics=drift_dynamics,
     control_matrix=control_matrix,
-    # stage_cost_function=stage_cost_function,
+    # stage_cost_function=stage_cost_function,  # We will pass python function directly below. No need to use auto-generation scripts for that
     # terminal_cost_function=terminal_cost_function,
     params=params,
 )
 
 import cbfkit.simulation.simulator as sim
-
 import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
 import cbfkit.controllers_and_planners.waypoint as single_waypoint_planner
 from cbfkit.sensors import perfect as sensor
 from cbfkit.estimators import naive as estimator
 from cbfkit.utils.numerical_integration import forward_euler as integrator
+
 from tutorials import mppi_cbf_stl
-
 dynamics = mppi_cbf_stl.plant()
-
-mppi_args = {
-    "robot_state_dim": 2,
-    "robot_control_dim": 2,
-    "prediction_horizon": 80,
-    "num_samples": 10000,
-    "plot_samples": 30,
-    "time_step": DT,
-    "use_GPU": False,
-    "costs_lambda": 0.03,
-    "cost_perturbation": 0.1,
-}
-
 
 @jit
 def stage_cost(state_and_time: Array, action: Array) -> Array:
@@ -88,7 +81,7 @@ def terminal_cost(state_and_time: Array, action: Array) -> Array:
     )
 
 
-# Instantiate MPPI control law
+# MPPI specific parameters
 mppi_args = {
     "robot_state_dim": 2,
     "robot_control_dim": 2,
@@ -100,16 +93,16 @@ mppi_args = {
     "costs_lambda": 0.03,
     "cost_perturbation": 0.1,
 }
+
+# Instantiate MPPI control law
 mppi_local_planner = mppi_planner.vanilla_mppi(
     control_limits=ACTUATION_LIMITS,
     dynamics_func=dynamics,
-    trajectory_cost=None,  # trajectory_cost_bad,
-    stage_cost=stage_cost,  # None,  # ,stage_cost,
-    terminal_cost=terminal_cost,  # None,  # terminal_cost,
+    trajectory_cost=None, 
+    stage_cost=stage_cost,  
+    terminal_cost=terminal_cost,  
     mppi_args=mppi_args,
 )
-
-target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
 
 (
     x_,
@@ -126,7 +119,7 @@ target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
     num_steps=N_STEPS,
     dynamics=dynamics,
     integrator=integrator,
-    planner=mppi_local_planner,  # target_setpoint,  # ,  # ,  # None,  #
+    planner=mppi_local_planner,  # target_setpoint
     nominal_controller=None,  # nominal_controller,
     controller=None,  # cbf_clf_controller,
     sensor=sensor,
