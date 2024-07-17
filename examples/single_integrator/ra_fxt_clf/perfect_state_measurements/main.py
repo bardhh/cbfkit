@@ -13,7 +13,7 @@ from cbfkit.models import single_integrator
 from cbfkit.sensors import perfect as sensor
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator
-import cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_controllers as ra_controllers
+import cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.risk_aware_cbf_clf_controllers as ra_controllers
 from examples.single_integrator.ra_fxt_clf.perfect_state_measurements import setup
 
 from examples.single_integrator.ra_fxt_clf.lyapunov_functions import fxts_lyapunov

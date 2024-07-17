@@ -30,19 +30,19 @@ from cbfkit.estimators import ct_ekf_dtmeas as ekf
 from cbfkit.integration import forward_euler as integrator
 
 # Import controller functions
-from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_path_integral_cbf_clf_qp_control_laws import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.risk_aware_path_integral_cbf_clf_qp_control_laws import (
     risk_aware_path_integral_cbf_clf_qp_controller,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
     zeroing_barriers,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
     e_s,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
     concatenate_certificates,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.risk_aware_params import (
     RiskAwareParams,
 )
 
