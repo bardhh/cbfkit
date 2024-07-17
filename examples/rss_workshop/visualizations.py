@@ -3,6 +3,7 @@ import matplotlib
 # matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FFMpegWriter
 from matplotlib.patches import Ellipse
 
 
@@ -78,6 +79,9 @@ def plot_trajectory(
 def animate(
     states,
     estimates,
+    controller_data_keys,
+    controller_data_items,
+    mppi_args,
     desired_state,
     desired_state_radius=0.1,
     obstacles=[],
@@ -94,16 +98,30 @@ def animate(
         etrajectory.set_data([], [])
         return (trajectory,)
 
-    def update(frame):
+    def update(frame, trajectory, etrajectory, mppi_sampled_trajectory, mppi_selected_trajectory):
         trajectory.set_data(states[:frame, 0], states[:frame, 1])
         etrajectory.set_data(estimates[:frame, 0], estimates[:frame, 1])
-        _, _, _ = states[frame]
-        _, _, _ = estimates[frame]
-        return (
-            trajectory,
-            etrajectory,
-        )
+        _, _, _, _ = states[frame]
+        _, _, _, _ = estimates[frame]
 
+        robot_sampled_states = controller_data_items[frame][
+            controller_data_keys.index("robot_sampled_states")
+        ]
+        robot_selected_states = controller_data_items[frame][controller_data_keys.index("x_traj")]
+
+        # Sampled Trajectories
+        for i in range(mppi_args["plot_samples"]):
+            mppi_sampled_trajectory[i].set_data(
+                robot_sampled_states[mppi_args["robot_state_dim"] * i, :],
+                robot_sampled_states[mppi_args["robot_state_dim"] * i + 1, :],
+            )
+
+        # Selected Trajectory
+        mppi_selected_trajectory.set_data(robot_selected_states[0, :], robot_selected_states[1, :])
+
+        return trajectory, etrajectory, mppi_sampled_trajectory, mppi_selected_trajectory
+
+    plt.ion()
     fig, ax = plt.subplots()
 
     ax.set_xlim(x_lim)
@@ -135,6 +153,11 @@ def animate(
     (trajectory,) = ax.plot([], [], label="Trajectory")
     (etrajectory,) = ax.plot([], [], label="Estimated Trajectory")
 
+    mppi_sampled_trajectory = [0] * (mppi_args["plot_samples"])
+    for i in range(mppi_args["plot_samples"]):
+        (mppi_sampled_trajectory[i],) = ax.plot([], [], "g", alpha=0.2)
+    (mppi_selected_trajectory,) = ax.plot([], [], "b")
+
     ax.set_xlim(x_lim[0], x_lim[1])
     ax.set_ylim(y_lim[0], y_lim[1])
     ax.set_xlabel("x [m]")
@@ -143,13 +166,29 @@ def animate(
     ax.legend()
     ax.grid()
 
-    ani = FuncAnimation(
-        fig, update, frames=len(states), init_func=init, blit=True, interval=dt * 100
-    )
+    metadata = dict(title="Movie Test", artist="Matplotlib", comment="Movie support!")
+    writer = FFMpegWriter(fps=int(1 / dt), metadata=metadata)
+    print(animation_filename)
+    with writer.saving(fig, animation_filename + ".mp4", 100):
+        for i in range(len(states)):
+            trajectory, etrajectory, mppi_sampled_trajectory, mppi_selected_trajectory = update(
+                i, trajectory, etrajectory, mppi_sampled_trajectory, mppi_selected_trajectory
+            )
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+            writer.grab_frame()
 
-    if save_animation:
-        ani.save(animation_filename, writer="imagemagick", fps=15)
-
+    plt.ioff()
+    plt.savefig(animation_filename + ".eps")
     plt.show()
+
+    # ani = FuncAnimation(
+    #     fig, update, frames=len(states), init_func=init, blit=True, interval=dt * 100
+    # )
+
+    # if save_animation:
+    #     ani.save(animation_filename, writer="imagemagick", fps=15)
+
+    # plt.show()
 
     return fig, ax

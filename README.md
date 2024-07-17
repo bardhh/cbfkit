@@ -111,13 +111,13 @@ import jax.numpy as jnp
 
 import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
 import cbfkit.simulation.simulator as sim
-from cbfkit.controllers.model_based.cbf_clf_controllers import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers import (
     vanilla_cbf_clf_qp_controller as cbf_controller,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
     concatenate_certificates,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
     zeroing_barriers,
 )
 

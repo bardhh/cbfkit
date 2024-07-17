@@ -11,13 +11,13 @@ from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.estimators import ct_ekf_dtmeas
 from cbfkit.integration import forward_euler as integrator
 from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
-from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_qp_control_laws import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.risk_aware_cbf_clf_qp_control_laws import (
     estimate_feedback_risk_aware_cbf_clf_qp_controller,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.risk_aware_params import (
     RiskAwareParams,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.fixed_time_stability import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.fixed_time_stability import (
     fxt_s,
 )
 

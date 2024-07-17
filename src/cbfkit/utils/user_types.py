@@ -53,6 +53,7 @@ State = Array
 Control = Array
 Estimate = Array
 Covariance = Array
+Key = int
 
 # Certificate (Barrier, Lyapunov, Barrier-Lyapunov, etc.) Function Callables
 CertificateCallable = Callable[[float, State], Array]
@@ -99,6 +100,10 @@ PerturbationCallable = Callable[[State, Control, Array, Array], PerturbationCall
 ControllerCallableReturns = Tuple[Array, Dict[str, Any]]
 ControllerCallable = Callable[[float, State], ControllerCallableReturns]
 
+# Planner Callables
+PlannerCallableReturns = Tuple[Array, Dict[str, Any]]
+PlannerCallable = Callable[[float, State], PlannerCallableReturns]
+
 # Estimator Callables
 EstimatorCallable = Callable[
     [float, Array, Array, Optional[Union[Array, None]], Optional[Union[Array, None]]],
@@ -144,3 +149,33 @@ ComputeCertificateConstraintFunctionGenerator = Callable[
 # Miscellaneous
 Time = float
 NumSteps = int
+
+# Cost function Callables
+TrajectoryCostCallableReturns = Tuple[Array]
+TrajectoryCostCallable = Callable[[State, Control], TrajectoryCostCallableReturns]
+StageCostCallableReturns = Tuple[Array]
+StageCostCallable = Callable[[State, Control], StageCostCallableReturns]
+TerminalCostCallableReturns = Tuple[Array]
+TerminalCostCallable = Callable[[State, Control], TerminalCostCallableReturns]
+
+# CBF-CLF-QP-Generators
+GenerateComputeStageCostCallable = Callable[
+    [Array, DynamicsCallable, StageCostCallable, TerminalCostCallable, Dict[str, Any]],
+    Callable[[float, State], Tuple[Array, Array]],
+]
+GenerateComputeTerminalCostCallable = Callable[
+    [Array, DynamicsCallable, StageCostCallable, TerminalCostCallable, Dict[str, Any]],
+    Callable[[float, State], Tuple[Array, Array]],
+]
+MppiGenerator = Callable[
+    [
+        Array,
+        ControllerCallable,
+        DynamicsCallable,
+        StageCostCallable,
+        TerminalCostCallable,
+        Union[Array, None],
+        Dict[str, Any],
+    ],
+    ControllerCallable,
+]

@@ -12,7 +12,7 @@ from cbfkit.models import van_der_pol
 from cbfkit.sensors import perfect as sensor
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator
-from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_controllers import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.risk_aware_cbf_clf_controllers import (
     cbf_clf_controller,
 )
 from examples.van_der_pol.ra_fxt_clbf.perfect_state_measurements import setup

@@ -26,13 +26,13 @@ from jax import jacfwd, random
 from numpy.random import uniform
 
 from cbfkit.simulation.simulator import stepper
-from cbfkit.controllers.model_based.cbf_clf_controllers.vanilla_cbf_clf_qp_control_laws import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.vanilla_cbf_clf_qp_control_laws import (
     vanilla_cbf_clf_qp_controller,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
     concatenate_certificates,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
     linear_class_k,
 )
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
