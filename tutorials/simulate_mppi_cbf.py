@@ -4,11 +4,12 @@ import jax.numpy as jnp
 from cbfkit.codegen.create_new_system import generate_model
 from typing import List, Callable
 
+
+
+# Simulation Parameters
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/tutorials"
 model_name = "mppi_cbf_si"
-
-# Simulation Parameters
 SAVE_FILE = target_directory + f"/{model_name}/simulation_data"
 DT = 0.05  # 1e-2
 TF = 10  # 10.0
@@ -16,23 +17,31 @@ N_STEPS = int(TF / DT) + 1
 INITIAL_STATE = jnp.array([0.0, 0.0])
 ACTUATION_LIMITS = jnp.array([5.0, 5.0])  # Box control input constraint, i.e., -100 <= u <= 100
 
-goal = jnp.array([7, 7])  # .reshape(-1, 1)
-obstacle = jnp.array([3, 6])
-obstacle_radius = 1.0  # 0.6
-
-# Generate files automatically
+# Initialize params dict for all dynamics and constraint function related parameters
 params = {}
-drift_dynamics = "[0, 0]"  # Dynamics
-control_matrix = "[[1, 0], [0, 1]]"  # Dynamics
+
+# Define  Dynamics
+drift_dynamics = "[0, 0]"
+control_matrix = "[[1, 0], [0, 1]]"
+
+# Define functions
 goal = jnp.array([9, 9])
 obstacle = jnp.array([3, 3])
 obstacle_radius = 0.6
+
+# MPPI stage and terminal cost functions
 stage_cost_function = "0.2 * ( (x[0]-goal[0])**2 + (x[1]-goal[1])**2 )+ 10.0/max(array([(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius),0.01]))"  # MPPI stage cost function
 terminal_cost_function = "0.2 * ( (x[0]-goal[0])**2 + (x[1]-goal[1])**2 ) + 10.0/max(array([(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius),0.01]))"  # MPPI terminal cost function
+
+# Nominal controller - to be passed to CBF-QP controller
 nominal_control_law = "-k_p * (x[0]-xd[0]), -k_p * (x[1]-xd[1])"  # nominal controller
+
+# Barrier functions
 state_constraint_funcs = [
     "(x[0]-obstacle[0])**2 + (x[1]-obstacle[1])**2 - obstacle_radius**2"
-]  # barrier functions
+] 
+
+# Lyapunov functions
 lyapunov_functions = ["(x[0]-goal[0])**2+(x[1]-goal[1])**2"]  # lyapunov functions
 params["stage_cost_function"] = {
     "goal: float": goal,
@@ -47,6 +56,8 @@ params["terminal_cost_function"] = {
 params["controller"] = {"k_p: float": 1.0}
 params["clf"] = [{"goal: float": goal}]
 params["cbf"] = [{"obstacle: float": obstacle, "obstacle_radius: float": obstacle_radius}]
+
+# Run script for automated genration of dynamics, cost functions python files
 generate_model.generate_model(
     directory=target_directory,
     model_name=model_name,
@@ -60,6 +71,7 @@ generate_model.generate_model(
     params=params,
 )
 
+# Import controllers and planners
 import cbfkit.simulation.simulator as sim
 import cbfkit.controllers_and_planners.model_based.cbf_clf_controllers as cbf_clf_controllers
 from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
@@ -78,6 +90,7 @@ from cbfkit.estimators import naive as estimator
 from cbfkit.utils.numerical_integration import forward_euler as integrator
 from tutorials import mppi_cbf_si
 
+# Load dynamics, cost functions and constraint functions that were auto-generated
 dynamics = mppi_cbf_si.plant()
 stage_cost = mppi_cbf_si.cost_functions.stage_cost_function.stage_cost(
     goal=goal, obstacle=obstacle, obstacle_radius=obstacle_radius
@@ -97,7 +110,7 @@ l1 = mppi_cbf_si.certificate_functions.lyapunov_functions.clf1_package(
 )
 lyapunov = concatenate_certificates(l1)
 
-# Instantiate MPPI control law
+# MPPI specific parameters
 mppi_args = {
     "robot_state_dim": 2,
     "robot_control_dim": 2,
@@ -109,6 +122,8 @@ mppi_args = {
     "costs_lambda": 0.03,
     "cost_perturbation": 0.1,
 }
+
+# Instantiate MPPI control law
 mppi_local_planner = mppi_planner.vanilla_mppi(
     control_limits=ACTUATION_LIMITS,
     dynamics_func=dynamics,
@@ -130,6 +145,7 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
     relaxable_clf=True,
 )
 
+# Run the simulation
 (
     x_,
     u_,
@@ -159,7 +175,7 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
 
 plot = True
 if plot:
-    from tutorials.plot_mppi_ffmpeg import animate
+    from tutorials.plot_helper.plot_mppi_ffmpeg import animate
 
     animate(
         states=x_,

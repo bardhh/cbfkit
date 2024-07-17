@@ -31,7 +31,6 @@ def setup_mppi(
             print(f"Neither Trajectory Cost nor Terminal Cost function is passed")
             exit()
 
-    # self.key = jax.random.PRNGKey(111)
     horizon = horizon
     samples = samples
     dt = dt
@@ -43,19 +42,30 @@ def setup_mppi(
     control_cov = 4.0 * jnp.eye(robot_control_dim)
     control_cov_inv = jnp.linalg.inv(control_cov)
     control_bound = control_bound
-    control_bound_lb = -jnp.array([1, 1]).reshape(-1, 1)
-    control_bound_ub = jnp.array([1, 1]).reshape(-1, 1)
+    # TODO: implement separate lower and upper bounds
+    # control_bound_lb = -jnp.array([1, 1]).reshape(-1, 1)
+    # control_bound_ub = jnp.array([1, 1]).reshape(-1, 1)
 
     costs_lambda = costs_lambda
     cost_perturbation_coeff = cost_perturbation_coeff
 
     @jit
     def robot_dynamics_step(state, input):
+        '''
+        Args: state and input vector
+        Returns: next state
+        '''
         f, g = dyn_func(state[:, 0])  # , input)
         return state + (f.reshape(-1, 1) + g @ input) * dt
 
     @jit
-    def weighted_sum(U, perturbation, costs):  # weights):
+    def weighted_sum(U, perturbation, costs):  
+        '''
+        Args: 
+            U: control input trajectory of all samples
+            perturbation: random perturbation trajectory of all samples
+            costs: cost of each sampled trajectory
+        '''
         costs = costs - jnp.min(costs)
         costs = costs / jnp.max(costs)
         lambd = costs_lambda
@@ -124,12 +134,6 @@ def setup_mppi(
                 robot_state[:, 0], perturbed_control[:, [horizon]][:, 0]
             )
         if trajectory_cost_func != None:
-            # find cost now
-            # cost_sample = cost_sample + trajectory_cost_func(time, robot_states, perturbed_control)
-            # robot_states_complete = jnp.append(x_prev, robot_states, axis=1)
-            # cost_sample = cost_sample + trajectory_cost_func(
-            #     0.0, robot_states_complete, perturbed_control
-            # )
             cost_sample = cost_sample + trajectory_cost_func(
                 time, robot_states, perturbed_control, prev_robustness
             )
