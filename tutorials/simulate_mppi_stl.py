@@ -2,7 +2,8 @@ import os
 from jax import Array, jit
 import jax.numpy as jnp
 from cbfkit.codegen.create_new_system import generate_model
-from typing import List, Callable
+
+from cbfkit.utils.jax_stl import *
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/tutorials"
@@ -67,9 +68,6 @@ from cbfkit.utils.numerical_integration import forward_euler as integrator
 from tutorials import mppi_cbf_stl
 
 dynamics = mppi_cbf_stl.plant()
-
-
-from jax_stl import *
 
 mppi_args = {
     "robot_state_dim": 2,
@@ -315,7 +313,7 @@ target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
 
 plot = True
 if plot:
-    from tutorials.plot_mppi_ffmpeg import animate
+    from tutorials.plot_helper.plot_mppi_ffmpeg import animate
 
     animate(
         states=x_,

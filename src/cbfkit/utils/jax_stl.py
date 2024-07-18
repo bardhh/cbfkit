@@ -11,7 +11,6 @@ def jax_not(robustness):
     return -robustness
 
 
-# want robustness to be more positive
 # Processes mtl or
 @jit
 def jax_or(left_robustness, right_robustness):
@@ -123,7 +122,6 @@ def jax_finally(lower_time_bound, upper_time_bound, robustness, time_stamps):
         def inf_case(_):
             # In case the upper time bound is infinity, we accumulate maximum robustness
             return jnp.max(robustness)
-            # return accumulate_max(robustness[::-1])[::-1]
 
         def bounded_case(_):
             upper_bound_index = search_sorted(time_stamps, upper_time_bound)
@@ -143,9 +141,6 @@ def jax_finally(lower_time_bound, upper_time_bound, robustness, time_stamps):
                 None,
             )
             # def compute_finally(i):
-
-        # return
-        # return vmap(compute_finally)(jnp.arange(length))
 
         return lax.cond(
             (lower_time_bound == 0) & jnp.isinf(upper_time_bound),
@@ -171,7 +166,6 @@ def jax_global(lower_time_bound, upper_time_bound, robustness, time_stamps):
         def inf_case(_):
             # In case the upper time bound is infinity, we accumulate minimum robustness
             return jnp.min(robustness)
-            # return accumulate_min(robustness[::-1])[::-1]
 
         def bounded_case(_):
             upper_bound_index = search_sorted(time_stamps, upper_time_bound)
@@ -181,8 +175,7 @@ def jax_global(lower_time_bound, upper_time_bound, robustness, time_stamps):
                 lambda _: search_sorted(time_stamps, lower_time_bound),
                 None,
             )
-            # jax.debug.print("🤯 {x} 🤯", x=lower_bound_index)
-            # jax.debug.print()
+
             # Check if indices are equal and return corresponding robustness
             return lax.cond(
                 lower_bound_index == upper_bound_index,
@@ -227,84 +220,11 @@ def jax_until(upper_time_bound, robustness, time_stamps):
 
     return robustness
 
-    length = len(left_robustness)
-
-    def inf_case(_):
-        def body(i, last_robustness):
-            last_robustness = max_jax(
-                min_jax(last_robustness, left_robustness[length - 1 - i]),
-                right_robustness[length - 1 - i],
-            )
-            return last_robustness, last_robustness
-
-        _, until_robustness = lax.scan(body, -jnp.inf, jnp.arange(length))
-        return until_robustness[::-1]
-
-    def bounded_case(_):
-        def compute_until(i):
-            lower_bound = time_stamps[i] + lower_time_bound
-            upper_bound = time_stamps[i] + upper_time_bound
-            lower_bound_index = lax.cond(
-                lower_time_bound == 0,
-                lambda _: i,
-                lambda _: search_sorted(time_stamps, lower_bound, i),
-                None,
-            )
-            upper_bound_index = search_sorted(time_stamps, upper_bound, i)
-
-            def get_min_robustness(start_idx, end_idx):
-                min_robustness = jnp.inf
-                min_robustness = lax.fori_loop(
-                    start_idx,
-                    end_idx + 1,
-                    lambda idx, val: jnp.minimum(val, left_robustness[idx]),
-                    min_robustness,
-                )
-                return min_robustness
-
-            def get_max_robustness(start_idx, end_idx, min_robustness):
-                max_robustness = -jnp.inf
-                max_robustness = lax.fori_loop(
-                    start_idx,
-                    end_idx + 1,
-                    lambda idx, val: jnp.maximum(
-                        val, jnp.minimum(right_robustness[idx], min_robustness)
-                    ),
-                    max_robustness,
-                )
-                return max_robustness
-
-            min_robustness = get_min_robustness(lower_bound_index, upper_bound_index)
-            max_robustness = get_max_robustness(
-                lower_bound_index, upper_bound_index, min_robustness
-            )
-            return max_robustness
-
-        return vmap(compute_until)(jnp.arange(length))
-
-    return lax.cond(
-        (lower_time_bound == 0) & jnp.isinf(upper_time_bound),
-        inf_case,
-        bounded_case,
-        None,
-    )
-
 
 # Processes mtl next
 @jit
 def jax_next(robustness):
     return jnp.roll(robustness, -1)
-
-
-## TODO: implement various robustness metrics??
-
-
-# everntually
-def barrier_robustness(barrier):
-    """
-    retruns rosutness value of a constraint
-    """
-    return
 
 
 # Example usage
@@ -359,28 +279,3 @@ if __name__ == "__main__":
     # print(f"Standard deviation of execution times: {jnp.std(execution_times):.6f} seconds")
     # print(f"Number of iterations: {len(execution_times)}")
     # print(f"Length of the trajectory: {length}")
-
-
-# @jit
-# def search_sorted_upper(time_stamps, time):  # , start_lower_index):
-#     jax.debug.print("🤯 upper time {x} 🤯", x=time)
-#     jax.debug.print("🤯 upper time {x} 🤯", x=time_stamps <= time)
-#     c = time_stamps <= time
-#     return jnp.max(jnp.where(c == True)[0])
-#     # return jnp.argmax(time_stamps <= time)
-
-
-# @jit
-# def search_sorted_lower(time_stamps, time):  # , start_lower_index):
-#     jax.debug.print("🤯 lower time {x} 🤯", x=time)
-#     jax.debug.print("🤯 lower time {x} 🤯", x=time_stamps >= time)
-#     jax.debug.print("🤯 lower time {x} 🤯", x=jnp.argmax(time_stamps >= time))
-#     c = time_stamps <= time
-#     return jnp.max(jnp.where(c == True)[0])
-# b = time_stamps >= time
-# return jnp.min(jnp.where(b == True)[0])
-# return jnp.argmin(time_stamps >= time)
-
-# jax.debug.print("🤯 time {x} 🤯", x=time)
-# jax.debug.print("🤯 time {x} 🤯", x=time_stamps <= time)
-# return jnp.argmin(time_stamps <= time)

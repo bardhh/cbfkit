@@ -1,6 +1,6 @@
 # CBFKit: A Control Barrier Function Toolbox for Robotics Applications
 
-CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control for robotics applications, particularly in uncertain environments. The toolbox utilizes Control Barrier Functions (CBFs) to provide formal safety guarantees while offering flexibility and ease of use.
+CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control for robotics applications, particularly in uncertain environments. The toolbox utilizes Control Barrier Functions (CBFs) to provide formal safety guarantees while offering flexibility and ease of use. We additionally provide efficient JAX implementatio of Model Predictive path Integral (MPPI) with support for reach avoid specifications.
 
 ## Table of Contents
 - [Key Features](#key-features)
@@ -17,9 +17,10 @@ CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control
 - **Generalized Framework:** Supports the design of CBFs for various robotic systems operating in both deterministic and stochastic settings.
 - **ROS Integration:** Seamlessly connects with ROS2, enabling multi-robot applications, environment and map encoding, and integration with motion planning algorithms.
 - **Diverse CBF Options:** Provides a variety of CBF formulations and algorithms to address different control scenarios.
-- **Model-based and Model-free Control:** Accommodates both model-based control strategies using system dynamics and model-free control approaches.
+- **Model-based and Model-free Control:** Accommodates both model-based control strategies using system dynamics and model-free control approaches. Model-free algorithms to be added soon.
 - **Safety Guarantee:** CBFs provide mathematically rigorous guarantees of safety by ensuring the system remains within a defined safe operating region.
 - **Flexibility:** Allows users to specify custom safety constraints and barrier functions to tailor the control behavior to specific needs.
+- **Multi-layer architecure** Allows seamless integration of planners, nominal controller and safety filter controllers.
 - **Efficiency:** Leverages JAX for efficient automatic differentiation and jaxopt for fast quadratic program (QP) solving, enabling real-time control applications.
 - **Code Generation:** Simplifies model creation with automatic code generation for dynamics, controllers, and certificate functions.
 - **Usability:** Includes tutorials and examples for a smooth learning curve and rapid prototyping.
@@ -87,19 +88,16 @@ van_der_pol_oscillator
  ┣ plant.py
  ┗ run_ros2_nodes.sh
 ```
+We recommend going through the tutorials in the following order to get comfortbale with the architecture of our library.
+- `simulate_new_control_system.ipynb`
+- `multi_robot_example.ipynb`
+- `simulate_mppi_cbf.py`
+- `simulate_mppi_cbf_ellipsoidal_stochastic_cbf.py`
+- `simulate_mppi_stl.py`
 
-## ROS2
-The ROS2 nodes are generated in the `ros2` directory. The nodes are generated for the plant, controller, sensor, and estimator.
 
-To run the nodes, execute the following command in the `van_der_pol_oscillator` directory:
-```bash
-bash run_ros2_nodes.sh
-```
-The generated nodes interact as follows:
-- The `plant_model` node simulates the physical system and publishes the system state.
-- The `sensor` node receives the system state and adds noise to simulate real-world measurements.
-- The `estimator` node receives the noisy measurements and estimates the true system state.
-- The `controller` node receives the estimated state and computes the control input based on the CBF formulation.
+## Simulation Arhitecture 
+- Every simulation must define a planner, nominal controller, and a controller where the output of planner is passed to nominal controller and the output of nominal controller is then passed to the controller.
 
 ## Examples
 Several additional examples of how to use CBFkit to conduct full simulations of arbitrary dynamical systems are provided, including a unicycle robot, fixed-wing aerial vehicle, and more, all of which may be found in the ```examples``` folder. Any file contained within ```examples``` or any of its subdirectories whose name takes the form of ```*main.py``` is an executable example that may be referenced when a user is building their own application.
@@ -184,6 +182,21 @@ x, u, z, p, data, data_keys = sim.execute(
     filepath=file_path + "vanilla_cbf_results",
 )
 ```
+
+
+## ROS2
+The ROS2 nodes are generated in the `ros2` directory. The nodes are generated for the plant, controller, sensor, and estimator. This support is in the initial stage and will be improved soon.
+
+To run the nodes, execute the following command in the `van_der_pol_oscillator` directory:
+```bash
+bash run_ros2_nodes.sh
+```
+The generated nodes interact as follows:
+- The `plant_model` node simulates the physical system and publishes the system state.
+- The `sensor` node receives the system state and adds noise to simulate real-world measurements.
+- The `estimator` node receives the noisy measurements and estimates the true system state.
+- The `controller` node receives the estimated state and computes the control input based on the CBF formulation.
+
 
 ## Citing CBFKit
 If you use CBFKit in your research, please cite the following [PAPER](https://arxiv.org/abs/2404.07158):
