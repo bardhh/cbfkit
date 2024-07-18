@@ -51,21 +51,21 @@ def setup_mppi(
 
     @jit
     def robot_dynamics_step(state, input):
-        '''
+        """
         Args: state and input vector
         Returns: next state
-        '''
+        """
         f, g = dyn_func(state[:, 0])  # , input)
         return state + (f.reshape(-1, 1) + g @ input) * dt
 
     @jit
-    def weighted_sum(U, perturbation, costs):  
-        '''
-        Args: 
+    def weighted_sum(U, perturbation, costs):
+        """
+        Args:
             U: control input trajectory of all samples
             perturbation: random perturbation trajectory of all samples
             costs: cost of each sampled trajectory
-        '''
+        """
         costs = costs - jnp.min(costs)
         costs = costs / jnp.max(costs)
         lambd = costs_lambda
@@ -129,10 +129,10 @@ def setup_mppi(
                 @ perturbation[:, [horizon]]
             )[0, 0]
         )
-        if trajectory_cost_func == None:
-            cost_sample = cost_sample + terminal_cost_func(
-                robot_state[:, 0], perturbed_control[:, [horizon]][:, 0]
-            )
+        # if trajectory_cost_func == None:
+        #     cost_sample = cost_sample + terminal_cost_func(
+        #         robot_state[:, 0], perturbed_control[:, [horizon]][:, 0]
+        #     )
         if trajectory_cost_func != None:
             cost_sample = cost_sample + trajectory_cost_func(
                 time, robot_states, perturbed_control, prev_robustness
