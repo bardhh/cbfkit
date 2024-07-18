@@ -57,8 +57,8 @@ from cbfkit.utils.user_types import (
     Key,
 )
 
-def mppi_generator(
-) -> MppiGenerator:
+
+def mppi_generator() -> MppiGenerator:
     """Function for producing a generating function for MPPI laws of various forms.
 
     Args:
