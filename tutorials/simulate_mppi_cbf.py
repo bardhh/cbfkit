@@ -35,9 +35,7 @@ terminal_cost_function = "0.2 * ( (x[0]-goal[0])**2 + (x[1]-goal[1])**2 ) + 10.0
 nominal_control_law = "-k_p * (x[0]-xd[0]), -k_p * (x[1]-xd[1])"  # nominal controller
 
 # Barrier functions
-state_constraint_funcs = [
-    "(x[0]-obstacle[0])**2 + (x[1]-obstacle[1])**2 - obstacle_radius**2"
-] 
+state_constraint_funcs = ["(x[0]-obstacle[0])**2 + (x[1]-obstacle[1])**2 - obstacle_radius**2"]
 
 # Lyapunov functions
 lyapunov_functions = ["(x[0]-goal[0])**2+(x[1]-goal[1])**2"]  # lyapunov functions
