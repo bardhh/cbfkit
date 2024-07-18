@@ -7,7 +7,7 @@ from cbfkit.utils.jax_stl import *
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/tutorials"
-model_name = "mppi_cbf_stl_v2"
+model_name = "mppi_cbf_stl"
 
 # Simulation Parameters
 SAVE_FILE = target_directory + f"/{model_name}/simulation_data"
@@ -20,7 +20,6 @@ ACTUATION_LIMITS = jnp.array([5.0, 5.0])  # Box control input constraint, i.e., 
 goal = jnp.array([7, 7])  # .reshape(-1, 1)
 goal_radius = 0.5
 obstacle = jnp.array([3, 6])
-# obstacle_radius = 1.0  # 0.6
 
 # Generate files automatically
 params = {}
@@ -29,24 +28,11 @@ control_matrix = "[[1, 0], [0, 1]]"  # Dynamics
 goal = jnp.array([4, 4])
 goal2 = jnp.array([6, 9])
 goal3 = jnp.array([4, 1])
-# goal4 = jnp.array([2, 1])
-goals = [goal, goal2, goal3]  # , goal3]
+goals = [goal, goal2, goal3]
 obstacle = jnp.array([3, 3])
-obstacle_radius = 0.6  # 1.0  # 0.6
+obstacle_radius = 0.6
 goal_threshold = 0.5
-# stage_cost_function = "(x[0]-goal[0])**2 + (x[1]-goal[1])**2 + 10.0/(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius)"  # MPPI stage cost function
-# terminal_cost_function = "(x[0]-goal[0])**2 + (x[1]-goal[1])**2 + 10.0/max(array([(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius),0.01]))"  # MPPI terminal cost function
 
-# params["stage_cost_function"] = {
-#     "goal: float": goal,
-#     "obstacle: float": obstacle,
-#     "obstacle_radius: float": obstacle_radius,
-# }
-# params["terminal_cost_function"] = {
-#     "goal: float": goal,
-#     "obstacle: float": obstacle,
-#     "obstacle_radius: float": obstacle_radius,
-# }
 
 generate_model.generate_model(
     directory=target_directory,
@@ -81,38 +67,16 @@ mppi_args = {
     "cost_perturbation": 0.1,
 }
 
-
-# Example 1 (without STL)
-# def constraints(state_array, input_array):
-#     """
-#     Returns a vector of constraint values g(x) such that the constraint is g(x)>=0
-#     Args:
-#         state: n X N
-#         input: m x N
-#     """
-#     h1 = 0.2 * jnp.sum(jnp.linalg.norm(state_array[0:2, :] - goal.reshape(-1, 1), axis=0) ** 2)
-#     h2 = jnp.sum(
-#         10.0
-#         / jnp.maximum(
-#             (
-#                 jnp.linalg.norm(state_array[0:2, :] - obstacle.reshape(-1, 1), axis=0)
-#                 - obstacle_radius
-#             ),
-#             0.01 * jnp.ones(mppi_args["prediction_horizon"]),
-#         )
-#     )
-#     return jnp.append(h1.reshape(1, -1), h2.reshape(1, -1), axis=0)
+##################################
+# Define STL constraint and trajectory cost (based on robustness metric)
+# The current implementation requires the trajectory_cost function to be defined two times
+# 1. stl_complete_trajectory_cost: computes STL robustness metric (for each constraint) on the complete state trajectory history maintained by the simulator. This function is used by the simulator.py
+# 2. stl_trajectory_cost: this function takes as input past STL robustness and a future predicted state and input trajectory to compute STL robustness (for all constraints combined) of concataneted past + future trajectory. This function is used by MPPI
+### TODO: make this more efficient by passing the same function to simulator.py and MPPi codes
 
 
-# @jit
-# def trajectory_cost(state_array: Array, input_array: Array) -> Array:
-#     robustness = constraints(state_array, input_array)
-#     return jnp.sum(robustness)
-
-
-# Example 2 (with STL)
 @jit
-def constraints(state_array, input_array):
+def stl_constraints(state_array, input_array):
     # low cost
     # but stl needs high reward
     """
@@ -127,14 +91,7 @@ def constraints(state_array, input_array):
         (dists - obstacle_radius),
         0.01 + 0 * dists,
     )
-    # h1 = 1.0 / jnp.maximum(
-    #     (jnp.linalg.norm(state_array[0:2, :] - obstacle.reshape(-1, 1), axis=0) - obstacle_radius),
-    #     0.01 * jnp.ones(mppi_args["prediction_horizon"]),
-    # )
-    # h1 = 10.0 * (
-    #     obstacle_radius**2
-    #     - jnp.linalg.norm(state_array[0:2, :] - obstacle.reshape(-1, 1), axis=0) ** 2
-    # )
+
     # Goal 1 reaching
     h2 = 10.0 * (
         jnp.linalg.norm(state_array[0:2, :] - goal.reshape(-1, 1), axis=0) ** 2 - goal_radius**2
@@ -149,65 +106,39 @@ def constraints(state_array, input_array):
         jnp.linalg.norm(state_array[0:2, :] - goal3.reshape(-1, 1), axis=0) ** 2 - goal_radius**2
     )
 
-    # h5 = 1.0 * (
-    #     jnp.linalg.norm(state_array[0:2, :] - goal4.reshape(-1, 1), axis=0) ** 2 - goal_radius**2
-    # )
-
-    # min value 0, max value infinity. want to minimze cost (that is, should be 0)
-    # return jnp.append(h1.reshape(1, -1), h2.reshape(1, -1), axis=0)
     return jnp.concatenate(
-        # (h1.reshape(1, -1), h2.reshape(1, -1), h3.reshape(1, -1)),
-        # axis=0,
         (h1.reshape(1, -1), h2.reshape(1, -1), h3.reshape(1, -1), h4.reshape(1, -1)),
         axis=0,
     )
 
 
-# @jit
-# def trajectory_cost(time: float, state_array: Array, input_array: Array) -> Array:
-#     robustness = constraints(state_array, input_array)
-#     # time = state_array[-1]
-#     time_stamps = jnp.linspace(
-#         time, time + mppi_args["prediction_horizon"] * DT, mppi_args["prediction_horizon"]
-#     )
-#     cost = -jax_and(
-#         jax_and(
-#             jax_global(
-#                 0,
-#                 jnp.inf,
-#                 -robustness[0, :],
-#                 time_stamps,
-#             ),  # jnp.linspace(0, mppi_args["prediction_horizon"] * DT, mppi_args["prediction_horizon"]),
-#             jax_finally(
-#                 0,
-#                 5,
-#                 -robustness[1, :],
-#                 time_stamps,
-#             ),  # mejnp.linspace(0, mppi_args["prediction_horizon"] * DT, mppi_args["prediction_horizon"]),
-#         ),
-#         jax_finally(5, 10, -robustness[2, :], time_stamps),
-#         # jax_and(
-#         #     jax_finally(5, 10, -robustness[2, :], time_stamps),
-#         #     jax_finally(8, 20, -robustness[3, :], time_stamps),
-#         # ),
-#     )
-
-#     return cost
-
-
 @jit
-def trajectory_cost_bad(
+def stl_complete_trajectory_cost(dt: float, state_array: Array) -> Array:
+    robustness = stl_constraints(state_array, None)
+    time_stamps = jnp.linspace(0, state_array.shape[1] * dt, state_array.shape[1])
+    h1 = jax_global(0, jnp.inf, -robustness[0, :], time_stamps)  # always satisfy this constraint
+    h2 = jax_finally(
+        0, 3.5, -robustness[1, :], time_stamps
+    )  # reach this goal between [0, 3.5] seconds.
+    h3 = jax_finally(
+        3.6, 5, -robustness[2, :], time_stamps
+    )  # reach this goal between [3.6, 5] seconds
+    h4 = jax_finally(
+        5.1, 10, -robustness[3, :], time_stamps
+    )  # reach this goal between [5.1, 10] seconds
+    return jnp.array([h1, h2, h3, h4])  # Note this function returns robustness of each constraint
+
+
+# repeat the above function for MPPI but return a single robustness metric
+@jit
+def stl_trajectory_cost(
     time: float, state_array: Array, input_array: Array, prev_robustness
 ) -> Array:
-    robustness = constraints(state_array, input_array)
-    # time = state_array[-1]
+    robustness = stl_constraints(state_array, input_array)
+
     time_stamps = jnp.linspace(
         time, time + mppi_args["prediction_horizon"] * DT, mppi_args["prediction_horizon"]
     )
-    # jax.debug.print("🤯 {x} 🤯", x=prev_robustness)
-    # h1 = jax_global(0, jnp.inf, -robustness[0, :], time_stamps)
-    # h2 = jax_finally(0, 5, -robustness[1, :], time_stamps)
-    # h3 = jax_finally(5, 10, -robustness[2, :], time_stamps)
 
     h1 = jax_global(0, jnp.inf, -robustness[0, :], time_stamps)
     h2 = jax_finally(0, 3.5, -robustness[1, :], time_stamps)
@@ -221,8 +152,8 @@ def trajectory_cost_bad(
 
     cost = -jax_and(
         jax_and(
-            h1,  # jnp.linspace(0, mppi_args["prediction_horizon"] * DT, mppi_args["prediction_horizon"]),
-            h2,  # mejnp.linspace(0, mppi_args["prediction_horizon"] * DT, mppi_args["prediction_horizon"]),
+            h1,
+            h2,
         ),
         # h3,
         jax_and(
@@ -231,9 +162,7 @@ def trajectory_cost_bad(
         ),
     )
 
-    return cost  # , jnp.array([h1, h2, h3])
-
-    # return jnp.max(jnp.array([jnp.max(robustness[0, :]), jnp.max(robustness[1, :])]))
+    return cost  # Note this function returns a single robustnees metric of all constraints
 
 
 @jit
@@ -275,7 +204,7 @@ mppi_args = {
 mppi_local_planner = mppi_planner.vanilla_mppi(
     control_limits=ACTUATION_LIMITS,
     dynamics_func=dynamics,
-    trajectory_cost=trajectory_cost_bad,
+    trajectory_cost=stl_trajectory_cost,
     stage_cost=None,  # ,stage_cost,
     terminal_cost=None,  # terminal_cost,
     mppi_args=mppi_args,
@@ -309,6 +238,7 @@ target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
         "prev_robustness": jnp.array([1, -1, -1]),
     },
     controller_data={},
+    stl_trajectory_cost=stl_complete_trajectory_cost,
 )
 
 plot = True

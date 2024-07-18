@@ -1,3 +1,8 @@
+"""
+This file shows how we can use MPPI controller to achieve reach avoid tasks. Our reach avoid specification utilizes Sigmal Temporal Logic (STL) inspired robustness metrics. 
+These robustness metrics are defined in cbfkit/utils/jax_stl.py and accomodated in the MPPI cost function below.
+"""
+
 import os
 import jax.numpy as jnp
 from jax import Array, jit, lax
@@ -132,6 +137,17 @@ def stage_cost(state_and_time: Array, action: Array) -> Array:
 def terminal_cost(state_and_time: Array, action: Array) -> Array:
     x_e, y_e = state_and_time[0], state_and_time[1]
     cost = 10.0 * ((x_e - desired_state[0]) ** 2 + (y_e - desired_state[1]) ** 2)
+    return cost  # comment this line to also include collision avoidance cost in terminal cost term
+
+    def body(i, inputs):
+        cost = inputs
+        x_o, y_o, _ = obstacles_array[i, :]
+        a1, a2 = ellipsoids_array[i, :]
+        d = ((x_e - x_o) / (a1)) ** 2 + ((y_e - y_o) / (a2)) ** 2 - 1.0
+        cost = cost + 5.0 / jnp.max(jnp.array([d, 0.01]))
+        return cost
+
+    cost = lax.fori_loop(0, len(obstacles), body, cost)
     return cost
 
 

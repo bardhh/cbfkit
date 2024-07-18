@@ -41,69 +41,6 @@ from cbfkit.utils.user_types import (
 )
 
 
-@jit
-def constraints(state_array, input_array):
-    # low cost
-    # but stl needs high reward
-    """
-    Returns a vector of constraint values g(x) such that the constraint is g(x)>=0
-    Args:
-        state: n X N
-        input: m x N
-    """
-    goal = jnp.array([4, 4])
-    goal2 = jnp.array([6, 9])
-    goal3 = jnp.array([4, 1])
-    # goal4 = jnp.array([2, 1])
-    goals = [goal, goal2]  # , goal3]
-    obstacle = jnp.array([3, 3])
-    obstacle_radius = 0.6  # 1.0  # 0.6
-    goal_threshold = 0.5
-    goal_radius = 0.5
-
-    # collision avoidance
-    dists = jnp.linalg.norm(state_array[0:2, :] - obstacle.reshape(-1, 1), axis=0)
-    h1 = 0.3 / jnp.maximum(
-        (dists - obstacle_radius),
-        0.01 + 0 * dists,
-    )
-
-    h2 = 10.0 * (
-        jnp.linalg.norm(state_array[0:2, :] - goal.reshape(-1, 1), axis=0) ** 2 - goal_radius**2
-    )
-
-    # Goal 2 reaching
-    h3 = 2.0 * (
-        jnp.linalg.norm(state_array[0:2, :] - goal2.reshape(-1, 1), axis=0) ** 2 - goal_radius**2
-    )
-
-    h4 = 1.0 * (
-        jnp.linalg.norm(state_array[0:2, :] - goal3.reshape(-1, 1), axis=0) ** 2 - goal_radius**2
-    )
-
-    return jnp.concatenate(
-        (h1.reshape(1, -1), h2.reshape(1, -1), h3.reshape(1, -1), h4.reshape(1, -1)),
-        axis=0,
-    )
-
-    return jnp.concatenate(
-        (h1.reshape(1, -1), h2.reshape(1, -1), h3.reshape(1, -1)),
-        axis=0,
-    )
-
-
-@jit
-def trajectory_cost(dt: float, state_array: Array) -> Array:
-    robustness = constraints(state_array, None)
-    time_stamps = jnp.linspace(0, state_array.shape[1] * dt, state_array.shape[1])
-    h1 = jax_global(0, jnp.inf, -robustness[0, :], time_stamps)
-    h2 = jax_finally(0, 3.5, -robustness[1, :], time_stamps)
-    h3 = jax_finally(3.6, 5, -robustness[2, :], time_stamps)
-    h4 = jax_finally(5.1, 10, -robustness[3, :], time_stamps)
-    # jax.debug.print("🤯 {x} 🤯", x=jnp.array([h1, h2, h3, h4]))
-    return jnp.array([h1, h2, h3, h4])
-
-
 def stepper(
     dt: float,
     dynamics: DynamicsCallable,
@@ -116,6 +53,7 @@ def stepper(
     perturbation: PerturbationCallable,
     sigma: Array,
     key: random.PRNGKey,
+    stl_trajectory_cost,
 ) -> Tuple[State, Dict[str, Any]]:
     """Step function to take the simulation forward one timestep. Designed
     to work generically with broad classes of dynamics, controllers, and
@@ -164,8 +102,6 @@ def stepper(
         nonlocal key
         key, subkey = random.split(key)
 
-        # Print Progress
-
         # Sensor measurement
         y = sensor(t, x, sigma=sigma, key=key)
 
@@ -178,7 +114,10 @@ def stepper(
         # TODO: error when none of the planner, nominal controller and controller are specified
 
         # Plan trajectory using planner
-        planner_data["prev_robustness"] = trajectory_cost(dt, planner_data["xs"])
+        if stl_trajectory_cost is not None:
+            planner_data["prev_robustness"] = stl_trajectory_cost(dt, planner_data["xs"])
+        else:
+            planner_data["prev_robustness"] = None
         if planner is not None:
             u_planner, planner_data = planner(t, z, None, subkey, planner_data)
             if "error" in planner_data.keys():
@@ -248,6 +187,7 @@ def simulator(
     sigma: Array,
     key: random.PRNGKey,
     verbose: Optional[bool] = True,
+    stl_trajectory_cost=None,
 ) -> Callable[[Array], Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array]]]]:
     """Generates function handle for the iterator that carries out the simulation of the
     dynamical system.
@@ -284,6 +224,7 @@ def simulator(
         sigma=sigma,
         dt=dt,
         key=key,
+        stl_trajectory_cost=stl_trajectory_cost,
     )
 
     def simulate_iter(
@@ -351,6 +292,7 @@ def execute(
     verbose: Optional[bool] = True,
     controller_data=None,
     planner_data=None,
+    stl_trajectory_cost=None,
 ) -> Tuple[Array, List[str], List[Array]]:
     """This function simulates the dynamical system for a given number of steps,
     and returns a tuple consisting of 1) an array containing the state, control,
@@ -424,11 +366,16 @@ def execute(
         sigma,
         key,
         verbose,
+        stl_trajectory_cost,
     )
 
     # Run simulation from initial state
     simulation_data = tuple(
-        simulate_iter(x0, controller_data=controller_data, planner_data=planner_data)
+        simulate_iter(
+            x0,
+            controller_data=controller_data,
+            planner_data=planner_data,
+        )
     )
 
     # Log / Extract data
