@@ -1,19 +1,26 @@
+'''
+This file simulates a centralized multi robot system. Decentralzied implementation will be supported in future releases of this library.
+'''
+import os
 from jax import Array, jit
 import jax.numpy as jnp
 import numpy as np
 
 from cbfkit.codegen.create_new_system import generate_model
 
+file_path = os.path.dirname(os.path.abspath(__file__))
+target_directory = file_path + "/tutorials"
+model_name = "multi_augmented_single_integrators"
+
+# Simulation Parameters
 num_robots = 10
-
-INITIAL_STATE = np.zeros(2 * num_robots)
-goals = np.zeros(2 * num_robots)
-
-DT = 0.05  # 0.1  # 1e-2
-TF = 10  # 10  # 4  # 10.0
+DT = 0.05 
+TF = 10 
 N_STEPS = int(TF / DT) + 1
 ACTUATION_LIMITS = 100 * jnp.ones(2 * num_robots)
 
+INITIAL_STATE = np.zeros(2 * num_robots)
+goals = np.zeros(2 * num_robots)
 for i in range(num_robots):
     theta_disturbance = np.clip(np.random.normal(0, 1.0), -np.pi / 60, np.pi / 60)
     INITIAL_STATE[2 * i] = 4 * np.cos(2 * np.pi * i / num_robots + theta_disturbance)
@@ -21,7 +28,7 @@ for i in range(num_robots):
     goals[2 * i] = -4 * np.cos(2 * np.pi * i / num_robots) + 0.1
     goals[2 * i + 1] = -4 * np.sin(2 * np.pi * i / num_robots) + 0.1
 
-    # Some example initial state and goals
+# Some example initial state and goals
 # INITIAL_STATE = jnp.array([-0.9, -0.9, 0.9, 0.9])
 # goals = jnp.array([1.0, 2.0, -0.6, -0.6])
 
@@ -29,19 +36,13 @@ for i in range(num_robots):
 # goals = jnp.array([1.0, 1.0, -1.0, -1.0])
 
 # Dynamics
+params = {}  
 drift_dynamics_single_robot = np.array([0, 0])
 control_matrix_single_robot = np.eye(2)  #  "[[1, 0], [0, 1]]"
 drift_dynamics = np.tile(drift_dynamics_single_robot, num_robots)
 control_matrix = np.kron(np.eye(num_robots), control_matrix_single_robot)
 drift_dynamics = np.array2string(drift_dynamics, separator=",").replace("\n", "")
 control_matrix = np.array2string(control_matrix, separator=",").replace("\n", "")
-params = {}  # {"dynamics": {"epsilon: float": 0.5}}
-
-import os
-
-file_path = os.path.dirname(os.path.abspath(__file__))
-target_directory = file_path + "/tutorials"
-model_name = "multi_augmented_single_integrators"
 
 # Nominal Control Law
 nominal_control_law = "["
@@ -78,7 +79,7 @@ for i in range(num_robots):
         }
     )
 
-print(f"hello9")
+# Run script for automated genration of dynamics, cost functions python files
 generate_model.generate_model(
     directory=target_directory,
     model_name=model_name,
@@ -89,7 +90,7 @@ generate_model.generate_model(
     nominal_controller=nominal_control_law,
     params=params,
 )
-print(f"hello")
+
 # Provides access to execute (sim.execute)
 import cbfkit.simulation.simulator as sim
 
@@ -174,7 +175,17 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
     relaxable_clf=True,
 )
 
-x, _u, _z, _p, dkeys, dvalues = sim.execute(
+# Run the simulation
+(
+    x_,
+    u_,
+    z_,
+    p_,
+    controller_data_keys_,
+    controller_data_items_,
+    planner_data_keys_,
+    planner_data_items_,
+) = sim.execute(
     x0=INITIAL_STATE,
     dt=DT,
     num_steps=N_STEPS,
@@ -194,11 +205,11 @@ x, _u, _z, _p, dkeys, dvalues = sim.execute(
 
 plot = True
 if plot:
-    from tutorials.plot_multi_single_integrators import animate
+    from tutorials.plot_helper.plot_multi_single_integrators import animate
 
     animate(
-        states=x,
-        estimates=_z,
+        states=x_,
+        estimates=z_,
         desired_state=goals,
         desired_state_radius=0.1,
         x_lim=(-5, 5),
@@ -209,23 +220,3 @@ if plot:
         animation_filename=target_directory + "/" + model_name + "/animation" + ".gif",
         num_robots=num_robots,
     )
-
-
-# Lyapunov functions
-
-# issue: each lyapunov functions needs its own parameter
-# lyapunov_functions = ""
-# for i in range(num_robots):
-#     if i < num_robots - 1:
-#         lyapunov_functions = (
-#             lyapunov_functions + f"(x[{2*i}]-goal[{2*i}])**2 + (x[{2*i+1}]-goal[{2*i+1}])**2 +"
-#         )
-#     else:
-#         lyapunov_functions = (
-#             lyapunov_functions + f"(x[{2*i}]-goal[{2*i}])**2 + (x[{2*i+1}]-goal[{2*i+1}])**2"
-#         )
-# params["clf"] = [
-#     {
-#         "goal: float": goals,
-#     }
-# ]
