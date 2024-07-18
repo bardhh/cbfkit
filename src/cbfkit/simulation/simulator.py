@@ -20,7 +20,7 @@ Examples
 
 """
 
-from tutorials.jax_stl import *
+from cbfkit.utils.jax_stl import *
 from typing import Any, Dict, Iterator, Optional, Tuple, List, Callable, Union
 from tqdm import tqdm
 import jax.numpy as jnp
