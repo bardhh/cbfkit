@@ -94,6 +94,7 @@ We recommend going through the tutorials in the following order to get comfortba
 - `simulate_mppi_cbf.py`
 - `simulate_mppi_cbf_ellipsoidal_stochastic_cbf.py`
 - `simulate_mppi_stl.py`
+[cbfkit_bardh_extended.drawio.pdf](https://github.com/user-attachments/files/16277560/cbfkit_bardh_extended.drawio.pdf)
 
 
 ## Simulation Arhitecture 
