@@ -107,6 +107,7 @@ controller = cbf_controller(
 
 ##### Define MPPI costs
 
+
 # MPPI stage cost
 @jit
 def stage_cost(state_and_time: Array, action: Array) -> Array:
@@ -125,22 +126,12 @@ def stage_cost(state_and_time: Array, action: Array) -> Array:
     cost = lax.fori_loop(0, len(obstacles), body, cost)
     return cost
 
+
 # MPPI terminal cost
 @jit
 def terminal_cost(state_and_time: Array, action: Array) -> Array:
     x_e, y_e = state_and_time[0], state_and_time[1]
     cost = 10.0 * ((x_e - desired_state[0]) ** 2 + (y_e - desired_state[1]) ** 2)
-    return cost
-
-    def body(i, inputs):
-        cost = inputs
-        x_o, y_o, _ = obstacles_array[i, :]
-        a1, a2 = ellipsoids_array[i, :]
-        d = ((x_e - x_o) / (a1)) ** 2 + ((y_e - y_o) / (a2)) ** 2 - 1.0
-        cost = cost + 5.0 / jnp.max(jnp.array([d, 0.01]))
-        return cost
-
-    cost = lax.fori_loop(0, len(obstacles), body, cost)
     return cost
 
 
@@ -174,7 +165,7 @@ u_guess = jnp.append(
     axis=1,
 )
 
-# 
+#
 (
     x,
     u,
