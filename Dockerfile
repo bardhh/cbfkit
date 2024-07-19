@@ -52,3 +52,9 @@ ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 # Project initialization and conditionally install cvxopt if on x86 architecture
 RUN poetry install --no-interaction && \
     if [ "$(uname -m)" = "x86_64" ]; then poetry add cvxopt; fi
+
+RUN apt-get update && apt-get install -y python3-tk
+RUN pip3 install PyQt5
+RUN apt-get install -y ffmpeg
+RUN apt-get install -y '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev
+RUN apt-get install -y ffmpeg
