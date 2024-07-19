@@ -1,9 +1,9 @@
 """
-Test Module for cbfkit.controllers.model_based.cbf_clf_controllers control laws.
+Test Module for cbfkit.controllers_and_planners.model_based.cbf_clf_controllers control laws.
 =========================
 
 This module contains unit tests for functionalities in 'cbf_clf_controllers'
-from 'cbfkit.controllers.model_based'.
+from 'cbfkit.controllers_and_planners.model_based'.
 
 Tests
 -----
@@ -27,11 +27,11 @@ To run all tests in this module (from the root of the repository):
 import unittest
 import jax.numpy as jnp
 from jax import random
-import cbfkit.controllers.model_based.cbf_clf_controllers as cbf_clf_controllers
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+import cbfkit.controllers_and_planners.model_based.cbf_clf_controllers as cbf_clf_controllers
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
     concatenate_certificates,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.risk_aware_params import (
     RiskAwareParams,
 )
 
@@ -105,10 +105,10 @@ class TestCbfClfQpControllers(unittest.TestCase):
 
     def test_setup_risk_aware_cbf_clf_qp_control_law(self):
         """Tests that the Risk-Aware (RA)-CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.risk_aware_barrier import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.risk_aware_barrier import (
             right_hand_side,
         )
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
@@ -149,10 +149,10 @@ class TestCbfClfQpControllers(unittest.TestCase):
 
     def test_setup_risk_aware_path_integral_cbf_clf_qp_control_law(self):
         """Tests that the Risk-Aware Path Integral (RA-PI)-CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.path_integral_barrier import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.path_integral_barrier import (
             right_hand_side,
         )
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
@@ -198,10 +198,10 @@ class TestCbfClfQpControllers(unittest.TestCase):
 
     def test_setup_robust_cbf_clf_qp_control_law(self):
         """Tests that the Robust (R)-CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
             linear_class_k,
         )
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
@@ -242,10 +242,10 @@ class TestCbfClfQpControllers(unittest.TestCase):
 
     def test_setup_stochastic_cbf_clf_qp_control_law(self):
         """Tests that the Stochastic (S)-CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.stochastic_barrier import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.stochastic_barrier import (
             right_hand_side,
         )
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
@@ -288,10 +288,10 @@ class TestCbfClfQpControllers(unittest.TestCase):
 
     def test_setup_vanilla_cbf_clf_qp_control_law(self):
         """Tests that the vanilla CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
             linear_class_k,
         )
-        from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
