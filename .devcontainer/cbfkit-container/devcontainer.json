@@ -1,6 +1,6 @@
 {
 	"name": "CBFkit Docker container",
-	"dockerComposeFile": "docker-compose.yml",
+	"dockerComposeFile": "../docker-compose.yml",
 	"service": "cbfkit",
 	"workspaceFolder": "/home/cbfkit",
 	"customizations": {
