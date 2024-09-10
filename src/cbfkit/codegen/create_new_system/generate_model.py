@@ -22,11 +22,11 @@ generate_model(
 """
 
 import os
-import re
-import textwrap
 import platform
+import re
 import subprocess
-from typing import Any, Dict, List, Optional, Union, Tuple
+import textwrap
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 op_sys = platform.system()
 DELIMITER = "/" if op_sys == "Darwin" or op_sys == "Linux" else "\\"
@@ -174,8 +174,8 @@ def generate_model(
     for expr in JAX_EXPRESSIONS:
         drift_dynamics = drift_dynamics.replace(expr, "jnp." + expr)
         control_matrix = control_matrix.replace(expr, "jnp." + expr)
-    drift_dynamics = drift_dynamics.replace("arcjnp.", "arc")
-    control_matrix = control_matrix.replace("arcjnp.", "arc")
+    drift_dynamics = drift_dynamics.replace("arcjnp.", "jnp.arc")
+    control_matrix = control_matrix.replace("arcjnp.", "jnp.arc")
 
     dynamics_args = (
         "".join([pp + ", " for pp in params["dynamics"].keys()])
@@ -257,6 +257,7 @@ def generate_model(
         for bb in range(n_bars):
             for expr in JAX_EXPRESSIONS:
                 barrier_funcs[bb] = barrier_funcs[bb].replace(expr, "jnp." + expr)
+            barrier_funcs[bb] = barrier_funcs[bb].replace("arcjnp.", "jnp.arc")
 
             cbf_args = (
                 "".join([pp + ", " for pp in params["cbf"][bb].keys()])
@@ -393,6 +394,7 @@ def generate_model(
         for ll in range(n_lfs):
             for expr in JAX_EXPRESSIONS:
                 lyapunov_funcs[ll] = lyapunov_funcs[ll].replace(expr, "jnp." + expr)
+            lyapunov_funcs[ll] = lyapunov_funcs[ll].replace("arcjnp.", "jnp.arc")
 
             clf_args = (
                 "".join([pp + ", " for pp in params["clf"][ll].keys()])
@@ -526,6 +528,7 @@ def generate_model(
         for cc in range(n_cons):
             for expr in JAX_EXPRESSIONS:
                 nominal_controller[cc] = nominal_controller[cc].replace(expr, "jnp." + expr)
+            nominal_controller[cc] = nominal_controller[cc].replace("arcjnp.", "jnp.arc")
 
             control_args = (
                 "".join([pp + ", " for pp in params["controller"].keys()])
