@@ -52,3 +52,6 @@ ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 # Project initialization and conditionally install cvxopt if on x86 architecture
 RUN poetry install --no-interaction && \
     if [ "$(uname -m)" = "x86_64" ]; then poetry add cvxopt; fi
+
+# Source the ROS 2 environment for all users when starting a shell
+RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
