@@ -55,3 +55,6 @@ RUN poetry install --no-interaction && \
 
 # Source the ROS 2 environment for all users when starting a shell
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
+
+# Set the safe directory to /home/cbfkit
+RUN git config --global --add safe.directory /home/cbfkit
