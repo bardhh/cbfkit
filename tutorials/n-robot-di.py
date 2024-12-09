@@ -33,7 +33,7 @@ import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
 
 
 TARGET_DIRECTORY = "./tutorials"
-MODEL_NAME = "nicole_sys"
+MODEL_NAME = "nicole_system"
 
 # Simulation Parameters
 NUM_ROBOTS = 2
@@ -236,11 +236,11 @@ generate_model.generate_model(
     params=params,
 )
 
-# from tutorials import nicole_sys
+# from tutorials import nicole_system
 from tutorials.plot_helper.plot_3d_multi_robot import animate_3d_multi_robot
 
 # Import the Generated Model
-import tutorials.nicole_sys as nicole_sys  # Adjusted import for clarity
+import tutorials.nicole_system as nicole_system  # Adjusted import for clarity
 import importlib
 
 # Create Barrier Functions with Linear Class K Function Derivative Conditions
@@ -248,21 +248,21 @@ rectified_barrier_packages = []
 h = []
 for i in range(len(state_constraint_funcs)):
     # Get the barrier function package
-    # h_package = getattr(nicole_sys.certificate_functions.barrier_functions, f"cbf{i + 1}_package")(
+    # h_package = getattr(nicole_system.certificate_functions.barrier_functions, f"cbf{i + 1}_package")(
     #     certificate_conditions=zeroing_barriers.linear_class_k(alpha=5.0)
     # )
 
     # Extract the h_ function from the package
     # h_function = h_package[2][0]  # h_ is at index 2 and is inside a list
-    # from nicole_sys.certificate_functions.barrier_functions.cbf1_package import cbf
-    # h = nicole_sys.certificate_functions.barrier_functions.barrier_1.cbf
-    module_name = f"nicole_sys.certificate_functions.barrier_functions.barrier_{i+1}"
+    # from nicole_system.certificate_functions.barrier_functions.cbf1_package import cbf
+    # h = nicole_system.certificate_functions.barrier_functions.barrier_1.cbf
+    module_name = f"nicole_system.certificate_functions.barrier_functions.barrier_{i+1}"
     module = importlib.import_module(module_name)
     h = getattr(module, "cbf")(alpha=5.0)
     # Apply rectify_relative_degree using the extracted function
     cbf_package = rectify_relative_degree(
         function=h,
-        system_dynamics=nicole_sys.plant(),
+        system_dynamics=nicole_system.plant(),
         state_dim=STATE_DIM,
         form="exponential",
     )(certificate_conditions=zeroing_barriers.linear_class_k(alpha=5.0))
@@ -274,13 +274,13 @@ for i in range(len(state_constraint_funcs)):
 # cbf_package = []
 
 # for i in range(len(state_constraint_funcs)):
-#     h = getattr(nicole_sys.certificate_functions.barrier_functions, f"cbf{i + 1}_package")(
+#     h = getattr(nicole_system.certificate_functions.barrier_functions, f"cbf{i + 1}_package")(
 #         certificate_conditions=zeroing_barriers.linear_class_k(alpha=5.0)
 #     )
 #     cbf_package.append(
 #         rectify_relative_degree(
 #             function=h,
-#             system_dynamics=nicole_sys.plant(),
+#             system_dynamics=nicole_system.plant(),
 #             state_dim=6,
 #             form="exponential",
 #         )
@@ -290,7 +290,7 @@ for i in range(len(state_constraint_funcs)):
 # # # Create Barrier Functions with Linear Class K Function Derivative Conditions
 # barriers = concatenate_certificates(
 #     *[
-#         getattr(nicole_sys.certificate_functions.barrier_functions, f"cbf{i + 1}_package")(
+#         getattr(nicole_system.certificate_functions.barrier_functions, f"cbf{i + 1}_package")(
 #             certificate_conditions=zeroing_barriers.linear_class_k(alpha=5.0),
 #             d_min_squared=D_MIN_SQUARED,  # (0.5)^2
 #         )
@@ -307,14 +307,14 @@ from cbfkit.systems.fixed_wing_uav.models.beard2014_kinematic.certificate_functi
 
 
 # Instantiate the Nominal Controller
-nominal_controller = nicole_sys.controllers.controller_1(goal=goals, k_p=KP, k_d=KD)
+nominal_controller = nicole_system.controllers.controller_1(goal=goals, k_p=KP, k_d=KD)
 
 # # Create Barrier Functions with Linear Class K Function Derivative Conditions
 # rectified_barrier_packages = []
 # for i in range(len(state_constraint_funcs)):
 #     # Get the original barrier function
 #     barrier_func = getattr(
-#         nicole_sys.certificate_functions.barrier_functions, f"cbf{i + 1}_package"
+#         nicole_system.certificate_functions.barrier_functions, f"cbf{i + 1}_package"
 #     )
 
 #     # Create a partial function with the required parameters
@@ -323,7 +323,7 @@ nominal_controller = nicole_sys.controllers.controller_1(goal=goals, k_p=KP, k_d
 #     # Apply rectify_relative_degree
 #     cbf_package = rectify_relative_degree(
 #         function=barrier_func_with_params,
-#         system_dynamics=nicole_sys.plant(),
+#         system_dynamics=nicole_system.plant(),
 #         state_dim=STATE_DIM,
 #         form="exponential",
 #     )
@@ -349,7 +349,7 @@ barriers = concatenate_certificates(*rectified_barrier_packages)
 # Create Lyapunov Functions with Exponential Stability Derivative Conditions
 lyapunov = concatenate_certificates(
     *[
-        getattr(nicole_sys.certificate_functions.lyapunov_functions, f"clf{i + 1}_package")(
+        getattr(nicole_system.certificate_functions.lyapunov_functions, f"clf{i + 1}_package")(
             certificate_conditions=e_s(c=LYAPUNOV_C),
             goal=goals,
         )
@@ -371,9 +371,10 @@ mppi_args = {
 }
 
 # Instantiate MPPI Control Law
+
 mppi_local_planner = mppi_planner.vanilla_mppi(
     control_limits=ACTUATION_LIMITS,
-    dynamics_func=nicole_sys.plant(),
+    dynamics_func=nicole_system.plant(),
     trajectory_cost=None,
     stage_cost=stage_cost,
     terminal_cost=terminal_cost,
@@ -386,7 +387,7 @@ mppi_local_planner = mppi_planner.vanilla_mppi(
 cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
     control_limits=ACTUATION_LIMITS,
     nominal_input=nominal_controller,
-    dynamics_func=nicole_sys.plant(),
+    dynamics_func=nicole_system.plant(),
     barriers=barriers,
     lyapunovs=lyapunov,
     # ra_clf_params=ra_clf_params,
@@ -414,7 +415,7 @@ simulation_data_path = os.path.join(TARGET_DIRECTORY, MODEL_NAME, "simulation_da
     x0=INITIAL_STATE,
     dt=DT,
     num_steps=N_STEPS,
-    dynamics=nicole_sys.plant(),
+    dynamics=nicole_system.plant(),
     integrator=integrator,
     planner=mppi_local_planner,
     nominal_controller=nominal_controller,

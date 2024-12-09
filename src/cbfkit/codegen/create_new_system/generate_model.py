@@ -22,16 +22,16 @@ generate_model(
 """
 
 import os
-import platform
 import re
-import subprocess
 import textwrap
-from typing import Any, Dict, List, Optional, Tuple, Union
+import platform
+import subprocess
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 op_sys = platform.system()
 DELIMITER = "/" if op_sys == "Darwin" or op_sys == "Linux" else "\\"
 INIT_CONTENTS = ""
-JAX_EXPRESSIONS = ["exp", "pi", "cos", "sin", "tan"]
+JAX_EXPRESSIONS = ["exp", "pi", "cos", "sin", "tan", "linalg.norm", "array", "max"]
 
 
 def create_folder(directory: str, folder_name: str) -> None:
@@ -96,6 +96,12 @@ def generate_model(
     model_name: str,
     drift_dynamics: Union[str, List[str]],
     control_matrix: Union[str, List[str]],
+    stage_cost_function: Optional[
+        Union[str, List, None]
+    ] = None,  # cost function beside constraints
+    terminal_cost_function: Optional[
+        Union[str, List, None]
+    ] = None,  # cost function beside constraints
     barrier_funcs: Optional[Union[str, List, None]] = None,
     lyapunov_funcs: Optional[Union[str, List, None]] = None,
     nominal_controller: Optional[Union[str, List, None]] = None,
@@ -130,6 +136,10 @@ def generate_model(
         create_folder(directory, model_name)
 
         # Create model subfolders
+        create_folder(model_folder, "cost_functions")
+        create_folder(model_folder + DELIMITER + "cost_functions", "stage_cost_function")
+        create_folder(model_folder + DELIMITER + "cost_functions", "terminal_cost_function")
+
         create_folder(model_folder, "certificate_functions")
         create_folder(model_folder + DELIMITER + "certificate_functions", "barrier_functions")
         create_folder(model_folder + DELIMITER + "certificate_functions", "lyapunov_functions")
@@ -139,14 +149,24 @@ def generate_model(
     model_init_contents = textwrap.dedent(
         """
         from .plant import plant
+        from . import cost_functions
         from . import certificate_functions
         from . import controllers
         """
     )
 
+    cost_init_contents = textwrap.dedent(
+        """
+        from . import stage_cost_function
+        from . import terminal_cost_function
+        """
+    )
+
     certificate_init_contents = textwrap.dedent(
-        ("from . import barrier_functions" if barrier_funcs is not None else "")
-        + ("from . import lyapunov_functions" if lyapunov_funcs is not None else "")
+        """
+        from . import barrier_functions
+        from . import lyapunov_functions
+        """
     )
 
     # Create proper init files
@@ -155,6 +175,14 @@ def generate_model(
     run_black(model_folder + DELIMITER + "__init__.py")
     if not os.path.isfile(model_folder + DELIMITER + "constants.py"):
         create_python_file(model_folder, "constants.py", "")
+
+    if not os.path.isfile(model_folder + DELIMITER + "cost_functions" + DELIMITER + "__init__.py"):
+        create_python_file(
+            model_folder + DELIMITER + "cost_functions",
+            "__init__.py",
+            cost_init_contents,
+        )
+    run_black(model_folder + DELIMITER + "cost_functions" + DELIMITER + "__init__.py")
 
     if not os.path.isfile(model_folder + DELIMITER + "controllers" + DELIMITER + "__init__.py"):
         create_python_file(model_folder + DELIMITER + "controllers", "__init__.py", INIT_CONTENTS)
@@ -174,8 +202,8 @@ def generate_model(
     for expr in JAX_EXPRESSIONS:
         drift_dynamics = drift_dynamics.replace(expr, "jnp." + expr)
         control_matrix = control_matrix.replace(expr, "jnp." + expr)
-    drift_dynamics = drift_dynamics.replace("arcjnp.", "jnp.arc")
-    control_matrix = control_matrix.replace("arcjnp.", "jnp.arc")
+    drift_dynamics = drift_dynamics.replace("arcjnp.", "arc")
+    control_matrix = control_matrix.replace("arcjnp.", "arc")
 
     dynamics_args = (
         "".join([pp + ", " for pp in params["dynamics"].keys()])
@@ -239,6 +267,134 @@ def generate_model(
     create_python_file(model_folder, "plant.py", plant_contents)
     run_black(model_folder + DELIMITER + "plant.py")
 
+    if stage_cost_function is not None:
+        stage_cost_folder = (
+            model_folder + DELIMITER + "cost_functions" + DELIMITER + "stage_cost_function"
+        )
+
+        for expr in JAX_EXPRESSIONS:
+            stage_cost_function = stage_cost_function.replace(expr, "jnp." + expr)
+
+        stage_cost_init_contents = "\n".join([f"from .stage_cost import stage_cost"])
+
+        stage_cost_args = (
+            "".join([pp + ", " for pp in params["stage_cost_function"].keys()])
+            if "stage_cost_function" in params.keys()
+            else ""
+        )
+
+        stage_cost_contents = textwrap.dedent(
+            f'''
+            """
+            #! MANUALLY POPULATE (docstring)
+            """
+            import jax.numpy as jnp
+            from jax import jit, Array, lax
+            from typing import List, Callable
+
+            N = {n_states}
+
+
+            ###############################################################################
+            # Stage Cost Function
+            ###############################################################################
+
+            def stage_cost({stage_cost_args}**kwargs) -> Callable[[Array], Array]:
+                """Super-level set convention.
+
+                Args:
+                    #! kwargs -- optional to manually populate
+
+                Returns:
+                    ret (float): value of constraint function evaluated at time and state
+
+                """
+
+                @jit
+                def func(state_and_time: Array, action: Array) -> Array:
+                    """Function to be evaluated.
+
+                    Args:
+                        state_and_time (Array): concatenated state vector and time
+
+                    Returns:
+                        Array: cbf value
+                    """
+                    x = state_and_time
+                    return {stage_cost_function}
+
+                return func
+
+            '''
+        )
+        create_python_file(stage_cost_folder, "__init__.py", stage_cost_init_contents)
+        create_python_file(stage_cost_folder, f"stage_cost.py", stage_cost_contents)
+        run_black(stage_cost_folder + DELIMITER + f"stage_cost.py")
+
+    if terminal_cost_function is not None:
+        terminal_cost_folder = (
+            model_folder + DELIMITER + "cost_functions" + DELIMITER + "terminal_cost_function"
+        )
+
+        for expr in JAX_EXPRESSIONS:
+            terminal_cost_function = terminal_cost_function.replace(expr, "jnp." + expr)
+
+        terminal_cost_init_contents = "\n".join([f"from .terminal_cost import terminal_cost"])
+
+        terminal_cost_args = (
+            "".join([pp + ", " for pp in params["terminal_cost_function"].keys()])
+            if "terminal_cost_function" in params.keys()
+            else ""
+        )
+
+        terminal_cost_contents = textwrap.dedent(
+            f'''
+            """
+            #! MANUALLY POPULATE (docstring)
+            """
+            import jax.numpy as jnp
+            from jax import jit, Array, lax
+            from typing import List, Callable
+
+            N = {n_states}
+
+
+            ###############################################################################
+            # Terminal Cost Function
+            ###############################################################################
+
+            def terminal_cost({terminal_cost_args}**kwargs) -> Callable[[Array], Array]:
+                """Super-level set convention.
+
+                Args:
+                    #! kwargs -- optional to manually populate
+
+                Returns:
+                    ret (float): value of constraint function evaluated at time and state
+
+                """
+
+                @jit
+                def func(state_and_time: Array, action: Array) -> Array:
+                    """Function to be evaluated.
+
+                    Args:
+                        state_and_time (Array): concatenated state vector and time
+
+                    Returns:
+                        Array: cbf value
+                    """
+                    x = state_and_time
+                    return {terminal_cost_function}
+
+                return func
+
+            '''
+        )
+        create_python_file(terminal_cost_folder, "__init__.py", terminal_cost_init_contents)
+        create_python_file(terminal_cost_folder, f"terminal_cost.py", terminal_cost_contents)
+        run_black(terminal_cost_folder + DELIMITER + f"terminal_cost.py")
+
     # Create barrier function contents
     if barrier_funcs is not None:
         barrier_folder = (
@@ -257,7 +413,6 @@ def generate_model(
         for bb in range(n_bars):
             for expr in JAX_EXPRESSIONS:
                 barrier_funcs[bb] = barrier_funcs[bb].replace(expr, "jnp." + expr)
-            barrier_funcs[bb] = barrier_funcs[bb].replace("arcjnp.", "jnp.arc")
 
             cbf_args = (
                 "".join([pp + ", " for pp in params["cbf"][bb].keys()])
@@ -272,7 +427,7 @@ def generate_model(
                 import jax.numpy as jnp
                 from jax import jit, jacfwd, jacrev, Array, lax
                 from typing import List, Callable
-                from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package
+                from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package
 
                 N = {n_states}
 
@@ -394,7 +549,6 @@ def generate_model(
         for ll in range(n_lfs):
             for expr in JAX_EXPRESSIONS:
                 lyapunov_funcs[ll] = lyapunov_funcs[ll].replace(expr, "jnp." + expr)
-            lyapunov_funcs[ll] = lyapunov_funcs[ll].replace("arcjnp.", "jnp.arc")
 
             clf_args = (
                 "".join([pp + ", " for pp in params["clf"][ll].keys()])
@@ -409,7 +563,7 @@ def generate_model(
                 import jax.numpy as jnp
                 from jax import jit, jacfwd, jacrev, Array, lax
                 from typing import List, Callable
-                from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package
+                from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package
 
                 N = {n_states}
 
@@ -528,7 +682,6 @@ def generate_model(
         for cc in range(n_cons):
             for expr in JAX_EXPRESSIONS:
                 nominal_controller[cc] = nominal_controller[cc].replace(expr, "jnp." + expr)
-            nominal_controller[cc] = nominal_controller[cc].replace("arcjnp.", "jnp.arc")
 
             control_args = (
                 "".join([pp + ", " for pp in params["controller"].keys()])
@@ -540,7 +693,7 @@ def generate_model(
             import jax.numpy as jnp
             from typing import *
             from jax import jit, Array, lax
-            from cbfkit.utils.user_types import ControllerCallable, ControllerCallableReturns
+            from cbfkit.utils.user_types import ControllerCallable, ControllerCallableReturns, Key
 
 
             def controller_{cc+1}({control_args}) -> ControllerCallable:
@@ -556,7 +709,7 @@ def generate_model(
                 """
 
                 @jit
-                def controller(t: float, x: Array) -> ControllerCallableReturns:
+                def controller(t: float, x: Array, key: Key, xd: float) -> ControllerCallableReturns:
                     """Computes control input ({n_controls}x1).
 
                     Args:
@@ -600,7 +753,7 @@ def generate_model(
             """
 
             @jit
-            def controller(_t: float, _state: Array) -> ControllerCallableReturns:
+            def controller(_t: float, _state: Array, _key: Key, target_state: float) -> ControllerCallableReturns:
                 """Computes zero control input ({n_controls}x1).
 
                 Args:
