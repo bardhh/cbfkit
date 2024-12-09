@@ -161,3 +161,6 @@ tests/test_models/generated
 
 # Folders generated when testing tutorials
 tutorials/tutorials
+
+# pyc files
+*.pyc
