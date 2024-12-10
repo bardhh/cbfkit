@@ -7,5 +7,8 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ../:/home/cbfkit
+      - ${SSH_KEYS_DIR:-}/:/root/.ssh:ro
     stdin_open: true
     tty: true
+    environment:
+      - SSH_KEYS_DIR

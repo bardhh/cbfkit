@@ -1,5 +1,6 @@
 FROM ros:humble-ros-base-jammy
 
+# Set environment variables to avoid interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,41 +8,49 @@ ENV DEBIAN_FRONTEND=noninteractive \
     YOUR_ENV=default_value \
     PATH="/root/.local/bin:${PATH}"
 
+# Version pinning as ARGs for easier updates
 ARG PYTHON_VERSION=3.10
 
-# Consolidate all apt operations into a single layer, reduce unnecessary packages, and clean up
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+# Update the package list, install necessary packages in one layer
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     make \
     build-essential \
     software-properties-common \
     curl \
     ssh \
     git \
+    # python3-pip \
+    # python3-dev \
     libopenblas-dev \
-    ffmpeg \
     && add-apt-repository -y ppa:deadsnakes/ppa \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    # && apt-get install -y python3.10 python3.10-dev python3.10-venv \
+    # && apt-get clean \
+    # && rm -rf /var/lib/apt/lists/* \
+    && apt-get install -y ffmpeg
+    # && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 
-# Install uv in a separate layer
+# Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
+# Expose the port that Jupyter Notebook will run on
 EXPOSE 8888
+
 WORKDIR /home/cbfkit
 
-# Copy only necessary dependency files first for better layer caching
+# Copy the project files
 COPY pyproject.toml ./
 
+# Set the PYTHONPATH to include /home and project directories
 ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 
-# Run uv sync after copying dependencies
-RUN uv sync --no-install-project
+# Install dependencies using uv
+RUN uv sync --no-install-project 
 
-# Source ROS 2 environment in every shell
+# Source the ROS 2 environment for all users when starting a shell
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
 
-# Mark project directory as safe for git
+# Set the safe directory to /home/cbfkit
 RUN git config --global --add safe.directory /home/cbfkit
 
-# Activate virtual environment in every shell session
+# Activate the environment in every shell session
 RUN echo "source .venv/bin/activate" >> /root/.bashrc
