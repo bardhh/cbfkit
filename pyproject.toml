@@ -4,9 +4,9 @@ version = "0.1.1"
 description = "A Control Barrier Function Toolbox for Robotics Applications"
 authors = [
     {name = "Mitchell Black", email = "6lack.mitchell@gmail.com"},
-    {name = "Bardh Hoxha", email = "bardhh@gmail.com"}
-    {name = "Hardik Parwana", email = "parwanahardik@gmail.com"}
-    {name = "Georgios Fainekos", email = "bardhh@gmail.com"}
+    {name = "Bardh Hoxha", email = "bardhh@gmail.com"},
+    {name = "Hardik Parwana", email = "parwanahardik@gmail.com"},
+    {name = "Georgios Fainekos", email = "bardhh@gmail.com"},
     {name = "Hideki Okamoto", email = "bardhh@gmail.com"}
 ]
 license = "MIT"
