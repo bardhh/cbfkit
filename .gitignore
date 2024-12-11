@@ -164,3 +164,6 @@ tutorials/tutorials
 
 # pyc files
 *.pyc
+
+# lock files
+*.lock
