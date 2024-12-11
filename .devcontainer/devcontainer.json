@@ -1,7 +1,9 @@
 {
 	"name": "CBFkit Docker container",
-	"dockerComposeFile": "docker-compose.yml",
-	"service": "cbfkit",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": ".."
+	},
 	"workspaceFolder": "/home/cbfkit",
 	"customizations": {
 		"vscode": {
@@ -45,5 +47,14 @@
 				]
 			}
 		}
-	}
+	},
+	"features": {
+		"docker-in-docker": {
+			"version": "latest"
+		}
+	},
+	"mounts": [
+		"source=${localWorkspaceFolder},target=/home/cbfkit,type=bind",
+		"source=${localEnv:SSH_KEYS_DIR:-},target=/root/.ssh,type=bind,readonly"
+	]
 }

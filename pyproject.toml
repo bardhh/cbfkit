@@ -9,9 +9,8 @@ authors = [
     {name = "Georgios Fainekos", email = "bardhh@gmail.com"},
     {name = "Hideki Okamoto", email = "bardhh@gmail.com"}
 ]
-license = "MIT"
+license = { text = "MIT" }
 readme = "README.md"
-packages = [{include = "cbfkit", from = "src"}]
 requires-python = ">=3.10,<3.11"
 dependencies = [
     "jax>=0.4.23,<0.5",
@@ -33,10 +32,6 @@ dependencies = [
     "casadi>=3.6.4,<4.0",
     "tqdm>=4.66.2,<5.0"
 ]
-
-[build-system]
-requires = ["poetry-core>=1.7.1"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 100
