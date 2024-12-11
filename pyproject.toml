@@ -1,39 +1,37 @@
-[tool.poetry]
+[project]
 name = "cbfkit"
 version = "0.1.1"
 description = "A Control Barrier Function Toolbox for Robotics Applications"
-authors = ["Mitchell Black <6lack.mitchell@gmail.com>", "Bardh Hoxha <bardhh@gmail.com>"]
-license = "MIT"
+authors = [
+    {name = "Mitchell Black", email = "6lack.mitchell@gmail.com"},
+    {name = "Bardh Hoxha", email = "bardhh@gmail.com"},
+    {name = "Hardik Parwana", email = "parwanahardik@gmail.com"},
+    {name = "Georgios Fainekos", email = "bardhh@gmail.com"},
+    {name = "Hideki Okamoto", email = "bardhh@gmail.com"}
+]
+license = { text = "MIT" }
 readme = "README.md"
-packages = [{include="cbfkit", from="src"}]
-
-
-[tool.poetry.dependencies]
-python = "^3.10"
-jax = "^0.4.23"
-jaxlib = "^0.4.23"
-kvxopt = "^1.3.2.0"
-cmake = "^3.28.1"
-cython = "^3.0.8"
-pyyaml = "^6.0.1"
-setuptools = "^69.0.3"
-black = "^23.12.1"
-mypy = "^1.8.0"
-jaxopt = "^0.8.3"
-jupyter = "^1.0.0"
-control = "^0.9.4"
-matplotlib = "^3.8.2"
-pandas = "^2.1.4"
-cvxpy = "^1.4.1"
-cvxpylayers = "^0.1.6"
-casadi = "^3.6.4"
-tqdm = "^4.66.2"
-
-
-[build-system]
-requires = ["poetry-core>=1.7.1"]
-build-backend = "poetry.core.masonry.api"
-
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "jax>=0.4.23,<0.5",
+    "jaxlib>=0.4.23,<0.5",
+    "kvxopt>=1.3.2.0,<2.0",
+    "cmake>=3.28.1,<4.0",
+    "cython>=3.0.8,<4.0",
+    "pyyaml>=6.0.1,<7.0",
+    "setuptools>=69.0.3,<70.0",
+    "black>=23.12.1,<24.0",
+    "mypy>=1.8.0,<2.0",
+    "jaxopt>=0.8.3,<0.9",
+    "jupyter>=1.0.0,<2.0",
+    "control>=0.9.4,<1.0",
+    "matplotlib>=3.8.2,<4.0",
+    "pandas>=2.1.4,<3.0",
+    "cvxpy>=1.4.1,<2.0",
+    "cvxpylayers>=0.1.6,<0.2",
+    "casadi>=3.6.4,<4.0",
+    "tqdm>=4.66.2,<5.0"
+]
 
 [tool.black]
 line-length = 100
@@ -42,5 +40,8 @@ extend-exclude = '''
 
 [tool.isort]
 profile = "black"
-line_length=100
+line_length = 100
 skip_gitignore = true
+
+[tool.uv.pip]
+system = true
