@@ -33,14 +33,14 @@ EXPOSE 8888
 
 WORKDIR /home/cbfkit
 
-# Copy the project files
+# # Copy the project files
 COPY pyproject.toml ./
 
 # Set the PYTHONPATH to include /home and project directories
 ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 
 # Install dependencies using uv
-RUN uv pip install .
+RUN uv pip install . 
 
 # Source the ROS 2 environment for all users when starting a shell
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc

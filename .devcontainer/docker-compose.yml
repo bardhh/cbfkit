@@ -5,14 +5,8 @@ services:
     build:
       context: ../
       dockerfile: .devcontainer/Dockerfile
-    container_name: cbfkit
     volumes:
       - ../:/home/cbfkit
       - ${SSH_KEYS_DIR:-~/.ssh}:/root/.ssh:ro
-    working_dir: /home/cbfkit
-    environment:
-      - PYTHONPATH=/home/cbfkit
-      - SSH_KEYS_DIR
-    privileged: true
     stdin_open: true
     tty: true
