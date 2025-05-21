@@ -60,5 +60,6 @@ def unbiased_gaussian_noise(
         chol = jnp.zeros(sigma.shape)
 
     sampled_random_vector = jnp.mean(jnp.dot(chol, normal_samples.T), axis=1)
+    sampled_random_vector = sampled_random_vector.reshape(x.shape)
 
-    return x + jnp.mean(sampled_random_vector)
+    return x + sampled_random_vector
