@@ -131,7 +131,7 @@ init_state = jnp.array([0.0, 0.0, jnp.pi / 4])
 desired_state = jnp.array([2.0, 4.0, 0])
 actuation_constraints = jnp.array([100.0, 100.0])  # Effectively, no control limits
 
-approx_uniycle_nom_controller = unicycle.controllers.proportional_controller(
+approx_unicycle_nom_controller = unicycle.controllers.proportional_controller(
     dynamics=approx_unicycle_dynamics,
     Kp_pos=1,
     Kp_theta=0.01,
@@ -161,7 +161,7 @@ barrier_packages = concatenate_certificates(*barriers)
 
 controller = cbf_controller(
     control_limits=actuation_constraints,
-    nominal_input=approx_uniycle_nom_controller,
+    nominal_input=approx_unicycle_nom_controller,
     dynamics_func=approx_unicycle_dynamics,
     barriers=barrier_packages,
 )
