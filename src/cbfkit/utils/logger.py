@@ -27,7 +27,7 @@ Examples
 """
 
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 import pandas as pd
 
 # Main logger variable
@@ -69,7 +69,7 @@ def write_log(filepath: str) -> None:
     df.to_csv(filepath)
 
 
-def extract_log(key: str) -> None:
+def extract_log(key: str) -> List[Any]:
     """Extracts the key data from the log.
 
     Args:
