@@ -43,7 +43,7 @@ approx_unicycle_dynamics = unicycle.plant(l=1.0)
 controller = unicycle.controllers.proportional_controller(
     dynamics=approx_unicycle_dynamics,
     Kp_pos=1,
-    Kp_theta=0.01,
+    Kp_theta=1.0,
     desired_state=initial_conditions.desired_state,
 )
 

@@ -46,8 +46,8 @@ h = lambda x: x
 dhdx = lambda x: jnp.eye((len(initial_conditions.initial_state)))
 controller = unicycle.controllers.proportional_controller(
     dynamics=approx_unicycle_dynamics,
-    Kp_pos=1,
-    Kp_theta=0.01,
+    Kp_pos=1.0,
+    Kp_theta=1.0,
     desired_state=initial_conditions.desired_state,
 )
 scale_factor = 1.25
