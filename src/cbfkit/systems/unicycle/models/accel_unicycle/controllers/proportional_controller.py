@@ -1,46 +1,37 @@
+# controllers/proportional_controller.py
+import jax
 import jax.numpy as jnp
-from jax import jit
+from jax import jit, lax
 
 
 def proportional_controller(dynamics, Kp_pos, Kp_theta, desired_state):
-    """
-    Create a proportional-only controller for the given unicycle dynamics.
-
-    :param dynamics: approximate unicycle dynamics ode
-    :param Kp_pos: Position proportional gain.
-    :param Kp_theta: Orientation proportional gain.
-    :param l: Wheelbase of the unicycle.
-    :return: A function that computes control inputs based on the current state and desired state.
-    """
+    # ── read limits from the plant (fallback if absent) ─────────────
+    a_max = float(getattr(dynamics, "a_max", 1.0))  # m s⁻²
+    omega_max = float(getattr(dynamics, "omega_max", 4.0))  # rad s⁻¹
+    v_max = float(getattr(dynamics, "v_max", 2.0))  # m s⁻¹
+    eps_pos = float(getattr(dynamics, "goal_tol", 0.25))  # m
 
     @jit
     def controller(_t, state):
-        _, _, v, theta = state
-        _, _, _, theta_desired = desired_state
+        x, y, v, theta = state
+        xd, yd, _, thetad = desired_state
 
-        # Compute the error between the current state and the desired state
-        error_pos = jnp.subtract(desired_state[:2], state[:2])
-        theta_d = jnp.arctan2(error_pos[1], error_pos[0])
-        v_d = jnp.linalg.norm(Kp_pos * error_pos)
-        v_d = jnp.minimum(2.0, v_d)
-        theta_error = (theta_d - theta) % (2 * jnp.pi)
+        dx, dy = xd - x, yd - y
+        dist = jnp.hypot(dx, dy)
 
-        unicycle_control_inputs = jnp.array(
-            [Kp_pos * (v_d - v), Kp_theta * jnp.minimum(theta_error, 2 * jnp.pi - theta_error)]
-        )
+        theta_goal = jnp.where(dist > eps_pos, jnp.arctan2(dy, dx), thetad)
+        theta_err = jnp.arctan2(jnp.sin(theta_goal - theta), jnp.cos(theta_goal - theta))
 
-        # # Compute control inputs based on proportional gains
-        # xdot_d = jnp.multiply(Kp_pos, error_pos)
-        # v_d = Kp_pos * (jnp.linalg.norm(xdot_d) - v)
-        # omega_d = Kp_theta * error_theta
+        v_prop = Kp_pos * dist
+        v_brake = jnp.sqrt(2.0 * a_max * dist + 1e-9)
+        v_des = jnp.minimum(jnp.minimum(v_prop, v_brake), v_max)
 
-        # # Convert position and orientation control inputs into unicycle control inputs (v, w)
-        # f, g = dynamics(state)
-        # unicycle_control_inputs = jnp.linalg.pinv(g) @ jnp.stack(jnp.array([xdot_d[0] - f[0], xdot_d[1] - f[1], v_d, omega_d]))
+        alpha_cmd = Kp_pos * (v_des - v)  # linear accel
+        omega_cmd = jnp.clip(Kp_theta * theta_err, -omega_max, omega_max)
 
-        # logging data
-        data = {}
+        # Check if controller is within goal tolerance
+        data = {"complete": dist <= eps_pos}
 
-        return unicycle_control_inputs, data
+        return jnp.array([alpha_cmd, omega_cmd]), data
 
     return controller
