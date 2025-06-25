@@ -102,9 +102,9 @@ barriers = [
 barrier_packages = concatenate_certificates(*barriers)
 risk_aware_barrier_params = RiskAwareParams(
     t_max=tf,
-    p_bound=0.01,
+    p_bound=0.05,
     gamma=0.75,
-    eta=20.0,
+    eta=10.0,
     sigma=lambda _: 1 * initial_conditions.R,
 )
 
@@ -124,16 +124,6 @@ risk_aware_lyapunov_params = RiskAwareParams(
     eta=2.0,
     sigma=lambda _: initial_conditions.R,
 )
-
-# controller = risk_aware_path_integral_cbf_clf_qp_controller(
-#     control_limits=jnp.array([100.0, 100.0]),
-#     nominal_input=nominal_controller,
-#     dynamics_func=approx_unicycle_dynamics,
-#     barriers=barrier_packages,
-#     lyapunovs=lyapunov_packages,
-#     ra_cbf_params=risk_aware_barrier_params,
-#     ra_clf_params=risk_aware_lyapunov_params,
-# )
 
 
 # Define simulation function, including post-processing of data
@@ -244,6 +234,7 @@ if __name__ == "__main__":
         #     ax.plot(jnp.linspace(0.0, tf, N_STEPS), controls[:, 0])
         #     ax.plot(jnp.linspace(0.0, tf, N_STEPS), controls[:, 1])
         fig.savefig(save_path + file_name + ".png")
+        print(f"Figure saved to: {save_path + file_name}.png")
 
     final_deviation = np.array(
         [rec[-1, :2] - initial_conditions.desired_state[:2] for rec in state_record]
