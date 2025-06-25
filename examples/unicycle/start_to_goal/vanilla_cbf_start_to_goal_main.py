@@ -55,13 +55,6 @@ ellipsoids = [
     (0.75, 0.5),
 ]
 
-# cbf_package = rectify_relative_degree(
-#     function=unicycle.certificate_functions.barrier_functions.ellipsoidal_obstacle.cbf(),
-#     system_dynamics=unicycle_dynamics,
-#     state_dim=len(init_state),
-#     form="exponential",
-# )
-
 barriers = [
     rectify_relative_degree(
         function=unicycle.certificate_functions.barrier_functions.ellipsoidal_obstacle.cbf(
@@ -78,16 +71,6 @@ barriers = [
     for obs, ell in zip(obstacles, ellipsoids)
 ]
 barrier_packages = concatenate_certificates(*barriers)
-
-# barriers = [
-#     unicycle.certificate_functions.barrier_functions.obstacle_ca(
-#         certificate_conditions=zeroing_barriers.linear_class_k(10.0),
-#         obstacle=obs,
-#         ellipsoid=ell,
-#     )
-#     for obs, ell in zip(obstacles, ellipsoids)
-# ]
-# barrier_packages = concatenate_certificates(*barriers)
 
 controller = cbf_controller(
     control_limits=actuation_constraints,
