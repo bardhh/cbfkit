@@ -69,29 +69,44 @@ ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 #     if [ "$(uname -m)" = "x86_64" ]; then poetry add cvxopt; fi
 
 # RUN python3 -m pip install jax[cuda12]
-RUN python3 -m pip install numpy matplotlib notebook PyQt5
-RUN python3 -m pip install kvxopt>=1.3.2.0
-RUN python3 -m pip install cmake>=3.28.1
-RUN python3 -m pip install cython>=3.0.8
-RUN python3 -m pip install pyyaml>=6.0.1
-RUN python3 -m pip install setuptools>=69.0.3
-RUN python3 -m pip install black>=23.12.1
-RUN python3 -m pip install mypy>=1.8.0
-RUN python3 -m pip install jaxopt>=0.8.3
-RUN python3 -m pip install jupyter>=1.0.0
-RUN python3 -m pip install control>=0.9.4
-RUN python3 -m pip install matplotlib>=3.8.2
-RUN python3 -m pip install pandas>=2.1.4
-RUN python3 -m pip install cvxpy>=1.4.1
-RUN python3 -m pip install cvxpylayers>=0.1.6
-RUN python3 -m pip install casadi>=3.6.4
-RUN python3 -m pip install tqdm>=4.66.2
-RUN if [ "$(uname -m)" = "x86_64" ]; then python3 -m pip install cvxopt; fi
+RUN python3 -m pip install --no-cache-dir \
+    numpy \
+    matplotlib \
+    notebook \
+    PyQt5 \
+    kvxopt>=1.3.2.0 \
+    cmake>=3.28.1 \
+    cython>=3.0.8 \
+    pyyaml>=6.0.1 \
+    setuptools>=69.0.3 \
+    black>=23.12.1 \
+    mypy>=1.8.0 \
+    jaxopt>=0.8.3 \
+    jupyter>=1.0.0 \
+    control>=0.9.4 \
+    pandas>=2.1.4 \
+    cvxpy>=1.4.1 \
+    cvxpylayers>=0.1.6 \
+    casadi>=3.6.4 \
+    tqdm>=4.66.2 \
+    && if [ "$(uname -m)" = "x86_64" ]; then python3 -m pip install --no-cache-dir cvxopt; fi
 
-RUN apt-get update && apt-get install -y python3-tk
-RUN python3 -m pip install PyQt5
-RUN apt-get install -y ffmpeg
-RUN apt-get install -y '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev
-RUN apt-get install -y libqt5gui5
-RUN apt-get install -y texlive-fonts-recommended texlive-fonts-extra texlive-latex-extra dvipng cm-super
-RUN apt install -y vim
+RUN apt-get update && apt-get install -y \
+    python3-tk \
+    ffmpeg \
+    '^libxcb.*-dev' \
+    libx11-xcb-dev \
+    libglu1-mesa-dev \
+    libxrender-dev \
+    libxi-dev \
+    libxkbcommon-dev \
+    libxkbcommon-x11-dev \
+    libqt5gui5 \
+    texlive-fonts-recommended \
+    texlive-fonts-extra \
+    texlive-latex-extra \
+    dvipng \
+    cm-super \
+    vim \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
