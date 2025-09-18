@@ -5,32 +5,37 @@ services:
     build:
       context: ../
       dockerfile: Dockerfile
+    platform: linux/amd64
     privileged: true
     network_mode: "host"
     volumes:
       - ../:/home/cbfkit
     stdin_open: true
     tty: true
+    init: true
 
   cbfkit_gpu:
+    profiles: ["gpu"]
     build:
       context: ../
       dockerfile: gpu.Dockerfile
+    platform: linux/amd64
     privileged: true
     network_mode: "host"
     volumes:
       - ../:/home/cbfkit
     stdin_open: true
     tty: true
+    init: true
     environment:
-        - DISPLAY=$DISPLAY
-        - NVIDIA_VISIBLE_DEVICES=all
-        - NVIDIA_DRIVER_CAPABILITIES=all
-    runtime: nvidia  # not need maybe for display atleast
+      - DISPLAY=${DISPLAY}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    runtime: nvidia
     deploy:
-            resources:
-              reservations:
-                devices:
-                  - driver: nvidia
-                    count: 1
-                    capabilities: [gpu]
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
