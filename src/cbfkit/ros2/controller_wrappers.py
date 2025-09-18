@@ -1,7 +1,11 @@
 import rclpy
+from rclpy.logging import get_logger
 from jax import Array
 from cbfkit.utils.user_types import ControllerCallable, ControllerCallableReturns
 from typing import Tuple, Dict, Callable
+
+
+LOGGER = get_logger(__name__)
 
 
 def controller_wrapper(
@@ -38,8 +42,11 @@ def controller_wrapper(
 
         try:
             u, data = controller(t, x)
+            if "sub_data" in data and "violated" in data["sub_data"]:
+                if data["sub_data"]["violated"]:
+                    raise ValueError("Violation of Safety Constraint!")
         except ValueError as e:
-            print(e)  # Modify as needed for ROS2 logging
+            LOGGER.error(str(e))
             u, data = backup_controller(t, x)
 
         # Sends the computed input u and the estimated state x

@@ -21,6 +21,7 @@ generate_model(
 
 """
 
+import logging
 import os
 import platform
 import re
@@ -60,15 +61,35 @@ def create_python_file(directory: str, file_name: str, file_contents: str):
         file.write(file_contents)
 
 
-def run_black(file_path):
+LOGGER = logging.getLogger(__name__)
+
+
+def run_black(file_path: str) -> None:
+    """Format the given file with Black.
+
+    Args:
+        file_path (str): path to the file that should be formatted.
+
+    Raises:
+        RuntimeError: if the Black formatter is not available or formatting fails.
+    """
+
     try:
-        # Run the Black linter on the specified file
         subprocess.run(
-            ["black", file_path], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ["black", file_path],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
-        # print(f"Black successfully formatted {file_path}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error running Black: {e}")
+    except FileNotFoundError as exc:
+        LOGGER.error("Black executable not found while formatting %s", file_path)
+        raise RuntimeError(
+            "Black executable not found. Please ensure Black is installed and available."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.decode().strip() if exc.stderr else str(exc)
+        LOGGER.error("Black failed to format %s: %s", file_path, stderr)
+        raise RuntimeError(f"Black failed to format {file_path}: {stderr}") from exc
 
 
 def extract_keys(input_string):
