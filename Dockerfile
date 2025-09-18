@@ -53,8 +53,24 @@ ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 RUN poetry install --no-interaction && \
     if [ "$(uname -m)" = "x86_64" ]; then poetry add cvxopt; fi
 
-RUN apt-get update && apt-get install -y python3-tk
-RUN pip3 install PyQt5
-RUN apt-get install -y ffmpeg
-RUN apt-get install -y '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev
-RUN apt-get install -y ffmpeg
+# GUI and visualization tooling required by the tutorials
+RUN apt-get update && apt-get install -y \
+    python3-tk \
+    ffmpeg \
+    '^libxcb.*-dev' \
+    libx11-xcb-dev \
+    libglu1-mesa-dev \
+    libxrender-dev \
+    libxi-dev \
+    libxkbcommon-dev \
+    libxkbcommon-x11-dev \
+    libqt5gui5 \
+    texlive-fonts-recommended \
+    texlive-fonts-extra \
+    texlive-latex-extra \
+    dvipng \
+    cm-super \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --no-cache-dir PyQt5

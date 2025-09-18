@@ -42,20 +42,36 @@ CBFKit can be applied to diverse robotics applications, including:
 ## Installation
 CBFKit is readily deployable via a Docker image. After setting up Docker (refer to the [official Docker documentation](https://docs.docker.com/get-started/) for detailed instructions), proceed with one of the following methods:
 
-### 1. VS Code DevContainer Launch
+### 1. VS Code Dev Container Launch
 1. Open the project in VS Code.
-2. Click the green button at the bottom right of the window to launch the DevContainer.
-3. All necessary components are pre-installed for immediate use.
+2. When prompted, reopen the folder in container and choose the **CBFKit CPU Dev Container** definition located at `.devcontainer/cbfkit-container`.
+3. The container uses the standard `Dockerfile` through Docker Compose so macOS hosts always build the CPU image, while Linux users can optionally select the GPU profile (see below).
 
-### 2. Docker Command Line
-1. Build the image:
+### 2. Docker Compose (command line)
+The dev containers are backed by `.devcontainer/docker-compose.yml`, so you can use the same configuration outside of VS Code:
+
+1. Build the CPU image (works on macOS via x86 emulation):
+   ```bash
+   docker compose -f .devcontainer/docker-compose.yml build cbfkit
    ```
-   docker build -t cbfkit:latest -f Dockerfile.$(uname -m) .
+2. Start an interactive development shell:
+   ```bash
+   docker compose -f .devcontainer/docker-compose.yml run --rm cbfkit bash
    ```
-2. Run the container:
+3. When you are done, clean up the container:
+   ```bash
+   docker compose -f .devcontainer/docker-compose.yml down
    ```
-   docker run -it --name container-name -v .:/workspace cbfkit:latest
-   ```
+
+### 3. GPU Development (Linux hosts only)
+The Compose file exposes a `cbfkit_gpu` service behind a `gpu` profile. Linux users with NVIDIA GPUs can enable it with:
+
+```bash
+docker compose -f .devcontainer/docker-compose.yml --profile gpu build cbfkit_gpu
+docker compose -f .devcontainer/docker-compose.yml --profile gpu run --rm cbfkit_gpu bash
+```
+
+macOS builds always target the CPU image because GPU passthrough is not supported.
 
 ## Start with Tutorials
 Explore the `tutorials` directory to help you get started with CBFKit. Open the Python notebook in the `tutorials` directory to get started. The script `simulate_new_control_system.ipynb` automatically generates the controller, plant, and certificate function for a Van der Pol oscillator. It also generates ROS2 nodes for the plant, controller, sensor, and estimator. These serve as a starting point for developing your own CBF-based controller.
