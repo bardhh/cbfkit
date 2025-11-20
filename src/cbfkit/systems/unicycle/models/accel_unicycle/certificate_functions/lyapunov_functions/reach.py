@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from jax import jit, jacfwd, jacrev, Array
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
     certificate_package,
 )
 
