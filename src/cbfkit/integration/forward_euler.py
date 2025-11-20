@@ -47,3 +47,13 @@ def forward_euler(x: Array, x_dot: Array, dt: float) -> Array:
 
     """
     return x + x_dot * dt
+
+
+# @jit
+# def step_with_diffrax(y, u, dt):
+#     solution = diffeqsolve(term, solver, t0=0, t1=dt, dt0=dt / 5, y0=np.append(y, u, axis=0))
+#     return solution.ys[0, :-1].reshape(-1, 1)
+
+
+def setup_forward_euler(x, xdot_func, dt):
+    return forward_euler(x + xdot_func(x), dt)  # use any other integrator here

@@ -27,17 +27,19 @@ import jax.numpy as jnp
 from jax import jacfwd, Array
 
 import cbfkit.simulation.simulator as sim
-from cbfkit.controllers.model_based.cbf_clf_controllers import vanilla_cbf_clf_qp_controller
-from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_qp_control_laws import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers import (
+    vanilla_cbf_clf_qp_controller,
+)
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.risk_aware_cbf_clf_qp_control_laws import (
     risk_aware_cbf_clf_qp_controller,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.risk_aware_params import (
     RiskAwareParams,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
     concatenate_certificates,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.fixed_time_stability import (
+from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.fixed_time_stability import (
     fxt_s,
 )
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
