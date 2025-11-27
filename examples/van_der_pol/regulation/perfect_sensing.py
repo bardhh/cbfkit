@@ -100,5 +100,5 @@ animate(
     dt=setup.dt,
     title="System Behavior",
     save_animation=False,
-    animation_filename="examples/van_der_pol/ra_fxt_clbf/results/perfect_measurements",
+    animation_filename="examples/van_der_pol/regulation/results/perfect_measurements",
 )

@@ -167,5 +167,5 @@ if __name__ == "__main__":
                 dt=setup.dt,
                 title="System Behavior",
                 save_animation=False,
-                animation_filename="examples/single_integrator/ra_fxt_clf/results/perfect_measurements",
+                animation_filename="examples/single_integrator/reach_goal/results/perfect_measurements",
             )

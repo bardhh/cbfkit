@@ -103,5 +103,5 @@ if plot:
         dt=dt,
         title="System Behavior",
         save_animation=save,
-        animation_filename="examples/unicycle/start_to_goal/results/ukf_estimation.gif",
+        animation_filename="examples/unicycle/reach_goal/results/ukf_estimation.gif",
     )

@@ -13,7 +13,7 @@ from examples.unicycle.common.ellipsoidal_obstacle import cbf as ellipsoid_cbf
 # Simulation parameters
 tf = 10.0
 dt = 0.05
-file_path = "examples/unicycle/start_to_goal/results/"
+file_path = "examples/unicycle/reach_goal/results/"
 
 init_state = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
 desired_state = jnp.array([2.0, 4.0, 0.0, 0.0])

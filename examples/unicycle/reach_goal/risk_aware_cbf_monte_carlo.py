@@ -66,7 +66,7 @@ N_TRIALS = 10
 N_STEPS = int(tf / dt)
 N_STATES = len(desired_state)
 N_CONTROLS = approx_uniycle_nom_controller(0.0, desired_state, random.PRNGKey(0), None)[0].shape[0]
-filepath = f"examples/unicycle/risk_aware_cbf/results/monte_carlo_N{N_TRIALS}.pkl"
+filepath = f"examples/unicycle/reach_goal/results/monte_carlo_N{N_TRIALS}.pkl"
 progress_update_percent = 10
 
 

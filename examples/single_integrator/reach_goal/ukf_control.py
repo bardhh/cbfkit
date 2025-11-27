@@ -5,7 +5,7 @@ to reach a goal region while avoiding dynamic obstacles.
 """
 
 from typing import List
-from jax import Array, random, jacfwd
+from jax import Array, random
 import numpy as np
 
 import jax.numpy as jnp
@@ -13,17 +13,15 @@ import cbfkit.simulation.simulator as sim
 from cbfkit.simulation.monte_carlo import conduct_monte_carlo
 from cbfkit.systems import single_integrator
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.estimators import ct_ekf_dtmeas
+from cbfkit.estimators import ct_ukf_dtmeas
 from cbfkit.integration import forward_euler as integrator
-
-# import cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_controllers as ra_controllers
-from cbfkit.controllers.cbf_clf.risk_aware_path_integral_cbf_clf_qp_control_laws import (
-    risk_aware_path_integral_cbf_clf_qp_controller as pi_cbf_clf_controller,
+from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
+    risk_aware_cbf_clf_qp_controller,
 )
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
     RiskAwareParams,
 )
-from examples.single_integrator.common.config import ekf_state_estimation as setup
+from examples.single_integrator.common.config import ukf_state_estimation as setup
 
 from examples.single_integrator.common.lyapunov_functions import fxts_lyapunov
 
@@ -43,43 +41,16 @@ N_STEPS = int(setup.tf / setup.dt)
 # Define dynamics, controller, and estimator with specified parameters
 dynamics = single_integrator.two_dimensional_single_integrator(r=setup.goal_radius, sigma=setup.Q)
 nominal_controller = single_integrator.zero_controller()
-dfdx = lambda x: jacfwd(dynamics)(x)
 h = lambda x: x
-dhdx = lambda _x: np.eye((len(setup.desired_state)))
-estimator = ct_ekf_dtmeas(
+estimator = ct_ukf_dtmeas(
     Q=setup.Q,
     R=setup.R,
     dynamics=dynamics,
-    dfdx=dfdx,
     h=h,
-    dhdx=dhdx,
     dt=setup.dt,
 )
 
 
-# controller = ra_controllers.fxt_cbf_clf_controller(
-#     nominal_input=nominal_controller,
-#     dynamics_func=dynamics,
-#     lyapunovs=lyapunovs,
-#     control_limits=setup.actuation_limits,
-#     alpha=np.array([0.1]),
-#     t_max=setup.Tg,
-#     p_bound_v=setup.pg,
-#     gamma_v=setup.gamma_v,
-#     eta_v=setup.eta_v,
-# )
-# controller = est_ra_controllers.fxt_cbf_clf_controller(
-#     nominal_input=nominal_controller,
-#     dynamics_func=dynamics,
-#     lyapunovs=lyapunovs,
-#     control_limits=setup.actuation_limits,
-#     alpha=np.array([0.1]),
-#     t_max=setup.Tg,
-#     p_bound_v=setup.pg,
-#     gamma_v=setup.gamma_v,
-#     eta_v=setup.eta_v,
-#     varsigma=setup.R,
-# )
 ra_clf_params = RiskAwareParams(
     t_max=setup.Tg,
     p_bound=setup.pg,
@@ -89,14 +60,26 @@ ra_clf_params = RiskAwareParams(
     varsigma=lambda x: jnp.sqrt(setup.R),
 )
 
-controller = pi_cbf_clf_controller(
+controller = risk_aware_cbf_clf_qp_controller(
+    nominal_input=nominal_controller,
     dynamics_func=dynamics,
     lyapunovs=lyapunovs,
     control_limits=setup.actuation_limits,
     alpha=np.array([0.1]),
     ra_clf_params=ra_clf_params,
-    dt=setup.dt,
 )
+# controller = ra_controllers.pi_cbf_clf_controller(
+#     nominal_input=nominal_controller,
+#     dynamics_func=dynamics,
+#     lyapunovs=lyapunovs,
+#     control_limits=setup.actuation_limits,
+#     alpha=np.array([0.1]),
+#     t_max=setup.Tg,
+#     p_bound_v=setup.pg,
+#     gamma_v=setup.gamma_v,
+#     eta_v=setup.eta_v,
+#     dt=setup.dt,
+# )
 
 
 def execute(ii: int = 0) -> List[Array]:
@@ -123,15 +106,11 @@ def execute(ii: int = 0) -> List[Array]:
         x0=initial_state,
         dynamics=dynamics,
         sensor=sensor,
-        nominal_controller=nominal_controller,
         controller=controller,
         estimator=estimator,
         integrator=integrator,
         dt=setup.dt,
-        # R=setup.R, # sim.execute doesn't take R directly? Check signature.
         num_steps=N_STEPS,
-        # key=key, # sim.execute doesn't take key directly?
-        planner_data={"x_traj": np.zeros((2, N_STEPS + 1))},
     )
 
     # Reformat results as numpy arrays
@@ -152,7 +131,6 @@ if __name__ == "__main__":
 
     # Execute numerous trials sim
     results = conduct_monte_carlo(execute, n_trials=setup.n_trials)
-    # results = [execute(0)]
 
     # Convert the results to a NumPy array
     states = [result[0] for result in results]
@@ -206,5 +184,5 @@ if __name__ == "__main__":
                 dt=setup.dt,
                 title="System Behavior",
                 save_animation=False,
-                animation_filename="examples/single_integrator/ra_fxt_clf/results/ekf_estimation",
+                animation_filename="examples/single_integrator/reach_goal/results/ukf_estimation",
             )

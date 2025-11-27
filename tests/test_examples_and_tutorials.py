@@ -6,15 +6,15 @@ import sys
 # List of script paths relative to the project root
 # These are the scripts we want to verify run successfully (exit code 0)
 SCRIPTS_TO_TEST = [
-    "examples/unicycle/start_to_goal/mppi_cbf_start_to_goal_main.py",
-    "examples/unicycle/start_to_goal/stochastic_cbf_start_to_goal_main.py",
-    "examples/unicycle/start_to_goal/vanilla_cbf_start_to_goal_main.py",
-    # "examples/unicycle/risk_aware_cbf/start_to_goal.py", # Currently disabled, needs visualization fix
+    "examples/unicycle/reach_goal/mppi_cbf_control.py",
+    "examples/unicycle/reach_goal/stochastic_cbf_control.py",
+    "examples/unicycle/reach_goal/vanilla_cbf_control.py",
+    # "examples/unicycle/reach_goal/risk_aware_cbf_control.py", # Currently disabled, needs visualization fix
     "tutorials/unicycle_reach_avoid.py",
-    "tutorials/single_integrator_reach_avoid_dyn_obs.py",
-    # "tutorials/simulate_mppi_stl.py", # Requires complex setup or long run?
-    "tutorials/simulate_mppi_cbf.py",
-    "tutorials/simulate_mppi_cbf_ellipsoidal_stochastic_cbf.py",
+    "tutorials/single_integrator_dynamic_obstacles.py",
+    # "tutorials/mppi_stl_reach_avoid.py", # Requires complex setup or long run?
+    "tutorials/mppi_cbf_reach_avoid.py",
+    "tutorials/mppi_stochastic_cbf_reach_avoid.py",
 ]
 
 @pytest.mark.parametrize("script_path", SCRIPTS_TO_TEST)

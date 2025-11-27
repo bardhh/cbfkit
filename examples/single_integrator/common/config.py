@@ -33,7 +33,7 @@ class PerfectMeasurementsConfig(BaseConfig):
     pg = 0.50
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2
     n_trials = 10
-    pkl_file = f"examples/single_integrator/ra_fxt_clf/results/perfect_measurements_n{n_trials}_pg{int(pg * 100)}.pkl"
+    pkl_file = f"examples/single_integrator/reach_goal/results/perfect_measurements_n{n_trials}_pg{int(pg * 100)}.pkl"
 
 class EKFEstimationConfig(BaseConfig):
     VISUALIZE = False
@@ -42,7 +42,7 @@ class EKFEstimationConfig(BaseConfig):
     pg = 0.95
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2
     n_trials = 10
-    pkl_file = f"examples/single_integrator/ra_fxt_clf/results/ekf_estimation_n{n_trials}_pg{int(pg * 100)}.pkl"
+    pkl_file = f"examples/single_integrator/reach_goal/results/ekf_estimation_n{n_trials}_pg{int(pg * 100)}.pkl"
 
 class UKFEstimationConfig(BaseConfig):
     VISUALIZE = True
@@ -50,7 +50,7 @@ class UKFEstimationConfig(BaseConfig):
     pg = 0.50
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2
     n_trials = 3
-    pkl_file = f"examples/single_integrator/ra_fxt_clf/results/ukf_estimation_n{n_trials}_pg{int(pg * 100)}.pkl"
+    pkl_file = f"examples/single_integrator/reach_goal/results/ukf_estimation_n{n_trials}_pg{int(pg * 100)}.pkl"
 
 # Aliases
 perfect_state_measurements = PerfectMeasurementsConfig
