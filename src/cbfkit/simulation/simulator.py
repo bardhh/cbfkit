@@ -143,7 +143,7 @@ def stepper(
         elif planner_data.x_traj is not None:
             # expect trajectory to be n x N. N is time steps
             # Calculate current timestep index for trajectory lookup
-            timestep_idx = int(jnp.round(t / dt))
+            timestep_idx = jnp.round(t / dt).astype(int)
             # Clamp to valid range [0, N-1] where N is number of columns in x_traj
             timestep_idx = jnp.clip(timestep_idx, 0, planner_data.x_traj.shape[1] - 1)
             u, _ = nominal_controller(t, z, subkey, planner_data.x_traj[:, timestep_idx])
