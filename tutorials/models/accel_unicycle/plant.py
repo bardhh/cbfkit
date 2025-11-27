@@ -1,6 +1,5 @@
 import jax.numpy as jnp
-from jax import jit, Array, lax
-from typing import Optional, Union, Callable
+from jax import jit, Array
 from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
 from .constants import *
 
@@ -17,7 +16,6 @@ def plant(**kwargs) -> DynamicsCallable:
         #! MANUALLY POPULATE
 
     Args:
-        perturbation (Optional, Array): additive perturbation to the xdot dynamics
         kwargs: keyword arguments
 
     Returns:

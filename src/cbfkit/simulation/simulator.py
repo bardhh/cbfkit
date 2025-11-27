@@ -116,33 +116,37 @@ def stepper(
         f, g = dynamics(x)
 
         if planner is None and nominal_controller is None and controller is None:
-            raise ValueError("At least one of planner, nominal_controller, or controller must be specified.")
+            raise ValueError(
+                "At least one of planner, nominal_controller, or controller must be specified."
+            )
 
         # Plan trajectory using planner
         if stl_trajectory_cost is not None:
-            planner_data["prev_robustness"] = stl_trajectory_cost(dt, planner_data["xs"])
+            planner_data = planner_data._replace(
+                prev_robustness=stl_trajectory_cost(dt, planner_data.xs)
+            )
         else:
-            planner_data["prev_robustness"] = None
+            planner_data = planner_data._replace(prev_robustness=None)
+
         if planner is not None:
             u_planner, planner_data = planner(t, z, None, subkey, planner_data)
-            if planner_data.get("error", False):
+            if planner_data.error:
                 return x, u, z, c, controller_data, planner_data
         else:
-            planner_data["u_traj"] = None
-            # planner_data = {"u_traj": None, "prev_robustness": None, "x_traj": None}
-        planner_data["prev_robustness"] = None
+            planner_data = planner_data._replace(u_traj=None)
+        planner_data = planner_data._replace(prev_robustness=None)
 
         # Nominal controller
-        if (planner is not None) and (planner_data.get("u_traj") is not None):
+        if (planner is not None) and (planner_data.u_traj is not None):
             # already have nominal input. just pass it along
             u = u_planner
-        elif planner_data.get("x_traj") is not None:
+        elif planner_data.x_traj is not None:
             # expect trajectory to be n x N. N is time steps
             # Calculate current timestep index for trajectory lookup
             timestep_idx = int(jnp.round(t / dt))
             # Clamp to valid range [0, N-1] where N is number of columns in x_traj
-            timestep_idx = jnp.clip(timestep_idx, 0, planner_data["x_traj"].shape[1] - 1)
-            u, _ = nominal_controller(t, z, subkey, planner_data["x_traj"][:, timestep_idx])
+            timestep_idx = jnp.clip(timestep_idx, 0, planner_data.x_traj.shape[1] - 1)
+            u, _ = nominal_controller(t, z, subkey, planner_data.x_traj[:, timestep_idx])
         else:
             if nominal_controller == None:
                 # print(f"WARNING: Nominal controller not defined. Setting to zero input")
@@ -152,14 +156,13 @@ def stepper(
 
         # Compute control input using controller
         if controller is not None:
-            # print(f"hello")
             u, controller_data = controller(t, z, u, subkey, controller_data)
-            if controller_data.get("error", False):
+            if controller_data.error:
                 return x, u, z, c, controller_data, planner_data
-            if controller_data.get("complete", False):
+            if controller_data.complete:
                 return x, u, z, c, controller_data, planner_data
         else:
-            controller_data = {}
+            controller_data = ControllerData()
 
         # Generate perturbation to the dynamics (inclusive of SDEs)
         p = perturbation(x, u, f, g)
@@ -173,8 +176,6 @@ def stepper(
         x = integrator(x, xdot, dt)
 
         return x, u, z, c, controller_data, planner_data
-
-    return step
 
     return step
 
@@ -194,7 +195,9 @@ def simulator(
     key: random.PRNGKey,
     verbose: Optional[bool] = True,
     stl_trajectory_cost=None,
-) -> Callable[[Array], Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array]]]]:
+) -> Callable[
+    [Array], Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array]]]
+]:
     """Generates function handle for the iterator that carries out the simulation of the
     dynamical system.
 
@@ -234,12 +237,14 @@ def simulator(
     )
 
     def simulate_iter(
-        x: Array, controller_data: ControllerData = None, planner_data: PlannerData = None
+        x: Array,
+        controller_data: ControllerData = None,
+        planner_data: PlannerData = None,
     ) -> Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array]]]:
         if controller_data is None:
-            controller_data = {}
+            controller_data = ControllerData()
         if planner_data is None:
-            planner_data = {}
+            planner_data = PlannerData()
         # No info on control/estimation
         u = None
         z = None
@@ -253,30 +258,36 @@ def simulator(
         xs = jnp.copy(x.reshape(-1, 1))
 
         # Simulate remaining timesteps
-        planner_data["xs"] = xs
+        planner_data = planner_data._replace(xs=xs)
         for s in items:
             x, u, z, p, controller_data, planner_data = step(
                 dt * s, x, u, z, p, controller_data, planner_data
             )
-            log(controller_data)
+            log(controller_data._asdict())
             xs = jnp.append(xs, x.reshape(-1, 1), axis=1)
-            planner_data["xs"] = jnp.append(planner_data["xs"], x.reshape(-1, 1), axis=1)
+            planner_data = planner_data._replace(
+                xs=jnp.append(planner_data.xs, x.reshape(-1, 1), axis=1)
+            )
             # None  # xs
-            yield x, u, z, p, list(controller_data.keys()), list(controller_data.values()), list(
-                planner_data.keys()
-            ), list(planner_data.values())
+            yield x, u, z, p, list(controller_data._asdict().keys()), list(
+                controller_data._asdict().values()
+            ), list(planner_data._asdict().keys()), list(
+                planner_data._asdict().values()
+            )
 
-            if controller_data.get("complete", False):
+            if controller_data.complete:
                 if verbose:
                     print("GOAL REACHED!")
                 break
 
-            if controller_data.get("error", False):
+            if controller_data.error:
                 if verbose:
-                    print(f"CONTROLLER ERROR: {controller_data.get('error_data', 'Unknown error')}")
+                    print(
+                        f"CONTROLLER ERROR: {controller_data.error_data if controller_data.error_data is not None else 'Unknown error'}"
+                    )
                 break
 
-            if planner_data.get("error", False):
+            if planner_data.error:
                 if verbose:
                     print("PLANNER ERROR")
                 break
@@ -306,8 +317,7 @@ def execute(
     stl_trajectory_cost=None,
     use_jit: bool = False,
 ) -> Tuple[Array, List[str], List[Array]]:
-    """This function simulates the dynamical system for a given number of steps...
-    """
+    """This function simulates the dynamical system for a given number of steps..."""
     if nominal_controller is None:
         pass
 
@@ -337,26 +347,41 @@ def execute(
     # Generate key for randomization
     if key is None:
         key = random.PRNGKey(0)
+        
+    # Ensure data structures are NamedTuples
+    if controller_data is None:
+        controller_data = ControllerData()
+    elif isinstance(controller_data, dict):
+        controller_data = ControllerData(**controller_data)
+        
+    if planner_data is None:
+        planner_data = PlannerData()
+    elif isinstance(planner_data, dict):
+        planner_data = PlannerData(**planner_data)
 
     if use_jit:
         # JIT Execution Path
         
-        # Initialize data structures if None
-        c_data = controller_data if controller_data is not None else {}
-        p_data = planner_data if planner_data is not None else {}
+        # Initialize data structures (already ensured to be NamedTuples or None)
+        c_data = controller_data
+        p_data = planner_data
         
+        # WARMUP JIT
         # Prime the data structures to ensure they have the correct static shape/keys
         # We perform one dummy call (not integrated) to get the output dict structure.
-        prime_key1, prime_key2, prime_key3 = random.split(key, 3)
+        if verbose:
+             print("Warming up JIT...")
         
+        prime_key1, prime_key2, prime_key3 = random.split(key, 3)
+
         # Prime Planner
         if planner is not None:
             # Dummy z (estimate) = x0
             _, p_data = planner(0.0, x0, None, prime_key1, p_data)
-        
+
         # Prime Nominal (optional, usually stateless, but good for consistency)
         # u_nom_dummy, _ = nominal_controller(0.0, x0, prime_key2, None)
-        
+
         # Prime Controller
         if controller is not None:
             # Need a dummy u_nom
@@ -386,31 +411,37 @@ def execute(
             initial_planner_data=p_data,
             initial_covariance=initial_covariance,
         )
-        
+
         if verbose:
             print("JIT execution completed.")
-        
+
         # Process results to match extract_and_log_data format
         # c_datas and p_datas are PyTrees of stacked arrays (Time x Shape).
         # We need to unstack them into a list of step-dictionaries, then extract values.
-        
-        c_keys = list(c_datas.keys())
+
+        c_keys = list(c_datas._fields)
         c_values = []
+        
+        # Extracting data efficiently
         for t in range(num_steps):
-            # Extract the full data structure for step t
+            # Extract full structure for step t
             c_data_t = jax.tree_util.tree_map(lambda x: x[t], c_datas)
-            # Extract values in the order of c_keys
-            c_values.append([c_data_t[k] for k in c_keys])
-            
-        p_keys = list(p_datas.keys())
+            # Extract values in the order of c_keys using getattr
+            c_val_t = [getattr(c_data_t, k) for k in c_keys]
+            c_values.append(c_val_t)
+
+        p_keys = list(p_datas._fields)
         p_values = []
         for t in range(num_steps):
             p_data_t = jax.tree_util.tree_map(lambda x: x[t], p_datas)
-            p_values.append([p_data_t[k] for k in p_keys])
-        
+            p_val_t = [getattr(p_data_t, k) for k in p_keys]
+            p_values.append(p_val_t)
+
         # We skip write_log(filepath) for now as we bypass the logger module buffering.
         if filepath is not None and verbose:
-            print(f"Warning: JIT mode enabled. Logging to {filepath} is not yet supported/implemented.")
+            print(
+                f"Warning: JIT mode enabled. Logging to {filepath} is not yet supported/implemented."
+            )
 
         return xs, us, zs, cs, c_keys, c_values, p_keys, p_values
 
@@ -421,7 +452,7 @@ def execute(
     # we leave Python loop as is for now, unless it needs explicit p0 too.
     # The Python stepper calls `estimator(..., c)`. Initially c=None.
     # Estimator handles None by calling `initialize`.
-    
+
     simulate_iter = simulator(
         dt,
         num_steps,
@@ -468,4 +499,13 @@ def extract_and_log_data(filepath: str, data):
     planner_data_keys = data[0][6]
     planner_data_values = [sim_data[7] for sim_data in data]
 
-    return states, controls, estimates, covariances, controller_data_keys, controller_data_values, planner_data_keys, planner_data_values  # type: ignore[return-value]
+    return (
+        states,
+        controls,
+        estimates,
+        covariances,
+        controller_data_keys,
+        controller_data_values,
+        planner_data_keys,
+        planner_data_values,
+    )  # type: ignore[return-value]

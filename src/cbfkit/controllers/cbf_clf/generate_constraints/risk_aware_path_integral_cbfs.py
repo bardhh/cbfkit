@@ -33,7 +33,7 @@ def generate_compute_ra_pi_cbf_constraints(
     """
     conditions = barriers[-1]
     compute_barrier_values = generate_compute_certificate_values(barriers)
-    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable = unpack_for_cbf(
+    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
 

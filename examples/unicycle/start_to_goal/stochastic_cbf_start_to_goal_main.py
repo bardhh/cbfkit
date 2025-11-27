@@ -16,6 +16,9 @@ from cbfkit.certificates import (
     rectify_relative_degree,
 )
 
+from cbfkit.utils.user_types import PlannerData
+from examples.unicycle.common.ellipsoidal_obstacle import stochastic_cbf as ellipsoid_cbf
+
 # Simulation parameters
 tf = 10.0
 dt = 0.01
@@ -32,7 +35,6 @@ uniycle_nom_controller = unicycle.controllers.proportional_controller(
     dynamics=unicycle_dynamics,
     Kp_pos=1.0,
     Kp_theta=10.0,
-    desired_state=desired_state,
 )
 
 obstacles = [
@@ -52,7 +54,7 @@ ellipsoids = [
 
 barriers = [
     rectify_relative_degree(
-        function=unicycle.certificates.barrier_functions.ellipsoidal_obstacle.stochastic_cbf(
+        function=ellipsoid_cbf(
             obs,
             ell,
         ),
@@ -95,6 +97,9 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     estimator=estimator,
     perturbation=generate_stochastic_perturbation(sigma=sigma, dt=dt),
     filepath=file_path + "stochastic_cbf_results",
+    planner_data=PlannerData(
+        x_traj=jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1))
+    ),
 )
 
 plot = 1
@@ -113,7 +118,6 @@ if plot:
         x_lim=(-2, 6),
         y_lim=(-2, 6),
         title="System Behavior",
-        savefile=None,
     )
 
 if animate:

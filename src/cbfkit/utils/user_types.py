@@ -45,7 +45,7 @@ Examples
 
 """
 
-from typing import Callable, Tuple, Dict, Any, List, Union, Optional, TypedDict
+from typing import Callable, Tuple, Dict, Any, List, Union, Optional, NamedTuple
 from jax import Array, random
 
 # Define types for readability
@@ -56,21 +56,22 @@ Covariance = Array
 Key = int
 
 # Data Schemas
-class ControllerData(TypedDict, total=False):
-    error: bool
-    error_data: Any
-    complete: bool
-    sol: Array
-    u: Array
-    u_nom: Array
-    sub_data: Dict[str, Any]
+class ControllerData(NamedTuple):
+    error: bool = False
+    error_data: Any = None
+    complete: bool = False
+    sol: Optional[Array] = None
+    u: Optional[Array] = None
+    u_nom: Optional[Array] = None
+    sub_data: Dict[str, Any] = {}
 
-class PlannerData(TypedDict, total=False):
-    u_traj: Optional[Array]
-    x_traj: Optional[Array]
-    prev_robustness: Optional[float]
-    error: bool
-    xs: Array
+class PlannerData(NamedTuple):
+    u_traj: Optional[Array] = None
+    x_traj: Optional[Array] = None
+    prev_robustness: Optional[float] = None
+    error: bool = False
+    xs: Optional[Array] = None
+    sampled_x_traj: Optional[Array] = None
 
 # Certificate (Barrier, Lyapunov, Barrier-Lyapunov, etc.) Function Callables
 CertificateCallable = Callable[[float, State], Array]

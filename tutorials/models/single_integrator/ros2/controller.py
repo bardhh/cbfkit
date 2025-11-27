@@ -7,14 +7,17 @@ import jax.numpy as jnp
 import config
 
 
-class VanDerPolOscillatorController(Node):
+class SingleIntegratorController(Node):
     def __init__(self):
         super().__init__("single_integrator_controller")
         self.publisher = self.create_publisher(
             Float32MultiArray, "control_command", config.QUEUE_SIZE
         )
         self.subscription = self.create_subscription(
-            Float32MultiArray, "state_estimate", self.listener_callback, config.QUEUE_SIZE
+            Float32MultiArray,
+            "state_estimate",
+            self.listener_callback,
+            config.QUEUE_SIZE,
         )
         self.controller = self.get_controller_by_name(
             config.CONTROLLER_NAME, **config.CONTROLLER_PARAMS
@@ -26,15 +29,7 @@ class VanDerPolOscillatorController(Node):
     def get_controller_by_name(name, **kwargs):
         """
         Dynamically import and return an instance of the specified controller.
-
-        Parameters:
-        - name: The name of the controller class to import and instantiate.
-        - **kwargs: Keyword arguments to pass to the controller's constructor.
-
-        Returns:
-        An instance of the specified controller.
         """
-        # Assuming all controllers are in a module named 'controllers'
         module = __import__(config.MODULE_NAME + "." + "controllers", fromlist=[name])
         controller_class = getattr(module, name)
         return controller_class(**kwargs)
@@ -50,7 +45,14 @@ class VanDerPolOscillatorController(Node):
     def listener_callback(self, msg):
         estimate = jnp.array(msg.data)
         t = 0.0  # USER_DEFINED
-        control_command, _ = self.controller(t, estimate)
+        # Dummy u_nom and key for ROS node usage
+        u_nom = jnp.zeros(1)
+        key = 0
+        from cbfkit.utils.user_types import ControllerData
+
+        data = ControllerData()
+
+        control_command, _ = self.controller(t, estimate, u_nom, key, data)
         self.reset_control_msg()
         if control_command.ndim > 0:
             self.control_msg.data = [float(c) for c in control_command]
@@ -60,7 +62,7 @@ class VanDerPolOscillatorController(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = VanDerPolOscillatorController()
+    node = SingleIntegratorController()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

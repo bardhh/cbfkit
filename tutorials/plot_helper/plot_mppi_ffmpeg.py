@@ -76,8 +76,14 @@ def animate(
         trajectory[0].set_data(states[:frame, 0], states[:frame, 1])
         _ = states[frame]
         _ = estimates[frame]
+        
+        if "sampled_x_traj" in controller_data_keys:
+            key = "sampled_x_traj"
+        else:
+            key = "robot_sampled_states"
+            
         robot_sampled_states = controller_data_items[frame][
-            controller_data_keys.index("robot_sampled_states")
+            controller_data_keys.index(key)
         ]
         robot_selected_states = controller_data_items[frame][controller_data_keys.index("x_traj")]
 
