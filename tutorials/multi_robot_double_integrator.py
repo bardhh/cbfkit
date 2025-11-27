@@ -1,26 +1,25 @@
+import importlib
 import os
-import numpy as np
+from functools import partial
+
 import jax.numpy as jnp
+import numpy as np
 from jax import jit
 from scipy.linalg import block_diag
-from functools import partial
-import importlib
 
-from cbfkit.certificates import rectify_relative_degree
-from cbfkit.codegen.create_new_system import generate_model
-import cbfkit.simulation.simulator as sim
 import cbfkit.controllers.cbf_clf as cbf_clf_controllers
-from cbfkit.certificates import concatenate_certificates
+import cbfkit.controllers.mppi as mppi_planner
+import cbfkit.simulation.simulator as sim
+from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import e_s
+from cbfkit.codegen.create_new_system import generate_model
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
-from cbfkit.sensors import perfect as sensor
 from cbfkit.estimators import naive as estimator
+from cbfkit.sensors import perfect as sensor
 from cbfkit.utils.numerical_integration import forward_euler as integrator
-import cbfkit.controllers.mppi as mppi_planner
-from cbfkit.utils.user_types import PlannerData, ControllerData
-
-from tutorials.plot_helper.plot_3d_multi_robot import animate_3d_multi_robot
+from cbfkit.utils.user_types import ControllerData, PlannerData
+from cbfkit.utils.visualizations.plot_3d_multi_robot import animate_3d_multi_robot
 
 TARGET_DIRECTORY = "./tutorials"
 MODEL_NAME = "multi_robot_di"
@@ -197,7 +196,7 @@ for i in range(len(state_constraint_funcs)):
     # module = importlib.import_module(module_name) # Need to ensure python path can find this
     # Since we generated it in tutorials/multi_robot_di, we can access it via the imported module
     module = getattr(multi_robot_di.certificate_functions.barrier_functions, f"barrier_{i+1}")
-    
+
     h = getattr(module, "cbf")(alpha=5.0)
     # Apply rectify_relative_degree using the extracted function
     cbf_package = rectify_relative_degree(
@@ -296,6 +295,7 @@ simulation_data_path = os.path.join(TARGET_DIRECTORY, MODEL_NAME, "simulation_da
         u_traj=3 * jnp.ones((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"]))
     ),
     controller_data=ControllerData(),
+    use_jit=True,
 )
 
 # ================================

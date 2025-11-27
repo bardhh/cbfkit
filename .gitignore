@@ -168,3 +168,6 @@ tutorials/multi_augmented_single_integrators/
 tutorials/generated/
 strategy.md
 tasks.md
+tutorials/models
+tutorials/generated
+tutorials/plot_helper
