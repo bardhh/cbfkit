@@ -1,6 +1,6 @@
 # CBFKit: A Control Barrier Function Toolbox for Robotics Applications
 
-CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control for robotics applications, particularly in uncertain environments. The toolbox utilizes Control Barrier Functions (CBFs) to provide formal safety guarantees while offering flexibility and ease of use. We additionally provide efficient JAX implementatio of Model Predictive path Integral (MPPI) with support for reach avoid specifications.
+CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control for robotics applications, particularly in uncertain environments. The toolbox utilizes Control Barrier Functions (CBFs) to provide formal safety guarantees while offering flexibility and ease of use. We additionally provide efficient JAX implementation of Model Predictive Path Integral (MPPI) control with support for reach-avoid specifications.
 
 ## Table of Contents
 - [Key Features](#key-features)
@@ -20,8 +20,8 @@ CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control
 - **Model-based and Model-free Control:** Accommodates both model-based control strategies using system dynamics and model-free control approaches. Model-free algorithms to be added soon.
 - **Safety Guarantee:** CBFs provide mathematically rigorous guarantees of safety by ensuring the system remains within a defined safe operating region.
 - **Flexibility:** Allows users to specify custom safety constraints and barrier functions to tailor the control behavior to specific needs.
-- **Multi-layer architecure** Allows seamless integration of planners, nominal controller and safety filter controllers.
-- **Efficiency:** Leverages JAX for efficient automatic differentiation and jaxopt for fast quadratic program (QP) solving, enabling real-time control applications.
+- **Multi-layer Architecture:** Allows seamless integration of planners, nominal controllers, and safety filter controllers.
+- **Efficiency:** Leverages JAX for efficient automatic differentiation and jaxopt for fast quadratic program (QP) solving, enabling real-time control applications. Includes optional **JIT compilation** (`use_jit=True`) for high-performance simulation loops.
 - **Code Generation:** Simplifies model creation with automatic code generation for dynamics, controllers, and certificate functions.
 - **Usability:** Includes tutorials and examples for a smooth learning curve and rapid prototyping.
 - **Functional Programming:** Built on functional programming principles, emphasizing data immutability and programmatic determinism. 
@@ -114,11 +114,11 @@ We recommend going through the tutorials in the following order to get familiar 
 
 
 
-## Simulation Arhitecture 
+## Simulation Architecture 
 - Every simulation must define a **planner**, **nominal controller**, and a **controller** where the output of planner is passed to nominal controller and the output of nominal controller is then passed to the controller. The **nominal controller** is expected to designed to generate control input that steers towards a state waypoint. The **controller** is designed to be a filter after nominal controller.
 - The planner can return a state or control input trajectory. If the planner returns a control input trajectory, the nominal controller is skipped and the controller is directly employed. If the planner returns a state trajectory, then the nominal controller is called first to convert the desired state into corresponding control input command which is then passed to the controller.
 
-The flowchart below summarizes the architecure
+The flowchart below summarizes the architecture
 
 ![cbfkit_architecture](https://github.com/user-attachments/assets/9ca32a8d-4fb5-420d-8742-cb6545a65889)
 
@@ -139,196 +139,104 @@ Each function (dynamics, cost, constraint, controller) must follow a specific st
    * Input arguments: t (time), x (state), u_nom (nominal control input), key (for random number generation), data (dictionary containing necessary information)
    * Return arguments: u (control input), data (dictionary containing extra information)
 
-The **data** *(python dictionary)* in planners and controllers is designed to cater to needs of different types of comntrollers and planners. For example, CBF-QP does not need to maintain internal state but planners/controllers like MPC or MPPI need to initialize their initial guess with solution from previous time step when implemented in receding horizon fashion. Since we focus on functional programming for computational efficiency, instead of maintaining this internal state, we pass it as input and output arguments. Controllers like CBF-QP need to maintain any internal state and can have empty dictionary whereas MPPI stores its solution trajectory in the dictionary (and received it back at next time step of the simulation). The **data** must therefore be populated appropriately. In case of planners, the control trajectory must be associated with the key *u_traj* and state trajectory must be associated with the key *x_traj*. See `cbf_clf_qp_generator.py` and `mpi_generator.py` files to understand in more detail.
+The **data** *(python dictionary)* in planners and controllers is designed to cater to needs of different types of comntrollers and planners. For example, CBF-QP does not need to maintain internal state but planners/controllers like MPC or MPPI need to initialize their initial guess with solution from previous time step when implemented in receding horizon fashion. Since we focus on functional programming for computational efficiency, instead of maintaining this internal state, we pass it as input and output arguments. Controllers like CBF-QP need to maintain any internal state and can have empty dictionary whereas MPPI stores its solution trajectory in the dictionary (and received it back at next time step of the simulation). The **data** must therefore be populated appropriately. In case of planners, the control trajectory must be associated with the key *u_traj* and state trajectory must be associated with the key *x_traj*. See `cbf_clf_qp_generator.py` and `mppi_generator.py` files to understand in more detail.
 
-<!-- ## Examples
-Several additional examples of how to use CBFkit to conduct full simulations of arbitrary dynamical systems are provided, including a unicycle robot, fixed-wing aerial vehicle, and more, all of which may be found in the ```examples``` folder. Any file contained within ```examples``` or any of its subdirectories whose name takes the form of ```*main.py``` is an executable example that may be referenced when a user is building their own application.
+## Examples
+Several additional examples of how to use CBFkit to conduct full simulations of arbitrary dynamical systems are provided, including a unicycle robot, fixed-wing aerial vehicle, and more, all of which may be found in the `examples` folder. Any file contained within `examples` or any of its subdirectories whose name takes the form of `*main.py` is an executable example that may be referenced when a user is building their own application.
 
-See below for the script used to simulate a unicycle robot navigating toward a goal set amidst three ellipsoidal obstacles, which may be found at ```examples/unicycle/vanilla_cbf_start_to_goal_main.py```:
+See below for the script used to simulate a unicycle robot navigating toward a goal set amidst three ellipsoidal obstacles using Model Predictive Path Integral (MPPI) control as a planner and a Control Barrier Function (CBF) as a safety filter. This file can be found at `examples/unicycle/start_to_goal/mppi_cbf_start_to_goal_main.py`:
 
 ```python
-import os
 import jax.numpy as jnp
-from jax import Array, jit, lax
-import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
-import cbfkit.simulation.simulator as sim
-from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
-from cbfkit.integration import forward_euler as integrator
-from cbfkit.sensors import perfect as sensor
-from cbfkit.estimators import naive as estimator
+from jax import Array, jit
 
-from cbfkit.controllers.cbf_clf import (
-    stochastic_cbf_clf_qp_controller as cbf_controller,
-)
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import (
-    concatenate_certificates,
-)
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import (
-    zeroing_barriers,
-)
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import (
-    stochastic_barrier,
-)
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import (
-    rectify_relative_degree,
-)
-
-import cbfkit.planners as single_waypoint_planner
 import cbfkit.controllers.mppi as mppi_planner
-
-file_path = os.path.dirname(os.path.abspath(__file__))
-target_directory = file_path + "/tutorials"
-model_name = "mppi_cbf_unicycle_ellipsoidal_obstacles"
-
+import cbfkit.simulation.simulator as sim
+import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
+from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
 
 # Simulation parameters
-tf = 3.0
-dt = 0.01
+tf = 10.0
+dt = 0.05
+file_path = "examples/unicycle/start_to_goal/results/"
 
-# Robot initialization
-unicycle_dynamics = unicycle.plant()
 init_state = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
 desired_state = jnp.array([2.0, 4.0, 0.0, 0.0])
 actuation_constraints = jnp.array([100.0, 100.0])  # Effectively, no control limits
 
-# Dynamics Noise matris
-sigma_matrix = 0.28 * jnp.eye(len(init_state))
-sigma = lambda x: sigma_matrix
+unicycle_dynamics = unicycle.plant(l=1.0)
+# ... (dynamics configuration) ...
 
-# Obstacle setup
-obstacles = [
-    (1.0, 2.0, 0.0),
-    (3.0, 2.0, 0.0),
-    (2.0, 5.0, 0.0),
-    (-1.0, 1.0, 0.0),
-    (0.5, -1.0, 0.0),
-]
-obstacles_array = jnp.asarray(obstacles)
-ellipsoids = [
-    (0.5, 1.5),
-    (0.75, 2.0),
-    (2.0, 0.25),
-    (1.0, 0.75),
-    (0.75, 0.5),
-]
-ellipsoids_array = jnp.asarray(ellipsoids)
-
-# Planner
-target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=desired_state)
-
-# Robot nominal controller
-uniycle_nom_controller = unicycle.controllers.proportional_controller(
-    dynamics=unicycle_dynamics,
-    Kp_pos=1.0,
-    Kp_theta=10.0,
-)
-
-# Barrier constraint functions
-barriers = [
-    rectify_relative_degree(
-        function=unicycle.certificate_functions.barrier_functions.ellipsoidal_obstacle.stochastic_cbf(
-            obs,
-            ell,
-        ),
-        system_dynamics=unicycle_dynamics,
-        state_dim=len(init_state),
-        form="exponential",
-    )(
-        certificate_conditions=stochastic_barrier.right_hand_side(
-            alpha=1.0, beta=1.0
-        ),  # 1.0, 1.0),
-        obstacle=obs,
-        ellipsoid=ell,
-    )
-    for obs, ell in zip(obstacles, ellipsoids)
-]
-barrier_packages = concatenate_certificates(*barriers)
-
-# Initialize CBF controller
-controller = cbf_controller(
-    control_limits=actuation_constraints,
-    nominal_input=uniycle_nom_controller,
-    dynamics_func=unicycle_dynamics,
-    barriers=barrier_packages,
-    sigma=sigma,
-)
-
-
-##### Define MPPI costs
-
-# MPPI stage cost
+# MPPI Cost Functions
 @jit
 def stage_cost(state_and_time: Array, action: Array) -> Array:
-    x_e, y_e = state_and_time[0], state_and_time[1]
-    cost = 2.0 * ((x_e - desired_state[0]) ** 2 + (y_e - desired_state[1]) ** 2)
-    # return cost
+    x, y = state_and_time[0], state_and_time[1]
+    xd, yd = desired_state[0], desired_state[1]
+    dist_sq = (x - xd) ** 2 + (y - yd) ** 2
+    return 10.0 * dist_sq
 
-    def body(i, inputs):
-        cost = inputs
-        x_o, y_o, _ = obstacles_array[i, :]
-        a1, a2 = ellipsoids_array[i, :]
-        d = ((x_e - x_o) / (a1)) ** 2 + ((y_e - y_o) / (a2)) ** 2 - 1.0
-        cost = cost + 2.0 / jnp.max(jnp.array([d, 0.01]))
-        return cost
-
-    cost = lax.fori_loop(0, len(obstacles), body, cost)
-    return cost
-
-# MPPI terminal cost
 @jit
 def terminal_cost(state_and_time: Array, action: Array) -> Array:
-    x_e, y_e = state_and_time[0], state_and_time[1]
-    cost = 10.0 * ((x_e - desired_state[0]) ** 2 + (y_e - desired_state[1]) ** 2)
-    return cost
+    x, y = state_and_time[0], state_and_time[1]
+    xd, yd = desired_state[0], desired_state[1]
+    dist_sq = (x - xd) ** 2 + (y - yd) ** 2
+    return 100.0 * dist_sq
 
-# MPPI specific parameters
+# MPPI Configuration
 mppi_args = {
     "robot_state_dim": 4,
     "robot_control_dim": 2,
-    "prediction_horizon": 80,  # 150,
-    "num_samples": 20000,
+    "prediction_horizon": 50,
+    "num_samples": 500,
     "plot_samples": 30,
-    "time_step": dt * 2.0,
-    "use_GPU": False,
-    "costs_lambda": 0.03,
-    "cost_perturbation": 0.1,
+    "time_step": dt,
+    "use_GPU": True,
+    "costs_lambda": 0.1,
+    "cost_perturbation": 0.5,
 }
 
-# Instantiate MPPI control law
+# Instantiate MPPI Planner
 mppi_local_planner = mppi_planner.vanilla_mppi(
     control_limits=actuation_constraints,
     dynamics_func=unicycle_dynamics,
-    trajectory_cost=None,  # trajectory_cost,
-    stage_cost=stage_cost,  # ,stage_cost,
-    terminal_cost=terminal_cost,  # terminal_cost,
+    trajectory_cost=None,
+    stage_cost=stage_cost,
+    terminal_cost=terminal_cost,
     mppi_args=mppi_args,
 )
 
-# Simulation imports
-u_guess = jnp.append(
-    jnp.ones((mppi_args["prediction_horizon"], 1)),
-    jnp.zeros((mppi_args["prediction_horizon"], 1)),
-    axis=1,
+# ... (Barrier function setup) ...
+
+controller = cbf_controller(
+    control_limits=actuation_constraints,
+    dynamics_func=unicycle_dynamics,
+    barriers=barrier_packages,
 )
 
-# 
-x, u, z, p, controller_data_keys_, controller_data_items_, planner_data_keys_, planner_data_items_ = sim.execute(
+# Simulation Execution (with JIT)
+x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     x0=init_state,
     dt=dt,
     num_steps=int(tf / dt),
     dynamics=unicycle_dynamics,
     integrator=integrator,
-    planner=mppi_local_planner,  # target_setpoint,  # mppi_local_planner,  # None,  # ,
-    nominal_controller=uniycle_nom_controller,
+    planner=mppi_local_planner,
+    nominal_controller=None, 
     controller=controller,
     sensor=sensor,
     estimator=estimator,
-    perturbation=generate_stochastic_perturbation(sigma=sigma, dt=dt),
-    filepath=file_path + "vanilla_cbf_results",
-    planner_data={"u_traj": u_guess, "prev_robustness": None},
-    controller_data={},
+    filepath=file_path + "mppi_cbf_results",
+    verbose=True,
+    planner_data={
+        "u_traj": jnp.zeros((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"])),
+        "x_traj": jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
+        "prev_robustness": None,
+    },
+    use_jit=True,
 )
-``` -->
+```
 
 
 ## ROS2
