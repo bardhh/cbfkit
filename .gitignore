@@ -171,3 +171,6 @@ tasks.md
 tutorials/models
 tutorials/generated
 tutorials/plot_helper
+tutorials/multi_robot_di
+tutorials/van_der_pol_oscillator
+tutorials/multi_augmented_single_integrators
