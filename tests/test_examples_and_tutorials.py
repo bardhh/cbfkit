@@ -15,6 +15,8 @@ SCRIPTS_TO_TEST = [
     # "tutorials/mppi_stl_reach_avoid.py", # Requires complex setup or long run?
     "tutorials/mppi_cbf_reach_avoid.py",
     "tutorials/mppi_stochastic_cbf_reach_avoid.py",
+    "tutorials/code_generation_example.py",
+    "tutorials/multi_robot_double_integrator.py",
 ]
 
 @pytest.mark.parametrize("script_path", SCRIPTS_TO_TEST)

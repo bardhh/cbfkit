@@ -138,13 +138,16 @@ def generate_model(
     model_folder = directory + DELIMITER + model_name
     if not os.path.exists(model_folder):
         create_folder(directory, model_name)
-        create_folder(model_folder, "cost_functions")
-        create_folder(model_folder + DELIMITER + "cost_functions", "stage_cost_function")
-        create_folder(model_folder + DELIMITER + "cost_functions", "terminal_cost_function")
-        create_folder(model_folder, "certificate_functions")
-        create_folder(model_folder + DELIMITER + "certificate_functions", "barrier_functions")
-        create_folder(model_folder + DELIMITER + "certificate_functions", "lyapunov_functions")
-        create_folder(directory + DELIMITER + model_name, "controllers")
+
+    # Create model subfolders
+    create_folder(model_folder, "cost_functions")
+    create_folder(model_folder + DELIMITER + "cost_functions", "stage_cost_function")
+    create_folder(model_folder + DELIMITER + "cost_functions", "terminal_cost_function")
+
+    create_folder(model_folder, "certificate_functions")
+    create_folder(model_folder + DELIMITER + "certificate_functions", "barrier_functions")
+    create_folder(model_folder + DELIMITER + "certificate_functions", "lyapunov_functions")
+    create_folder(directory + DELIMITER + model_name, "controllers")
 
     # Build init contents
     model_init_contents = textwrap.dedent(
@@ -231,7 +234,44 @@ def generate_model(
             create_python_file(barrier_folder, f"barrier_{bb+1}.py", barrier_contents)
             run_black(barrier_folder + DELIMITER + f"barrier_{bb+1}.py")
 
-    # ... (Lyapunov functions - similar structure, TODO: convert) ...
+    # Create lyapunov function contents
+    if lyapunov_funcs is not None:
+        lyapunov_folder = (
+            model_folder + DELIMITER + "certificate_functions" + DELIMITER + "lyapunov_functions"
+        )
+        
+        if type(lyapunov_funcs) is str:
+            n_lfs = 1
+            lyapunov_funcs = [lyapunov_funcs]
+        else:
+            n_lfs = len(lyapunov_funcs)
+
+        lyap_init_contents = "\n".join(
+            [f"from .lyapunov_{ll+1} import clf{ll+1}_package" for ll in range(n_lfs)]
+        )
+        create_python_file(lyapunov_folder, "__init__.py", lyap_init_contents)
+
+        lyapunov_template = jinja_env.get_template("lyapunov.py.j2")
+
+        for ll in range(n_lfs):
+            lf_str = jaxify_expression(lyapunov_funcs[ll])
+
+            clf_args = (
+                "".join([pp + ", " for pp in params["clf"][ll].keys()])
+                if "clf" in params.keys()
+                else ""
+            )
+            clf_args_call = convert_string(clf_args)
+            
+            lyapunov_contents = lyapunov_template.render(
+                n_states=n_states,
+                clf_args=clf_args,
+                clf_args_call=clf_args_call,
+                lyapunov_func=lf_str,
+                index=ll+1
+            )
+            create_python_file(lyapunov_folder, f"lyapunov_{ll+1}.py", lyapunov_contents)
+            run_black(lyapunov_folder + DELIMITER + f"lyapunov_{ll+1}.py")
 
     control_folder = model_folder + DELIMITER + "controllers"
     if nominal_controller is not None:
