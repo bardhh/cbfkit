@@ -218,7 +218,12 @@ barriers = concatenate_certificates(*rectified_barrier_packages)
 # Create Lyapunov Functions with Exponential Stability Derivative Conditions
 lyapunov = concatenate_certificates(
     *[
-        getattr(multi_robot_di.certificate_functions.lyapunov_functions, f"clf{i + 1}_package")(
+        getattr(
+            importlib.import_module(
+                f"tutorials.multi_robot_di.certificate_functions.lyapunov_functions.lyapunov_{i+1}"
+            ),
+            f"clf{i + 1}_package",
+        )(
             certificate_conditions=e_s(c=LYAPUNOV_C),
             goal=goals,
         )
