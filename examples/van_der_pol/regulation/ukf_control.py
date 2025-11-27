@@ -101,7 +101,7 @@ if plot:
         x_lim=(-5, 5),
         y_lim=(-5, 5),
         dt=dt,
-        title="System Behavior",
-        save_animation=save,
-        animation_filename="examples/van_der_pol/ra_fxt_clbf/results/ukf_estimation.gif",
-    )
+            title="System Behavior",
+            save_animation=save,
+            animation_filename="examples/van_der_pol/regulation/results/ukf_estimation.gif",
+        )

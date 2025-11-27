@@ -22,7 +22,7 @@ from examples.unicycle.common.ellipsoidal_obstacle import stochastic_cbf as elli
 # Simulation parameters
 tf = 10.0
 dt = 0.01
-file_path = "examples/unicycle/start_to_goal/results/"
+file_path = "examples/unicycle/reach_goal/results/"
 
 unicycle_dynamics = unicycle.plant()
 init_state = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
