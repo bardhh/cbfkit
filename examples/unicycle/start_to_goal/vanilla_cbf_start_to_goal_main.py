@@ -14,6 +14,9 @@ from cbfkit.certificates.conditions.barrier_conditions import (
     zeroing_barriers,
 )
 
+from cbfkit.utils.user_types import PlannerData
+from examples.unicycle.common.ellipsoidal_obstacle import cbf as ellipsoid_cbf
+
 # Simulation parameters
 tf = 10.0
 dt = 0.01
@@ -52,7 +55,7 @@ ellipsoids = [
 
 barriers = [
     rectify_relative_degree(
-        function=unicycle.certificates.barrier_functions.ellipsoidal_obstacle.cbf(obs, ell),
+        function=ellipsoid_cbf(obs, ell),
         system_dynamics=unicycle_dynamics,
         state_dim=len(init_state),
         form="exponential",
@@ -99,11 +102,10 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     estimator=estimator,
     filepath=file_path + "vanilla_cbf_results",
     verbose=True,
-    planner_data={
-        "u_traj": None,
-        "x_traj": jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
-        "prev_robustness": None,
-    },
+    planner_data=PlannerData(
+        x_traj=jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
+        prev_robustness=None,
+    ),
     use_jit=True,
 )
 

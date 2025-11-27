@@ -104,8 +104,13 @@ def animate(
         _, _, _, _ = states[frame]
         _, _, _, _ = estimates[frame]
 
+        if "sampled_x_traj" in controller_data_keys:
+            key = "sampled_x_traj"
+        else:
+            key = "robot_sampled_states"
+
         robot_sampled_states = controller_data_items[frame][
-            controller_data_keys.index("robot_sampled_states")
+            controller_data_keys.index(key)
         ]
         robot_selected_states = controller_data_items[frame][controller_data_keys.index("x_traj")]
 

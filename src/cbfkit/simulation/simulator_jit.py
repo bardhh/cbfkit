@@ -67,24 +67,13 @@ def simulator_jit(
         # Logic: Check if planner provided u_traj or x_traj
         
         # Check for u_traj (Control Trajectory)
-        # We assume if 'u_traj' key exists and is an array, we might use it.
-        # But checking 'is not None' on a Tracer is tricky. 
-        # We rely on the structure being static.
-        
-        # We implement the priority:
-        # 1. Planner u_traj (if available) -> u_nom = u_planner (which is usually next step of u_traj)
-        # 2. Planner x_traj (if available) -> u_nom = nominal_controller(..., x_des)
-        # 3. Default -> u_nom = nominal_controller(..., None)
-        
-        # Implementation Note:
-        # In the Python loop, u_planner is returned by planner(). 
-        # If planner is active, u_planner IS the next control input from the trajectory.
+        # We assume if 'u_traj' field exists and is not None, we might use it.
+        # We rely on the structure being static (determined by initial_planner_data).
         
         use_planner_u = False
         if planner is not None:
             # If planner exists, u_planner is valid.
-            # In simulator.py: if planner_data.get("u_traj") is not None: u = u_planner
-            if "u_traj" in planner_data and planner_data["u_traj"] is not None:
+            if planner_data.u_traj is not None:
                 use_planner_u = True
         
         if use_planner_u:
@@ -92,11 +81,11 @@ def simulator_jit(
         else:
             # Check x_traj
             use_x_traj = False
-            if "x_traj" in planner_data and planner_data["x_traj"] is not None:
+            if planner_data.x_traj is not None:
                 use_x_traj = True
                 
             if use_x_traj:
-                traj = planner_data["x_traj"]
+                traj = planner_data.x_traj
                 # Calculate index
                 idx = jnp.round(t / dt).astype(int)
                 idx = jnp.clip(idx, 0, traj.shape[1] - 1)

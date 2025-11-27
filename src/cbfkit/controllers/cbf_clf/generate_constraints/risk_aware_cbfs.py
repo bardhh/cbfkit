@@ -33,7 +33,7 @@ def generate_compute_ra_cbf_constraints(
     """Placeholder. Theory still in development."""
     compute_barrier_values = generate_compute_certificate_values(barriers)
 
-    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable = unpack_for_cbf(
+    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
 
@@ -69,6 +69,8 @@ def generate_compute_ra_cbf_constraints(
             # if tunable:
             #     a_cbf = a_cbf.at[:, n_con:n_bfs].set(-bc_x)
             #     b_cbf = b_cbf.at[:].set(-dbf_t - jnp.matmul(bj_x, dyn_f) - traces)
+            # elif relaxable:
+            #     a_cbf = a_cbf.at[:, n_con:n_con+n_bfs].set(-1.0)
 
             # violated = lax.cond(jnp.any(bf_x > 1), lambda _fake: True, lambda _fake: False, 0)
 
@@ -93,7 +95,7 @@ def generate_compute_estimate_feedback_ra_cbf_constraints(
     #! To Do: docstring
     """
     compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
-    n_con, n_bfs, _n_lfs, a_clf, b_clf, relaxable = unpack_for_cbf(
+    n_con, n_bfs, _n_lfs, a_clf, b_clf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
 
@@ -140,11 +142,13 @@ def generate_compute_estimate_feedback_ra_cbf_constraints(
             b_clf = b_clf.at[:].set(
                 -dlf_t - jnp.matmul(lj_x, dyn_f) - traces - estimate_feedback_term + lc_x
             )
-            if relaxable:
+            if tunable:
                 a_clf = a_clf.at[:, -n_bfs:].set(-lc_x)
                 b_clf = b_clf.at[:].set(
                     -dlf_t - jnp.matmul(lj_x, dyn_f) - traces - estimate_feedback_term
                 )
+            elif relaxable:
+                a_clf = a_clf.at[:, -n_bfs:].set(-1.0)
 
             complete = lax.cond(jnp.all(lf_x < 0), lambda _fake: True, lambda _fake: False, 0)
 

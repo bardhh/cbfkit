@@ -3,8 +3,7 @@ from jax import jit, Array
 from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
 from .constants import *
 
-
-def plant(**kwargs) -> DynamicsCallable:
+def plant({{ dynamics_args }}**kwargs) -> DynamicsCallable:
     """
     Returns a function that represents the plant model,
     which computes the drift vector 'f' and control matrix 'g' based on the given state.
@@ -35,23 +34,8 @@ def plant(**kwargs) -> DynamicsCallable:
         Returns:
             dynamics (DynamicsCallable): takes state as input and returns dynamics components f, g
         """
-        f = jnp.array([0, 0, -0.5, 0, 0.3, 0.3, 0.2, 0.2, -0.4, -0.2, 0, 0])
-        g = jnp.array(
-            [
-                [1, 0],
-                [0, 1],
-                [0, 0],
-                [0, 0],
-                [0, 0],
-                [0, 0],
-                [0, 0],
-                [0, 0],
-                [0, 0],
-                [0, 0],
-                [0, 0],
-                [0, 0],
-            ]
-        )
+        f = jnp.array({{ drift_dynamics }})
+        g = jnp.array({{ control_matrix }})
 
         return f, g
 

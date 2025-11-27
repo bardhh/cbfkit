@@ -1,4 +1,4 @@
 """
 docstring
 """
-from .ellipsoidal_obstacle import obstacle_ca
+# from .ellipsoidal_obstacle import obstacle_ca

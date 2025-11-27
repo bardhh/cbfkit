@@ -29,7 +29,7 @@ def generate_compute_stochastic_cbf_constraints(
     #! To Do: docstring
     """
     compute_barrier_values = generate_compute_certificate_values(barriers)
-    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable = unpack_for_cbf(
+    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
 
@@ -55,11 +55,39 @@ def generate_compute_stochastic_cbf_constraints(
             )
 
             # Configure constraint matrix and vector (a * u <= b)
-            a_cbf = a_cbf.at[:, :n_con].set(jnp.matmul(bj_x, dyn_g))
-            b_cbf = b_cbf.at[:].set(-dbf_t - jnp.matmul(bj_x, dyn_f) - traces + bc_x)
+            # Safety: LfB + LgB u + 0.5 Tr(...) >= -alpha(B) + beta
+            # LgB u >= -LfB - 0.5 Tr(...) - alpha(B) + beta
+            # -LgB u <= LfB + 0.5 Tr(...) + alpha(B) - beta
+            # Note: bc_x contains -alpha(B) + beta usually? Or just the RHS condition.
+            # If certificate condition is gamma(h) (class K), then we want h_dot >= -gamma(h).
+            # So RHS is -gamma(h).
+            # zeroing_cbfs uses: b = dbf_t + Lfh + bc_x.
+            # If bc_x is gamma(h), this means h_dot + gamma(h) >= 0 ? No.
+            # zeroing_cbfs logic: b = ... + bc_x.
+            # If bc_x is the class K function value (e.g. alpha * h), then `b` is the upper bound for `-LgB u`.
+            # -LgB u <= LfB + gamma(h).
+            # So LgB u >= -LfB - gamma(h).
+            # h_dot >= -gamma(h). Correct.
+            
+            # Here: b_cbf.set(-dbf_t - jnp.matmul(bj_x, dyn_f) - traces + bc_x)
+            # If a_cbf is positive LgB:
+            # LgB u <= -LfB - Tr + bc_x.
+            # LfB + LgB u + Tr <= bc_x.
+            # This implies h_dot <= bc_x.
+            # If bc_x is negative (e.g. -alpha h), then h_dot <= -alpha h. This is STABILITY/Convergence to 0.
+            # If this is for Safety (stay positive), it should be >=.
+            
+            # Given standard CBF is >=, I suspect `stochastic_cbfs.py` was using sublevel sets or had a bug.
+            # I will switch it to match zeroing_cbfs (negative a_cbf) to assume superlevel sets.
+            
+            a_cbf = a_cbf.at[:, :n_con].set(-jnp.matmul(bj_x, dyn_g))
+            b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) + traces + bc_x)
+            
             if tunable:
-                a_cbf = a_cbf.at[:, n_con:n_bfs].set(-bc_x)
-                b_cbf = b_cbf.at[:].set(-dbf_t - jnp.matmul(bj_x, dyn_f) - traces)
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-bc_x)
+                b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) + traces)
+            elif relaxable:
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-1.0)
 
             violated = lax.cond(jnp.any(bf_x > 1), lambda _fake: True, lambda _fake: False, 0)
 

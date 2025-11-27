@@ -40,6 +40,7 @@ from cbfkit.utils.user_types import (
     State,
     Control,
     Key,
+    ControllerData,
 )
 from cbfkit.optimization.quadratic_program import solve as solve_qp
 from .generate_constraints import (
@@ -89,13 +90,18 @@ def cbf_clf_qp_generator(
         complete = False
         n_con = len(control_limits)
 
-        if "tunable_class_k" not in kwargs:
-            n_bfs = 0
-        elif kwargs["tunable_class_k"]:
+        if "tunable_class_k" in kwargs and kwargs["tunable_class_k"]:
             b_funcs, _, _, _, _ = barriers
             n_bfs = len(b_funcs)
             slack_cbf = kwargs.get("slack_bound_cbf", 100.0)
             control_limits = jnp.hstack([control_limits, slack_cbf * jnp.ones((n_bfs,))])
+        elif "relaxable_cbf" in kwargs and kwargs["relaxable_cbf"]:
+            b_funcs, _, _, _, _ = barriers
+            n_bfs = len(b_funcs)
+            slack_cbf = kwargs.get("slack_bound_cbf", 1e4)
+            control_limits = jnp.hstack([control_limits, slack_cbf * jnp.ones((n_bfs,))])
+        else:
+            n_bfs = 0
 
         if "relaxable_clf" not in kwargs:
             n_lfs = 0
@@ -143,7 +149,7 @@ def cbf_clf_qp_generator(
         # ) -> ControllerCallableReturns:
         @jit
         def controller(
-            t: float, x: State, u_nom: Array, key: Key, data: list
+            t: float, x: State, u_nom: Array, key: Key, data: ControllerData
         ) -> ControllerCallableReturns:
             """JIT-compatible portion of the CBF-CLF-QP control law.
 
@@ -159,7 +165,10 @@ def cbf_clf_qp_generator(
             nonlocal complete
 
             if n_bfs > 0:
-                u_nom = jnp.hstack([u_nom, jnp.ones((n_bfs,))])
+                if "tunable_class_k" in kwargs and kwargs["tunable_class_k"]:
+                    u_nom = jnp.hstack([u_nom, jnp.ones((n_bfs,))])
+                else:
+                    u_nom = jnp.hstack([u_nom, jnp.zeros((n_bfs,))])
             if n_lfs > 0:
                 u_nom = jnp.hstack([u_nom, jnp.zeros((n_lfs,))])
 
@@ -193,15 +202,15 @@ def cbf_clf_qp_generator(
             error = lax.cond(status, lambda _fake: False, lambda _fake: True, 0)
 
             # logging data
-            data = {
-                "error": error,
-                "error_data": status,
-                "complete": complete,
-                "sol": jnp.array(sol),
-                "u": u,
-                "u_nom": u_nom,
-                "sub_data": sub_data,
-            }
+            data = ControllerData(
+                error=error,
+                error_data=status,
+                complete=complete,
+                sol=jnp.array(sol),
+                u=u,
+                u_nom=u_nom,
+                sub_data=sub_data,
+            )
 
             return u, data
 

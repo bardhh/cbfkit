@@ -3,10 +3,12 @@ from jax import Array, jit
 
 import cbfkit.controllers.mppi as mppi_planner
 import cbfkit.simulation.simulator as sim
-import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
+from cbfkit.systems.unicycle.models.accel_unicycle import plant
+from cbfkit.utils.user_types import PlannerData
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
+from examples.unicycle.common.ellipsoidal_obstacle import cbf as ellipsoid_cbf
 
 # Simulation parameters
 tf = 10.0
@@ -17,12 +19,7 @@ init_state = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
 desired_state = jnp.array([2.0, 4.0, 0.0, 0.0])
 actuation_constraints = jnp.array([100.0, 100.0])  # Effectively, no control limits
 
-unicycle_dynamics = unicycle.plant(l=1.0)
-unicycle_dynamics.a_max = actuation_constraints[0]  # α_max
-unicycle_dynamics.omega_max = actuation_constraints[1]  # ω_max
-unicycle_dynamics.v_max = 1.0
-unicycle_dynamics.goal_tol = 0.25
-
+unicycle_dynamics = plant(l=1.0)
 
 # MPPI Cost Functions
 @jit
@@ -86,7 +83,7 @@ ellipsoids = [
 
 barriers = [
     rectify_relative_degree(
-        function=unicycle.certificates.barrier_functions.ellipsoidal_obstacle.cbf(obs, ell),
+        function=ellipsoid_cbf(obs, ell),
         system_dynamics=unicycle_dynamics,
         state_dim=len(init_state),
         form="exponential",
@@ -108,6 +105,8 @@ controller = cbf_controller(
 
 from cbfkit.estimators import naive as estimator
 
+from cbfkit.utils.user_types import PlannerData
+
 # Simulation imports
 from cbfkit.integration import forward_euler as integrator
 from cbfkit.sensors import perfect as sensor
@@ -125,11 +124,11 @@ x, u, z, p, dkeys, dvals, planner_data_keys, planner_data_values = sim.execute(
     estimator=estimator,
     filepath=file_path + "mppi_cbf_results",
     verbose=True,
-    planner_data={
-        "u_traj": jnp.zeros((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"])),
-        "x_traj": jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
-        "prev_robustness": None,
-    },
+    planner_data=PlannerData(
+        u_traj=jnp.zeros((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"])),
+        x_traj=jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
+        prev_robustness=None,
+    ),
     use_jit=True,
 )
 

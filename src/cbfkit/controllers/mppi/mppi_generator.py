@@ -55,6 +55,7 @@ from cbfkit.utils.user_types import (
     StageCostCallable,
     TerminalCostCallable,
     Key,
+    PlannerData,
 )
 
 
@@ -110,7 +111,7 @@ def mppi_generator() -> MppiGenerator:
 
         # TODO: define State, Control Trajectory types??
         def process(
-            t: float, x: State, u_nom: Control, key: Key, data: list
+            t: float, x: State, u_nom: Control, key: Key, data: PlannerData
         ) -> ControllerCallableReturns:
             """MPPI control law.
 
@@ -125,7 +126,9 @@ def mppi_generator() -> MppiGenerator:
             return jittable_process(t, x, key, data)
 
         @jit
-        def jittable_process(t: float, x: State, key: Key, data: list) -> ControllerCallableReturns:
+        def jittable_process(
+            t: float, x: State, key: Key, data: PlannerData
+        ) -> ControllerCallableReturns:
             """JIT-compatible portion of the MPPI control law.
 
             Args:
@@ -139,15 +142,15 @@ def mppi_generator() -> MppiGenerator:
             nonlocal complete
 
             # Solve MPPI
-            xs = data.get("xs", x.reshape(-1, 1))
-            prev_robustness = data.get("prev_robustness", None)
-            
+            xs = data.xs if data.xs is not None else x.reshape(-1, 1)
+            prev_robustness = data.prev_robustness
+
             (
                 robot_sampled_states,
                 robot_selected_states,
                 robot_action,
                 action_trajectory,
-            ) = mppi(key, data["u_traj"], x.reshape(-1, 1), t, xs, prev_robustness)
+            ) = mppi(key, data.u_traj, x.reshape(-1, 1), t, xs, prev_robustness)
 
             # Saturate the solution if necessary
             u = jnp.clip(robot_action, -control_limits[:n_con], control_limits[:n_con]).reshape(
@@ -155,15 +158,12 @@ def mppi_generator() -> MppiGenerator:
             )
 
             # logging data
-            data = {
-                "complete": complete,  # TODO: what is complete
-                "u": u,
-                "robot_sampled_states": robot_sampled_states,
-                "x_traj": robot_selected_states,
-                "u_traj": action_trajectory,
-                "xs": xs,
-                "prev_robustness": prev_robustness,
-            }
+            data = data._replace(
+                sampled_x_traj=robot_sampled_states,
+                x_traj=robot_selected_states,
+                u_traj=action_trajectory,
+                prev_robustness=prev_robustness,
+            )
 
             return u, data
 

@@ -30,7 +30,7 @@ def generate_compute_robust_cbf_constraints(
     #! To Do: docstring
     """
     compute_barrier_values = generate_compute_certificate_values(barriers)
-    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable = unpack_for_cbf(
+    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
 
@@ -63,8 +63,10 @@ def generate_compute_robust_cbf_constraints(
             a_cbf = a_cbf.at[:, :n_con].set(-jnp.matmul(bj_x, dyn_g))
             b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) - robustness_term(bj_x) + bc_x)
             if tunable:
-                a_cbf = a_cbf.at[:, n_con:n_bfs].set(-bc_x)
-                b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f))
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-bc_x)
+                b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) - robustness_term(bj_x))
+            elif relaxable:
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-1.0)
 
             violated = lax.cond(jnp.any(bf_x < 0), lambda _fake: True, lambda _fake: False, 0)
 

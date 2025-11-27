@@ -68,9 +68,13 @@ uniycle_nom_controller = unicycle.controllers.proportional_controller(
 )
 
 # Barrier constraint functions
+from examples.unicycle.common.ellipsoidal_obstacle import stochastic_cbf as ellipsoid_cbf
+
+# ...
+
 barriers = [
     rectify_relative_degree(
-        function=unicycle.certificates.barrier_functions.ellipsoidal_obstacle.stochastic_cbf(
+        function=ellipsoid_cbf(
             obs,
             ell,
         ),
@@ -78,9 +82,7 @@ barriers = [
         state_dim=len(init_state),
         form="exponential",
     )(
-        certificate_conditions=stochastic_barrier.right_hand_side(
-            alpha=1.0, beta=1.0
-        ),  # 1.0, 1.0),
+        certificate_conditions=stochastic_barrier.right_hand_side(alpha=1.0, beta=1.0),
         obstacle=obs,
         ellipsoid=ell,
     )
