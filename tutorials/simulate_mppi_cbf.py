@@ -1,12 +1,13 @@
 import os
-from jax import Array, jit
-import jax.numpy as jnp
-from cbfkit.codegen.create_new_system import generate_model
 
+import jax.numpy as jnp
+from jax import Array, jit
+
+from cbfkit.codegen.create_new_system import generate_model
 
 # Simulation Parameters
 file_path = os.path.dirname(os.path.abspath(__file__))
-target_directory = file_path + "/tutorials"
+target_directory = file_path + "/generated"
 model_name = "mppi_cbf_si"
 SAVE_FILE = target_directory + f"/{model_name}/simulation_data"
 DT = 0.05  # 1e-2
@@ -67,24 +68,23 @@ generate_model.generate_model(
     params=params,
 )
 
+import cbfkit.controllers.cbf_clf as cbf_clf_controllers
+import cbfkit.controllers.mppi as mppi_planner
+import cbfkit.planners as single_waypoint_planner
+
 # Import controllers and planners
 import cbfkit.simulation.simulator as sim
-import cbfkit.controllers_and_planners.model_based.cbf_clf_controllers as cbf_clf_controllers
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
-    concatenate_certificates,
-)
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
-    zeroing_barriers,
-)
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
-    e_s,
-)
-import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
-import cbfkit.controllers_and_planners.waypoint as single_waypoint_planner
-from cbfkit.sensors import perfect as sensor
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import e_s
 from cbfkit.estimators import naive as estimator
+from cbfkit.sensors import perfect as sensor
 from cbfkit.utils.numerical_integration import forward_euler as integrator
-from tutorials import mppi_cbf_si
+
+try:
+    from tutorials.generated import mppi_cbf_si
+except ImportError:
+    from generated import mppi_cbf_si
 
 # Load dynamics, cost functions and constraint functions that were auto-generated
 dynamics = mppi_cbf_si.plant()
@@ -111,7 +111,7 @@ mppi_args = {
     "robot_state_dim": 2,
     "robot_control_dim": 2,
     "prediction_horizon": 80,
-    "num_samples": 20000,
+    "num_samples": 1000,
     "plot_samples": 30,
     "time_step": DT,
     "use_GPU": False,
@@ -167,11 +167,15 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
         "u_traj": 3 * jnp.ones((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"]))
     },
     controller_data={},
+    use_jit=True,
 )
 
 plot = True
 if plot:
-    from tutorials.plot_helper.plot_mppi_ffmpeg import animate
+    try:
+        from tutorials.plot_helper.plot_mppi_ffmpeg import animate
+    except ImportError:
+        from plot_helper.plot_mppi_ffmpeg import animate
 
     animate(
         states=x_,

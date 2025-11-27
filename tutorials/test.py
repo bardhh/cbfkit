@@ -1,6 +1,7 @@
 from jax import Array, jit
 import jax.numpy as jnp
 import numpy as np
+import functools
 
 target_directory = "./tutorials"
 model_name = "multi_augmented_single_integrators"
@@ -40,20 +41,20 @@ for i in range(num_robots):
 import cbfkit.simulation.simulator as sim
 
 # Access to CBF-CLF-QP control law
-import cbfkit.controllers_and_planners.model_based.cbf_clf_controllers as cbf_clf_controllers
+import cbfkit.controllers.cbf_clf as cbf_clf_controllers
 
 # Necessary housekeeping for using multiple CBFs/CLFs
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.certificates import (
     concatenate_certificates,
 )
 
 # Suite of zeroing barrier function derivative conditions (forms of Class K functions)
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
+from cbfkit.certificates.conditions.barrier_conditions import (
     zeroing_barriers,
 )
 
 # Exponentially stable derivative condition for CLF
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
     e_s,
 )
 
@@ -66,33 +67,22 @@ from cbfkit.estimators import naive as estimator
 # Use forward-Euler numerical integration scheme
 from cbfkit.utils.numerical_integration import forward_euler as integrator
 
-from tutorials import multi_augmented_single_integrators
+import tutorials.multi_augmented_single_integrators as multi_augmented_single_integrators
 
 # Simulation Parameters
 SAVE_FILE = f"tutorials/{model_name}/simulation_data"  # automatically uses .csv format
 
 bs = []
 for i in range(len(state_constraint_funcs)):
-    func_name = (
-        "multi_augmented_single_integrators.certificate_functions.barrier_functions."
-        + "cbf"
-        + str(i + 1)
-        + "_package"
-    )
-    exec(f"func={func_name}")
+    func_path = f"certificate_functions.barrier_functions.cbf{i + 1}_package"
+    func = functools.reduce(getattr, func_path.split("."), multi_augmented_single_integrators)
     bs.append(func(certificate_conditions=zeroing_barriers.linear_class_k(alpha=1.0)))
 barriers = concatenate_certificates(*bs)
 
 ls = []
 for i in range(len(lyapunov_functions)):
-    func_name = (
-        "multi_augmented_single_integrators.certificate_functions.lyapunov_functions."
-        + "clf"
-        + str(i + 1)
-        + "_package"
-    )
-    exec(f"func={func_name}")
-    # func = getattr(__main__, func_name)
+    func_path = f"certificate_functions.lyapunov_functions.clf{i + 1}_package"
+    func = functools.reduce(getattr, func_path.split("."), multi_augmented_single_integrators)
     ls.append(
         func(
             certificate_conditions=e_s(c=2.0),
@@ -114,7 +104,7 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
     relaxable_clf=True,
 )
 
-x, _u, _z, _p, dkeys, dvalues = sim.execute(
+x, _u, _z, _p, dkeys, dvalues, pkeys, pvalues = sim.execute(
     x0=INITIAL_STATE,
     dt=DT,
     num_steps=N_STEPS,
@@ -124,4 +114,5 @@ x, _u, _z, _p, dkeys, dvalues = sim.execute(
     sensor=sensor,
     estimator=estimator,  # perturbation=generate_stochastic_perturbation(sigma=sigma, dt=DT),
     filepath=SAVE_FILE,
+    use_jit=True,
 )

@@ -157,24 +157,24 @@ from cbfkit.integration import forward_euler as integrator
 from cbfkit.sensors import perfect as sensor
 from cbfkit.estimators import naive as estimator
 
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers import (
+from cbfkit.controllers.cbf_clf import (
     stochastic_cbf_clf_qp_controller as cbf_controller,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.controllers.cbf_clf.utils.certificate_packager import (
     concatenate_certificates,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
+from cbfkit.controllers.cbf_clf.utils.barrier_conditions import (
     zeroing_barriers,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
+from cbfkit.controllers.cbf_clf.utils.barrier_conditions import (
     stochastic_barrier,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.rectify_relative_degree import (
+from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import (
     rectify_relative_degree,
 )
 
-import cbfkit.controllers_and_planners.waypoint as single_waypoint_planner
-import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
+import cbfkit.planners as single_waypoint_planner
+import cbfkit.controllers.mppi as mppi_planner
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/tutorials"

@@ -252,31 +252,31 @@ def generate_sigma_points(
         if scheme == 0:
             # Calculate the first set of sigma points in one line using broadcasting
             sigma_points = sigma_points.at[indices_1, :].set(
-                z + alpha * jnp.sqrt(kappa) * A[:, indices_1]
+                z + alpha * jnp.sqrt(kappa) * A[:, indices_1 - 1].T
             )
 
             # Calculate the second set of sigma points in one line using broadcasting
             sigma_points = sigma_points.at[indices_2, :].set(
-                z - alpha * jnp.sqrt(kappa) * A[:, indices_2]
+                z - alpha * jnp.sqrt(kappa) * A[:, indices_2 - L - 1].T
             )
 
         elif scheme == 1:
             # Calculate the first set of sigma points in one line using broadcasting
             sigma_points = sigma_points.at[indices_1, :].set(
-                z + jnp.sqrt(L / (1 - Wa[0])) * A[:, indices_1]
+                z + jnp.sqrt(L / (1 - Wa[0])) * A[:, indices_1 - 1].T
             )
 
             # Calculate the second set of sigma points in one line using broadcasting
             sigma_points = sigma_points.at[indices_2, :].set(
-                z - jnp.sqrt(L / (1 - Wa[0])) * A[:, indices_2]
+                z - jnp.sqrt(L / (1 - Wa[0])) * A[:, indices_2 - L - 1].T
             )
 
         elif scheme == 2:
             # Calculate the first set of sigma points in one line using broadcasting
-            sigma_points = sigma_points.at[indices_1, :].set(z + jnp.sqrt(3) * A[:, indices_1])
+            sigma_points = sigma_points.at[indices_1, :].set(z + jnp.sqrt(3) * A[:, indices_1 - 1].T)
 
             # Calculate the second set of sigma points in one line using broadcasting
-            sigma_points = sigma_points.at[indices_2, :].set(z - jnp.sqrt(3) * A[:, indices_2])
+            sigma_points = sigma_points.at[indices_2, :].set(z - jnp.sqrt(3) * A[:, indices_2 - L - 1].T)
 
         return sigma_points, Wa, Wc
 

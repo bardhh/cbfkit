@@ -2,6 +2,6 @@
 docstring
 """
 
-from .plant import plant, plant_jacobians
-from . import certificate_functions
+from .dynamics import plant, plant_jacobians
+from . import certificates
 from . import controllers

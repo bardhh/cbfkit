@@ -1,9 +1,9 @@
 """
-Test Module for cbfkit.controllers_and_planners.model_based.cbf_clf_controllers control laws.
+Test Module for cbfkit.controllers.cbf_clf control laws.
 =========================
 
 This module contains unit tests for functionalities in 'cbf_clf_controllers'
-from 'cbfkit.controllers_and_planners.model_based'.
+from 'cbfkit.controllers.cbf_clf'.
 
 Tests
 -----
@@ -27,11 +27,11 @@ To run all tests in this module (from the root of the repository):
 import unittest
 import jax.numpy as jnp
 from jax import random
-import cbfkit.controllers_and_planners.model_based.cbf_clf_controllers as cbf_clf_controllers
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
+import cbfkit.controllers.cbf_clf as cbf_clf_controllers
+from cbfkit.certificates import (
     concatenate_certificates,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.risk_aware_params import (
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
     RiskAwareParams,
 )
 
@@ -77,7 +77,6 @@ NOMINAL_CONTROLLER = unicycle.controllers.proportional_controller(
     dynamics=DYNAMICS,
     Kp_pos=1.0,
     Kp_theta=0.01,
-    desired_state=GOAL,
 )
 RISK_AWARE_CBF_PARAMS = RiskAwareParams(
     t_max=5.0,
@@ -105,16 +104,16 @@ class TestCbfClfQpControllers(unittest.TestCase):
 
     def test_setup_risk_aware_cbf_clf_qp_control_law(self):
         """Tests that the Risk-Aware (RA)-CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.risk_aware_barrier import (
+        from cbfkit.certificates.conditions.barrier_conditions.risk_aware_barrier import (
             right_hand_side,
         )
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
         # Barrier functions
         bars = [
-            unicycle.certificate_functions.barrier_functions.obstacle_ca(
+            unicycle.certificates.barrier_functions.obstacle_ca(
                 certificate_conditions=right_hand_side(RISK_AWARE_CBF_PARAMS.p_bound, ALPHA),
                 obstacle=jnp.array([obs[0], obs[1], 0.0]),
                 ellipsoid=jnp.array([ell[0], ell[1]]),
@@ -124,7 +123,7 @@ class TestCbfClfQpControllers(unittest.TestCase):
         BARRIERS = concatenate_certificates(*bars)
 
         # Lyapunov functions
-        lyaps = unicycle.certificate_functions.lyapunov_functions.reach_goal(
+        lyaps = unicycle.certificates.lyapunov_functions.reach_goal(
             certificate_conditions=e_s(c=2.0),
             goal=GOAL,
             radius=RAD,
@@ -135,7 +134,6 @@ class TestCbfClfQpControllers(unittest.TestCase):
         # Create controller
         controller = cbf_clf_controllers.risk_aware_cbf_clf_qp_controller(
             control_limits=ACTUATION_LIMITS,
-            nominal_input=NOMINAL_CONTROLLER,
             dynamics_func=DYNAMICS,
             barriers=BARRIERS,
             lyapunovs=LYAPUNOVS,
@@ -143,22 +141,23 @@ class TestCbfClfQpControllers(unittest.TestCase):
             ra_clf_params=RISK_AWARE_CLF_PARAMS,
         )
 
-        u, _ = controller(0.0, jnp.zeros((N,)))
+        u_nom, _ = NOMINAL_CONTROLLER(0.0, jnp.zeros((N,)), KEY, GOAL)
+        u, _ = controller(0.0, jnp.zeros((N,)), u_nom, KEY, {})
 
         self.assertTrue(u.shape == (M,))
 
     def test_setup_risk_aware_path_integral_cbf_clf_qp_control_law(self):
         """Tests that the Risk-Aware Path Integral (RA-PI)-CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.path_integral_barrier import (
+        from cbfkit.certificates.conditions.barrier_conditions.path_integral_barrier import (
             right_hand_side,
         )
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
         # Barrier functions
         bars = [
-            unicycle.certificate_functions.barrier_functions.obstacle_ca(
+            unicycle.certificates.barrier_functions.obstacle_ca(
                 certificate_conditions=right_hand_side(
                     RISK_AWARE_CBF_PARAMS.p_bound,
                     RISK_AWARE_CBF_PARAMS.gamma,
@@ -173,7 +172,7 @@ class TestCbfClfQpControllers(unittest.TestCase):
         BARRIERS = concatenate_certificates(*bars)
 
         # Lyapunov functions
-        lyaps = unicycle.certificate_functions.lyapunov_functions.reach_goal(
+        lyaps = unicycle.certificates.lyapunov_functions.reach_goal(
             certificate_conditions=e_s(c=2.0),
             goal=GOAL,
             radius=RAD,
@@ -184,7 +183,6 @@ class TestCbfClfQpControllers(unittest.TestCase):
         # Create controller
         controller = cbf_clf_controllers.risk_aware_path_integral_cbf_clf_qp_controller(
             control_limits=ACTUATION_LIMITS,
-            nominal_input=NOMINAL_CONTROLLER,
             dynamics_func=DYNAMICS,
             barriers=BARRIERS,
             lyapunovs=LYAPUNOVS,
@@ -192,22 +190,23 @@ class TestCbfClfQpControllers(unittest.TestCase):
             ra_clf_params=RISK_AWARE_CLF_PARAMS,
         )
 
-        u, _ = controller(0.0, jnp.zeros((N,)))
+        u_nom, _ = NOMINAL_CONTROLLER(0.0, jnp.zeros((N,)), KEY, GOAL)
+        u, _ = controller(0.0, jnp.zeros((N,)), u_nom, KEY, {})
 
         self.assertTrue(u.shape == (M,))
 
     def test_setup_robust_cbf_clf_qp_control_law(self):
         """Tests that the Robust (R)-CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+        from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import (
             linear_class_k,
         )
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
         # Barrier functions
         bars = [
-            unicycle.certificate_functions.barrier_functions.obstacle_ca(
+            unicycle.certificates.barrier_functions.obstacle_ca(
                 certificate_conditions=linear_class_k(alpha=1.0),
                 obstacle=jnp.array([obs[0], obs[1], 0.0]),
                 ellipsoid=jnp.array([ell[0], ell[1]]),
@@ -217,7 +216,7 @@ class TestCbfClfQpControllers(unittest.TestCase):
         BARRIERS = concatenate_certificates(*bars)
 
         # Lyapunov functions
-        lyaps = unicycle.certificate_functions.lyapunov_functions.reach_goal(
+        lyaps = unicycle.certificates.lyapunov_functions.reach_goal(
             certificate_conditions=e_s(c=2.0),
             goal=GOAL,
             radius=RAD,
@@ -228,7 +227,6 @@ class TestCbfClfQpControllers(unittest.TestCase):
         # Create controller
         controller = cbf_clf_controllers.robust_cbf_clf_qp_controller(
             control_limits=ACTUATION_LIMITS,
-            nominal_input=NOMINAL_CONTROLLER,
             dynamics_func=DYNAMICS,
             barriers=BARRIERS,
             lyapunovs=LYAPUNOVS,
@@ -236,22 +234,23 @@ class TestCbfClfQpControllers(unittest.TestCase):
             disturbance_norm_bound=10.0,
         )
 
-        u, _ = controller(0.0, jnp.zeros((N,)))
+        u_nom, _ = NOMINAL_CONTROLLER(0.0, jnp.zeros((N,)), KEY, GOAL)
+        u, _ = controller(0.0, jnp.zeros((N,)), u_nom, KEY, {})
 
         self.assertTrue(u.shape == (M,))
 
     def test_setup_stochastic_cbf_clf_qp_control_law(self):
         """Tests that the Stochastic (S)-CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.stochastic_barrier import (
+        from cbfkit.certificates.conditions.barrier_conditions.stochastic_barrier import (
             right_hand_side,
         )
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
         # Barrier functions
         bars = [
-            unicycle.certificate_functions.barrier_functions.obstacle_ca(
+            unicycle.certificates.barrier_functions.obstacle_ca(
                 certificate_conditions=right_hand_side(
                     alpha=1.0,
                     beta=0.25,
@@ -264,7 +263,7 @@ class TestCbfClfQpControllers(unittest.TestCase):
         BARRIERS = concatenate_certificates(*bars)
 
         # Lyapunov functions
-        lyaps = unicycle.certificate_functions.lyapunov_functions.reach_goal(
+        lyaps = unicycle.certificates.lyapunov_functions.reach_goal(
             certificate_conditions=e_s(c=2.0),
             goal=GOAL,
             radius=RAD,
@@ -275,29 +274,29 @@ class TestCbfClfQpControllers(unittest.TestCase):
         # Create controller
         controller = cbf_clf_controllers.stochastic_cbf_clf_qp_controller(
             control_limits=ACTUATION_LIMITS,
-            nominal_input=NOMINAL_CONTROLLER,
             dynamics_func=DYNAMICS,
             barriers=BARRIERS,
             lyapunovs=LYAPUNOVS,
             sigma=lambda x: Q,
         )
 
-        u, _ = controller(0.0, jnp.zeros((N,)))
+        u_nom, _ = NOMINAL_CONTROLLER(0.0, jnp.zeros((N,)), KEY, GOAL)
+        u, _ = controller(0.0, jnp.zeros((N,)), u_nom, KEY, {})
 
         self.assertTrue(u.shape == (M,))
 
     def test_setup_vanilla_cbf_clf_qp_control_law(self):
         """Tests that the vanilla CBF-CLF-QP controller is set up correctly."""
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+        from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import (
             linear_class_k,
         )
-        from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+        from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
             e_s,
         )
 
         # Barrier functions
         bars = [
-            unicycle.certificate_functions.barrier_functions.obstacle_ca(
+            unicycle.certificates.barrier_functions.obstacle_ca(
                 certificate_conditions=linear_class_k(alpha=1.0),
                 obstacle=jnp.array([obs[0], obs[1], 0.0]),
                 ellipsoid=jnp.array([ell[0], ell[1]]),
@@ -307,7 +306,7 @@ class TestCbfClfQpControllers(unittest.TestCase):
         BARRIERS = concatenate_certificates(*bars)
 
         # Lyapunov functions
-        lyaps = unicycle.certificate_functions.lyapunov_functions.reach_goal(
+        lyaps = unicycle.certificates.lyapunov_functions.reach_goal(
             certificate_conditions=e_s(c=2.0),
             goal=GOAL,
             radius=RAD,
@@ -318,12 +317,12 @@ class TestCbfClfQpControllers(unittest.TestCase):
         # Create controller
         controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
             control_limits=ACTUATION_LIMITS,
-            nominal_input=NOMINAL_CONTROLLER,
             dynamics_func=DYNAMICS,
             barriers=BARRIERS,
             lyapunovs=LYAPUNOVS,
         )
 
-        u, _ = controller(0.0, jnp.zeros((N,)))
+        u_nom, _ = NOMINAL_CONTROLLER(0.0, jnp.zeros((N,)), KEY, GOAL)
+        u, _ = controller(0.0, jnp.zeros((N,)), u_nom, KEY, {})
 
         self.assertTrue(u.shape == (M,))

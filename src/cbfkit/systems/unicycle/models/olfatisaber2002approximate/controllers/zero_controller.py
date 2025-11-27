@@ -11,7 +11,7 @@ def zero_controller():
     """
 
     @jit
-    def controller(_t, _state):
+    def controller(_t, _state, _key, _xd):
         # logging data
         data = {}
 

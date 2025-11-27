@@ -2,7 +2,7 @@ import jax.numpy as jnp
 from jax import jit
 
 
-def proportional_controller(dynamics, Kp_pos, Kp_theta, desired_state):
+def proportional_controller(dynamics, Kp_pos, Kp_theta):
     """
     Create a proportional-only controller for the given unicycle dynamics.
 
@@ -14,12 +14,12 @@ def proportional_controller(dynamics, Kp_pos, Kp_theta, desired_state):
     """
 
     @jit
-    def controller(_t, state):
+    def controller(_t, state, key, xd):
         _, _, theta = state
-        _, _, final_theta_desired = desired_state
+        _, _, final_theta_desired = xd
 
         # Compute the error between the current state and the desired state
-        error_pos = jnp.subtract(desired_state[:2], state[:2])
+        error_pos = jnp.subtract(xd[:2], state[:2])
 
         # Desired orientation is to point towards the goal
         theta_desired = jnp.arctan2(error_pos[1], error_pos[0])

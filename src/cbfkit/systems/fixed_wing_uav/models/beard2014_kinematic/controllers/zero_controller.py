@@ -16,7 +16,7 @@ def zero_controller() -> ControllerCallable:
     """
 
     @jit
-    def controller(_t: float, _state: Array) -> ControllerCallableReturns:
+    def controller(_t: float, _state: Array, _key: Array = None, _xd: Array = None) -> ControllerCallableReturns:
         """Computes zero control input (4x1).
 
         Args:

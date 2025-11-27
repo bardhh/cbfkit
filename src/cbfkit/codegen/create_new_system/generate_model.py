@@ -449,7 +449,7 @@ def generate_model(
                 import jax.numpy as jnp
                 from jax import jit, jacfwd, jacrev, Array, lax
                 from typing import List, Callable
-                from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package
+                from cbfkit.certificates import certificate_package
 
                 N = {n_states}
 
@@ -586,7 +586,7 @@ def generate_model(
                 import jax.numpy as jnp
                 from jax import jit, jacfwd, jacrev, Array, lax
                 from typing import List, Callable
-                from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import certificate_package
+                from cbfkit.certificates import certificate_package
 
                 N = {n_states}
 

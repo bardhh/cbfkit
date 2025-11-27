@@ -21,22 +21,31 @@ def proportional_controller(dynamics, Kp_pos, Kp_theta):
         # Compute the error between the current state and the desired state
         error_pos = jnp.subtract(xd[:2], state[:2])
         theta_d = jnp.arctan2(error_pos[1], error_pos[0])
-        v_d = jnp.linalg.norm(Kp_pos * error_pos)
+        
+        # Calculate distance to goal
+        dist = jnp.linalg.norm(error_pos)
+        
+        # Calculate robust heading error in [-pi, pi]
+        theta_error = theta_d - theta
+        theta_error = (theta_error + jnp.pi) % (2 * jnp.pi) - jnp.pi
+        
+        # Desired velocity
+        # Saturate max desired velocity at 2.0 (as in original)
+        v_d = Kp_pos * dist
         v_d = jnp.minimum(2.0, v_d)
-        theta_error = (theta_d - theta) % (2 * jnp.pi)
+        
+        # Coupling: Slow down if not facing goal to turn in place
+        # Use a cosine factor or similar. If error is 90 deg, v_d becomes 0.
+        # v_d = v_d * jnp.maximum(0.0, jnp.cos(theta_error))
+        
+        # Acceleration control
+        # Using Kp_pos as gain for velocity error as well (heuristic from original)
+        accel = Kp_pos * (v_d - v)
+        
+        # Angular velocity control
+        omega = Kp_theta * theta_error
 
-        unicycle_control_inputs = jnp.array(
-            [Kp_pos * (v_d - v), Kp_theta * jnp.minimum(theta_error, 2 * jnp.pi - theta_error)]
-        )
-
-        # # Compute control inputs based on proportional gains
-        # xdot_d = jnp.multiply(Kp_pos, error_pos)
-        # v_d = Kp_pos * (jnp.linalg.norm(xdot_d) - v)
-        # omega_d = Kp_theta * error_theta
-
-        # # Convert position and orientation control inputs into unicycle control inputs (v, w)
-        # f, g = dynamics(state)
-        # unicycle_control_inputs = jnp.linalg.pinv(g) @ jnp.stack(jnp.array([xdot_d[0] - f[0], xdot_d[1] - f[1], v_d, omega_d]))
+        unicycle_control_inputs = jnp.array([accel, omega])
 
         # logging data
         data = {}

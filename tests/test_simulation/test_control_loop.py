@@ -26,13 +26,13 @@ from jax import jacfwd, random
 from numpy.random import uniform
 
 from cbfkit.simulation.simulator import stepper
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.vanilla_cbf_clf_qp_control_laws import (
+from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import (
     vanilla_cbf_clf_qp_controller,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.certificates import (
     concatenate_certificates,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import (
     linear_class_k,
 )
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
@@ -78,7 +78,7 @@ ELLIPSOIDS = [
 
 # Lyapunov function
 bars = [
-    unicycle.certificate_functions.barrier_functions.obstacle_ca(
+    unicycle.certificates.barrier_functions.obstacle_ca(
         certificate_conditions=linear_class_k(ALPHA),
         obstacle=jnp.array([obs[0], obs[1], 0.0]),
         ellipsoid=jnp.array([ell[0], ell[1]]),
@@ -92,7 +92,6 @@ NOMINAL_CONTROLLER = unicycle.controllers.proportional_controller(
     dynamics=DYNAMICS,
     Kp_pos=1.0,
     Kp_theta=0.01,
-    desired_state=GOAL,
 )
 DFDX = jacfwd(DYNAMICS)
 H = lambda x: x
@@ -108,7 +107,6 @@ ESTIMATOR = ct_ekf_dtmeas(
 )
 CONTROLLER = vanilla_cbf_clf_qp_controller(
     control_limits=ACTUATION_LIMITS,
-    nominal_input=NOMINAL_CONTROLLER,
     dynamics_func=DYNAMICS,
     barriers=BARRIERS,
 )
@@ -118,11 +116,14 @@ step = stepper(
     dynamics=DYNAMICS,
     perturbation=generate_stochastic_perturbation(sigma=lambda _x: Q, dt=DT),
     integrator=integrator,
+    planner=None,
+    nominal_controller=NOMINAL_CONTROLLER,
     controller=CONTROLLER,
     sensor=sensor,
     estimator=ESTIMATOR,
     sigma=R,
     key=random.PRNGKey(0),
+    stl_trajectory_cost=None,
 )
 
 
@@ -151,11 +152,19 @@ class TestControlLoop(unittest.TestCase):
         p = jnp.zeros((z.shape[0], z.shape[0]))
 
         elapsed_times = jnp.zeros((N_STEPS,))
+        controller_data = {}
+        planner_data = {
+            "u_traj": None,
+            "x_traj": jnp.tile(GOAL.reshape(-1, 1), (1, N_STEPS + 1)),
+            "prev_robustness": None,
+        }
         for ii in range(N_STEPS):
             start_time = time.time()
 
             # Take one step
-            x, u, z, p, _ = step(DT * ii, x, u, z, p)
+            x, u, z, p, controller_data, planner_data = step(
+                DT * ii, x, u, z, p, controller_data, planner_data
+            )
 
             elapsed_times = elapsed_times.at[ii].set(time.time() - start_time)
 

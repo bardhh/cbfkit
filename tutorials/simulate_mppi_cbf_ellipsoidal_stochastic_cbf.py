@@ -1,39 +1,27 @@
 """
-This file shows how we can use MPPI controller to achieve reach avoid tasks. Our reach avoid specification utilizes Sigmal Temporal Logic (STL) inspired robustness metrics. 
+This file shows how we can use MPPI controller to achieve reach avoid tasks. Our reach avoid specification utilizes Sigmal Temporal Logic (STL) inspired robustness metrics.
 These robustness metrics are defined in cbfkit/utils/jax_stl.py and accomodated in the MPPI cost function below.
 """
 
 import os
+
 import jax.numpy as jnp
 from jax import Array, jit, lax
-import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
+
+import cbfkit.controllers.mppi as mppi_planner
+import cbfkit.planners as single_waypoint_planner
 import cbfkit.simulation.simulator as sim
-from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
-from cbfkit.integration import forward_euler as integrator
-from cbfkit.sensors import perfect as sensor
+import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
+from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import stochastic_barrier, zeroing_barriers
+from cbfkit.controllers.cbf_clf import stochastic_cbf_clf_qp_controller as cbf_controller
 from cbfkit.estimators import naive as estimator
-
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers import (
-    stochastic_cbf_clf_qp_controller as cbf_controller,
-)
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
-    concatenate_certificates,
-)
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
-    zeroing_barriers,
-)
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
-    stochastic_barrier,
-)
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.rectify_relative_degree import (
-    rectify_relative_degree,
-)
-
-import cbfkit.controllers_and_planners.waypoint as single_waypoint_planner
-import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
+from cbfkit.sensors import perfect as sensor
 
 file_path = os.path.dirname(os.path.abspath(__file__))
-target_directory = file_path + "/tutorials"
+target_directory = file_path + "/generated"
 model_name = "mppi_cbf_unicycle_ellipsoidal_obstacles"
 
 
@@ -82,7 +70,7 @@ uniycle_nom_controller = unicycle.controllers.proportional_controller(
 # Barrier constraint functions
 barriers = [
     rectify_relative_degree(
-        function=unicycle.certificate_functions.barrier_functions.ellipsoidal_obstacle.stochastic_cbf(
+        function=unicycle.certificates.barrier_functions.ellipsoidal_obstacle.stochastic_cbf(
             obs,
             ell,
         ),
@@ -156,7 +144,7 @@ mppi_args = {
     "robot_state_dim": 4,
     "robot_control_dim": 2,
     "prediction_horizon": 80,  # 150,
-    "num_samples": 20000,
+    "num_samples": 1000,  # Reduced from 20000 to prevent memory issues with JIT data logging
     "plot_samples": 30,
     "time_step": dt * 2.0,
     "use_GPU": False,
@@ -206,13 +194,17 @@ u_guess = jnp.append(
     filepath=file_path + "vanilla_cbf_results",
     planner_data={"u_traj": u_guess, "prev_robustness": None},
     controller_data={},
+    use_jit=True,
 )
 
 plot = 1
 save = 1
 
 if plot:
-    from tutorials.plot_helper.plot_mppi_ellipsoid_environment import animate
+    try:
+        from tutorials.plot_helper.plot_mppi_ellipsoid_environment import animate
+    except ImportError:
+        from plot_helper.plot_mppi_ellipsoid_environment import animate
 
     animate(
         states=x,
@@ -231,3 +223,6 @@ if plot:
         save_animation=save,
         animation_filename=target_directory + "/" + model_name,  # + ".mp4",
     )
+
+x.block_until_ready()
+print("Simulation Finished Successfully")

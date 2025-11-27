@@ -1,12 +1,14 @@
+import sys
 import os
-from jax import Array, jit
-import jax.numpy as jnp
-from cbfkit.codegen.create_new_system import generate_model
 
+import jax.numpy as jnp
+from jax import Array, jit
+
+from cbfkit.codegen.create_new_system import generate_model
 from cbfkit.utils.jax_stl import *
 
 file_path = os.path.dirname(os.path.abspath(__file__))
-target_directory = file_path + "/tutorials"
+target_directory = file_path + "/generated"
 model_name = "mppi_cbf_stl"
 
 # Simulation Parameters
@@ -44,14 +46,21 @@ generate_model.generate_model(
     params=params,
 )
 
+import cbfkit.controllers.mppi as mppi_planner
+import cbfkit.planners as single_waypoint_planner
 import cbfkit.simulation.simulator as sim
-
-import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
-import cbfkit.controllers_and_planners.waypoint as single_waypoint_planner
-from cbfkit.sensors import perfect as sensor
 from cbfkit.estimators import naive as estimator
+from cbfkit.sensors import perfect as sensor
 from cbfkit.utils.numerical_integration import forward_euler as integrator
-from tutorials import mppi_cbf_stl
+
+sys.path.append(target_directory)
+sys.path.append(target_directory + "/" + model_name + "/ros2")
+from unittest.mock import MagicMock
+sys.modules["rclpy"] = MagicMock()
+sys.modules["rclpy.node"] = MagicMock()
+sys.modules["std_msgs"] = MagicMock()
+sys.modules["std_msgs.msg"] = MagicMock()
+import mppi_cbf_stl
 
 dynamics = mppi_cbf_stl.plant()
 
@@ -194,7 +203,7 @@ mppi_args = {
     "robot_state_dim": 2,
     "robot_control_dim": 2,
     "prediction_horizon": 50,  # 100,  # 150,
-    "num_samples": 10000,
+    "num_samples": 1000,
     "plot_samples": 30,
     "time_step": DT,
     "use_GPU": False,
@@ -235,15 +244,19 @@ target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
     filepath=SAVE_FILE,
     planner_data={
         "u_traj": 1 * jnp.ones((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"])),
-        "prev_robustness": jnp.array([1, -1, -1]),
+        "prev_robustness": jnp.array([1, -1, -1, -1]),
     },
     controller_data={},
     stl_trajectory_cost=stl_complete_trajectory_cost,
+    use_jit=True,
 )
 
-plot = True
+plot = 0
 if plot:
-    from tutorials.plot_helper.plot_mppi_ffmpeg import animate
+    try:
+        from tutorials.plot_helper.plot_mppi_ffmpeg import animate
+    except ImportError:
+        from plot_helper.plot_mppi_ffmpeg import animate
 
     animate(
         states=x_,
@@ -257,8 +270,9 @@ if plot:
         y_lim=(0, 10),
         dt=DT,
         title="System Behavior",
-        save_animation=True,
+        save_animation=False,
         animation_filename=target_directory + "/" + model_name + "/animation",  # + ".mp4",
         obstacle=obstacle,
         obstacle_radius=obstacle_radius,
     )
+print("Simulation Finished Successfully")
