@@ -140,7 +140,7 @@ def generate_model(
     # Build init contents
     model_init_contents = textwrap.dedent(
         """
-        from .plant import plant
+        from .dynamics import plant
         from . import cost_functions
         """
     )

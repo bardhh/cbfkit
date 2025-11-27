@@ -7,6 +7,7 @@ from cbfkit.utils.matrix_vector_operations import (
     vee,
 )
 from cbfkit.utils.miscellaneous import tanh_sigmoid_func
+from cbfkit.utils.logger import print_progress
 
 __all__ = [
     "normalize",
@@ -14,4 +15,5 @@ __all__ = [
     "vee",
     "block_diag_matrix",
     "tanh_sigmoid_func",
+    "print_progress",
 ]

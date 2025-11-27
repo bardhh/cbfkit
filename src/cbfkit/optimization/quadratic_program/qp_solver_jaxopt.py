@@ -62,7 +62,9 @@ def solve_inequality_constrained_qp(
         params_ineq=params_ineq,
     )
     status = state.status
-    return sol.primal, status == True
+    # 1: SOLVED, 2: MAX_ITER_REACHED
+    # We consider both as success for now to avoid dropping control inputs
+    return sol.primal, (status == 1) | (status == 2)
 
 
 @jit

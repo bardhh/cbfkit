@@ -30,13 +30,9 @@ def reverse_van_der_pol_oscillator(
 
     Returns:
         dynamics (Callable): takes state as input and returns dynamics components
-            f, g, and s of the form dx = (f(x) + g(x)u)dt + s(x)dw
+            f, g of the form dx = (f(x) + g(x)u)dt
 
     """
-    if sigma is not None:
-        s = sigma
-    else:
-        s = jnp.zeros((2, 2))
 
     @jit
     def equations_of_motion(state: Array) -> DynamicsCallableReturns:
@@ -48,11 +44,9 @@ def reverse_van_der_pol_oscillator(
             x (Array): state vector
 
         Returns:
-            f, g, s (Tuple of Arrays): drift vector f, control matrix g, diffusion matrix s
+            f, g (Tuple of Arrays): drift vector f, control matrix g
 
         """
-        nonlocal s
-
         x1, x2 = state
         f = jnp.array([-x2, x1 - epsilon * (1 - x1**2) * x2])
         g = jnp.array(
@@ -62,6 +56,6 @@ def reverse_van_der_pol_oscillator(
             ]
         )
 
-        return f, g, s
+        return f, g
 
     return equations_of_motion

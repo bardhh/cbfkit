@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "uv run current file",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder} && uv run ${relativeFile}"
+    }
+  ]
+}

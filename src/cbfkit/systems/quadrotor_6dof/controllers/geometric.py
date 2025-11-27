@@ -6,7 +6,7 @@ from cbfkit.utils.matrix_vector_operations import normalize, hat, vee
 from cbfkit.utils.user_types import DynamicsCallable, ControllerCallable, ControllerCallableReturns
 from ..utils.rotations import rotation_body_frame_to_inertial_frame
 from ..models.quadrotor_6dof_dynamics import g_accel as g
-from ..certificate_functions.lyapunov_functions import V_pv as V
+from ..certificates.lyapunov_functions import V_pv as V
 
 
 def geometric_controller(

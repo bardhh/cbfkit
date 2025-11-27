@@ -30,24 +30,24 @@ from cbfkit.estimators import ct_ekf_dtmeas as ekf
 from cbfkit.integration import forward_euler as integrator
 
 # Import controller functions
-from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_path_integral_cbf_clf_qp_control_laws import (
-    risk_aware_path_integral_cbf_clf_qp_controller,
+from cbfkit.controllers.cbf_clf.risk_aware_path_integral_cbf_clf_qp_control_laws import (
+    risk_aware_path_integral_cbf_clf_qp_controller as cbf_controller,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions import (
+from cbfkit.certificates.conditions.barrier_conditions import (
     zeroing_barriers,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
     e_s,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.certificates import (
     concatenate_certificates,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.risk_aware_params import (
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
     RiskAwareParams,
 )
 
 # Load initial conditions
-from examples.unicycle.start_to_goal.initial_conditions import (
+from examples.unicycle.common.config import (
     ekf_state_estimation as initial_conditions,
 )
 
@@ -92,7 +92,7 @@ ellipsoids = [
     (0.75, 0.5),
 ]
 barriers = [
-    unicycle.certificate_functions.barrier_functions.obstacle_ca(
+    unicycle.certificates.barrier_functions.obstacle_ca(
         certificate_conditions=zeroing_barriers.linear_class_k(1.0),
         obstacle=obs,
         ellipsoid=ell,
@@ -110,7 +110,7 @@ risk_aware_barrier_params = RiskAwareParams(
 
 # Lyapunov function configuration
 lyapunovs = [
-    unicycle.certificate_functions.lyapunov_functions.reach_goal(
+    unicycle.certificates.lyapunov_functions.reach_goal(
         certificate_conditions=e_s(1.0),
         goal=initial_conditions.desired_state,
         radius=0.1,
@@ -137,9 +137,8 @@ def execute_simulation(ii: int) -> List[Array]:
     ) + np.random.uniform(low=-jnp.pi / 4, high=jnp.pi / 4)
     init_state = jnp.array([x_rand, y_rand, a_rand])
 
-    controller = risk_aware_path_integral_cbf_clf_qp_controller(
+    controller = cbf_controller(
         control_limits=jnp.array([100.0, 100.0]),
-        nominal_input=nominal_controller,
         dynamics_func=approx_unicycle_dynamics,
         barriers=barrier_packages,
         lyapunovs=lyapunov_packages,
@@ -149,17 +148,26 @@ def execute_simulation(ii: int) -> List[Array]:
     )
 
     # Execute simulation
-    x, u, z, p, data, data_keys = sim.execute(
+    x, u, z, p, data, data_keys, planner_data, planner_data_keys = sim.execute(
         x0=init_state,
         dt=dt,
         num_steps=int(tf / dt),
         dynamics=approx_unicycle_dynamics,
         integrator=integrator,
+        nominal_controller=nominal_controller,
         controller=controller,
         sensor=sensor,
         estimator=estimator,
         sigma=initial_conditions.R,
         filepath=save_path + file_name,
+        planner_data={
+            "u_traj": None,
+            "x_traj": jnp.tile(
+                initial_conditions.desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)
+            ),
+            "prev_robustness": None,
+        },
+        use_jit=True,
     )
 
     return [x, u]
@@ -209,14 +217,10 @@ if __name__ == "__main__":
         control_record = loaded_data["control_record"]
 
     if plot:
-        from examples.unicycle.start_to_goal.visualizations import plot_trajectory
-
-        fig, ax = plt.subplots()
+        from examples.unicycle.common.visualizations import plot_trajectory
 
         for states in state_record:
             fig, ax = plot_trajectory(
-                fig=fig,
-                ax=ax,
                 states=states,
                 desired_state=initial_conditions.desired_state,
                 desired_state_radius=0.1,

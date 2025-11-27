@@ -130,15 +130,15 @@ nominal_controller = unicycle.controllers.controller_1(kp=1.0, xg=-2.0, yg=-2.0)
 
 #####################################################################
 #####################################################################
-from cbfkit.controllers.model_based.cbf_clf_controllers import vanilla_cbf_clf_qp_controller
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import (
     cubic_class_k,
     linear_class_k,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.certificates import (
     concatenate_certificates,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.rectify_relative_degree import (
+from cbfkit.certificates import (
     rectify_relative_degree,
 )
 
@@ -179,10 +179,9 @@ barriers = concatenate_certificates(
 # Construct the CBF-CLF-QP controller
 # Update controller setup
 controller = vanilla_cbf_clf_qp_controller(
-    actuation_limits,
-    nominal_controller,
-    dynamics,
-    barriers,
+    control_limits=actuation_limits,
+    dynamics_func=dynamics,
+    barriers=barriers,
     p_mat=jnp.eye(2),  # Simplified p_mat
 )
 #####################################################################
@@ -197,7 +196,7 @@ from cbfkit.sensors import perfect as sensor
 from cbfkit.simulation import simulator
 
 # Simulate the closed-loop system
-x, u, z, p, dkeys, dvals = simulator.execute(
+x, u, z, p, dkeys, dvals, pkeys, pvals = simulator.execute(
     x0=initial_state,
     dt=1e-2,
     num_steps=1000,
@@ -206,6 +205,7 @@ x, u, z, p, dkeys, dvals = simulator.execute(
     controller=controller,
     sensor=sensor,
     estimator=naive,
+    use_jit=True,
 )
 
 #####################################################################

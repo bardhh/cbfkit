@@ -160,7 +160,11 @@ cython_debug/
 tests/test_models/generated
 
 # Folders generated when testing tutorials
-tutorials/tutorials
+tutorials/generated/
 
 # pyc files
 *.pyc
+tutorials/multi_augmented_single_integrators/
+tutorials/generated/
+strategy.md
+tasks.md

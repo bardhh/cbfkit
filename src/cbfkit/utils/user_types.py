@@ -45,7 +45,7 @@ Examples
 
 """
 
-from typing import Callable, Tuple, Dict, Any, List, Union, Optional
+from typing import Callable, Tuple, Dict, Any, List, Union, Optional, TypedDict
 from jax import Array, random
 
 # Define types for readability
@@ -54,6 +54,23 @@ Control = Array
 Estimate = Array
 Covariance = Array
 Key = int
+
+# Data Schemas
+class ControllerData(TypedDict, total=False):
+    error: bool
+    error_data: Any
+    complete: bool
+    sol: Array
+    u: Array
+    u_nom: Array
+    sub_data: Dict[str, Any]
+
+class PlannerData(TypedDict, total=False):
+    u_traj: Optional[Array]
+    x_traj: Optional[Array]
+    prev_robustness: Optional[float]
+    error: bool
+    xs: Array
 
 # Certificate (Barrier, Lyapunov, Barrier-Lyapunov, etc.) Function Callables
 CertificateCallable = Callable[[float, State], Array]
@@ -97,11 +114,11 @@ PerturbationCallableReturns = Callable[[random.PRNGKey], Array]
 PerturbationCallable = Callable[[State, Control, Array, Array], PerturbationCallableReturns]
 
 # Controller Callables
-ControllerCallableReturns = Tuple[Array, Dict[str, Any]]
+ControllerCallableReturns = Tuple[Array, ControllerData]
 ControllerCallable = Callable[[float, State], ControllerCallableReturns]
 
 # Planner Callables
-PlannerCallableReturns = Tuple[Array, Dict[str, Any]]
+PlannerCallableReturns = Tuple[Array, PlannerData]
 PlannerCallable = Callable[[float, State], PlannerCallableReturns]
 
 # Estimator Callables

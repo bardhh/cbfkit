@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "cbfkit"
 version = "0.1.1"
@@ -13,8 +17,8 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
 dependencies = [
-    "jax>=0.4.23,<0.5",
-    "jaxlib>=0.4.23,<0.5",
+    "jax>=0.4.23",
+    "jaxlib>=0.4.23",
     "kvxopt>=1.3.2.0,<2.0",
     "cmake>=3.28.1,<4.0",
     "cython>=3.0.8,<4.0",
@@ -22,7 +26,7 @@ dependencies = [
     "setuptools>=69.0.3,<70.0",
     "black>=23.12.1,<24.0",
     "mypy>=1.8.0,<2.0",
-    "jaxopt>=0.8.3,<0.9",
+    "jaxopt>=0.8.3",
     "jupyter>=1.0.0,<2.0",
     "control>=0.9.4,<1.0",
     "matplotlib>=3.8.2,<4.0",
@@ -42,6 +46,3 @@ extend-exclude = '''
 profile = "black"
 line_length = 100
 skip_gitignore = true
-
-[tool.uv.pip]
-system = true
