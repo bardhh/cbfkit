@@ -173,9 +173,9 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
 plot = True
 if plot:
     try:
-        from tutorials.plot_helper.plot_mppi_ffmpeg import animate
+        from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
     except ImportError:
-        from plot_helper.plot_mppi_ffmpeg import animate
+        from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
 
     animate(
         states=x_,

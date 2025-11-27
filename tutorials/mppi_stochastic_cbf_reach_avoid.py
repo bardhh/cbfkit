@@ -204,9 +204,9 @@ save = 1
 
 if plot:
     try:
-        from tutorials.plot_helper.plot_mppi_ellipsoid_environment import animate
+        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate
     except ImportError:
-        from plot_helper.plot_mppi_ellipsoid_environment import animate
+        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate
 
     animate(
         states=x,
