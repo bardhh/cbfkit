@@ -1,19 +1,10 @@
 import jax.numpy as jnp
 
-import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 import cbfkit.simulation.simulator as sim
-
-from cbfkit.controllers.cbf_clf import (
-    vanilla_cbf_clf_qp_controller as cbf_controller,
-)
-from cbfkit.certificates import (
-    concatenate_certificates,
-    rectify_relative_degree,
-)
-from cbfkit.certificates.conditions.barrier_conditions import (
-    zeroing_barriers,
-)
-
+import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
+from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
 from cbfkit.utils.user_types import PlannerData
 from examples.unicycle.common.ellipsoidal_obstacle import cbf as ellipsoid_cbf
 
@@ -84,11 +75,11 @@ controller = cbf_controller(
     barriers=barrier_packages,
 )
 
+from cbfkit.estimators import naive as estimator
+
 # Simulation imports
 from cbfkit.integration import forward_euler as integrator
 from cbfkit.sensors import perfect as sensor
-from cbfkit.estimators import naive as estimator
-
 
 x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     x0=init_state,
@@ -114,9 +105,9 @@ animate = 0
 save = 1
 
 if plot:
-    from examples.unicycle.common.visualizations import plot_trajectory
-
     import matplotlib.pyplot as plt
+
+    from examples.unicycle.common.visualizations import plot_trajectory
 
     plot_trajectory(
         states=x,

@@ -1,30 +1,64 @@
+from typing import List, Tuple, TypedDict
+
 import jax.numpy as jnp
 from jax import Array, jit
 
 import cbfkit.controllers.mppi as mppi_planner
 import cbfkit.simulation.simulator as sim
-from cbfkit.systems.unicycle.models.accel_unicycle import plant
-from cbfkit.utils.user_types import PlannerData
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
+from cbfkit.estimators import naive as estimator
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.sensors import perfect as sensor
+from cbfkit.systems.unicycle.models.accel_unicycle import plant
+from cbfkit.utils.user_types import PlannerData
 from examples.unicycle.common.ellipsoidal_obstacle import cbf as ellipsoid_cbf
 
+
+# Define a TypedDict for MPPI configuration to ensure type safety and clarity
+class MPPIConfig(TypedDict):
+    robot_state_dim: int
+    robot_control_dim: int
+    prediction_horizon: int
+    num_samples: int
+    plot_samples: int
+    time_step: float
+    use_GPU: bool
+    costs_lambda: float
+    cost_perturbation: float
+
+
 # Simulation parameters
-tf = 10.0
-dt = 0.05
-file_path = "examples/unicycle/reach_goal/results/"
+tf: float = 10.0
+dt: float = 0.05
+file_path: str = "examples/unicycle/reach_goal/results/"
 
-init_state = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
-desired_state = jnp.array([2.0, 4.0, 0.0, 0.0])
-actuation_constraints = jnp.array([100.0, 100.0])  # Effectively, no control limits
+# Define states and constraints
+init_state: Array = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
+desired_state: Array = jnp.array([2.0, 4.0, 0.0, 0.0])
+actuation_constraints: Array = jnp.array([100.0, 100.0])  # Effectively, no control limits
 
+# Define system dynamics
 unicycle_dynamics = plant(l=1.0)
 
+
 # MPPI Cost Functions
+# We use @jit here to compile these functions with JAX.
+# This is crucial for MPPI performance as these cost functions are evaluated
+# thousands of times per step (num_samples * prediction_horizon).
 @jit
 def stage_cost(state_and_time: Array, action: Array) -> Array:
-    # Penalize distance to goal
+    """
+    Calculates the stage cost for the MPPI planner.
+
+    Args:
+        state_and_time (Array): The current state and time [x, y, v, theta, t]
+        action (Array): The control action [a, omega]
+
+    Returns:
+        Array: The scalar cost.
+    """
     # state: [x, y, v, theta]
     # action: [a, omega]
     x, y = state_and_time[0], state_and_time[1]
@@ -36,6 +70,16 @@ def stage_cost(state_and_time: Array, action: Array) -> Array:
 
 @jit
 def terminal_cost(state_and_time: Array, action: Array) -> Array:
+    """
+    Calculates the terminal cost for the MPPI planner.
+
+    Args:
+        state_and_time (Array): The current state and time [x, y, v, theta, t]
+        action (Array): The control action [a, omega]
+
+    Returns:
+        Array: The scalar cost.
+    """
     x, y = state_and_time[0], state_and_time[1]
     xd, yd = desired_state[0], desired_state[1]
 
@@ -44,7 +88,8 @@ def terminal_cost(state_and_time: Array, action: Array) -> Array:
 
 
 # MPPI Configuration
-mppi_args = {
+# This dictionary controls the behavior of the Model Predictive Path Integral controller.
+mppi_args: MPPIConfig = {
     "robot_state_dim": 4,
     "robot_control_dim": 2,
     "prediction_horizon": 50,
@@ -66,21 +111,23 @@ mppi_local_planner = mppi_planner.vanilla_mppi(
     mppi_args=mppi_args,
 )
 
-obstacles = [
+# Define Obstacles
+obstacles: List[Tuple[float, float, float]] = [
     (1, 2.0, 0.0),
     (3.0, 2.0, 0.0),
-    # (2.0, 5.0, 0.0),
+    (2.0, 5.0, 0.0),
     (-1.0, 1.0, 0.0),
     (0.5, -1.0, 0.0),
 ]
-ellipsoids = [
+ellipsoids: List[Tuple[float, float]] = [
     (0.5, 1.5),
     (0.75, 2.0),
-    # (2.0, 0.25),
+    (2.0, 0.25),
     (1.0, 0.75),
     (0.75, 0.5),
 ]
 
+# Construct Control Barrier Functions (CBFs)
 barriers = [
     rectify_relative_degree(
         function=ellipsoid_cbf(obs, ell),
@@ -97,20 +144,16 @@ barriers = [
 
 barrier_packages = concatenate_certificates(*barriers)
 
+# Instantiate Controller
 controller = cbf_controller(
     control_limits=actuation_constraints,
     dynamics_func=unicycle_dynamics,
     barriers=barrier_packages,
 )
 
-from cbfkit.estimators import naive as estimator
-
-from cbfkit.utils.user_types import PlannerData
-
-# Simulation imports
-from cbfkit.integration import forward_euler as integrator
-from cbfkit.sensors import perfect as sensor
-
+# Execute Simulation
+# usage of use_jit=True ensures the entire simulation loop is JIT compiled,
+# drastically improving performance by avoiding Python interpreter overhead during stepping.
 x, u, z, p, dkeys, dvals, planner_data_keys, planner_data_values = sim.execute(
     x0=init_state,
     dt=dt,
@@ -132,6 +175,7 @@ x, u, z, p, dkeys, dvals, planner_data_keys, planner_data_values = sim.execute(
     use_jit=True,
 )
 
+# Visualization
 plot = 1
 animate = 1
 save = 1
@@ -155,11 +199,16 @@ if plot:
 
 if animate:
     try:
-        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate
+        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import (
+            animate as animate_func,
+        )
     except ImportError:
-        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate
+        # Fallback or re-import if necessary, but naming it animate_func avoids shadowing 'animate' variable
+        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import (
+            animate as animate_func,
+        )
 
-    animate(
+    animate_func(
         states=x,
         estimates=z,
         controller_data_keys=planner_data_keys,
