@@ -26,8 +26,8 @@ import os
 import platform
 import re
 import subprocess
-import textwrap
 from typing import Any, Dict, List, Optional, Tuple, Union
+
 from jinja2 import Environment, FileSystemLoader
 
 op_sys = platform.system()
@@ -37,8 +37,11 @@ JAX_EXPRESSIONS = ["exp", "pi", "cos", "sin", "tan", "linalg.norm", "array", "ma
 
 # Jinja2 Setup
 # Assuming templates are in ../templates relative to this file
-TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+TEMPLATE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates"
+)
 jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+
 
 def create_folder(directory: str, folder_name: str) -> None:
     """Creates a new folder called 'folder_name' at the location specified by 'directory'."""
@@ -88,12 +91,14 @@ def convert_string(input_string):
     result_string = "".join([key + "," for key in keys])
     return result_string
 
+
 def jaxify_expression(expr: str) -> str:
     """Helper to replace math functions with jnp versions."""
     for func in JAX_EXPRESSIONS:
         expr = expr.replace(func, "jnp." + func)
-    expr = expr.replace("arcjnp.", "jnp.arc") # Fix arcsin/arccos
+    expr = expr.replace("arcjnp.", "jnp.arc")  # Fix arcsin/arccos
     return expr
+
 
 def generate_model(
     directory: str,
@@ -150,33 +155,40 @@ def generate_model(
     create_folder(directory + DELIMITER + model_name, "controllers")
 
     # Build init contents
-    model_init_contents = textwrap.dedent(
-        """
-        from .plant import plant
-        from . import cost_functions
-        from . import certificate_functions
-        from . import controllers
-        """
-    )
-    
-    # ... (Init file creation logic remains largely same, skipping template for simple inits for now to save tokens, 
-    # but `plant.py` and others will use Jinja)
+    init_template = jinja_env.get_template("init.py.j2")
+
+    model_init_imports = [
+        "from .plant import plant",
+        "from . import cost_functions",
+        "from . import certificate_functions",
+        "from . import controllers",
+    ]
+    model_init_contents = init_template.render(imports="\n".join(model_init_imports))
 
     if not os.path.isfile(model_folder + DELIMITER + "__init__.py"):
         create_python_file(model_folder, "__init__.py", model_init_contents)
     run_black(model_folder + DELIMITER + "__init__.py")
-    
+
     if not os.path.isfile(model_folder + DELIMITER + "constants.py"):
         create_python_file(model_folder, "constants.py", "")
 
     # ... (Subfolder inits) ...
     create_python_file(model_folder + DELIMITER + "controllers", "__init__.py", "")
-    
-    cert_init_content = "from . import barrier_functions\nfrom . import lyapunov_functions"
-    create_python_file(model_folder + DELIMITER + "certificate_functions", "__init__.py", cert_init_content)
-    
-    cost_init_content = "from . import stage_cost_function\nfrom . import terminal_cost_function"
-    create_python_file(model_folder + DELIMITER + "cost_functions", "__init__.py", cost_init_content)
+
+    cert_init_imports = ["from . import barrier_functions", "from . import lyapunov_functions"]
+    cert_init_content = init_template.render(imports="\n".join(cert_init_imports))
+    create_python_file(
+        model_folder + DELIMITER + "certificate_functions", "__init__.py", cert_init_content
+    )
+
+    cost_init_imports = [
+        "from . import stage_cost_function",
+        "from . import terminal_cost_function",
+    ]
+    cost_init_content = init_template.render(imports="\n".join(cost_init_imports))
+    create_python_file(
+        model_folder + DELIMITER + "cost_functions", "__init__.py", cost_init_content
+    )
 
     # Create plant.py using Jinja
     dynamics_args = (
@@ -184,17 +196,70 @@ def generate_model(
         if "dynamics" in params.keys()
         else ""
     )
-    
+
     plant_template = jinja_env.get_template("plant.py.j2")
     plant_contents = plant_template.render(
         dynamics_args=dynamics_args,
         drift_dynamics=drift_dynamics_str,
-        control_matrix=control_matrix_str
+        control_matrix=control_matrix_str,
     )
     create_python_file(model_folder, "plant.py", plant_contents)
     run_black(model_folder + DELIMITER + "plant.py")
 
-    # ... (Cost functions - keeping as legacy textwrap for now or TODO: convert to Jinja) ...
+    # Cost functions
+    cost_template = jinja_env.get_template("cost.py.j2")
+
+    if stage_cost_function is not None:
+        stage_cost_folder = (
+            model_folder + DELIMITER + "cost_functions" + DELIMITER + "stage_cost_function"
+        )
+
+        stage_cost_str = jaxify_expression(stage_cost_function)
+        stage_cost_args = (
+            "".join([pp + ", " for pp in params["stage_cost_function"].keys()])
+            if "stage_cost_function" in params.keys()
+            else ""
+        )
+
+        stage_cost_contents = cost_template.render(
+            n_states=n_states,
+            cost_name="stage_cost",
+            cost_args=stage_cost_args,
+            cost_function=stage_cost_str,
+        )
+
+        stage_init_imports = ["from .stage_cost import stage_cost"]
+        stage_init_contents = init_template.render(imports="\n".join(stage_init_imports))
+
+        create_python_file(stage_cost_folder, "__init__.py", stage_init_contents)
+        create_python_file(stage_cost_folder, "stage_cost.py", stage_cost_contents)
+        run_black(stage_cost_folder + DELIMITER + "stage_cost.py")
+
+    if terminal_cost_function is not None:
+        terminal_cost_folder = (
+            model_folder + DELIMITER + "cost_functions" + DELIMITER + "terminal_cost_function"
+        )
+
+        terminal_cost_str = jaxify_expression(terminal_cost_function)
+        terminal_cost_args = (
+            "".join([pp + ", " for pp in params["terminal_cost_function"].keys()])
+            if "terminal_cost_function" in params.keys()
+            else ""
+        )
+
+        terminal_cost_contents = cost_template.render(
+            n_states=n_states,
+            cost_name="terminal_cost",
+            cost_args=terminal_cost_args,
+            cost_function=terminal_cost_str,
+        )
+
+        terminal_init_imports = ["from .terminal_cost import terminal_cost"]
+        terminal_init_contents = init_template.render(imports="\n".join(terminal_init_imports))
+
+        create_python_file(terminal_cost_folder, "__init__.py", terminal_init_contents)
+        create_python_file(terminal_cost_folder, "terminal_cost.py", terminal_cost_contents)
+        run_black(terminal_cost_folder + DELIMITER + "terminal_cost.py")
 
     # Create barrier function contents
     if barrier_funcs is not None:
@@ -207,29 +272,30 @@ def generate_model(
         else:
             n_bars = len(barrier_funcs)
 
-        barr_init_contents = "\n".join(
-            [f"from .barrier_{bb+1} import cbf{bb+1}_package" for bb in range(n_bars)]
-        )
+        barr_init_imports = [
+            f"from .barrier_{bb+1} import cbf{bb+1}_package" for bb in range(n_bars)
+        ]
+        barr_init_contents = init_template.render(imports="\n".join(barr_init_imports))
         create_python_file(barrier_folder, "__init__.py", barr_init_contents)
 
         barrier_template = jinja_env.get_template("barrier.py.j2")
 
         for bb in range(n_bars):
             bf_str = jaxify_expression(barrier_funcs[bb])
-            
+
             cbf_args = (
                 "".join([pp + ", " for pp in params["cbf"][bb].keys()])
                 if "cbf" in params.keys()
                 else ""
             )
             cbf_args_call = convert_string(cbf_args)
-            
+
             barrier_contents = barrier_template.render(
                 n_states=n_states,
                 cbf_args=cbf_args,
                 cbf_args_call=cbf_args_call,
                 barrier_func=bf_str,
-                index=bb+1
+                index=bb + 1,
             )
             create_python_file(barrier_folder, f"barrier_{bb+1}.py", barrier_contents)
             run_black(barrier_folder + DELIMITER + f"barrier_{bb+1}.py")
@@ -239,16 +305,17 @@ def generate_model(
         lyapunov_folder = (
             model_folder + DELIMITER + "certificate_functions" + DELIMITER + "lyapunov_functions"
         )
-        
+
         if type(lyapunov_funcs) is str:
             n_lfs = 1
             lyapunov_funcs = [lyapunov_funcs]
         else:
             n_lfs = len(lyapunov_funcs)
 
-        lyap_init_contents = "\n".join(
-            [f"from .lyapunov_{ll+1} import clf{ll+1}_package" for ll in range(n_lfs)]
-        )
+        lyap_init_imports = [
+            f"from .lyapunov_{ll+1} import clf{ll+1}_package" for ll in range(n_lfs)
+        ]
+        lyap_init_contents = init_template.render(imports="\n".join(lyap_init_imports))
         create_python_file(lyapunov_folder, "__init__.py", lyap_init_contents)
 
         lyapunov_template = jinja_env.get_template("lyapunov.py.j2")
@@ -262,13 +329,13 @@ def generate_model(
                 else ""
             )
             clf_args_call = convert_string(clf_args)
-            
+
             lyapunov_contents = lyapunov_template.render(
                 n_states=n_states,
                 clf_args=clf_args,
                 clf_args_call=clf_args_call,
                 lyapunov_func=lf_str,
-                index=ll+1
+                index=ll + 1,
             )
             create_python_file(lyapunov_folder, f"lyapunov_{ll+1}.py", lyapunov_contents)
             run_black(lyapunov_folder + DELIMITER + f"lyapunov_{ll+1}.py")
@@ -281,30 +348,29 @@ def generate_model(
         else:
             n_cons = len(nominal_controller)
 
-        cont_init_contents = "\n".join(
-            [f"from .controller_{cc+1} import controller_{cc+1}" for cc in range(n_cons)]
-        )
+        cont_init_imports = [
+            f"from .controller_{cc+1} import controller_{cc+1}" for cc in range(n_cons)
+        ]
+        cont_init_contents = init_template.render(imports="\n".join(cont_init_imports))
         create_python_file(control_folder, "__init__.py", cont_init_contents)
 
         controller_template = jinja_env.get_template("controller.py.j2")
 
         for cc in range(n_cons):
             u_nom_str = jaxify_expression(nominal_controller[cc])
-            
+
             control_args = (
                 "".join([pp + ", " for pp in params["controller"].keys()])
                 if "controller" in params.keys()
                 else ""
             )
-            
+
             controller_contents = controller_template.render(
-                index=cc+1,
-                control_args=control_args,
-                nominal_controller=u_nom_str
+                index=cc + 1, control_args=control_args, nominal_controller=u_nom_str
             )
             create_python_file(control_folder, f"controller_{cc+1}.py", controller_contents)
             run_black(control_folder + DELIMITER + f"controller_{cc+1}.py")
-    
+
     # ROS2 Controller Node using Jinja
     ros2_folder = model_folder + "/ros2"
     os.makedirs(ros2_folder, exist_ok=True)
@@ -314,19 +380,13 @@ def generate_model(
     controller_node_template = jinja_env.get_template("ros2_controller_node.py.j2")
     # Assuming class name convention
     class_name = "".join([word.capitalize() for word in model_name.split("_")]) + "Controller"
-    
-    node_contents = controller_node_template.render(
-        class_name=class_name,
-        model_name=model_name
-    )
+
+    node_contents = controller_node_template.render(class_name=class_name, model_name=model_name)
     controller_path = os.path.join(ros2_folder, "controller.py")
     with open(controller_path, "w") as f:
         f.write(node_contents)
     run_black(controller_path)
-    
+
     print(f"Generated ROS2 controller node script at {controller_path}")
 
-    # ... (Other ROS nodes - TODO: convert) ...
-    
-    # Placeholder return for existing signature
     return n_states, n_controls
