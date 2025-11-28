@@ -62,22 +62,39 @@ def stepper(
     key: random.PRNGKey,
     stl_trajectory_cost,
 ) -> Tuple[State, Dict[str, Any]]:
-    """Step function to take the simulation forward one timestep. Designed
-    to work generically with broad classes of dynamics, controllers, and
-    estimators.
+    """Creates a closure to step the simulation forward by one timestep.
+
+    This function sets up the simulation environment including dynamics,
+    controllers, estimators, and sensors. It returns a `step` function
+    that, when called, advances the state of the system by `dt`.
+
+    The returned `step` closure performs the following operations:
+    1. Generates sensor measurements from the current state.
+    2. Updates the state estimate using the estimator.
+    3. Computes the true dynamics at the current state.
+    4. Plans a trajectory if a planner is provided.
+    5. Computes the nominal control input.
+    6. Computes the final control input using the controller (e.g., CBF-QP).
+    7. Applies perturbations (e.g., noise) to the dynamics.
+    8. Integrates the dynamics to obtain the next state.
 
     Args:
-        dynamics (Callable): function handle to compute true system dynamics
-        sensor (Callable): function handle to generate new state sensor
-        controller (Callable): function handle to compute control input
-        estimator (Callable): function handle to compute new state estimate
-        integrator (Callable): function handle to integrate over timestep for new state
-        dt (float) timestep (sec)
+        dt (float): The timestep for the simulation (in seconds).
+        dynamics (DynamicsCallable): Function to compute true system dynamics f(x) and g(x).
+        integrator (IntegratorCallable): Function to integrate dynamics over the timestep.
+        planner (PlannerCallable): Function to plan a reference trajectory.
+        nominal_controller (ControllerCallable): Function to compute nominal control input.
+        controller (ControllerCallable): Function to compute safety-critical control input.
+        sensor (SensorCallable): Function to generate sensor measurements.
+        estimator (EstimatorCallable): Function to estimate state from measurements.
+        perturbation (PerturbationCallable): Function to apply disturbances to dynamics.
+        sigma (Array): Noise covariance parameter for sensors/dynamics.
+        key (random.PRNGKey): JAX random key for stochasticity.
+        stl_trajectory_cost (Optional[Callable]): Cost function for STL specifications.
 
     Returns:
-        step (Callable): function handle for stepping forward in simulation time
-
-
+        Callable: A `step` function that takes (t, x, u, z, c, data) and returns
+        updated (x, u, z, c, data) for the next timestep.
     """
 
     def step(
@@ -199,27 +216,40 @@ def simulator(
     verbose: Optional[bool] = True,
     stl_trajectory_cost=None,
 ) -> Callable[[Array], Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array]]]]:
-    """Generates function handle for the iterator that carries out the simulation of the
-    dynamical system.
+    """Generates an iterator for simulating the dynamical system over a fixed horizon.
+
+    This function configures the simulation loop using the provided components
+    (dynamics, controller, etc.). It returns a callable that, when invoked with an
+    initial state, returns an iterator. This iterator yields the system state and
+    data at each timestep.
 
     Args:
-        dynamics (Callable): function handle to compute true system dynamics
-        sensor (Callable): function handle to generate new state sensor
-        controller (Callable): function handle to compute control input
-        estimator (Callable): function handle to compute new state estimate
-        dt (float) timestep (sec)
-        num_steps (int): number of timesteps to simulate
-        key (random.PRNGKey): key for generating random stochastic noise
+        dt (float): The timestep for the simulation (in seconds).
+        num_steps (int): Total number of timesteps to simulate.
+        dynamics (DynamicsCallable): Function to compute true system dynamics.
+        integrator (IntegratorCallable): Function to integrate dynamics.
+        planner (PlannerCallable): Function to plan trajectories.
+        nominal_controller (ControllerCallable): Function for nominal control.
+        controller (ControllerCallable): Function for safety filter/control.
+        sensor (SensorCallable): Function for sensor measurements.
+        estimator (EstimatorCallable): Function for state estimation.
+        perturbation (PerturbationCallable): Function for dynamics perturbations.
+        sigma (Array): Noise parameters.
+        key (random.PRNGKey): JAX random key.
+        verbose (bool, optional): If True, shows a progress bar. Defaults to True.
+        stl_trajectory_cost (Optional[Callable], optional): STL cost function. Defaults to None.
 
     Returns:
-        iterator eventually returning the following:
-            x (Array): state vector
-            u (Array): control input vector
-            z (Array): state estimate vector
-            p (Array): state estimate covariance matrix
-            keys (list): list of keys in data dict
-            vals (list): lists of values contained in data
-
+        Callable[[Array], Iterator]: A function that accepts an initial state `x0`
+        and returns an iterator. The iterator yields tuples containing:
+            - x (Array): Current state vector.
+            - u (Array): Applied control input.
+            - z (Array): Estimated state vector.
+            - p (Array): Estimation covariance/metadata.
+            - c_keys (List[str]): Keys for controller data.
+            - c_vals (List[Array]): Values for controller data.
+            - p_keys (List[str]): Keys for planner data.
+            - p_vals (List[Array]): Values for planner data.
     """
     # Define step function
     step = stepper(
@@ -316,7 +346,47 @@ def execute(
     stl_trajectory_cost=None,
     use_jit: bool = False,
 ) -> Tuple[Array, List[str], List[Array]]:
-    """This function simulates the dynamical system for a given number of steps..."""
+    """Executes a complete simulation of the dynamical system.
+
+    This function runs the simulation for `num_steps` starting from `x0`.
+    It can execute either in a standard Python loop or using JAX JIT compilation
+    for performance.
+
+    Args:
+        x0 (State): Initial state vector.
+        dt (float): Simulation timestep (seconds).
+        num_steps (int): Number of steps to simulate.
+        dynamics (DynamicsCallable): True system dynamics function.
+        integrator (IntegratorCallable): Numerical integrator.
+        planner (Optional[ControllerCallable], optional): Trajectory planner. Defaults to None.
+        nominal_controller (Optional[ControllerCallable], optional): Nominal controller. Defaults to None.
+        controller (Optional[ControllerCallable], optional): Safety controller (e.g., CBF). Defaults to None.
+        sensor (Optional[SensorCallable], optional): Sensor model. Defaults to None.
+        estimator (Optional[EstimatorCallable], optional): State estimator. Defaults to None.
+        perturbation (Optional[PerturbationCallable], optional): Disturbance model. Defaults to None.
+        sigma (Optional[Array], optional): Noise covariance/parameters. Defaults to None.
+        key (Optional[random.PRNGKey], optional): Random key for noise. Defaults to None.
+        filepath (Optional[str], optional): Path to save log file. Defaults to None.
+        verbose (Optional[bool], optional): Print progress/status. Defaults to True.
+        controller_data (ControllerData, optional): Initial controller data. Defaults to None.
+        planner_data (PlannerData, optional): Initial planner data. Defaults to None.
+        initial_covariance (Optional[Covariance], optional): Initial estimator covariance. Defaults to None.
+        stl_trajectory_cost (Optional[Any], optional): STL cost object. Defaults to None.
+        use_jit (bool, optional): If True, uses `jax.jit` for faster execution.
+            JIT compilation requires that all callables are JIT-compatible. Defaults to False.
+
+    Returns:
+        Tuple containing:
+            - states (Array): Trajectory of states (num_steps x state_dim).
+            - controls (Array): Trajectory of control inputs.
+            - estimates (Array): Trajectory of state estimates.
+            - covariances (Array): Trajectory of covariances.
+            - controller_keys (List[str]): Names of logged controller data fields.
+            - controller_values (List[Array]): Logged controller data values.
+            - planner_keys (List[str]): Names of logged planner data fields.
+            - planner_values (List[Array]): Logged planner data values.
+    """
+
     if nominal_controller is None:
         pass
 
