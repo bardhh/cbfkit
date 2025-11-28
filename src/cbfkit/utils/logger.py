@@ -6,9 +6,8 @@ This module provides functions required for logging simulation data.
 
 Functions
 ---------
-log(new_data): adds the latest data to the log
-write_log(filepath): writes the data contained in the log to a .csv file
-extract_log(key): retrieves data corresponding to key from log
+write_log(filepath, data): writes the data contained in the log to a .csv file
+extract_log(key, data): retrieves data corresponding to key from log
 
 Notes
 -----
@@ -18,71 +17,69 @@ for any type of simulation with arbitrary data.
 Examples
 --------
 >>> import logger
->>> data = {'x': 1, 'y':2}
->>> logger.log(data)
+>>> data = [{'x': 1, 'y':2}]
 >>> fpath = "point.csv"
->>> logger.write_log(fpath)
->>> x = logger.extract_log("x")
+>>> logger.write_log(fpath, data)
+>>> x = logger.extract_log("x", data)
 
 """
 
 import os
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 import pandas as pd
 
-# Main logger variable
-LOG = []
+LogEntry = Dict[str, Any]
 
 
-def log(new_data: Dict[str, Any]) -> None:
-    """Adds new_data to the log.
-
-    Args:
-    new_data (Dict): dictionary containing all data to be written with pertinent keys
-
-    Returns:
-    None
-
-    """
-    LOG.append(new_data)
-
-
-def write_log(filepath: str) -> None:
+def write_log(filepath: str, data: List[LogEntry]) -> None:
     """Writes logged data out to csv file specified at filepath.
 
     Args:
     filepath (str): path to save file
+    data (List[LogEntry]): list of log entries
 
     Returns:
     None
 
     """
-    folder_path = "/".join(filepath.split("/")[:-1])
-    if not os.path.exists(folder_path):
+    folder_path = os.path.dirname(filepath)
+    if folder_path and not os.path.exists(folder_path):
         os.makedirs(folder_path)
+
     if filepath[-4:] != ".csv":
         if filepath[-4] == ".":
             raise ValueError("filepath must have no extension, or have extension `.csv`")
         filepath += ".csv"
 
-    df = pd.DataFrame.from_dict(LOG)
+    df = pd.DataFrame.from_dict(data)
     df.to_csv(filepath)
 
 
-def extract_log(key: str) -> List[Any]:
+def extract_log(key: str, data: List[LogEntry]) -> List[Any]:
     """Extracts the key data from the log.
 
     Args:
     key (str): key to the log
+    data (List[LogEntry]): list of log entries
 
     Returns:
     key_data (list): data from log corresponding to key
 
     """
-    return [entry[key] for entry in LOG]
+    return [entry[key] for entry in data]
 
 
-def print_progress(iteration: int, total: int, prefix: str = '', suffix: str = '', decimals: int = 1, length: int = 50, fill: str = '█', printEnd: str = "\r") -> None:
+def print_progress(
+    iteration: int,
+    total: int,
+    prefix: str = "",
+    suffix: str = "",
+    decimals: int = 1,
+    length: int = 50,
+    fill: str = "█",
+    printEnd: str = "\r",
+) -> None:
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -97,8 +94,8 @@ def print_progress(iteration: int, total: int, prefix: str = '', suffix: str = '
     """
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
+    bar = fill * filledLength + "-" * (length - filledLength)
+    print(f"\r{prefix} |{bar}| {percent}% {suffix}", end=printEnd)
     # Print New Line on Complete
-    if iteration == total: 
+    if iteration == total:
         print()
