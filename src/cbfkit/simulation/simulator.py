@@ -3,7 +3,7 @@ simulator
 ================
 
 This module contains the functions responsible for simulating the trajectories
-of (controlled) dynamical systems over 
+of (controlled) dynamical systems over
 
 Functions
 ---------
@@ -20,28 +20,31 @@ Examples
 
 """
 
-from cbfkit.utils.jax_stl import *
-from typing import Any, Dict, Iterator, Optional, Tuple, List, Callable, Union
-from tqdm import tqdm
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+
 import jax.numpy as jnp
 import jax.tree_util
-from jax import random, Array, jit
-from cbfkit.utils.logger import log, write_log
+from jax import Array, jit, random
+from tqdm import tqdm
+
+from cbfkit.utils.jax_stl import *
+from cbfkit.utils.logger import write_log
 from cbfkit.utils.user_types import (
-    PlannerCallable,
+    Control,
     ControllerCallable,
+    ControllerData,
+    Covariance,
     DynamicsCallable,
+    Estimate,
     EstimatorCallable,
     IntegratorCallable,
     PerturbationCallable,
+    PlannerCallable,
+    PlannerData,
     SensorCallable,
     State,
-    Control,
-    Estimate,
-    Covariance,
-    ControllerData,
-    PlannerData,
 )
+
 from .simulator_jit import simulator_jit
 
 
@@ -195,9 +198,7 @@ def simulator(
     key: random.PRNGKey,
     verbose: Optional[bool] = True,
     stl_trajectory_cost=None,
-) -> Callable[
-    [Array], Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array]]]
-]:
+) -> Callable[[Array], Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array]]]]:
     """Generates function handle for the iterator that carries out the simulation of the
     dynamical system.
 
@@ -263,7 +264,7 @@ def simulator(
             x, u, z, p, controller_data, planner_data = step(
                 dt * s, x, u, z, p, controller_data, planner_data
             )
-            log(controller_data._asdict())
+            # Removed log() call here
             xs = jnp.append(xs, x.reshape(-1, 1), axis=1)
             planner_data = planner_data._replace(
                 xs=jnp.append(planner_data.xs, x.reshape(-1, 1), axis=1)
@@ -271,9 +272,7 @@ def simulator(
             # None  # xs
             yield x, u, z, p, list(controller_data._asdict().keys()), list(
                 controller_data._asdict().values()
-            ), list(planner_data._asdict().keys()), list(
-                planner_data._asdict().values()
-            )
+            ), list(planner_data._asdict().keys()), list(planner_data._asdict().values())
 
             if controller_data.complete:
                 if verbose:
@@ -347,13 +346,13 @@ def execute(
     # Generate key for randomization
     if key is None:
         key = random.PRNGKey(0)
-        
+
     # Ensure data structures are NamedTuples
     if controller_data is None:
         controller_data = ControllerData()
     elif isinstance(controller_data, dict):
         controller_data = ControllerData(**controller_data)
-        
+
     if planner_data is None:
         planner_data = PlannerData()
     elif isinstance(planner_data, dict):
@@ -361,17 +360,17 @@ def execute(
 
     if use_jit:
         # JIT Execution Path
-        
+
         # Initialize data structures (already ensured to be NamedTuples or None)
         c_data = controller_data
         p_data = planner_data
-        
+
         # WARMUP JIT
         # Prime the data structures to ensure they have the correct static shape/keys
         # We perform one dummy call (not integrated) to get the output dict structure.
         if verbose:
-             print("Warming up JIT...")
-        
+            print("Warming up JIT...")
+
         prime_key1, prime_key2, prime_key3 = random.split(key, 3)
 
         # Prime Planner
@@ -421,7 +420,7 @@ def execute(
 
         c_keys = list(c_datas._fields)
         c_values = []
-        
+
         # Extracting data efficiently
         for t in range(num_steps):
             # Extract full structure for step t
@@ -437,21 +436,30 @@ def execute(
             p_val_t = [getattr(p_data_t, k) for k in p_keys]
             p_values.append(p_val_t)
 
-        # We skip write_log(filepath) for now as we bypass the logger module buffering.
+        simulation_data = []
+        for t in range(num_steps):
+            # We need to handle potential shape mismatches if JIT returns different shapes
+            # Assuming xs, us, zs, cs are shaped (num_steps, ...)
+
+            x_t = xs[t]
+            u_t = us[t]
+            z_t = zs[t]
+            c_t = cs[t]
+
+            c_val_t = c_values[t]
+            p_val_t = p_values[t]
+
+            item = (x_t, u_t, z_t, c_t, c_keys, c_val_t, p_keys, p_val_t)
+            simulation_data.append(item)
+
+        simulation_data = tuple(simulation_data)
+
         if filepath is not None and verbose:
-            print(
-                f"Warning: JIT mode enabled. Logging to {filepath} is not yet supported/implemented."
-            )
+            # Now we can support logging in JIT!
+            # print(f"Logging JIT data to {filepath}...")
+            pass
 
-        return xs, us, zs, cs, c_keys, c_values, p_keys, p_values
-
-    # Define simulator (Python Loop)
-    # Note: Python loop logic for initial covariance is implicit in estimator initialization if needed.
-    # But we should probably pass it if estimator supports it, or rely on estimator behavior.
-    # Since this is a targeted fix for JIT/Hybrid, and Python loop seemed to work (or initialized differently),
-    # we leave Python loop as is for now, unless it needs explicit p0 too.
-    # The Python stepper calls `estimator(..., c)`. Initially c=None.
-    # Estimator handles None by calling `initialize`.
+        return extract_and_log_data(filepath, simulation_data)
 
     simulate_iter = simulator(
         dt,
@@ -486,18 +494,37 @@ def execute(
 #! Finish this function
 def extract_and_log_data(filepath: str, data):
     """_summary_"""
-    if filepath is not None:
-        write_log(filepath)
+
+    if len(data) > 0:
+        controller_data_keys = data[0][4]
+        controller_data_values = [sim_data[5] for sim_data in data]
+
+        if filepath is not None:
+            # Reconstruct log data
+            log_data = []
+            for i, values in enumerate(controller_data_values):
+                # values is a list of values corresponding to keys
+                entry = dict(zip(controller_data_keys, values))
+                log_data.append(entry)
+
+            write_log(filepath, log_data)
 
     #! Somehow make these more modular?
     states = jnp.array([sim_data[0] for sim_data in data])
     controls = jnp.array([sim_data[1] for sim_data in data])
     estimates = jnp.array([sim_data[2] for sim_data in data])
     covariances = jnp.array([sim_data[3] for sim_data in data])
-    controller_data_keys = data[0][4]
-    controller_data_values = [sim_data[5] for sim_data in data]
-    planner_data_keys = data[0][6]
-    planner_data_values = [sim_data[7] for sim_data in data]
+
+    if len(data) > 0:
+        controller_data_keys = data[0][4]
+        controller_data_values = [sim_data[5] for sim_data in data]
+        planner_data_keys = data[0][6]
+        planner_data_values = [sim_data[7] for sim_data in data]
+    else:
+        controller_data_keys = []
+        controller_data_values = []
+        planner_data_keys = []
+        planner_data_values = []
 
     return (
         states,
