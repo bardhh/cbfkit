@@ -7,9 +7,7 @@ Hessians, etc., for use in control Lyapunov function-based controllers.
 import jax.numpy as jnp
 from jax import Array, jacfwd, jacrev, jit
 
-from cbfkit.utils.user_types import (
-    LyapunovTuple,
-)
+from cbfkit.utils.user_types import LyapunovTuple
 
 # constants
 N = 2  # number of states

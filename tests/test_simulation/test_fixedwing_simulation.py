@@ -112,7 +112,7 @@ def execute(controller) -> Tuple[bool, int, Array]:
     )
 
     if "error" in dkeys:
-        if dvalues[-1][dkeys.index("error")]:
+        if dvalues[dkeys.index("error")].any():
             return False, x.shape[0], x[-1]
 
     return True, x.shape[0], x[-1]

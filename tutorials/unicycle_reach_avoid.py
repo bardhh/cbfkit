@@ -16,9 +16,7 @@ from cbfkit.integration import forward_euler
 from cbfkit.sensors import perfect
 from cbfkit.simulation import simulator
 from cbfkit.utils.user_types import PlannerData
-from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.barrier_1 import (
-    cbf,
-)
+from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.barrier_1 import cbf
 from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.barrier_2 import (
     cbf2_package,
 )

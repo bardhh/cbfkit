@@ -169,7 +169,7 @@ def execute(_ii: int, use_jit: bool = False) -> bool:
     if "error" in dkeys:
         err_idx = dkeys.index("error")
         # Check if any step reported an error
-        if any(step_vals[err_idx] for step_vals in dvalues):
+        if dvalues[err_idx].any():
             return False
 
     return True
