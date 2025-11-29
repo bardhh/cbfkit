@@ -1,17 +1,10 @@
-import matplotlib
-
 # matplotlib.use("macosx")
 import matplotlib.pyplot as plt
-from matplotlib.animation import FFMpegWriter
-from matplotlib.patches import Ellipse
-from typing import List
-from jax import Array
 import numpy as np
-import jax.numpy as jnp
+from matplotlib.animation import FFMpegWriter
 
 
 class circle:
-
     def __init__(self, ax, pos=np.array([0, 0]), radius=1.0):
         self.X = pos
         self.radius = radius
@@ -76,15 +69,13 @@ def animate(
         trajectory[0].set_data(states[:frame, 0], states[:frame, 1])
         _ = states[frame]
         _ = estimates[frame]
-        
+
         if "sampled_x_traj" in controller_data_keys:
             key = "sampled_x_traj"
         else:
             key = "robot_sampled_states"
-            
-        robot_sampled_states = controller_data_items[frame][
-            controller_data_keys.index(key)
-        ]
+
+        robot_sampled_states = controller_data_items[frame][controller_data_keys.index(key)]
         robot_selected_states = controller_data_items[frame][controller_data_keys.index("x_traj")]
 
         # Sampled Trajectories
@@ -119,10 +110,8 @@ def animate(
             )
         )
 
-    if obstacle != None:
+    if obstacle is not None:
         circle(ax, pos=obstacle, radius=obstacle_radius)
-
-    from matplotlib import animation
 
     text = ax.text(1, 9, f"time: {dt}")
     trajectory = [0] * (1 + mppi_args["plot_samples"] + 1)

@@ -20,29 +20,23 @@ To run all tests in this module (from the root of the repository):
 """
 
 import time
-import pytest
-import jax.numpy as jnp
-from jax import jacfwd, random, jit
-from numpy.random import uniform
 
-from cbfkit.simulation import simulator as sim
-from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import (
-    vanilla_cbf_clf_qp_controller,
-)
-from cbfkit.certificates import (
-    concatenate_certificates,
-)
-from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import (
-    linear_class_k,
-)
-from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.estimators import ct_ekf_dtmeas
-from cbfkit.integration import forward_euler as integrator
-from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
-from cbfkit.utils.user_types import PlannerData, ControllerData
+import jax.numpy as jnp
+import pytest
+from jax import jacfwd, random
+from numpy.random import uniform
 
 # Simulation-specific
 import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
+from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import vanilla_cbf_clf_qp_controller
+from cbfkit.estimators import ct_ekf_dtmeas
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
+from cbfkit.sensors import unbiased_gaussian_noise as sensor
+from cbfkit.simulation import simulator as sim
+from cbfkit.utils.user_types import PlannerData
 
 # Simulation setup
 N = 3  # n_states
@@ -87,15 +81,23 @@ bars = [
 ]
 BARRIERS = concatenate_certificates(*bars)
 
-DYNAMICS = unicycle.plant(l=1.0)
+DYNAMICS = unicycle.plant(lam=1.0)
 NOMINAL_CONTROLLER = unicycle.controllers.proportional_controller(
     dynamics=DYNAMICS,
     Kp_pos=1.0,
     Kp_theta=0.01,
 )
 DFDX = jacfwd(DYNAMICS)
-H = lambda x: x
-DHDX = lambda _x: jnp.eye(N)
+
+
+def H(x):
+    return x
+
+
+def DHDX(_x):
+    return jnp.eye(N)
+
+
 ESTIMATOR = ct_ekf_dtmeas(
     Q=Q,
     R=R,
@@ -117,7 +119,7 @@ def initial_state():
     """Fixture to generate a valid initial state."""
     invalid_initial_condition = True
     state = None
-    
+
     # Generate random initial condition
     while invalid_initial_condition:
         x_rand = uniform(low=-x_max, high=x_max)
@@ -135,13 +137,13 @@ def initial_state():
 @pytest.mark.benchmark
 def test_execution_performance_jit(initial_state):
     """Tests that JIT-compiled execution is fast (average step < 1ms)."""
-    
+
     planner_data = PlannerData(
         u_traj=None,
         x_traj=jnp.tile(GOAL.reshape(-1, 1), (1, N_STEPS + 1)),
         prev_robustness=None,
     )
-    
+
     # Warmup
     sim.execute(
         x0=initial_state,
@@ -159,11 +161,11 @@ def test_execution_performance_jit(initial_state):
         key=random.PRNGKey(0),
         planner_data=planner_data,
         use_jit=True,
-        verbose=False
+        verbose=False,
     )
-    
+
     start_time = time.time()
-    
+
     sim.execute(
         x0=initial_state,
         dt=DT,
@@ -180,14 +182,14 @@ def test_execution_performance_jit(initial_state):
         key=random.PRNGKey(0),
         planner_data=planner_data,
         use_jit=True,
-        verbose=False
+        verbose=False,
     )
-    
+
     total_time = time.time() - start_time
     avg_step_ms = (total_time / N_STEPS) * 1000
-    
+
     print(f"Total Time (s): {total_time:.4f}")
     print(f"Avg Step (ms): {avg_step_ms:.4f}")
-    
+
     # JIT execution should be fast, satisfying the < 20ms requirement
     assert avg_step_ms < 20.0

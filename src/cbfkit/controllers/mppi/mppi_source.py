@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
-from jax.random import multivariate_normal
 from jax import jit, lax
+from jax.random import multivariate_normal
 
 
 def setup_mppi(
@@ -19,16 +19,15 @@ def setup_mppi(
     costs_lambda=0.03,
     cost_perturbation_coeff=0.1,
 ):
-
-    if dyn_func == None:
-        print(f"Dynamics function not passed")
+    if dyn_func is None:
+        print("Dynamics function not passed")
         exit()
-    if trajectory_cost_func == None:
-        if stage_cost_func == None:
-            print(f"Neither Trajectury Cost nor Stage Cost function is passed.")
+    if trajectory_cost_func is None:
+        if stage_cost_func is None:
+            print("Neither Trajectury Cost nor Stage Cost function is passed.")
             exit()
-        if terminal_cost_func == None:
-            print(f"Neither Trajectory Cost nor Terminal Cost function is passed")
+        if terminal_cost_func is None:
+            print("Neither Trajectory Cost nor Terminal Cost function is passed")
             exit()
 
     horizon = horizon
@@ -106,7 +105,7 @@ def setup_mppi(
                     @ perturbation[:, [i]]
                 )[0, 0]
             )
-            if trajectory_cost_func == None:
+            if trajectory_cost_func is None:
                 cost_sample = cost_sample + stage_cost_func(
                     robot_state[:, 0], perturbed_control[:, [i]][:, 0]
                 )
@@ -119,7 +118,7 @@ def setup_mppi(
 
         cost_sample, robot_states = lax.fori_loop(0, horizon - 1, body, (cost_sample, robot_states))
 
-        robot_state = robot_states[:, [horizon - 1]]
+        robot_states[:, [horizon - 1]]
         cost_sample = (
             cost_sample
             + cost_perturbation_coeff
@@ -133,7 +132,7 @@ def setup_mppi(
         #     cost_sample = cost_sample + terminal_cost_func(
         #         robot_state[:, 0], perturbed_control[:, [horizon]][:, 0]
         #     )
-        if trajectory_cost_func != None:
+        if trajectory_cost_func is not None:
             cost_sample = cost_sample + trajectory_cost_func(
                 time, robot_states, perturbed_control, prev_robustness
             )
@@ -144,7 +143,6 @@ def setup_mppi(
     def rollout_states_foresee(
         time, robot_init_state, perturbed_control, perturbation, x_prev, prev_robustness
     ):
-
         ##### Initialize
 
         # Robot
@@ -230,7 +228,6 @@ def setup_mppi(
 
     @jit
     def compute_rollout_costs(key, U, init_state, time, x_prev, prev_robustness):
-
         perturbation, perturbed_control = compute_perturbed_control(
             key, control_mu, control_cov, control_bound, U
         )

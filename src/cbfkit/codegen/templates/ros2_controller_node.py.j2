@@ -37,11 +37,11 @@ class {{ class_name }}(Node):
         estimate = jnp.array(msg.data)
         t = 0.0 # USER_DEFINED
         # Dummy u_nom and key for ROS node usage
-        u_nom = jnp.zeros(1) 
+        u_nom = jnp.zeros(1)
         key = 0
         from cbfkit.utils.user_types import ControllerData
         data = ControllerData()
-        
+
         control_command, _ = self.controller(t, estimate, u_nom, key, data)
         self.reset_control_msg()
         if control_command.ndim > 0:

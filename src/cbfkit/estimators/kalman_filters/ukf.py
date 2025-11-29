@@ -1,14 +1,15 @@
+from typing import Callable, Optional, Tuple, Union, cast
+
 import jax.numpy as jnp
 from jax import Array
-from typing import Tuple, Callable, Union, Optional
 
-from cbfkit.utils.user_types import DynamicsCallable
 from cbfkit.integration import forward_euler as integrate
+from cbfkit.utils.user_types import DynamicsCallable, EstimatorCallable, Time
 
 
 def ct_ukf_dtmeas(
     Q: Array, R: Array, dynamics: DynamicsCallable, h: Callable, dt: float
-) -> Callable[[float, Array, Array, Array], Tuple[Array, Array]]:
+) -> EstimatorCallable:
     """Function defining the continuous-time UKF with discrete-time measurements.
 
     Arguments:
@@ -23,11 +24,11 @@ def ct_ukf_dtmeas(
     update = update_dtmeas(R, h)
 
     def step_ukf(
-        t: float,
+        t: Time,
         y: Array,
-        z: Optional[Union[Array, None]] = None,
-        u: Optional[Union[Array, None]] = None,
-        P: Optional[Union[Array, None]] = None,
+        z: Optional[Array] = None,
+        u: Optional[Array] = None,
+        P: Optional[Array] = None,
     ) -> Tuple[Array, Array]:
         """Continuous-time implementation of Unscented Kalman Filter (UKF) with
         discrete-time measurements.
@@ -44,10 +45,17 @@ def ct_ukf_dtmeas(
             P_new (Array): updated Kalman covariance matrix
 
         """
-        if z is None and u is None and P is None:
+        if z is None or u is None or P is None:
             return initialize(y, R)
 
-        x_predicted, P_predicted, s_predicted = predict(t, z, u, P)
+        # Cast t to float as predict expects float
+        t_float = (
+            float(t)
+            if isinstance(t, (float, int))
+            else float(cast(Array, t)[0]) if t.shape == (1,) else float(cast(Array, t))
+        )  # Best effort casting
+
+        x_predicted, P_predicted, s_predicted = predict(t_float, z, u, P)
         x_new, P_new = update(x_predicted, y, P_predicted, s_predicted)
 
         return x_new, P_new
@@ -56,7 +64,7 @@ def ct_ukf_dtmeas(
 
 
 #! Possibly implement this in a better fashion in the future
-def initialize(y: Array, R: Array) -> Array:
+def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
     """Initialization for the continuous-time EKF with discrete-time measurements.
 
     Arguments:
@@ -74,7 +82,7 @@ def initialize(y: Array, R: Array) -> Array:
 
 def predict_ct_dtmeas(
     Q: Array, dynamics: DynamicsCallable, dt: float
-) -> Callable[[float, Array, Array, Array], Tuple[Array, Array]]:
+) -> Callable[[float, Array, Array, Array], Tuple[Array, Array, Array]]:
     """Function defining the prediction step for the continuous-time EKF with discrete-time measurements.
 
     Arguments:
@@ -88,7 +96,7 @@ def predict_ct_dtmeas(
     """
     sigma_points = generate_sigma_points(Q.shape[0])
 
-    def predict(_t: float, z: Array, u: Array, P: Array) -> Tuple[Array, Array]:
+    def predict(_t: float, z: Array, u: Array, P: Array) -> Tuple[Array, Array, Array]:
         """Implementation of prediction step for the continuous-time EKF with discrete-time measurements.
 
         Arguments:
@@ -125,7 +133,7 @@ def predict_ct_dtmeas(
 
 def update_dtmeas(
     R: Array, h: Callable[[Array], Array]
-) -> Callable[[float, Array, Array], Tuple[Array, Array]]:
+) -> Callable[[Array, Array, Array, Array], Tuple[Array, Array]]:
     """Function defining the update step for (any) EKF with discrete-time measurements.
 
     Arguments:
@@ -177,7 +185,7 @@ def update_dtmeas(
 
 def generate_sigma_points(
     L: int, alpha: float = 0.05, beta: float = 2.0, kappa: float = 1.0, scheme: int = 0
-) -> Array:
+) -> Callable[[Array, Array], Tuple[Array, Array, Array]]:
     """Generates the sigma points for the Unscented Transform.
 
     Arguments:
@@ -226,7 +234,7 @@ def generate_sigma_points(
     Wa = Wa / jnp.sum(Wa)
     Wc = Wc / jnp.sum(Wc)
 
-    def sigma_points(z: Array, P: Array):
+    def sigma_points(z: Array, P: Array) -> Tuple[Array, Array, Array]:
         """_summary_
 
         Args:
@@ -273,10 +281,14 @@ def generate_sigma_points(
 
         elif scheme == 2:
             # Calculate the first set of sigma points in one line using broadcasting
-            sigma_points = sigma_points.at[indices_1, :].set(z + jnp.sqrt(3) * A[:, indices_1 - 1].T)
+            sigma_points = sigma_points.at[indices_1, :].set(
+                z + jnp.sqrt(3) * A[:, indices_1 - 1].T
+            )
 
             # Calculate the second set of sigma points in one line using broadcasting
-            sigma_points = sigma_points.at[indices_2, :].set(z - jnp.sqrt(3) * A[:, indices_2 - L - 1].T)
+            sigma_points = sigma_points.at[indices_2, :].set(
+                z - jnp.sqrt(3) * A[:, indices_2 - L - 1].T
+            )
 
         return sigma_points, Wa, Wc
 

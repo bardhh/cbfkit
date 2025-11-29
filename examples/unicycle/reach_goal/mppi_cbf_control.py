@@ -40,7 +40,7 @@ desired_state: Array = jnp.array([2.0, 4.0, 0.0, 0.0])
 actuation_constraints: Array = jnp.array([100.0, 100.0])  # Effectively, no control limits
 
 # Define system dynamics
-unicycle_dynamics = plant(l=1.0)
+unicycle_dynamics = plant(lam=1.0)
 
 
 # MPPI Cost Functions

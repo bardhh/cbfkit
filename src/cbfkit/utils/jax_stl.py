@@ -1,8 +1,6 @@
 import jax
 import jax.numpy as jnp
-from jax import jit, vmap, lax
-
-import time
+from jax import jit, lax
 
 
 # Processes mtl not
@@ -26,7 +24,6 @@ def jax_and(left_robustness, right_robustness):
 # Binary search for a desired time step
 @jit
 def search_sorted(time_stamps, time):  # , start_lower_index):
-
     def search_body(i, bounds):
         lower, upper, middle = bounds
         middle = (lower + upper) // 2
@@ -116,7 +113,7 @@ def accumulate_min(arr):
 # Processes mtl finally
 @jit
 def jax_finally(lower_time_bound, upper_time_bound, robustness, time_stamps):
-    length = len(robustness)
+    len(robustness)
 
     def process_valid_bounds(_):
         def inf_case(_):
@@ -159,10 +156,9 @@ def jax_finally(lower_time_bound, upper_time_bound, robustness, time_stamps):
 # Processes mtl global
 # #@jit
 def jax_global(lower_time_bound, upper_time_bound, robustness, time_stamps):
-    length = len(robustness)
+    len(robustness)
 
     def process_valid_bounds(_):
-
         def inf_case(_):
             # In case the upper time bound is infinity, we accumulate minimum robustness
             return jnp.min(robustness)
@@ -207,7 +203,6 @@ def jax_one_dim_pred(traces, A, bound):
 # Processes mtl until
 @jit
 def jax_until(upper_time_bound, robustness, time_stamps):
-
     robustness = lax.cond(
         upper_time_bound > time_stamps[0],
         jax_global,
@@ -236,8 +231,6 @@ if __name__ == "__main__":
     print(f"robustness: {robustness}")
     time_stamps = jnp.linspace(1, 10, length)
     print(f"timestamps: {time_stamps}")
-
-    execution_times = []
 
     # JIT compile the function
     jax_global_jit = jit(jax_global)

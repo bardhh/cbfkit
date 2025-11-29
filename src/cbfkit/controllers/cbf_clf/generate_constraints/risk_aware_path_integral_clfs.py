@@ -2,21 +2,18 @@
 #! docstring
 """
 
-from typing import Callable, Tuple, Dict, Any
+from typing import Any, Callable, Dict, Tuple
+
 import jax.numpy as jnp
 from jax import Array, jit, lax, scipy
-from cbfkit.utils.user_types import (
-    DynamicsCallable,
-    CertificateCollection,
-    State,
-)
-from .unpack import unpack_for_clf
+
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable, State, Time
+
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
-    RiskAwareParams,
-)
+from .unpack import unpack_for_clf
 
 
 ###################################################################################################
@@ -27,7 +24,7 @@ def generate_compute_ra_pi_clf_constraints(
     barriers: CertificateCollection = ([], [], [], [], []),
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
-) -> Callable[[float, State], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """
     #! To Do: docstring
     """
@@ -39,22 +36,31 @@ def generate_compute_ra_pi_clf_constraints(
 
     # Check for Risk-Aware Params object
     if "ra_clf_params" in kwargs:
-        ra_params = kwargs["ra_clf_params"]
+        ra_params: RiskAwareParams = kwargs["ra_clf_params"]  # type: ignore[assignment]
+        assert ra_params.eta is not None
+        assert ra_params.t_max is not None
+        assert ra_params.p_bound is not None
+        assert ra_params.gamma is not None
         r_buffer = float(
             ra_params.eta * jnp.sqrt(2 * ra_params.t_max) * scipy.special.erfinv(ra_params.p_bound)
         )
     else:
-        ra_params = RiskAwareParams(sigma=lambda _: None)
+        ra_params = RiskAwareParams(
+            sigma=lambda x: jnp.zeros((x.shape[0], 1)),
+            gamma=jnp.zeros(n_lfs),  # Initialize gamma to zeros
+            integrator_states=jnp.zeros((n_lfs,)),  # Initialize integrator_states
+        )
         r_buffer = 0.0
 
     ra_params.integrator_states = jnp.zeros((n_lfs,))
 
     @jit
-    def compute_clf_constraints(t: float, x: State) -> Tuple[Array, Array]:
+    def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
         """Computes CBF and CLF constraints."""
         nonlocal a_clf, b_clf, ra_params
-        data = {}
+        data: Dict[str, Any] = {}
         dyn_f, dyn_g = dyn_func(x)
+        assert ra_params.sigma is not None
         sigma = ra_params.sigma(x)
         ra_params.integrator_states = lax.cond(
             t == 0, lambda _: jnp.zeros((n_lfs,)), lambda _: ra_params.integrator_states, 0
@@ -62,6 +68,8 @@ def generate_compute_ra_pi_clf_constraints(
 
         if n_lfs > 0:
             lf_x, lj_x, lh_x, dlf_t, _ = compute_lyapunov_values(t, x)
+            assert ra_params.gamma is not None
+            # Ensure array types for addition
             w_vals = ra_params.integrator_states + ra_params.gamma + r_buffer
             lc_x = jnp.stack([lc(w_vals[ii]) for ii, lc in enumerate(conditions)])
             traces = jnp.array(

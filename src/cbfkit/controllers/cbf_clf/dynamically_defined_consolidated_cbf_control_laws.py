@@ -3,10 +3,12 @@
 """
 
 from typing import Callable, Tuple
-from jax import Array, jacfwd, jacrev, jit
+
 import jax.numpy as jnp
-from cbfkit.utils.user_types import DynamicsCallable
+from jax import Array, jacfwd, jacrev, jit
+
 from cbfkit.utils.matrix_vector_operations import invert_array
+from cbfkit.utils.user_types import DynamicsCallable
 
 
 def generate_compute_w2dot_udot(

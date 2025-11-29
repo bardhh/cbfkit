@@ -1,11 +1,9 @@
-import pytest
+import jax.numpy as jnp
 
-jax = pytest.importorskip("jax")
-jnp = jax.numpy
-
-from cbfkit.utils import block_diag_matrix, hat, normalize, tanh_sigmoid_func, vee
+from cbfkit.utils import block_diag_matrix, hat
 from cbfkit.utils import matrix_vector_operations as mvo
 from cbfkit.utils import miscellaneous as misc
+from cbfkit.utils import normalize, tanh_sigmoid_func, vee
 
 
 def test_helpers_are_reexported():

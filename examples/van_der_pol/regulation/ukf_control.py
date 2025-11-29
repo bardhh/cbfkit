@@ -11,25 +11,22 @@ import jax.numpy as jnp
 import numpy as np
 from jax import jacfwd
 
-# Whether or not to simulate, plot
-simulate = 1
-plot = 1
-save = 1
-
-# Load system module
 import cbfkit.simulation.simulator as sim
-
-# Load dynamics, sensors, controller, estimator, integrator
+from cbfkit.estimators import ct_ukf_dtmeas as ukf
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.systems.unicycle.models.olfatisaber2002approximate import dynamics as unicycle
 from cbfkit.systems.unicycle.models.olfatisaber2002approximate.controllers.proportional_controller import (
     proportional_controller,
 )
-from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.estimators import ct_ukf_dtmeas as ukf
-from cbfkit.integration import forward_euler as integrator
-
-# Load initial conditions
+from cbfkit.utils.user_types import PlannerData
 from examples.van_der_pol.common.config import ukf_state_estimation as initial_conditions
+from examples.van_der_pol.common.visualizations import animate
+
+# Whether or not to simulate, plot
+simulate = 1
+plot = 1
+save = 1
 
 # Define time parameters
 tf = 5.0
@@ -37,10 +34,21 @@ dt = 0.01
 n_steps = int(tf / dt)
 
 # Define dynamics, controller, and estimator with specified parameters
-dynamics = unicycle.approx_unicycle_dynamics(l=1.0)
-dfdx = lambda x: jacfwd(dynamics)(x)
-h = lambda x: x
-dhdx = lambda x: jnp.eye((len(initial_conditions.initial_state)))
+dynamics = unicycle.approx_unicycle_dynamics(lam=1.0)
+
+
+def dfdx(x):
+    return jacfwd(dynamics)(x)
+
+
+def h(x):
+    return x
+
+
+def dhdx(x):
+    return jnp.eye((len(initial_conditions.initial_state)))
+
+
 controller = proportional_controller(dynamics=dynamics, Kp_pos=1, Kp_theta=0.01)
 scale_factor = 1.25
 estimator = ukf(
@@ -53,6 +61,14 @@ estimator = ukf(
 
 
 if simulate:
+    initial_state = jnp.array(
+        [
+            initial_conditions.initial_state[0],
+            initial_conditions.initial_state[1],
+            initial_conditions.initial_state[2],
+        ]
+    )
+
     # Execute simulation
     (
         states,
@@ -64,7 +80,7 @@ if simulate:
         planner_data,
         planner_data_keys,
     ) = sim.execute(
-        x0=initial_conditions.initial_state,
+        x0=initial_state,
         dynamics=dynamics,
         sensor=sensor,
         nominal_controller=controller,
@@ -72,19 +88,13 @@ if simulate:
         integrator=integrator,
         dt=dt,
         num_steps=n_steps,
-        planner_data={
-            "u_traj": None,
-            "x_traj": jnp.tile(initial_conditions.desired_state.reshape(-1, 1), (1, n_steps + 1)),
-            "prev_robustness": None,
-        },
+        planner_data=PlannerData(
+            u_traj=None,
+            x_traj=jnp.tile(initial_conditions.desired_state.reshape(-1, 1), (1, n_steps + 1)),
+            prev_robustness=None,
+        ),
         use_jit=True,
     )
-
-    # Reformat results as numpy arrays
-    states = np.array(states)
-    controls = np.array(controls)
-    estimates = np.array(estimates)
-    covariances = np.array(covariances)
 
 else:
     # Implement load from file
@@ -101,7 +111,7 @@ if plot:
         x_lim=(-5, 5),
         y_lim=(-5, 5),
         dt=dt,
-            title="System Behavior",
-            save_animation=save,
-            animation_filename="examples/van_der_pol/regulation/results/ukf_estimation.gif",
-        )
+        title="System Behavior",
+        save_animation=save,
+        animation_filename="examples/van_der_pol/regulation/results/ukf_estimation.gif",
+    )

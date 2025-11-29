@@ -3,19 +3,18 @@ velocity_with_obstacles.py
 
 """
 
-from typing import List
+from typing import Callable, List
+
 import jax.numpy as jnp
-from jax import jit, jacfwd, jacrev, Array
-from cbfkit.certificates import (
-    certificate_package,
+from jax import Array, jacfwd, jacrev, jit
+
+from cbfkit.certificates import certificate_package
+from cbfkit.systems.fixed_wing_uav.models.beard2014_kinematic.certificates.barrier_functions.obstacle_avoidance.high_order import (
+    cbf,
 )
 from cbfkit.systems.fixed_wing_uav.models.beard2014_kinematic.certificates.lyapunov_functions.velocity import (
     clf,
 )
-from cbfkit.systems.fixed_wing_uav.models.beard2014_kinematic.certificates.barrier_functions.obstacle_avoidance.high_order import (
-    cbf,
-)
-
 
 # constants
 N = 6  # number of states
@@ -29,7 +28,7 @@ def cblf(
     obstacles: List[Array],
     robs: List[float],
     alpha: float,
-) -> Array:
+) -> Callable[[Array], Array]:
     """Barrier Lyapunov function for driving the vehicle to goal velocities
     while avoiding obstacles.
 
@@ -45,7 +44,7 @@ def cblf(
         ret (float): value of goal function evaluated at time and state
 
     """
-    barriers = [cbf(obs, ro, alpha) for (obs, ro) in zip(obstacles, robs)]
+    barriers = [cbf(obs, [ro, ro, ro], alpha) for (obs, ro) in zip(obstacles, robs)]
     control_lyap = clf(goal, rg)
 
     @jit
@@ -64,7 +63,7 @@ def cblf_grad(
     obstacles: List[Array],
     robs: List[float],
     alpha: float,
-) -> Array:
+) -> Callable[[Array], Array]:
     """Jacobian for Barrier-Lyapunov function for driving the vehicle to goal velocities
     while avoiding obstacles.
 
@@ -94,7 +93,7 @@ def cblf_hess(
     obstacles: List[Array],
     robs: List[float],
     alpha: float,
-) -> Array:
+) -> Callable[[Array], Array]:
     """Hessian for Barrier-Lyapunov function for driving the vehicle to goal velocities
     while avoiding obstacles.
 

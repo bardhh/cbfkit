@@ -2,18 +2,17 @@
 #! docstring
 """
 
-from typing import Dict, Any, Tuple
-from jax import Array, jit, lax
+from typing import Any, Callable, Dict, Tuple
+
 import jax.numpy as jnp
-from cbfkit.utils.user_types import (
-    DynamicsCallable,
-    CertificateCollection,
-    State,
-)
-from .unpack import unpack_for_clf
+from jax import Array, jit, lax
+
+from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable, State, Time
+
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
+from .unpack import unpack_for_clf
 
 
 #! To Do: implement (after discovering theory)
@@ -25,7 +24,7 @@ def generate_compute_stochastic_clf_constraints(
     barriers: CertificateCollection = ([], [], [], [], []),
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
-):
+) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """Placeholder. Theory still in development."""
     """
     #! To Do: docstring
@@ -43,10 +42,10 @@ def generate_compute_stochastic_clf_constraints(
         raise ValueError("sigma must be of type Callable[[Array], Array]!")
 
     @jit
-    def compute_clf_constraints(t: float, x: State) -> Tuple[Array, Array]:
+    def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
         """Computes CBF and CLF constraints."""
         nonlocal a_clf, b_clf
-        data = {}
+        data: Dict[str, Any] = {}
         dyn_f, dyn_g = dyn_func(x)
         s = sigma(x)
 

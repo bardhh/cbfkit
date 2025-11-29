@@ -1,20 +1,21 @@
 import jax.numpy as jnp
 import numpy as np
 
+
 class BaseConfig:
     # Time settings
     tf = 1.0
     dt = 1e-3
-    
+
     # Define goal set
     desired_state = jnp.array([0.0, 0.0])
     goal_radius = 0.05
     initial_state = jnp.array([2.0, 2.0])
-    
+
     # Physical parameters
     actuation_limits = jnp.array([1e3])  # effectively, no actuation limits (except roll)
     epsilon = 0.2
-    
+
     # FxTS parameters
     Tg = tf
     e1 = 0.5
@@ -23,10 +24,10 @@ class BaseConfig:
     c2 = 1 / ((e2 - 1) * (Tg - 1 / (c1 * (1 - e1))))
     if c2 < 0:
         raise ValueError(f"Parameter c2 < 0: c2 = {c2:.2f}")
-    
+
     # Stochasticity Parameters
     Q = 0.05 * jnp.array([[0.0, 0.0], [0.0, 1.0]])  # process noise
-    
+
     # RA-CLF Parameters
     pg = 0.75
     gamma_v = 11.0
@@ -34,10 +35,12 @@ class BaseConfig:
     lambda_h = 1.0
     lambda_generator = None
 
+
 class PerfectMeasurementsConfig(BaseConfig):
     R = 0.05 * jnp.eye(len(BaseConfig.desired_state))  # measurement noise
 
-# For UKF, the existing code was using Unicycle parameters. 
+
+# For UKF, the existing code was using Unicycle parameters.
 # To break dependency but preserve behavior (even if potentially wrong for VDP),
 # we replicate the Unicycle config values here but adapted for VDP structure if needed.
 # However, since the UKF example imports Unicycle dynamics, it expects Unicycle config structure (3 states).
@@ -53,6 +56,7 @@ class UKFEstimationConfig:
     desired_state = jnp.array([0.0, 0.0, 0])
     Q = 0.5 * jnp.eye(len(initial_state))
     R = 0.05 * jnp.eye(len(initial_state))
+
 
 # Aliases
 perfect_state_measurements = PerfectMeasurementsConfig

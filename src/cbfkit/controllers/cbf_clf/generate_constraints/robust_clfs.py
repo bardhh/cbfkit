@@ -2,19 +2,18 @@
 #! docstring
 """
 
-from typing import Callable, Tuple, Dict, Any
+from typing import Any, Callable, Dict, Tuple
+
 import jax.numpy as jnp
 from jax import Array, jit, lax
-from cbfkit.utils.user_types import (
-    DynamicsCallable,
-    CertificateCollection,
-    State,
-)
-from .unpack import unpack_for_clf
-from ..utils.robustness_terms import robustness_two_norm, robustness_sup_norm
+
+from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable, State, Time
+
+from ..utils.robustness_terms import robustness_sup_norm, robustness_two_norm
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
+from .unpack import unpack_for_clf
 
 
 ####################################################################################################
@@ -25,7 +24,7 @@ def generate_compute_robust_clf_constraints(
     barriers: CertificateCollection = ([], [], [], [], []),
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
-) -> Callable[[float, State], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """
     #! To Do: docstring
     """
@@ -42,7 +41,7 @@ def generate_compute_robust_clf_constraints(
         raise ValueError("kwargs missing disturbance_norm (int) (e.g., 2-norm, sup-norm)!")
 
     disturbance_norm = kwargs["disturbance_norm"]
-    disturbance_norm_bound = kwargs["disturbance_norm_bound"]
+    disturbance_norm_bound = jnp.array(kwargs["disturbance_norm_bound"])
 
     if disturbance_norm == 2:
         robustness_term = robustness_two_norm(disturbance_norm_bound)
@@ -51,7 +50,7 @@ def generate_compute_robust_clf_constraints(
         robustness_term = robustness_sup_norm(disturbance_norm_bound)
 
     @jit
-    def compute_clf_constraints(t: float, x: State) -> Tuple[Array, Array]:
+    def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
         """Computes CBF and CLF constraints."""
         nonlocal a_clf, b_clf
         data = {}

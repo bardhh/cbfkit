@@ -1,5 +1,6 @@
-import rclpy
 from typing import Callable, Tuple
+
+import rclpy
 from jax import Array
 
 

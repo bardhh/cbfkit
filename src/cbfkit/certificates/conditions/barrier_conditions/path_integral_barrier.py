@@ -2,8 +2,8 @@
 path_integral_barrier.py
 ================
 
-This module contains the function specifying the right-hand side of risk-aware path-integral 
-CBF inequalities, e.g., 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - rho) + integral for 
+This module contains the function specifying the right-hand side of risk-aware path-integral
+CBF inequalities, e.g., 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - rho) + integral for
 Lh <= 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - rho) + integral.
 
 Functions
@@ -19,7 +19,7 @@ Examples
 >>> from jax import jacfwd, jacrev
 >>> from cbfkit.certificates import certificate_package, concatenate_certificates
 >>> from cbfkit.certificates.conditions.barrier_conditions.path_integral_barrier import right_hand_side
->>> 
+>>>
 >>> def cbf(limit):
 >>>     def func(x):
 >>>         return x[0] - limit
@@ -36,20 +36,21 @@ Examples
 >>>     def func(x):
 >>>         return hessian(x)
 >>>     return func
->>> 
+>>>
 >>> package = certificate_package(cbf, cbf_grad, cbf_hess, n=1)
 >>>
 >>> limit = 1.0
 >>> rho, gamma, eta, time_period = 1.0, 0.5, 2.0, 1.0
 >>> stochastic_barriers = concatenate_certificates(
->>>     package(certificate_conditions=right_hand_side(rho, gamma, eta, time_period), limit=limit), 
+>>>     package(certificate_conditions=right_hand_side(rho, gamma, eta, time_period), limit=limit),
 >>> )
 
 """
 
 from typing import Callable
-from jax import Array
+
 import jax.numpy as jnp
+from jax import Array
 from jax.scipy.special import erfinv
 
 

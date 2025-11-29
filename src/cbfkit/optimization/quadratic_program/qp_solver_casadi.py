@@ -30,13 +30,14 @@ Examples
 
 """
 
-from typing import Union, Tuple
-import casadi as ca
-import numpy as np
-from jax import Array
-import jax.numpy as jnp
 import contextlib
 import os
+from typing import Tuple, Union
+
+import casadi as ca
+import jax.numpy as jnp
+import numpy as np
+from jax import Array
 
 
 def solve(

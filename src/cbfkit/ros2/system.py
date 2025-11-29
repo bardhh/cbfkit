@@ -1,9 +1,11 @@
 """module docstring here"""
 
 from typing import Callable
+
 import rclpy
-from cbfkit.utils.user_types import ControllerCallable, SensorCallable
 from std_msgs.msg import Float64
+
+from cbfkit.utils.user_types import ControllerCallable, SensorCallable
 
 NODE_NAME = "ros2_node"  # Replace with an appropriate node name
 execution_time_publisher = None  # Global publisher variable
@@ -25,7 +27,7 @@ def spin(node_name: str, callback: Callable, frequency: float = 0.01):
         # Set up callback
         node = rclpy.create_node(node_name)
         timer_period = 1.0 / frequency
-        timer = node.create_timer(timer_period, callback)
+        node.create_timer(timer_period, callback)
 
         rclpy.spin(node)
 

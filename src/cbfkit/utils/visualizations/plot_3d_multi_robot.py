@@ -1,9 +1,6 @@
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.animation import FuncAnimation, FFMpegWriter
 import numpy as np
-import matplotlib.cm as cm
-import matplotlib.colors as mcolors
+from matplotlib.animation import FFMpegWriter, FuncAnimation
 from matplotlib.gridspec import GridSpec
 
 
@@ -379,7 +376,7 @@ def animate_3d_multi_robot(
                 obstacle_distances[t, i] = min_distance
 
         max_obstacle_distance = np.max(obstacle_distances)
-        min_obstacle_distance = np.min(obstacle_distances)
+        np.min(obstacle_distances)
 
         # Adjust y-axis limit for obstacle distance plot
         ax_obstacle_dist.set_ylim(0, max_obstacle_distance * 1.1)

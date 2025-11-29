@@ -1,29 +1,26 @@
-"""
-#! docstring
-"""
+from typing import Any, Callable, Dict, List, Tuple, cast
 
-from typing import Callable, Tuple, Dict, Any, List
 import jax.numpy as jnp
-from jax import Array, jit, lax, vmap, jacfwd, jacrev
+from jax import Array, jacfwd, jacrev, jit, lax
+
+from cbfkit.certificates import certificate_package
+from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
 from cbfkit.utils.user_types import (
-    DynamicsCallable,
+    CertificateCallable,
     CertificateCollection,
+    DynamicsCallable,
     State,
+    Time,
 )
-from .unpack import unpack_for_cbf
+
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
-from cbfkit.certificates import (
-    certificate_package,
-)
-from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import (
-    linear_class_k,
-)
+from .unpack import unpack_for_cbf
 
 
 def ccbf(
-    constraint_functions: List[Callable[[Array], Array]],
+    constraint_functions: List[CertificateCallable],
     **kwargs,
 ) -> Callable[[Array], Array]:
     n_bfs = len(constraint_functions)
@@ -41,7 +38,7 @@ def ccbf(
 
 
 def ccbf_grad(
-    constraint_functions: List[Callable[[Array], Array]],
+    constraint_functions: List[CertificateCallable],
     **kwargs,
 ) -> Callable[[Array], Array]:
     """Jacobian for the constraint function defined by cbf.
@@ -72,7 +69,7 @@ def ccbf_grad(
 
 
 def ccbf_hess(
-    constraint_functions: List[Callable[[Array], Array]],
+    constraint_functions: List[CertificateCallable],
     **kwargs,
 ) -> Callable[[Array], Array]:
     """Hessian for the constraint function defined by cbf.
@@ -110,7 +107,7 @@ def generate_compute_consolidated_cbf_constraints(
     barriers: CertificateCollection = ([], [], [], [], []),
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
-) -> Callable[[float, State], Tuple[Array, Array]]:
+) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """
     #! To Do: docstring
     """
@@ -120,10 +117,10 @@ def generate_compute_consolidated_cbf_constraints(
         raise ValueError("Missing n_states from kwargs!")
     bfs, _, _, _, _ = barriers
     consolidated_barrier_package = certificate_package(
-        ccbf, ccbf_grad, ccbf_hess, kwargs["n_states"] + len(bfs)
+        ccbf, ccbf_grad, ccbf_hess, cast(int, kwargs["n_states"]) + len(bfs)
     )
     consolidated_barriers = consolidated_barrier_package(
-        certificate_conditions=linear_class_k(alpha=kwargs["alpha"]),
+        certificate_conditions=linear_class_k(alpha=cast(float, kwargs["alpha"])),
         constraint_functions=bfs,
     )
     compute_barrier_values = generate_compute_certificate_values(consolidated_barriers)
@@ -133,7 +130,7 @@ def generate_compute_consolidated_cbf_constraints(
     )
 
     @jit
-    def compute_cbf_constraints(t: float, x: State) -> Tuple[Array, Array]:
+    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
         """Computes CBF and CLF constraints."""
         nonlocal a_cbf, b_cbf
         data = {}

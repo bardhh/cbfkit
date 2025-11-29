@@ -1,7 +1,8 @@
 import jax.numpy as jnp
 from jax import Array
-from cbfkit.utils.user_types import CertificateTuple
+
 from cbfkit.systems.single_integrator.certificates.lyapunov_function_catalog import position
+from cbfkit.utils.user_types import CertificateCollection
 
 
 def fxts_lyapunov_conditions(c1: float, c2: float, e1: float, e2: float):
@@ -21,7 +22,7 @@ def fxts_lyapunov_conditions(c1: float, c2: float, e1: float, e2: float):
 
 def fxts_lyapunov(
     goal: Array, r: float, c1: float, c2: float, e1: float, e2: float
-) -> CertificateTuple:
+) -> CertificateCollection:
     """Generates Lyapunov functions, jacobians, hessians for use in CLF control law.
 
     Args:
@@ -33,7 +34,7 @@ def fxts_lyapunov(
         e2 (float): exponential constant 2
 
     Returns:
-        CertificateTuple: all inforrmation needed for CLF constraint in QP
+        CertificateCollection: all inforrmation needed for CLF constraint in QP
     """
 
-    return position(goal, r) + fxts_lyapunov_conditions(c1, c2, e1, e2)
+    return position(goal, r) + fxts_lyapunov_conditions(c1, c2, e1, e2)  # type: ignore[return-value]

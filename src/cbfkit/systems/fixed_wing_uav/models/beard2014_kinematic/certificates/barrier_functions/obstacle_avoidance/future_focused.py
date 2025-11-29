@@ -5,14 +5,13 @@ Contains functions defining a future-focused CBF wrt an ellipsoidal obstacle.
 
 Exportable:
     obstacle_ff
-    
+
 """
 
 import jax.numpy as jnp
-from jax import jit, jacfwd, jacrev, Array
-from cbfkit.certificates import (
-    certificate_package,
-)
+from jax import Array, jacfwd, jacrev, jit
+
+from cbfkit.certificates import certificate_package
 from cbfkit.utils.real_functions import tanh_sigmoid
 
 N = 6

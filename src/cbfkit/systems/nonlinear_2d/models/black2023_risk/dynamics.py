@@ -1,13 +1,15 @@
+from typing import Callable, Optional, Tuple, Union
+
 import jax.numpy as jnp
-from jax import jit, Array
-from typing import Optional, Union
-from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
+from jax import Array, jit
+
+from cbfkit.utils.user_types import DynamicsCallable
 
 
 def velocity_with_flow(
     r: float,
-    sigma: Optional[Union[float, None]] = None,
-) -> DynamicsCallable:
+    sigma: Optional[Array] = None,
+) -> Callable[[Array], Tuple[Array, Array, Array]]:
     """
     Returns a function that represents the equations of motion for the Van der
     Pol oscillator, and specifically returns them in the form of a drift vector
@@ -38,7 +40,7 @@ def velocity_with_flow(
         s = jnp.zeros((2, 2))
 
     @jit
-    def equations_of_motion(state: Array) -> DynamicsCallableReturns:
+    def equations_of_motion(state: Array) -> Tuple[Array, Array, Array]:
         """
         Computes the drift vector 'f' and control matrix 'g' based on the given state x,
         which consists of x1 ('position' coordinate) and x2 ('velocity' coordinate).

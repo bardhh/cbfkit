@@ -2,9 +2,11 @@
 #! docstring
 """
 
-from typing import List, Callable, Tuple
-from jax import Array, jit, vmap, jacfwd, jacrev
+from typing import Callable, List, Tuple
+
 import jax.numpy as jnp
+from jax import Array, jit
+
 from cbfkit.utils.user_types import DynamicsCallable
 
 # from cbfkit.utils.matrix_vector_operations import invert_array
@@ -12,7 +14,7 @@ from cbfkit.utils.user_types import DynamicsCallable
 
 def generate_augmented_dynamics(
     list_of_dynamics: List[DynamicsCallable],
-) -> Callable[[Array], Array]:
+) -> Callable[[Array], Tuple[Array, Array]]:
     """Given a list of dynamics functions, generates a function to compute the augmented
     system dynamics (f and g).
 
@@ -24,7 +26,7 @@ def generate_augmented_dynamics(
     """
 
     @jit
-    def dynamics(z: Array) -> Array:
+    def dynamics(z: Array) -> Tuple[Array, Array]:
         """_summary_
 
         Args:
@@ -47,7 +49,7 @@ def generate_augmented_dynamics(
     return dynamics
 
 
-def generate_t_dynamics(n_controls: int) -> Callable[[Array], Array]:
+def generate_t_dynamics(n_controls: int) -> Callable[[Array], Tuple[Array, Array]]:
     """Generates dynamics function for time evolution."""
 
     def t_dynamics(_z: Array) -> Tuple[Array, Array]:

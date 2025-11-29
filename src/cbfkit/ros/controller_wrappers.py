@@ -1,7 +1,17 @@
+from typing import Callable, Dict, Optional, Tuple, cast
+
 import rospy
 from jax import Array
-from cbfkit.utils.user_types import ControllerCallable, ControllerCallableReturns
-from typing import Tuple, Dict, Callable
+
+from cbfkit.utils.user_types import (
+    Control,
+    ControllerCallable,
+    ControllerCallableReturns,
+    ControllerData,
+    Key,
+    State,
+    Time,
+)
 
 
 def controller_wrapper(
@@ -23,7 +33,13 @@ def controller_wrapper(
         wrapped_controller (Callable[[float, Array], Tuple[Array, Dict]]): handle to the wrapped_controller function
     """
 
-    def wrapped_controller(t: float, x: Array) -> ControllerCallableReturns:
+    def wrapped_controller(
+        t: Time,
+        x: State,
+        u_nom: Optional[Control],
+        key: Key,
+        data: ControllerData,
+    ) -> ControllerCallableReturns:
         """_summary_
 
         Args:
@@ -33,18 +49,22 @@ def controller_wrapper(
         Returns:
             Tuple: (computed input u, dict containing misc data)
         """
-        if type(t) == rospy.Time:
-            t = t.to_sec()
+        _t_float: float
+        if isinstance(t, rospy.Time):
+            _t_float = t.to_sec()
+        elif isinstance(t, Array):
+            _t_float = float(t[0])  # Assuming it's a scalar array
+        else:
+            _t_float = t
 
         try:
-            u, data = controller(t, x)
-            if "sub_data" in data.keys():
-                if "violated" in data["sub_data"].keys():
-                    if data["sub_data"]["violated"]:
-                        raise ValueError("Violation of Safety Constraint!")
+            u, data = controller(_t_float, x, u_nom, key, data)
+            if data.sub_data is not None and "violated" in data.sub_data:
+                if data.sub_data["violated"]:
+                    raise ValueError("Violation of Safety Constraint!")
         except ValueError as e:
             rospy.loginfo(e)
-            u, data = backup_controller(t, x)
+            u, data = backup_controller(_t_float, x, u_nom, key, data)
 
         # Sends the computed input u and the estimated state x
         # since the published message may require x as well as u
@@ -65,7 +85,14 @@ def ros_controller(extract_control: Callable[[], Tuple[Array, Dict]]) -> Control
         Tuple[Array, Dict]: contains computed input u and dictionary containing extra data
     """
 
-    def controller(_t: float, _x: Array) -> ControllerCallableReturns:
-        return extract_control(), {}
+    def controller(
+        _t: Time,
+        _x: State,
+        _u_nom: Optional[Control],
+        _key: Key,
+        _data: ControllerData,
+    ) -> ControllerCallableReturns:
+        u, d = extract_control()
+        return u, ControllerData(sub_data=d)
 
     return controller

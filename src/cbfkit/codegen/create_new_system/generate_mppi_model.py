@@ -22,11 +22,11 @@ generate_model(
 """
 
 import os
-import re
-import textwrap
 import platform
+import re
 import subprocess
-from typing import Any, Dict, List, Optional, Union, Tuple
+import textwrap
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 op_sys = platform.system()
 DELIMITER = "/" if op_sys == "Darwin" or op_sys == "Linux" else "\\"
@@ -96,34 +96,32 @@ def generate_model(
     model_name: str,
     drift_dynamics: Union[str, List[str]],
     control_matrix: Union[str, List[str]],
-    stage_cost_function: Optional[
-        Union[str, List, None]
-    ] = None,  # cost function beside constraints
-    terminal_cost_function: Optional[
-        Union[str, List, None]
-    ] = None,  # cost function beside constraints
+    stage_cost_function: Optional[str] = None,  # cost function beside constraints
+    terminal_cost_function: Optional[str] = None,  # cost function beside constraints
     params: Optional[Union[Dict[str, Any], None]] = None,
-) -> Tuple[int, int]:
+) -> None:
     if params is None:
         params = {}
 
     # Process drift dynamics
-    if type(drift_dynamics) == str:
+    drift_dynamics_str: str
+    if isinstance(drift_dynamics, str):
         n_states = len(drift_dynamics.split(","))
-        drift_dynamics = textwrap.dedent(drift_dynamics)
-    elif type(drift_dynamics) == list:
+        drift_dynamics_str = textwrap.dedent(drift_dynamics)
+    elif isinstance(drift_dynamics, list):
         n_states = len(drift_dynamics)
-        drift_dynamics = textwrap.dedent("[" + ",".join(drift_dynamics) + "]")
+        drift_dynamics_str = textwrap.dedent("[" + ",".join(drift_dynamics) + "]")
     else:
         raise TypeError("drift_dynamics is not type str or list!")
 
     # Process control matrix
-    if type(control_matrix) == str:
-        n_controls = len(control_matrix.split("],")[0].split(","))
-        control_matrix = textwrap.dedent(control_matrix)
-    elif type(control_matrix) == list:
-        n_controls = len(control_matrix[0].split(","))
-        control_matrix = textwrap.dedent("[" + ",".join(control_matrix) + "]")
+    control_matrix_str: str
+    if isinstance(control_matrix, str):
+        len(control_matrix.split("],")[0].split(","))
+        control_matrix_str = textwrap.dedent(control_matrix)
+    elif isinstance(control_matrix, list):
+        len(control_matrix[0].split(","))
+        control_matrix_str = textwrap.dedent("[" + ",".join(control_matrix) + "]")
     else:
         raise TypeError("drift_dynamics is not type str or list!")
 
@@ -169,10 +167,10 @@ def generate_model(
 
     # Create plant.py contents
     for expr in JAX_EXPRESSIONS:
-        drift_dynamics = drift_dynamics.replace(expr, "jnp." + expr)
-        control_matrix = control_matrix.replace(expr, "jnp." + expr)
-    drift_dynamics = drift_dynamics.replace("arcjnp.", "arc")
-    control_matrix = control_matrix.replace("arcjnp.", "arc")
+        drift_dynamics_str = drift_dynamics_str.replace(expr, "jnp." + expr)
+        control_matrix_str = control_matrix_str.replace(expr, "jnp." + expr)
+    drift_dynamics_str = drift_dynamics_str.replace("arcjnp.", "arc")
+    control_matrix_str = control_matrix_str.replace("arcjnp.", "arc")
 
     dynamics_args = (
         "".join([pp + ", " for pp in params["dynamics"].keys()])
@@ -221,10 +219,10 @@ def generate_model(
                     dynamics (DynamicsCallable): takes state as input and returns dynamics components f, g
                 """
                 f = jnp.array(
-                    {drift_dynamics}
+                    {drift_dynamics_str}
                 )
                 g = jnp.array(
-                    {control_matrix}
+                    {control_matrix_str}
                 )
 
                 return f, g
@@ -247,7 +245,7 @@ def generate_model(
         for expr in JAX_EXPRESSIONS:
             stage_cost_function = stage_cost_function.replace(expr, "jnp." + expr)
 
-        stage_cost_init_contents = "\n".join([f"from .stage_cost import stage_cost"])
+        stage_cost_init_contents = "\n".join(["from .stage_cost import stage_cost"])
 
         stage_cost_args = (
             "".join([pp + ", " for pp in params["stage_cost_function"].keys()])
@@ -300,8 +298,8 @@ def generate_model(
             '''
         )
         create_python_file(stage_cost_folder, "__init__.py", stage_cost_init_contents)
-        create_python_file(stage_cost_folder, f"stage_cost.py", stage_cost_contents)
-        run_black(stage_cost_folder + DELIMITER + f"stage_cost.py")
+        create_python_file(stage_cost_folder, "stage_cost.py", stage_cost_contents)
+        run_black(stage_cost_folder + DELIMITER + "stage_cost.py")
 
     if terminal_cost_function is not None:
         terminal_cost_folder = (
@@ -311,7 +309,7 @@ def generate_model(
         for expr in JAX_EXPRESSIONS:
             terminal_cost_function = terminal_cost_function.replace(expr, "jnp." + expr)
 
-        terminal_cost_init_contents = "\n".join([f"from .terminal_cost import terminal_cost"])
+        terminal_cost_init_contents = "\n".join(["from .terminal_cost import terminal_cost"])
 
         terminal_cost_args = (
             "".join([pp + ", " for pp in params["terminal_cost_function"].keys()])
@@ -364,5 +362,5 @@ def generate_model(
             '''
         )
         create_python_file(terminal_cost_folder, "__init__.py", terminal_cost_init_contents)
-        create_python_file(terminal_cost_folder, f"terminal_cost.py", terminal_cost_contents)
-        run_black(terminal_cost_folder + DELIMITER + f"terminal_cost.py")
+        create_python_file(terminal_cost_folder, "terminal_cost.py", terminal_cost_contents)
+        run_black(terminal_cost_folder + DELIMITER + "terminal_cost.py")

@@ -1,11 +1,6 @@
-import matplotlib
-
 # matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from matplotlib.patches import Ellipse
-from typing import List
-from jax import Array
 
 
 #! PLOTTING
@@ -113,7 +108,6 @@ def animate(
             linewidth=1,
         )
     )
-    from matplotlib import animation
 
     ax.add_patch(
         plt.Circle(

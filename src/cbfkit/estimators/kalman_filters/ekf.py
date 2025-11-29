@@ -1,9 +1,10 @@
+from typing import Callable, Optional, Tuple, Union, cast
+
 import jax.numpy as jnp
 from jax import Array
-from typing import Tuple, Callable, Union, Optional
 
-from cbfkit.utils.user_types import DynamicsCallable
 from cbfkit.integration import forward_euler as integrate
+from cbfkit.utils.user_types import DynamicsCallable, EstimatorCallable, Time
 
 global K_EKF
 K_EKF = jnp.zeros((6, 6))
@@ -27,7 +28,7 @@ def ct_ekf_dtmeas(
     h: Callable,
     dhdx: Callable,
     dt: float,
-) -> Callable[[float, Array, Array, Array], Tuple[Array, Array]]:
+) -> EstimatorCallable:
     """Function defining the continuous-time EKF with discrete-time measurements.
 
     Arguments:
@@ -46,11 +47,11 @@ def ct_ekf_dtmeas(
     update = update_dtmeas(R, h, dhdx)
 
     def step_ekf(
-        t: float,
+        t: Time,
         y: Array,
-        z: Optional[Union[Array, None]] = None,
-        u: Optional[Union[Array, None]] = None,
-        P: Optional[Union[Array, None]] = None,
+        z: Optional[Array] = None,
+        u: Optional[Array] = None,
+        P: Optional[Array] = None,
     ) -> Tuple[Array, Array]:
         """Continuous-time implementation of Extended Kalman Filter (EKF) with
         discrete-time measurements.
@@ -67,10 +68,17 @@ def ct_ekf_dtmeas(
             P_new (Array): updated Kalman covariance matrix
 
         """
-        if z is None and u is None and P is None:
+        if z is None or u is None or P is None:
             return initialize(y, R)
 
-        z_predicted, P_predicted = predict(t, z, u, P)
+        # Cast t to float
+        t_float = (
+            float(t)
+            if isinstance(t, (float, int))
+            else float(cast(Array, t)[0]) if t.shape == (1,) else float(cast(Array, t))
+        )
+
+        z_predicted, P_predicted = predict(t_float, z, u, P)
         z_new, P_new = update(z_predicted, y, P_predicted)
 
         return z_new, P_new
@@ -79,7 +87,7 @@ def ct_ekf_dtmeas(
 
 
 #! Possibly implement this in a better fashion in the future
-def initialize(y: Array, R: Array) -> Array:
+def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
     """Initialization for the continuous-time EKF with discrete-time measurements.
 
     Arguments:
@@ -144,7 +152,7 @@ def predict_ct_dtmeas(
 
 def update_dtmeas(
     R: Array, h: Callable[[Array], Array], dhdx: Callable[[Array], Array]
-) -> Callable[[float, Array, Array], Tuple[Array, Array]]:
+) -> Callable[[Array, Array, Array], Tuple[Array, Array]]:
     """Function defining the update step for (any) EKF with discrete-time measurements.
 
     Arguments:

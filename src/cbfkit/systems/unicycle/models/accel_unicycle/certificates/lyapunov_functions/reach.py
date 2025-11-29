@@ -1,14 +1,14 @@
-import jax.numpy as jnp
-from jax import jit, jacfwd, jacrev, Array
-from cbfkit.certificates import (
-    certificate_package,
-)
+from typing import Callable
+
+from jax import Array, jacfwd, jacrev, jit
+
+from cbfkit.certificates import certificate_package
 
 #! Circular Obstacle Avoidance
 N = 3
 
 
-def clf(goal: Array, radius: float) -> Array:
+def clf(goal: Array, radius: float) -> Callable[[Array], Array]:
     """Reach goal convergence function.
 
     Args:
@@ -30,7 +30,7 @@ def clf(goal: Array, radius: float) -> Array:
     return func
 
 
-def clf_grad(goal: Array, radius: float) -> Array:
+def clf_grad(goal: Array, radius: float) -> Callable[[Array], Array]:
     """Jacobian for Reach goal convergence function.
 
     Args:
@@ -50,7 +50,7 @@ def clf_grad(goal: Array, radius: float) -> Array:
     return func
 
 
-def clf_hess(goal: Array, radius: float) -> Array:
+def clf_hess(goal: Array, radius: float) -> Callable[[Array], Array]:
     """Hessian for Reach goal convergence function.
 
     Args:

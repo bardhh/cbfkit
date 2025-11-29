@@ -5,12 +5,12 @@ This file contains a catalog of candidate lyapunov functions and their associate
 gradients, Hessians, etc., for use in control Lyapunov function-based controllers.
 """
 
-import jax.numpy as jnp
-from jax import jit, jacfwd, jacrev, Array
-from cbfkit.certificates import (
-    certificate_package,
-)
+from typing import Callable
 
+import jax.numpy as jnp
+from jax import Array, jacfwd, jacrev, jit
+
+from cbfkit.certificates import certificate_package
 
 # constants
 N = 6  # number of states
@@ -18,7 +18,7 @@ N = 6  # number of states
 
 ###############################################################################
 ## Goal Velocity
-def clf(goal: Array, r: float) -> Array:
+def clf(goal: Array, r: float) -> Callable[[Array], Array]:
     """Second order position goal function (drive fixed-wing UAV
     to a set of states within which a constant Vdot will drive it to
     the goal location within time T).
@@ -52,7 +52,7 @@ def clf(goal: Array, r: float) -> Array:
     return func
 
 
-def clf_grad(goal: Array, r: float) -> Array:
+def clf_grad(goal: Array, r: float) -> Callable[[Array], Array]:
     """Jacobian for second order position goal function (drive fixed-wing UAV
     to a set of states within which a constant Vdot will drive it to
     the goal location within time T).
@@ -75,7 +75,7 @@ def clf_grad(goal: Array, r: float) -> Array:
     return func
 
 
-def clf_hess(goal: Array, r: float) -> Array:
+def clf_hess(goal: Array, r: float) -> Callable[[Array], Array]:
     """Hessian for second order position goal function (drive fixed-wing UAV
     to a set of states within which a constant Vdot will drive it to
     the goal location within time T).

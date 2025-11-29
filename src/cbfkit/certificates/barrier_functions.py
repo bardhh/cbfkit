@@ -1,6 +1,8 @@
-from jax import jit, jacfwd, jacrev, Array
-import jax.numpy as jnp
 from typing import Tuple
+
+import jax.numpy as jnp
+from jax import Array, jacfwd, jacrev, jit
+
 
 @jit
 def ellipsoidal_barrier(
@@ -75,7 +77,7 @@ def ellipsoidal_barrier_factory(
                 obstacle_position_indices,
                 ellipsoid_axis_indices,
             )
-            
+
         jacobian = jacfwd(partial_barrier)
 
         @jit

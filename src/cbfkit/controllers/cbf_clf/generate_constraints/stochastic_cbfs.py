@@ -2,18 +2,17 @@
 #! docstring
 """
 
-from typing import Tuple, Dict, Any, Callable
+from typing import Any, Callable, Dict, Tuple
+
 import jax.numpy as jnp
 from jax import Array, jit, lax
-from cbfkit.utils.user_types import (
-    DynamicsCallable,
-    CertificateCollection,
-    State,
-)
-from .unpack import unpack_for_cbf
+
+from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable, State, Time
+
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
+from .unpack import unpack_for_cbf
 
 
 ###################################################################################################
@@ -24,7 +23,7 @@ def generate_compute_stochastic_cbf_constraints(
     barriers: CertificateCollection = ([], [], [], [], []),
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
-):
+) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """
     #! To Do: docstring
     """
@@ -41,10 +40,10 @@ def generate_compute_stochastic_cbf_constraints(
         raise ValueError("sigma must be of type Callable[[Array], Array]!")
 
     @jit
-    def compute_cbf_constraints(t: float, x: State) -> Tuple[Array, Array]:
+    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
         """Computes CBF and CLF constraints."""
         nonlocal a_cbf, b_cbf
-        data = {}
+        data: Dict[str, Any] = {}
         dyn_f, dyn_g = dyn_func(x)
         s = sigma(x)
 
@@ -68,7 +67,7 @@ def generate_compute_stochastic_cbf_constraints(
             # -LgB u <= LfB + gamma(h).
             # So LgB u >= -LfB - gamma(h).
             # h_dot >= -gamma(h). Correct.
-            
+
             # Here: b_cbf.set(-dbf_t - jnp.matmul(bj_x, dyn_f) - traces + bc_x)
             # If a_cbf is positive LgB:
             # LgB u <= -LfB - Tr + bc_x.
@@ -76,13 +75,13 @@ def generate_compute_stochastic_cbf_constraints(
             # This implies h_dot <= bc_x.
             # If bc_x is negative (e.g. -alpha h), then h_dot <= -alpha h. This is STABILITY/Convergence to 0.
             # If this is for Safety (stay positive), it should be >=.
-            
+
             # Given standard CBF is >=, I suspect `stochastic_cbfs.py` was using sublevel sets or had a bug.
             # I will switch it to match zeroing_cbfs (negative a_cbf) to assume superlevel sets.
-            
+
             a_cbf = a_cbf.at[:, :n_con].set(-jnp.matmul(bj_x, dyn_g))
             b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) + traces + bc_x)
-            
+
             if tunable:
                 a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-bc_x)
                 b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) + traces)

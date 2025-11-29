@@ -1,8 +1,5 @@
-import matplotlib
-
 # matplotlib.use("macosx")
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 from matplotlib.animation import FFMpegWriter
 from matplotlib.patches import Ellipse
 
@@ -109,9 +106,7 @@ def animate(
         else:
             key = "robot_sampled_states"
 
-        robot_sampled_states = controller_data_items[frame][
-            controller_data_keys.index(key)
-        ]
+        robot_sampled_states = controller_data_items[frame][controller_data_keys.index(key)]
         robot_selected_states = controller_data_items[frame][controller_data_keys.index("x_traj")]
 
         # Sampled Trajectories

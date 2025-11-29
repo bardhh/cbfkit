@@ -2,7 +2,8 @@
 #! docstring
 """
 
-from typing import Callable, Union, Tuple
+from typing import Callable, Tuple, Union
+
 import jax.numpy as jnp
 from jax import Array, jit
 

@@ -9,34 +9,18 @@ src/cbfkit tree.
 
 import jax.numpy as jnp
 import numpy as np
+from jax import Array, random
 
-# Whether or not to simulate
-simulate = 1
-
-# Plot or save
-plot = 1
-save = 0
-
-
-# Load initial conditions
-from examples.unicycle.common.config import (
-    perfect_state_measurements as initial_conditions,
-)
-
-# Load simulation module
 import cbfkit.simulation.simulator as sim
-
-# Load dynamics, sensors, integrator
-from cbfkit.systems import unicycle
-from cbfkit.sensors import perfect as sensor
-from cbfkit.integration import forward_euler as integrator
-
-# Load controller and estimator
 from cbfkit.estimators import naive as estimator
-
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.sensors import perfect as sensor
+from cbfkit.systems import unicycle
+from cbfkit.utils.user_types import PlannerData
+from examples.unicycle.common.config import perfect_state_measurements as initial_conditions
 
 # Define dynamics and controller with specified parameters
-approx_unicycle_dynamics = unicycle.approx_unicycle_dynamics(l=1.0)
+approx_unicycle_dynamics = unicycle.approx_unicycle_dynamics(lam=1.0)
 controller = unicycle.proportional_controller(
     dynamics=approx_unicycle_dynamics,
     Kp_pos=1,
@@ -48,30 +32,42 @@ tf = 5.0
 dt = 0.01
 n_steps = int(tf / dt)
 
+# Whether or not to simulate
+simulate = 1
+
+# Plot or save
+plot = 1
+save = 0
+
 if simulate:
     # Execute simulation
-    states, controls, estimates, covariances, data_keys, data_values, planner_data, planner_data_keys = sim.execute(
-        x0=initial_conditions.initial_state,
+    initial_state = jnp.array(initial_conditions.initial_state)
+
+    (
+        states,
+        controls,
+        estimates,
+        covariances,
+        data_keys,
+        data_values,
+        planner_data,
+        planner_data_keys,
+    ) = sim.execute(
+        x0=initial_state,
         dynamics=approx_unicycle_dynamics,
         sensor=sensor,
         nominal_controller=controller,
         estimator=estimator,
         integrator=integrator,
         dt=dt,
-        sigma=initial_conditions.R,
+        sigma=jnp.array(initial_conditions.R),
         num_steps=n_steps,
-        planner_data={
-            "u_traj": None,
-            "x_traj": jnp.tile(initial_conditions.desired_state.reshape(-1, 1), (1, n_steps + 1)),
-            "prev_robustness": None,
-        },
+        planner_data=PlannerData(
+            u_traj=None,
+            x_traj=jnp.tile(initial_conditions.desired_state.reshape(-1, 1), (1, n_steps + 1)),
+            prev_robustness=None,
+        ),
     )
-
-    # Reformat results as numpy arrays
-    states = np.array(states)
-    controls = np.array(controls)
-    estimates = np.array(estimates)
-    covariances = np.array(covariances)
 
 else:
     # Implement load from file

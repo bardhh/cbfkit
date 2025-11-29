@@ -1,31 +1,25 @@
-"""
-This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks
-to reach a goal region while avoiding dynamic obstacles.
-
-"""
-
-from typing import List
-from jax import Array, random, jacfwd
-import numpy as np
+from typing import List, Tuple
 
 import jax.numpy as jnp
+import numpy as np
+from jax import Array, jacfwd, random
+
 import cbfkit.simulation.simulator as sim
-from cbfkit.simulation.monte_carlo import conduct_monte_carlo
-from cbfkit.systems import single_integrator
-from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.estimators import ct_ekf_dtmeas
-from cbfkit.integration import forward_euler as integrator
 
 # import cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_controllers as ra_controllers
 from cbfkit.controllers.cbf_clf.risk_aware_path_integral_cbf_clf_qp_control_laws import (
     risk_aware_path_integral_cbf_clf_qp_controller as pi_cbf_clf_controller,
 )
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
-    RiskAwareParams,
-)
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.estimators import ct_ekf_dtmeas
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.sensors import unbiased_gaussian_noise as sensor
+from cbfkit.simulation.monte_carlo import conduct_monte_carlo
+from cbfkit.systems import single_integrator
+from cbfkit.utils.user_types import PlannerData
 from examples.single_integrator.common.config import ekf_state_estimation as setup
-
 from examples.single_integrator.common.lyapunov_functions import fxts_lyapunov
+from examples.van_der_pol.visualizations.path import animate
 
 # Lyapunov Barrier Functions
 lyapunovs = fxts_lyapunov(
@@ -43,9 +37,20 @@ N_STEPS = int(setup.tf / setup.dt)
 # Define dynamics, controller, and estimator with specified parameters
 dynamics = single_integrator.two_dimensional_single_integrator(r=setup.goal_radius, sigma=setup.Q)
 nominal_controller = single_integrator.zero_controller()
-dfdx = lambda x: jacfwd(dynamics)(x)
-h = lambda x: x
-dhdx = lambda _x: np.eye((len(setup.desired_state)))
+
+
+def dfdx(x):
+    return jacfwd(dynamics)(x)
+
+
+def h(x):
+    return x
+
+
+def dhdx(_x):
+    return jnp.eye((len(setup.desired_state)))
+
+
 estimator = ct_ekf_dtmeas(
     Q=setup.Q,
     R=setup.R,
@@ -93,13 +98,15 @@ controller = pi_cbf_clf_controller(
     dynamics_func=dynamics,
     lyapunovs=lyapunovs,
     control_limits=setup.actuation_limits,
-    alpha=np.array([0.1]),
+    alpha=jnp.array([0.1]),
     ra_clf_params=ra_clf_params,
     dt=setup.dt,
 )
 
 
-def execute(ii: int = 0) -> List[Array]:
+def execute(
+    ii: int = 0,
+) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array], bool, float]:
     """_summary_
 
     Args:
@@ -115,11 +122,11 @@ def execute(ii: int = 0) -> List[Array]:
         np.pi / 2 * initial_quadrant + np.pi / 4 + (random.uniform(k2) - 0.5) * np.pi / 4
     )
     initial_radius = float(1.0 + random.uniform(k3) * (np.sqrt(2) - 1.0))
-    initial_state = np.array(
-        [initial_radius * np.cos(initial_angle), initial_radius * np.sin(initial_angle)]
+    initial_state = jnp.array(
+        [initial_radius * jnp.cos(initial_angle), initial_radius * jnp.sin(initial_angle)]
     )
 
-    x, u, z, p, dkeys, dvalues, planner_data, planner_data_keys = sim.execute(
+    states, controls, estimates, covariances, c_keys, c_values, p_keys, p_values = sim.execute(
         x0=initial_state,
         dynamics=dynamics,
         sensor=sensor,
@@ -131,19 +138,25 @@ def execute(ii: int = 0) -> List[Array]:
         # R=setup.R, # sim.execute doesn't take R directly? Check signature.
         num_steps=N_STEPS,
         # key=key, # sim.execute doesn't take key directly?
-        planner_data={"x_traj": np.zeros((2, N_STEPS + 1))},
+        planner_data=PlannerData(x_traj=jnp.zeros((2, N_STEPS + 1))),
     )
 
-    # Reformat results as numpy arrays
-    x = np.array(x)
-    u = np.array(u)
-    z = np.array(z)
-    p = np.array(p)
-    success = np.linalg.norm(x[-1]) < setup.goal_radius
-    completion_time = x.shape[0] * setup.dt
+    success = jnp.linalg.norm(states[-1]) < setup.goal_radius
+    completion_time = states.shape[0] * setup.dt
     print(f"Completed Trial No. {ii}")
 
-    return x, u, z, p, dkeys, dvalues, success, completion_time
+    return (
+        states,
+        controls,
+        estimates,
+        covariances,
+        c_keys,
+        c_values,
+        p_keys,
+        p_values,
+        success,
+        completion_time,
+    )
 
 
 # Simulate total number of trials
@@ -159,13 +172,13 @@ if __name__ == "__main__":
     controls = [result[1] for result in results]
     estimates = [result[2] for result in results]
     covariances = [result[3] for result in results]
-    successes = [result[6] for result in results]
-    completion_times = [result[7] for result in results if result[6]]
+    successes = [result[8] for result in results]
+    completion_times = [result[9] if result[8] else None for result in results]
 
-    n_success = np.sum(successes)
+    n_success = jnp.sum(jnp.array(successes))
     fraction_success = n_success / setup.n_trials
     print(f"Success Rate: {fraction_success:.2f}")
-    print(f"Avg. Completion Time: {np.mean(completion_times):.2f}")
+    print(f"Avg. Completion Time: {jnp.mean(jnp.array(completion_times)):.2f}")
 
     # (
     #     states,

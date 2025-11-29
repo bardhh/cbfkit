@@ -2,19 +2,21 @@
 #! docstring
 """
 
-import jax.numpy as jnp
-from jax import jit, Array
-from typing import Optional, Union, Callable
+from typing import Callable, Optional, Union
+
+from jax import Array
+
 from cbfkit.utils.user_types import DynamicsCallable
+
 from .additive_disturbances import (
-    generate_stochastic_perturbation,
-    generate_bounded_perturbation,
     generate_affine_perturbation,
+    generate_bounded_perturbation,
+    generate_stochastic_perturbation,
 )
 
 
 def sde_plant(
-    plant: Callable[[Optional[Union[Callable[[Array], Array], None]]], DynamicsCallable],
+    plant: Callable[..., DynamicsCallable],
     sigma: Callable[[Array], Array],
     dt: float,
 ) -> DynamicsCallable:
@@ -34,7 +36,7 @@ def sde_plant(
 
 
 def ode_bounded_perturbation_plant(
-    plant: Callable[[Optional[Union[Callable[[Array], Array], None]]], DynamicsCallable],
+    plant: Callable[..., DynamicsCallable],
     perturbation: Callable[[Array], Array],
 ) -> DynamicsCallable:
     """Plant model in ordinary differential equation (ODE) form subject to
@@ -53,7 +55,7 @@ def ode_bounded_perturbation_plant(
 
 
 def ode_affine_perturbation_plant(
-    plant: Callable[[Optional[Union[Callable[[Array], Array], None]]], DynamicsCallable],
+    plant: Callable[..., DynamicsCallable],
     regressor: Callable[[Array], Array],
     parameter_vector: Array,
 ) -> DynamicsCallable:
@@ -74,7 +76,7 @@ def ode_affine_perturbation_plant(
 
 
 def ode_plant(
-    plant: Callable[[Optional[Union[Callable[[Array], Array], None]]], DynamicsCallable]
+    plant: Callable[..., DynamicsCallable],
 ) -> DynamicsCallable:
     """Nominal plant model in ordinary differential equation (ODE) form.
 

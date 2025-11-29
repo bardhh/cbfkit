@@ -1,15 +1,31 @@
-import sys
 import os
+import sys
+from typing import Any, Dict
+from unittest.mock import MagicMock
 
 import jax.numpy as jnp
+import mppi_cbf_stl  # type: ignore[import]
 from jax import Array, jit
 
-from cbfkit.codegen.create_new_system import generate_model
-from cbfkit.utils.jax_stl import *
+import cbfkit.controllers.mppi as mppi_planner
+import cbfkit.planners as single_waypoint_planner
+import cbfkit.simulation.simulator as sim
+from cbfkit.estimators import naive as estimator
+from cbfkit.sensors import perfect as sensor
+from cbfkit.utils.jax_stl import jax_and, jax_finally, jax_global, jax_or
+from cbfkit.utils.numerical_integration import forward_euler as integrator
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/generated"
 model_name = "mppi_cbf_stl"
+
+sys.path.append(target_directory)
+sys.path.append(target_directory + "/" + model_name + "/ros2")
+sys.modules["rclpy"] = MagicMock()
+sys.modules["rclpy.node"] = MagicMock()
+sys.modules["std_msgs"] = MagicMock()
+sys.modules["std_msgs.msg"] = MagicMock()
+
 
 # Simulation Parameters
 SAVE_FILE = target_directory + f"/{model_name}/simulation_data"
@@ -24,7 +40,7 @@ goal_radius = 0.5
 obstacle = jnp.array([3, 6])
 
 # Generate files automatically
-params = {}
+params: Dict[str, Any] = {}
 drift_dynamics = "[0, 0]"  # Dynamics
 control_matrix = "[[1, 0], [0, 1]]"  # Dynamics
 goal = jnp.array([4, 4])
@@ -35,32 +51,13 @@ obstacle = jnp.array([3, 3])
 obstacle_radius = 0.6
 goal_threshold = 0.5
 
+plot = 0
+if plot:
+    try:
+        from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
+    except ImportError:
+        from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
 
-generate_model.generate_model(
-    directory=target_directory,
-    model_name=model_name,
-    drift_dynamics=drift_dynamics,
-    control_matrix=control_matrix,
-    # stage_cost_function=stage_cost_function,
-    # terminal_cost_function=terminal_cost_function,
-    params=params,
-)
-
-import cbfkit.controllers.mppi as mppi_planner
-import cbfkit.planners as single_waypoint_planner
-import cbfkit.simulation.simulator as sim
-from cbfkit.estimators import naive as estimator
-from cbfkit.sensors import perfect as sensor
-from cbfkit.utils.numerical_integration import forward_euler as integrator
-
-sys.path.append(target_directory)
-sys.path.append(target_directory + "/" + model_name + "/ros2")
-from unittest.mock import MagicMock
-sys.modules["rclpy"] = MagicMock()
-sys.modules["rclpy.node"] = MagicMock()
-sys.modules["std_msgs"] = MagicMock()
-sys.modules["std_msgs.msg"] = MagicMock()
-import mppi_cbf_stl
 
 dynamics = mppi_cbf_stl.plant()
 
@@ -146,7 +143,9 @@ def stl_trajectory_cost(
     robustness = stl_constraints(state_array, input_array)
 
     time_stamps = jnp.linspace(
-        time, time + mppi_args["prediction_horizon"] * DT, mppi_args["prediction_horizon"]
+        time,
+        time + mppi_args["prediction_horizon"] * DT,
+        int(mppi_args["prediction_horizon"]),
     )
 
     h1 = jax_global(0, jnp.inf, -robustness[0, :], time_stamps)
@@ -219,6 +218,8 @@ mppi_local_planner = mppi_planner.vanilla_mppi(
     mppi_args=mppi_args,
 )
 
+from cbfkit.utils.user_types import ControllerData, PlannerData
+
 target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
 
 (
@@ -242,11 +243,11 @@ target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
     sensor=sensor,
     estimator=estimator,
     filepath=SAVE_FILE,
-    planner_data={
-        "u_traj": 1 * jnp.ones((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"])),
-        "prev_robustness": jnp.array([1, -1, -1, -1]),
-    },
-    controller_data={},
+    planner_data=PlannerData(
+        u_traj=1 * jnp.ones((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"])),
+        prev_robustness=jnp.array([1, -1, -1, -1]),
+    ),
+    controller_data=ControllerData(),
     stl_trajectory_cost=stl_complete_trajectory_cost,
     use_jit=True,
 )

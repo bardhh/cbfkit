@@ -1,9 +1,8 @@
 import jax.numpy as jnp
-from jax import jit, Array
-from typing import Optional, Union, Callable
+from jax import Array, jit
 
 
-def approx_unicycle_dynamics(l: float = 1.0):
+def approx_unicycle_dynamics(lam: float = 1.0):
     """
     Returns a function that represents the approximate unicycle dynamics, which computes
     the drift vector 'f' and control matrix 'g' based on the given state.
@@ -27,8 +26,8 @@ def approx_unicycle_dynamics(l: float = 1.0):
         f = jnp.array([0, 0, 0])
         g = jnp.array(
             [
-                [jnp.cos(theta), -l * jnp.sin(theta)],
-                [jnp.sin(theta), l * jnp.cos(theta)],
+                [jnp.cos(theta), -lam * jnp.sin(theta)],
+                [jnp.sin(theta), lam * jnp.cos(theta)],
                 [0, 1],
             ]
         )

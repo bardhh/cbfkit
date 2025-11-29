@@ -21,8 +21,6 @@ Examples
 >>> target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
 """
 
-from .waypoint_generator import (
-    waypoint_generator,
-)
+from .waypoint_generator import waypoint_generator
 
 vanilla_waypoint = waypoint_generator()

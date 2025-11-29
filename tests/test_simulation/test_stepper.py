@@ -1,7 +1,6 @@
 from unittest.mock import Mock
 
 import jax.numpy as jnp
-import pytest
 from jax import random
 
 from cbfkit.simulation.simulator import stepper

@@ -1,8 +1,7 @@
 import jax.numpy as jnp
-from jax import jit, Array, lax
-from typing import Optional, Union, Callable
+from jax import Array, jit
+
 from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
-from .constants import *
 
 
 def accel_unicycle_dynamics(**kwargs) -> DynamicsCallable:

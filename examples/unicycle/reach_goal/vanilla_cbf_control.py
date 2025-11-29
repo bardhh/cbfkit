@@ -1,12 +1,21 @@
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
+from cbfkit.estimators import naive as estimator
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.sensors import perfect as sensor
 from cbfkit.utils.user_types import PlannerData
 from examples.unicycle.common.ellipsoidal_obstacle import cbf as ellipsoid_cbf
+from examples.unicycle.common.visualizations import animate, plot_trajectory
+
+plot = 1
+should_animate = 0  # Renamed from animate
+save = 1
 
 # Simulation parameters
 tf = 10.0
@@ -17,11 +26,11 @@ init_state = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
 desired_state = jnp.array([2.0, 4.0, 0.0, 0.0])
 actuation_constraints = jnp.array([100.0, 100.0])  # Effectively, no control limits
 
-unicycle_dynamics = unicycle.plant(l=1.0)
-unicycle_dynamics.a_max = actuation_constraints[0]  # α_max
-unicycle_dynamics.omega_max = actuation_constraints[1]  # ω_max
-unicycle_dynamics.v_max = 1.0
-unicycle_dynamics.goal_tol = 0.25
+unicycle_dynamics = unicycle.plant(lam=1.0)
+unicycle_dynamics.a_max = actuation_constraints[0]  # type: ignore # α_max
+unicycle_dynamics.omega_max = actuation_constraints[1]  # type: ignore # ω_max
+unicycle_dynamics.v_max = 1.0  # type: ignore
+unicycle_dynamics.goal_tol = 0.25  # type: ignore
 
 uniycle_nom_controller = unicycle.controllers.proportional_controller(
     dynamics=unicycle_dynamics,
@@ -75,12 +84,6 @@ controller = cbf_controller(
     barriers=barrier_packages,
 )
 
-from cbfkit.estimators import naive as estimator
-
-# Simulation imports
-from cbfkit.integration import forward_euler as integrator
-from cbfkit.sensors import perfect as sensor
-
 x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     x0=init_state,
     dt=dt,
@@ -100,15 +103,7 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     use_jit=True,
 )
 
-plot = 1
-animate = 0
-save = 1
-
 if plot:
-    import matplotlib.pyplot as plt
-
-    from examples.unicycle.common.visualizations import plot_trajectory
-
     plot_trajectory(
         states=x,
         desired_state=desired_state,
@@ -121,9 +116,7 @@ if plot:
     )
     plt.show()
 
-if animate:
-    from examples.unicycle.common.visualizations import animate
-
+if should_animate:  # Changed from if animate:
     animate(
         states=x,
         estimates=z,

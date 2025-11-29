@@ -46,3 +46,8 @@ skip_gitignore = true
 
 [tool.uv.pip]
 system = true
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+]
