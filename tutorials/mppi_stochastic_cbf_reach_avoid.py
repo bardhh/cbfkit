@@ -215,10 +215,7 @@ plot = 1
 save = 1
 
 if plot:
-    try:
-        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate
-    except ImportError:
-        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate
+    from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate
 
     animate(
         states=x,

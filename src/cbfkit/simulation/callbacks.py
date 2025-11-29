@@ -1,0 +1,61 @@
+from typing import Any, Dict, List, Optional, Protocol
+
+from tqdm import tqdm
+
+from cbfkit.simulation.utils import SimulationStepData
+from cbfkit.utils.logger import write_log
+
+
+class SimulationCallback(Protocol):
+    def on_start(self, total_steps: int, dt: float) -> None: ...
+
+    def on_step(self, step_idx: int, time: float, data: SimulationStepData) -> None: ...
+
+    def on_end(self, success: bool, message: str = "") -> None: ...
+
+
+class ProgressCallback:
+    def __init__(self):
+        self.pbar: Optional[tqdm] = None
+
+    def on_start(self, total_steps: int, dt: float) -> None:
+        self.pbar = tqdm(total=total_steps)
+
+    def on_step(self, step_idx: int, time: float, data: SimulationStepData) -> None:
+        if self.pbar:
+            self.pbar.update(1)
+
+    def on_end(self, success: bool, message: str = "") -> None:
+        if self.pbar:
+            self.pbar.close()
+        if not success and message:
+            print(f"Simulation stopped: {message}")
+        elif success and message:
+            print(message)
+
+
+class LoggingCallback:
+    def __init__(self, filepath: str):
+        self.filepath = filepath
+        self.log_data: List[Dict[str, Any]] = []
+
+    def on_start(self, total_steps: int, dt: float) -> None:
+        self.log_data = []
+
+    def on_step(self, step_idx: int, time: float, data: SimulationStepData) -> None:
+        step_log_entry = {
+            "state": data.state,
+            "control": data.control,
+            "estimate": data.estimate,
+            "covariance": data.covariance,
+        }
+        for i, key in enumerate(data.controller_keys):
+            step_log_entry[f"controller_{key}"] = data.controller_values[i]
+        for i, key in enumerate(data.planner_keys):
+            step_log_entry[f"planner_{key}"] = data.planner_values[i]
+
+        self.log_data.append(step_log_entry)
+
+    def on_end(self, success: bool, message: str = "") -> None:
+        if self.log_data:
+            write_log(self.filepath, self.log_data)

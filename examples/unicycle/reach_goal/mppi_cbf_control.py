@@ -198,15 +198,7 @@ if plot:
     plt.show()
 
 if animate:
-    try:
-        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import (
-            animate as animate_func,
-        )
-    except ImportError:
-        # Fallback or re-import if necessary, but naming it animate_func avoids shadowing 'animate' variable
-        from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import (
-            animate as animate_func,
-        )
+    from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate as animate_func
 
     animate_func(
         states=x,

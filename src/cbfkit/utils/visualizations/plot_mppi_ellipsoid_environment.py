@@ -109,8 +109,8 @@ def animate(
         else:
             key = "robot_sampled_states"
 
-        robot_sampled_states = controller_data_items[frame][controller_data_keys.index(key)]
-        robot_selected_states = controller_data_items[frame][controller_data_keys.index("x_traj")]
+        robot_sampled_states = controller_data_items[controller_data_keys.index(key)][frame]
+        robot_selected_states = controller_data_items[controller_data_keys.index("x_traj")][frame]
 
         # Sampled Trajectories
         for i in range(mppi_args["plot_samples"]):

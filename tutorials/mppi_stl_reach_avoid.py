@@ -262,10 +262,7 @@ target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
 
 plot = 0
 if plot:
-    try:
-        from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
-    except ImportError:
-        from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
+    from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
 
     animate(
         states=x_,
