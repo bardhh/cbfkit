@@ -1,8 +1,7 @@
-"""
-lyapunov_fcn_catalog.py
+"""lyapunov_fcn_catalog.py.
 
-This file contains a catalog of candidate lyapunov functions and their associated
-gradients, Hessians, etc., for use in control Lyapunov function-based controllers.
+This file contains a catalog of candidate lyapunov functions and their associated gradients,
+Hessians, etc., for use in control Lyapunov function-based controllers.
 """
 
 from typing import List, Tuple
@@ -25,17 +24,16 @@ N = 2  # number of states
 ## Position Convergence
 # @jit
 def V_pos(state: Array, goal: Array, r: float) -> Array:
-    """Position goal function (drive single integrator
-    to goal set around the origin).
+    """Position goal function (drive single integrator to goal set around the origin).
 
     Args:
         state (Array): concatenated time and state vector
         goal (Array): goal position vector [xg, yg]
         r (float): goal set radius
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
-
     """
     x1, x2, _t = state
 
@@ -46,15 +44,15 @@ def V_pos(state: Array, goal: Array, r: float) -> Array:
 
 @jit
 def dV_pos_dx(state: Array, goal: Array, r: float) -> Array:
-    """Jacobian for position goal function (drive single integrator
-    to goal set around the origin).
+    """Jacobian for position goal function (drive single integrator to goal set around the origin).
 
     Args:
         state (Array): concatenated time and state vector
         goal (Array): goal position vector [xg, yg]
         r (float): goal set radius
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(V_pos)(state, goal, r)
@@ -62,15 +60,15 @@ def dV_pos_dx(state: Array, goal: Array, r: float) -> Array:
 
 @jit
 def dV2_pos_dx2(state: Array, goal: Array, r: float) -> Array:
-    """Hessian for position goal function (drive single integrator
-    to goal set around the origin).
+    """Hessian for position goal function (drive single integrator to goal set around the origin).
 
     Args:
         state (Array): concatenated time and state vector
         goal (Array): goal position vector [xg, yg]
         r (float): goal set radius
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(jacrev(V_pos))(state, goal, r)
@@ -82,13 +80,14 @@ def position(goal: Array, r: float) -> Tuple[
     List[CertificateHessianCallable],
     List[CertificatePartialCallable],
 ]:
-    """Callable that generates Lyapunov function and its associated
+    """Callable that generates Lyapunov function and its associated.
 
     Args:
         goal (Array): goal position in inertial frame
         T (float): lookahead time horizon
 
-    Returns:
+    Returns
+    -------
         tuple: lists of functions
     """
 

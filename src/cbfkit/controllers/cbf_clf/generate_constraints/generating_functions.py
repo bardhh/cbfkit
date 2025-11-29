@@ -27,7 +27,8 @@ def generate_compute_input_constraints(
     Args:
         control_limits (Array): 1D array of actuation limits (symmetric about origin)
 
-    Returns:
+    Returns
+    -------
         compute_input_constraints (Callable[[float, State], Tuple[Array, Array]]):
             function to compute input constraints
     """
@@ -63,7 +64,8 @@ def generate_compute_cbf_clf_constraints(
         barriers (CertificateCollection, optional): _description_. Defaults to ([], [], [], [], []).
         lyapunovs (CertificateCollection, optional): _description_. Defaults to ([], [], [], [], []).
 
-    Returns:
+    Returns
+    -------
         Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]]: _description_
     """
     compute_cbf_constraints = generate_compute_cbf_constraints(
@@ -77,7 +79,8 @@ def generate_compute_cbf_clf_constraints(
     def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, Dict[str, Any]]:
         """_summary_
 
-        Returns:
+        Returns
+        -------
             _type_: _description_
         """
         amat_cbf, bvec_cbf, cbf_data = compute_cbf_constraints(t, x)

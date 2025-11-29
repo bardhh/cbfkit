@@ -7,10 +7,9 @@ g_accel = 9.81
 
 
 def plant() -> DynamicsCallable:
-    """
-    Returns a function that represents the fixed-wing UAV dynamics,
-    which computes the drift vector 'f', control matrix 'g', and a perturbation
-    'p' (stochastic, deterministic, or None) based on the given state.
+    """Returns a function that represents the fixed-wing UAV dynamics, which computes the drift
+    vector 'f', control matrix 'g', and a perturbation 'p' (stochastic, deterministic, or None)
+    based on the given state.
 
     The model characterized by this function may be found in Beard et al. 2014
     "Fixed Wing UAV Path Following in Wind with Input Constraints".
@@ -31,7 +30,8 @@ def plant() -> DynamicsCallable:
     Args:
         perturbation (Optional, Callable / None): perturbation to nominal dynamics
 
-    Returns:
+    Returns
+    -------
         dynamics (DynamicsCallable): takes state as input and returns dynamics components
             f, g, and p of one of the following forms:
 
@@ -43,25 +43,22 @@ def plant() -> DynamicsCallable:
 
             Case 3: perfect dynamics
             dx/dt = f(x) + g(x)u
-
     """
 
     @jit
     def kinematics(state: Array) -> DynamicsCallableReturns:
-        """
-        Computes the drift vector 'f', control matrix 'g', and perturbation 'p'
-        based on the given state x, which consists of px, py, pz (positions in
-        m), v (flight speed in m/s), gamma (flight path angle in rad), and psi
-        (heading angle in rad).
+        """Computes the drift vector 'f', control matrix 'g', and perturbation 'p' based on the
+        given state x, which consists of px, py, pz (positions in m), v (flight speed in m/s), gamma
+        (flight path angle in rad), and psi (heading angle in rad).
 
         Args:
             state (Array): state vector
 
-        Returns:
-            f, g, p(state) (Tuple of Arrays or None): drift vector f, control matrix g, perturbation p(state)
-
+        Returns
+        -------
+            f, g, p(state) (Tuple of Arrays or None): drift vector f, control matrix g,
+            perturbation p(state)
         """
-
         _, _, _, v, psi, gamma = state
         f = jnp.array(
             [
@@ -90,6 +87,7 @@ def plant() -> DynamicsCallable:
 
 
 def plant_jacobians():
+    """Returns a function that computes the Jacobian of the fixed-wing UAV dynamics."""
     jacobian = jacfwd(plant())
 
     def func(x: Array) -> Array:

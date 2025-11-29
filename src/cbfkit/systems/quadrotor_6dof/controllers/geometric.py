@@ -38,8 +38,7 @@ def geometric_controller(
     kr: float = 8.81,
     ko: float = 2.54,
 ) -> ControllerCallable:
-    """
-    Creates a geometric controller for the 6-DOF quadrotor model based on the following paper:
+    """Creates a geometric controller for the 6-DOF quadrotor model based on the following paper:.
 
     T. Lee, M. Leok and N. H. McClamroch,
         "Geometric tracking control of a quadrotor UAV on SE(3),"
@@ -59,7 +58,8 @@ def geometric_controller(
         kr (float): attitude error gain
         ko (float): omega error gain
 
-    Returns:
+    Returns
+    -------
         controller (Callable): computes control input
     """
     e3 = jnp.array([0.0, 0.0, 1.0])
@@ -87,23 +87,23 @@ def geometric_controller(
         _key: Optional[Array] = None,
         _data: Optional[ControllerData] = None,
     ) -> ControllerCallableReturns:
-        """
-        Computes control input.
+        """Computes control input.
 
         Args:
             t (float): time in sec
             x (Array): state vector
 
-        Returns:
+        Returns
+        -------
             u (Array): computed control inputs
             data (dict): requisite dictionary return
-
         """
         nonlocal _b1_d, e3, j_vec
 
         _, _, _, _, _, _, _, theta, psi, _, _, _ = x
         # dynamics returns (f, g), we unpack the first element which is f?
-        # The original code was: dynamics(x)[0]. This seems to imply dynamics(x) returns a tuple/list and the first element is f.
+        # The original code was: dynamics(x)[0]. This seems to imply dynamics(x)
+        # returns a tuple/list and the first element is f.
         # Assuming dynamics(x) -> (f, g) or similar.
         # And unpacking f: _, _, _, _, _, _, phi_dot, theta_dot, psi_dot, _, _, _ = f
         f_val, _ = dynamics(x)
@@ -182,6 +182,21 @@ def lyapunov_control(
     k3: float = 1.0,
     k5: float = 1.0,
 ):
+    """Creates a function to compute the desired accelerations for reaching a goal location based on
+    a Lyapunov function.
+
+    Args:
+        goal (Array): desired position vector
+        dt (float): timestep length
+        fV (Callable): Lyapunov function
+        k1 (float): positive gain
+        k3 (float): positive gain
+        k5 (float): positive gain
+
+    Returns
+    -------
+        Callable: computes the desired position, velocity, and acceleration
+    """
     exp = 4
     x_d, y_d, z_d = goal
     x_dot_d, y_dot_d, z_dot_d = 0.0, 0.0, 0.0
@@ -237,17 +252,16 @@ def lyapunov_control(
 
 
 def lqr_control(xd: Array, dt: float) -> Callable[[float, Array], Tuple[Array, Array, Array]]:
-    """
-    Creates a function to compute the desired accelerations for reaching a goal
-    location based on a double integrator model given the time and state vector.
+    """Creates a function to compute the desired accelerations for reaching a goal location based on
+    a double integrator model given the time and state vector.
 
     Args:
         xd (Array): desired position vector
         dt (float): timestep length
 
-    Returns:
-        get_desired_pos_vel_acc (Callable): computes the desired position, velocity, and acceleration
-
+    Returns
+    -------
+        get_desired_pos_vel_acc (Callable): computes the desired position, velocity, and acceleration.
     """
     # Generate A, B, Q, R for LQR
     A = jnp.zeros((6, 6))
@@ -262,19 +276,17 @@ def lqr_control(xd: Array, dt: float) -> Callable[[float, Array], Tuple[Array, A
 
     # @jit
     def controller(_t: float, x: Array) -> Tuple[Array, Array, Array]:
-        """
-        Computes desired position, velocity, and acceleration based on current and goal
-        states.
+        """Computes desired position, velocity, and acceleration based on current and goal states.
 
         Args:
             t (float): time in sec (unused)
             x (Array): state vector
 
-        Returns:
+        Returns
+        -------
             xd (Array): goal position vector
             vd (Array): goal velocity vector
             ad (Array): goal acceleration vector
-
         """
         pos_vel = jnp.hstack([x[:3], jnp.matmul(rotation_body_frame_to_inertial_frame(x), x[3:6])])
         ad = -jnp.matmul(K, pos_vel - jnp.hstack([xd, jnp.zeros((3,))]))

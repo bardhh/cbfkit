@@ -1,8 +1,4 @@
-"""
-unpack.py
-
-
-"""
+"""unpack.py."""
 
 from typing import Any, Dict
 
@@ -25,7 +21,8 @@ def unpack_for_cbf(
         functions (CertificateCollection): _description_
         lyapunovs (CertificateCollection): _description_
 
-    Returns:
+    Returns
+    -------
         _type_: _description_
     """
     tunable = False
@@ -68,7 +65,8 @@ def unpack_for_clf(
         functions (CertificateCollection): _description_
         barriers (CertificateCollection): _description_
 
-    Returns:
+    Returns
+    -------
         _type_: _description_
     """
     relaxable = False

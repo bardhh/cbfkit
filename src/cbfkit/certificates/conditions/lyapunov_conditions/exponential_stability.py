@@ -64,7 +64,8 @@ def e_s(c: float) -> Callable[[Array], Array]:
     Args:
         c1 (float): convergence constant
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: ES Lyapunov conditions
     """
     return lambda V: lax.cond(V > 0, lambda _fake: -c * V, lambda _fake: 0.0, 0)

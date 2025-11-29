@@ -1,34 +1,4 @@
-"""
-qp_solver_cvxopt
-================
-
-This module implements a solver for quadratic programs using the CVXOPT library.
-
-Functions
----------
--solve(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec): calculates solution to quadratic program specified by args
-
-Notes
------
-Quadratic Program takes the following form:
-min 1/2 x.T @ h_mat @ x + f_vec @ x
-subject to
-g_mat @ x <= h_vec
-a_mat @ x = b_vec
-
-Examples
---------
->>> import qp_solver_cvxopt
->>> sol, status = qp_solver_cvxopt.solve(
-        h_mat=jnp.eye(2),
-        f_vec=jnp.ones((2,)),
-        g_mat=jnp.ones((2, 1)),
-        h_vec=jnp.array([1.0]),
-        a_mat=None,
-        b_vec=None,
-    )
-
-"""
+"""Quadratic program solver using the CVXOPT library."""
 
 import platform
 from typing import Any, Dict, Tuple, Union
@@ -53,8 +23,7 @@ def solve(
     a_mat: Union[Array, None] = None,
     b_vec: Union[Array, None] = None,
 ) -> Tuple[Array, int]:
-    """
-    Solve a quadratic program using the cvxopt solver.
+    """Solve a quadratic program using the cvxopt solver.
 
     Args:
         h_mat: quadratic cost matrix
@@ -64,7 +33,8 @@ def solve(
         g_mat: linear equality constraint matrix
         h_vec: linear equality constraint vector
 
-    Returns:
+    Returns
+    -------
         sol['x']: Solution to the QP
     """
     # Use the cvxopt library to solve the quadratic program

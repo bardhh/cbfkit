@@ -18,6 +18,7 @@ def plot_trajectory(
     ax=None,
     savefile=None,
 ):
+    """Plot the trajectory with ellipsoidal obstacles."""
     if fig is None and ax is None:
         fig, ax = plt.subplots()
 
@@ -90,6 +91,8 @@ def animate(
     save_animation=True,
     animation_filename="system_behavior.gif",
 ):
+    """Animate the system behavior in an ellipsoidal environment."""
+
     def init():
         trajectory.set_data([], [])
         etrajectory.set_data([], [])

@@ -23,9 +23,8 @@ def stepper(
 ) -> Callable[
     [float, Optional[Array], Array, Optional[Array]], Tuple[Array, Array, Array, Dict[str, Any]]
 ]:
-    """Step function to take the simulation forward one timestep. Designed
-    to work generically with broad classes of dynamics, controllers, and
-    estimators.
+    """Step function to take the simulation forward one timestep. Designed to work generically with
+    broad classes of dynamics, controllers, and estimators.
 
     Args:
         dynamics (Callable): function handle to compute true system dynamics
@@ -34,10 +33,9 @@ def stepper(
         estimator (Callable): function handle to compute new state estimate
         dt (float) timestep (sec)
 
-    Returns:
+    Returns
+    -------
         step (Callable): function handle for stepping forward in simulation time
-
-
     """
 
     def step(
@@ -46,7 +44,7 @@ def stepper(
         z: Estimate,
         p: Optional[Covariance],
     ) -> Tuple[Array, Array, Array, Dict[str, Any]]:
-        """_summary_
+        """_summary_.
 
         Args:
             t (float): time (sec)
@@ -54,7 +52,8 @@ def stepper(
             z (Array): state estimate vector
             p (Array): covariance matrix of state estimate
 
-        Returns:
+        Returns
+        -------
             u (Array): control input vector
             z (Array): state estimate vector
             p (Array): covariance matrix of state estimate
@@ -83,8 +82,8 @@ def experimenter(
     dt: float,
     num_steps: int,
 ) -> Callable[[Array], Iterator[tuple[Array, Array, Array, List[str], List[Array]]]]:
-    """Generates function handle for the iterator that carries out the simulation of the
-    dynamical system.
+    """Generates function handle for the iterator that carries out the simulation of the dynamical
+    system.
 
     Args:
         sensor (Callable): function handle to generate new state sensor
@@ -93,14 +92,14 @@ def experimenter(
         dt (float) timestep (sec)
         num_steps (int): number of timesteps to simulate
 
-    Returns:
+    Returns
+    -------
         iterator eventually returning the following:
             u (Array): control input vector
             z (Array): state estimate vector
             p (Array): state estimate covariance matrix
             keys (list): list of keys in data dict
             vals (list): lists of values contained in data
-
     """
     # Define step function
     step = stepper(
@@ -136,11 +135,10 @@ def experiment(
     num_steps: int,
     filepath: Optional[str] = None,
 ) -> Tuple[Array, List[str], List[Array]]:
-    """This function simulates the dynamical system for a given number of steps,
-    and returns a tuple consisting of 1) an array containing the state, control,
-    estimate, and covariance trajectories, 2) a list containing keys to a dict
-    object containing additional data, and 3) a list of objects corresponding to
-    the data accessed by those keys.
+    """Simulates the dynamical system for a given number of steps, and returns a tuple
+    consisting of 1) an array containing the state, control, estimate, and covariance trajectories,
+    2) a list containing keys to a dict object containing additional data, and 3) a list of objects
+    corresponding to the data accessed by those keys.
 
     Args:
         z0 (State): initial (estimated) state of the system
@@ -151,7 +149,8 @@ def experiment(
         num_steps (int): _description_
         filepath (Optional[str], optional): _description_. Defaults to None.
 
-    Returns:
+    Returns
+    -------
         Tuple[Array, List[str], List[Array]]: _description_
     """
     # Define simulator
@@ -166,7 +165,7 @@ def experiment(
 
 #! Finish this function
 def extract_and_log_data(filepath: Optional[str], data):
-    """_summary_"""
+    """_summary_."""
     if filepath is not None:
         # write_log(filepath)
         pass

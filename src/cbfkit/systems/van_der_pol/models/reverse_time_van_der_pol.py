@@ -10,11 +10,10 @@ def reverse_van_der_pol_oscillator(
     epsilon: float,
     sigma: Optional[Union[float, Array, None]] = None,
 ) -> DynamicsCallable:
-    """
-    Returns a function that represents the equations of motion for the Van der
-    Pol oscillator, and specifically returns them in the form of a drift vector
-    'f', control matrix 'g', and diffusion matrix 's' (the argument sigma) based
-    on the given state.
+    """Returns a function that represents the equations of motion for the Van der Pol oscillator.
+
+    Specifically returns them in the form of a drift vector 'f', control matrix 'g',
+    and diffusion matrix 's' (the argument sigma) based on the given state.
 
     The model characterized by this function may be found in Khalil's Nonlinear
     Systems book.
@@ -30,24 +29,24 @@ def reverse_van_der_pol_oscillator(
         epsilon (float): parameter in the equations of motion
         sigma (Optional, Array): diffusion term in stochastic differential equation
 
-    Returns:
+    Returns
+    -------
         dynamics (Callable): takes state as input and returns dynamics components
             f, g of the form dx = (f(x) + g(x)u)dt
-
     """
 
     @jit
     def equations_of_motion(state: Array) -> DynamicsCallableReturns:
-        """
-        Computes the drift vector 'f' and control matrix 'g' based on the given state x,
-        which consists of x1 ('position' coordinate) and x2 ('velocity' coordinate).
+        """Computes the drift vector 'f' and control matrix 'g' based on the given state x.
+
+        State x consists of x1 ('position' coordinate) and x2 ('velocity' coordinate).
 
         Args:
             x (Array): state vector
 
-        Returns:
+        Returns
+        -------
             f, g (Tuple of Arrays): drift vector f, control matrix g
-
         """
         x1, x2 = state
         f = jnp.array([-x2, x1 - epsilon * (1 - x1**2) * x2])

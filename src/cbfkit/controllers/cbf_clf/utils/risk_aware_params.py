@@ -36,15 +36,14 @@ from jax import Array
 
 
 class RiskAwareParams:
-    """
-    Object to compile various parameters relevant to risk-aware control with CBFs and CLFs.
+    """Object to compile various parameters relevant to risk-aware control with CBFs and CLFs.
 
-    Attributes:
+    Attributes
+    ----------
         ra_cbf (Params): object containing parameters for RA/RA-PI CBFs
         ra_clf (Params): object containing parameters for RA/RA-PI CLFs
         sigma (Optional[Union[Callable[[Array], Array], None]] = None): diffusion function in stochastic plant dynamics
         varsigma (Optional[Union[Callable[[Array], Array], None]] = None): diffusion function in stochastic measurement dynamics
-
     """
 
     def __init__(

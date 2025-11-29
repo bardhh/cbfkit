@@ -22,18 +22,19 @@ def controller_wrapper(
     backup_controller: ControllerCallable,
     publish: Callable[[Array, Array], None],
 ) -> ControllerCallable:
-    """Wrapper for any generic controller function to publish to specified ROS topics.
-    Requires the controller function handle, a list of publishers, and a handle to
-    the publish function which processes the publish request for the specific
-    configuration.
+    """Wrapper for any generic controller function to publish to specified ROS topics. Requires the
+    controller function handle, a list of publishers, and a handle to the publish function which
+    processes the publish request for the specific configuration.
 
     Args:
         controller (ControllerCallable): handle to the controller function (computes input)
         publish (Callable[[Array, Array], None]): handle to the function which
             carries out the publish request. Must be configured for the specific environment.
 
-    Returns:
-        wrapped_controller (Callable[[float, Array], Tuple[Array, Dict]]): handle to the wrapped_controller function
+    Returns
+    -------
+        wrapped_controller (Callable[[float, Array], Tuple[Array, Dict]]): handle to the
+        wrapped_controller function
     """
 
     def wrapped_controller(
@@ -43,13 +44,14 @@ def controller_wrapper(
         key: Key,
         data: ControllerData,
     ) -> ControllerCallableReturns:
-        """_summary_
+        """_summary_.
 
         Args:
             t (float): time in sec
             x (Array): estimated state vector
 
-        Returns:
+        Returns
+        -------
             Tuple: (computed input u, dict containing misc data)
         """
         _t_float: float
@@ -79,12 +81,13 @@ def controller_wrapper(
 
 
 def ros_controller(extract_control: Callable[[], Tuple[Array, Dict]]) -> ControllerCallable:
-    """_summary_
+    """_summary_.
 
     Args:
         extract_control (Callable): _description_
 
-    Returns:
+    Returns
+    -------
         Tuple[Array, Dict]: contains computed input u and dictionary containing extra data
     """
 

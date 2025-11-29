@@ -1,11 +1,9 @@
-"""
-future_focused.py
+"""future_focused.py.
 
 Contains functions defining a future-focused CBF wrt an ellipsoidal obstacle.
 
 Exportable:
     obstacle_ff
-
 """
 
 import jax.numpy as jnp
@@ -35,9 +33,9 @@ def cbf(state: Array, *, obstacle: Array, r: float, tfuture: float) -> Array:
         r (float): radius of obstacle
         tfuture (float): maximum lookahead time
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
-
     """
     # Get states
     x_e, y_e, z_e, v_e, psi_e, gamma_e, _t = state
@@ -89,9 +87,9 @@ def cbf_grad(state: Array, *, obstacle: Array, r: float, tfuture: float) -> Arra
         r (float): radius of obstacle
         tfuture (float): maximum lookahead time
 
-    Returns:
+    Returns
+    -------
         ret (float): value of Jacobian evaluated at time and state
-
     """
     return jacfwd(cbf)(state, obstacle, r, tfuture)
 
@@ -108,9 +106,9 @@ def cbf_hess(state: Array, *, obstacle: Array, r: float, tfuture: float) -> Arra
         r (float): radius of obstacle
         tfuture (float): maximum lookahead time
 
-    Returns:
+    Returns
+    -------
         ret (float): value of Hessian evaluated at time and state
-
     """
     return jacrev(jacfwd(cbf))(state, obstacle, r, tfuture)
 

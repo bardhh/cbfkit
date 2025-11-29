@@ -1,10 +1,7 @@
-"""
-This module provides a template for example simulations designed to be run from
-the interpreter via ''python examples/template.py''.
+"""This module provides a template for example simulations designed to be run from the interpreter
+via ''python examples/template.py''.
 
-It does not define any new functions, and primarily loads modules from the
-src/cbfkit tree.
-
+It does not define any new functions, and primarily loads modules from the src/cbfkit tree.
 """
 
 import jax.numpy as jnp

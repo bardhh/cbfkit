@@ -1,6 +1,4 @@
-"""
-Module docstring
-"""
+"""Module docstring."""
 
 from typing import Callable, List
 
@@ -23,7 +21,8 @@ def obstacle_ff_barriers(
         r_obs (List[float]): list of obstacle radii
         tfuture (float): maximum lookahead time
 
-    Returns:
+    Returns
+    -------
         Callable[[], CertificateCollection]: all inforrmation needed for CLF constraint in QP
     """
     barrier_functions = []

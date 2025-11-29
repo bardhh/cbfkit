@@ -25,9 +25,9 @@ def h_att(z: Array, att_limit: float, k: Optional[float] = 2.0) -> Array:
         att_limit (float): attitude limit in rad
 
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
-
     """
     # HO-CBF requires state model
     _, _, _, _, _, _, phi, theta, _, p, q, r, _ = z
@@ -48,7 +48,8 @@ def dh_att_dx(z: Array, att_limit: float) -> Array:
         z (Array): concatenated time and state vector
         att_limit (float): attitude limit in rad
 
-    Returns:
+    Returns
+    -------
         ret (Array): value of Jacobian evaluated at time and state
     """
     return jacfwd(h_att)(z, att_limit)
@@ -62,18 +63,30 @@ def dh2_att_dx2(z: Array, att_limit: float) -> Array:
         z (Array): concatenated time and state vector
         att_limit (float): attitude limit in rad
 
-    Returns:
+    Returns
+    -------
         ret (Array): value of Hessian evaluated at time and state
     """
     return jacfwd(jacrev(h_att))(z, att_limit)
 
 
-def attitude(limit: float) -> Tuple[
+def attitude(
+    limit: float,
+) -> Tuple[
     List[CertificateCallable],
     List[CertificateJacobianCallable],
     List[CertificateHessianCallable],
     List[CertificatePartialCallable],
 ]:
+    """Provides a certificate for attitude constraints.
+
+    Args:
+        limit (float): The attitude limit.
+
+    Returns:
+        A tuple of lists containing the barrier function, its Jacobian, Hessian, and partial derivative.
+    """
+
     def b_func(t, x):
         return h_att(jnp.hstack([x, t]), limit)  # type: ignore[return-value]
 
@@ -105,9 +118,9 @@ def h_alt(z: Array, alt_limit: float, k: float = 2.0, n: int = 2) -> Array:
         alt_limit (float): altitude limit in rad
 
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
-
     """
     # HO-CBF requires state model
     _, _, a, u, v, w, phi, theta, _, _, _, _, _ = z
@@ -129,7 +142,8 @@ def dh_alt_dx(z: Array, alt_limit: float) -> Array:
         z (Array): concatenated time and state vector
         att_limit (float): attitude limit in rad
 
-    Returns:
+    Returns
+    -------
         ret (Array): value of Jacobian evaluated at time and state
     """
     return jacfwd(h_alt)(z, alt_limit)
@@ -143,18 +157,30 @@ def dh2_alt_dx2(z: Array, alt_limit: float) -> Array:
         z (Array): concatenated time and state vector
         att_limit (float): attitude limit in rad
 
-    Returns:
+    Returns
+    -------
         ret (Array): value of Hessian evaluated at time and state
     """
     return jacfwd(jacrev(h_alt))(z, alt_limit)
 
 
-def altitude(limit: float) -> Tuple[
+def altitude(
+    limit: float,
+) -> Tuple[
     List[CertificateCallable],
     List[CertificateJacobianCallable],
     List[CertificateHessianCallable],
     List[CertificatePartialCallable],
 ]:
+    """Provides a certificate for altitude constraints.
+
+    Args:
+        limit (float): The altitude limit.
+
+    Returns:
+        A tuple of lists containing the barrier function, its Jacobian, Hessian, and partial derivative.
+    """
+
     def b_func(t, x):
         return h_alt(jnp.hstack([x, t]), limit)  # type: ignore[return-value]
 

@@ -12,7 +12,8 @@ def tanh_sigmoid_func(x: float, xbar: float):
         x (float): argument to sigmoid.
         xbar (float): maximum value of argument.
 
-    Returns:
+    Returns
+    -------
         float: Result of the smooth saturation function.
     """
     k = 100

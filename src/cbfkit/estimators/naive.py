@@ -21,8 +21,8 @@ def naive(
         u (Array): control input vector -- unused but required for generic sensor
         p (Array): state estimate covariance vector -- unused but required for generic sensor
 
-    Returns:
+    Returns
+    -------
         y (Array): naively returns the (full) state measurement
-
     """
     return y, jnp.zeros((len(y), len(y)))

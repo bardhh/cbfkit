@@ -34,19 +34,17 @@ from scipy.integrate import solve_ivp as solve
 
 
 def solve_ivp(x: Array, x_dot: Array, dt: float):
-    """Performs numerical integration on current state (x) and current state
-    derivative (x_dot) over time interval of length dt according to
-    scipy.integrate.solve_ivp
+    """Performs numerical integration on current state (x) and current state derivative (x_dot) over
+    time interval of length dt according to scipy.integrate.solve_ivp.
 
     Arguments:
         x: current state
         x_dot: current state derivative
         dt: timestep length (in sec)
 
-    Returns:
+    Returns
+    -------
         new_state
-
     """
-
     sol = solve(x_dot, (0, dt), x, t_eval=jnp.linspace(0, dt, 100))
     return jnp.array(sol.y)

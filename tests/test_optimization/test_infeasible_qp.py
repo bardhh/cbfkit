@@ -6,8 +6,8 @@ from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
 
 
 def test_infeasible_qp_behavior():
-    """
-    Test that the QP solver handles infeasibility correctly.
+    """Test that the QP solver handles infeasibility correctly.
+
     Scenario:
         x_dot = u
         Constraint: u <= 0.5

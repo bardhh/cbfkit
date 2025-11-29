@@ -70,8 +70,8 @@ def rectify_relative_degree(
     roots: Union[Array, None] = None,
     form: str = "exponential",
 ) -> Callable[..., CertificateCollection]:
-    """Rectifies the relative degree of the provided constraint function with respect to
-    the system dynamics deriving a new exponential- or high-order-CBF.
+    """Rectifies the relative degree of the provided constraint function with respect to the system
+    dynamics deriving a new exponential- or high-order-CBF.
 
     Args:
         function (Callable[[float, Array], Array]): constraint function
@@ -79,7 +79,8 @@ def rectify_relative_degree(
         state_dim (int): dimension of the state
         form (str, optional): type of cascading procedure. Defaults to "exponential".
 
-    Returns:
+    Returns
+    -------
         Callable[[Dict[str, Any]], CertificateTuple]: Function to create the CertificateCollection
     """
     function_list = compute_function_list(function, system_dynamics, state_dim + 1, form)
@@ -154,8 +155,8 @@ def compute_function_list(
     subkey: Union[Array, None] = None,
     n_samples: int = 10,
 ):
-    """Computes the cascading list of derivatives/functions for rectifying the relative
-    degree of the provided function.
+    """Computes the cascading list of derivatives/functions for rectifying the relative degree of
+    the provided function.
 
     Args:
         function (Callable[[float, Array], Array]): constraint function
@@ -166,7 +167,8 @@ def compute_function_list(
         subkey (Union[jaxlib.xla_extension.ArrayImpl, None], optional): random subkey. Defaults to None.
         n_samples (int, optional): number of samples used to determine relative-degree. Defaults to 10.
 
-    Returns:
+    Returns
+    -------
         List[Callable]: list of functions/derivatives
     """
     if func_list is None:
@@ -223,10 +225,10 @@ def polynomial_coefficients_from_roots(roots: Array) -> Array:
     Args:
         roots (Array): roots of polynomial
 
-    Returns:
+    Returns
+    -------
         Array: polynomial coefficients
     """
-
     # Create a polynomial with roots at the specified locations
     polynomial = np.poly1d(roots, r=True)
 

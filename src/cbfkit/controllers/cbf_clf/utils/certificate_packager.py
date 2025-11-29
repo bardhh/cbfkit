@@ -78,7 +78,8 @@ def certificate_package(
         func_hess (Callable): certificate hessian matrix function
         n (int): state dimension
 
-    Returns:
+    Returns
+    -------
         CertificateCollection: _description_
     """
 
@@ -93,7 +94,8 @@ def certificate_package(
             kwargs
 
 
-        Returns:
+        Returns
+        -------
             BarrierTuple: _description_
         """
         v_func = func(**kwargs)
@@ -132,7 +134,8 @@ def certificate_package(
 def concatenate_certificates(*tuples: CertificateCollection) -> CertificateCollection:
     """_summary_
 
-    Returns:
+    Returns
+    -------
         _type_: _description_
     """
     if not tuples:

@@ -1,6 +1,4 @@
-"""
-docstring
-"""
+"""docstring."""
 
 from . import certificates, controllers
 from .dynamics import plant, plant_jacobians

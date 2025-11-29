@@ -25,7 +25,8 @@ def ellipsoidal_barrier(
         obstacle_position_indices (Tuple[int, ...]): Indices of position in obstacle_state.
         ellipsoid_axis_indices (Tuple[int, ...]): Indices of axes in ellipsoid_axes.
 
-    Returns:
+    Returns
+    -------
         Array: The barrier function value.
     """
     # Extract position components
@@ -44,9 +45,8 @@ def ellipsoidal_barrier_factory(
     obstacle_position_indices: Tuple[int, ...] = (0, 1),
     ellipsoid_axis_indices: Tuple[int, ...] = (0, 1),
 ):
-    """
-    Returns a set of functions (cbf, cbf_grad, cbf_hess) for an ellipsoidal barrier,
-    configured for specific state indices.
+    """Returns a set of functions (cbf, cbf_grad, cbf_hess) for an ellipsoidal barrier, configured
+    for specific state indices.
 
     The returned functions satisfy the signature expected by certificate_package:
     func(obstacle, ellipsoid) -> func(state_and_time) -> value

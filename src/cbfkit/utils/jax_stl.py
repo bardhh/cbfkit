@@ -6,24 +6,29 @@ from jax import jit, lax
 # Processes mtl not
 @jit
 def jax_not(robustness):
+    """Compute logical NOT for robustness."""
     return -robustness
 
 
 # Processes mtl or
 @jit
 def jax_or(left_robustness, right_robustness):
+    """Compute logical OR for robustness."""
     return jnp.maximum(left_robustness, right_robustness)
 
 
 # Processes mtl and
 @jit
 def jax_and(left_robustness, right_robustness):
+    """Compute logical AND for robustness."""
     return jnp.minimum(left_robustness, right_robustness)
 
 
 # Binary search for a desired time step
 @jit
 def search_sorted(time_stamps, time):  # , start_lower_index):
+    """Perform binary search for a desired time step."""
+
     def search_body(i, bounds):
         lower, upper, middle = bounds
         middle = (lower + upper) // 2
@@ -49,18 +54,22 @@ def search_sorted(time_stamps, time):  # , start_lower_index):
 # Returns the max of two inputs
 @jit
 def max_jax(left, right):
+    """Return the max of two inputs."""
     return jnp.maximum(left, right)
 
 
 # Returns the min of two inputs
 @jit
 def min_jax(left, right):
+    """Return the min of two inputs."""
     return jnp.minimum(left, right)
 
 
 # Finds the index of the minimum value in array
 @jit
 def find_min(array, start_index, end_index):
+    """Find the index of the minimum value in array."""
+
     def min_body(i, min_idx):
         new_min_idx = lax.cond(
             array[start_index + i] < array[min_idx],
@@ -76,6 +85,8 @@ def find_min(array, start_index, end_index):
 # Finds the index of the max value in array
 @jit
 def find_max(array, start_index, end_index):
+    """Find the index of the max value in array."""
+
     def max_body(i, max_idx):
         new_max_idx = lax.cond(
             array[start_index + i] > array[max_idx],
@@ -91,6 +102,8 @@ def find_max(array, start_index, end_index):
 # Custom accumulate function using lax.scan
 @jit
 def accumulate_max(arr):
+    """Custom accumulate function using lax.scan."""
+
     def body(carry, x):
         return jnp.maximum(carry, x), jnp.maximum(carry, x)
 
@@ -100,6 +113,8 @@ def accumulate_max(arr):
 
 @jit
 def accumulate_min(arr):
+    """Custom accumulate min function."""
+
     def body(carry, x):
         return jnp.minimum(carry, x), jnp.minimum(carry, x)
 
@@ -113,6 +128,7 @@ def accumulate_min(arr):
 # Processes mtl finally
 @jit
 def jax_finally(lower_time_bound, upper_time_bound, robustness, time_stamps):
+    """Process mtl finally."""
     len(robustness)
 
     def process_valid_bounds(_):
@@ -156,6 +172,7 @@ def jax_finally(lower_time_bound, upper_time_bound, robustness, time_stamps):
 # Processes mtl global
 # #@jit
 def jax_global(lower_time_bound, upper_time_bound, robustness, time_stamps):
+    """Process mtl global."""
     len(robustness)
 
     def process_valid_bounds(_):
@@ -197,12 +214,14 @@ def jax_global(lower_time_bound, upper_time_bound, robustness, time_stamps):
 # Processes 1-dimensional polyhedron A*trace[i] <= bound
 @jit
 def jax_one_dim_pred(traces, A, bound):
+    """Process 1-dimensional polyhedron A*trace[i] <= bound."""
     return -1 * (traces * A - bound)
 
 
 # Processes mtl until
 @jit
 def jax_until(upper_time_bound, robustness, time_stamps):
+    """Process mtl until."""
     robustness = lax.cond(
         upper_time_bound > time_stamps[0],
         jax_global,
@@ -219,6 +238,7 @@ def jax_until(upper_time_bound, robustness, time_stamps):
 # Processes mtl next
 @jit
 def jax_next(robustness):
+    """Process mtl next."""
     return jnp.roll(robustness, -1)
 
 

@@ -67,7 +67,8 @@ def fxt_s(c1: float, c2: float, e1: float, e2: float) -> Callable[[Array], Array
         e1 (float): exponential constant 1
         e2 (float): exponential constant 2
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: FxTS Lyapunov conditions
     """
     return lambda V: lax.cond(V > 0, lambda _fake: -c1 * V**e1 - c2 * V**e2, lambda _fake: 0.0, 0)

@@ -1,8 +1,7 @@
-"""
-lyapunov_fcn_catalog.py
+"""lyapunov_fcn_catalog.py.
 
-This file contains a catalog of candidate lyapunov functions and their associated
-gradients, Hessians, etc., for use in control Lyapunov function-based controllers.
+This file contains a catalog of candidate lyapunov functions and their associated gradients,
+Hessians, etc., for use in control Lyapunov function-based controllers.
 """
 
 import jax.numpy as jnp
@@ -18,9 +17,8 @@ N = 6  # number of states
 ## 2nd Order Goal Position
 @jit
 def clf(state: Array, goal: Array, c1: float, c2: float, e1: float, e2: float) -> Array:
-    """Second order position goal function (drive fixed-wing UAV
-    to a set of states within which a constant Vdot will drive it to
-    the goal location within time T).
+    """Second order position goal function (drive fixed-wing UAV to a set of states within which a
+    constant Vdot will drive it to the goal location within time T).
 
     Args:
         state (Array): concatenated time and state vector
@@ -30,9 +28,9 @@ def clf(state: Array, goal: Array, c1: float, c2: float, e1: float, e2: float) -
         e1 (float): first-term exponent on FxTS conditions
         e2 (float): second-term exponent on FxTS conditions
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
-
     """
     x, y, z, v, psi, gamma, _t = state
     xg, yg, zg = goal
@@ -49,9 +47,8 @@ def clf(state: Array, goal: Array, c1: float, c2: float, e1: float, e2: float) -
 
 @jit
 def clf_grad(state: Array, goal: Array, c1: float, c2: float, e1: float, e2: float) -> Array:
-    """Jacobian for second order position goal function (drive fixed-wing UAV
-    to a set of states within which a constant Vdot will drive it to
-    the goal location within time T).
+    """Jacobian for second order position goal function (drive fixed-wing UAV to a set of states
+    within which a constant Vdot will drive it to the goal location within time T).
 
     Args:
         state (Array): concatenated time and state vector
@@ -61,7 +58,8 @@ def clf_grad(state: Array, goal: Array, c1: float, c2: float, e1: float, e2: flo
         e1 (float): first-term exponent on FxTS conditions
         e2 (float): second-term exponent on FxTS conditions
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(clf)(state, goal, c1, c2, e1, e2)
@@ -69,9 +67,8 @@ def clf_grad(state: Array, goal: Array, c1: float, c2: float, e1: float, e2: flo
 
 @jit
 def clf_hess(state: Array, goal: Array, c1: float, c2: float, e1: float, e2: float) -> Array:
-    """Hessian for second order position goal function (drive fixed-wing UAV
-    to a set of states within which a constant Vdot will drive it to
-    the goal location within time T).
+    """Hessian for second order position goal function (drive fixed-wing UAV to a set of states
+    within which a constant Vdot will drive it to the goal location within time T).
 
     Args:
         state (Array): concatenated time and state vector
@@ -81,7 +78,8 @@ def clf_hess(state: Array, goal: Array, c1: float, c2: float, e1: float, e2: flo
         e1 (float): first-term exponent on FxTS conditions
         e2 (float): second-term exponent on FxTS conditions
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(jacrev(clf))(state, goal, c1, c2, e1, e2)

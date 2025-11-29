@@ -1,5 +1,5 @@
-"""
-Test Module for conducting a Monte Carlo simulation of the unicycle system
+"""Test Module for conducting a Monte Carlo simulation of the unicycle system.
+
 =========================
 
 This module contains tests that simulate the unicycle system under various
@@ -91,10 +91,12 @@ DFDX = jacfwd(DYNAMICS)
 
 
 def H(x):
+    """Identity measurement function."""
     return x
 
 
 def DHDX(_x):
+    """Jacobian of identity measurement function."""
     return jnp.eye(N)
 
 
@@ -119,13 +121,15 @@ CONTROLLER = vanilla_cbf_clf_qp_controller(
 
 
 def execute(_ii: int, use_jit: bool = False) -> bool:
-    """_summary_
+    """Execute a single Monte Carlo trial.
 
     Args:
-        int (ii): _description_
+        _ii (int): Seed/index for random number generation.
+        use_jit (bool): Whether to use JIT compilation.
 
-    Returns:
-        List[Array]: _description_
+    Returns
+    -------
+        bool: Success flag.
     """
     invalid_initial_condition = True
     key = random.PRNGKey(_ii)
@@ -172,13 +176,15 @@ def execute(_ii: int, use_jit: bool = False) -> bool:
 
 
 def run_monte_carlo(n_trials: int, use_jit: bool = False) -> bool:
-    """_summary_
+    """Run Monte Carlo simulation.
 
     Args:
-        controller (ControllerCallable): _description_
+        n_trials (int): Number of trials to run.
+        use_jit (bool): Whether to use JIT compilation.
 
-    Returns:
-        bool: _description_
+    Returns
+    -------
+        bool: True if all trials were successful.
     """
     # Partial application to pass use_jit
     from functools import partial
@@ -198,9 +204,9 @@ def run_monte_carlo(n_trials: int, use_jit: bool = False) -> bool:
 
 
 class TestUnicycleMonteCarlo(unittest.TestCase):
-    """Takes care of unit tests intended to simulate Monte Carlo trials of the
-    unicycle start-to-goal case study.
-
+    """
+    Takes care of unit tests for the unicycle Monte Carlo start-to-goal case study.
+    It groups tests that simulate randomized trajectories.
     """
 
     def test_unicycle_cbf_controller_controller(self):

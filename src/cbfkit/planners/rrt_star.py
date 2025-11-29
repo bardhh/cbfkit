@@ -1,5 +1,4 @@
-"""
-rrt_star.py
+"""rrt_star.py.
 
 #! To Do: implement
 """

@@ -14,15 +14,14 @@ from cbfkit.utils.user_types import (
 
 
 def zero_controller() -> ControllerCallable:
-    """
-    Create a zero controller for the given fixed-wing uav dynamics.
+    """Create a zero controller for the given fixed-wing uav dynamics.
 
     Args:
         None
 
-    Returns:
+    Returns
+    -------
         controller (Callable): handle to function computing zero control
-
     """
 
     @jit
@@ -39,7 +38,8 @@ def zero_controller() -> ControllerCallable:
             _t (float): time in sec
             _state (Array): state vector (or estimate if using observer/estimator)
 
-        Returns:
+        Returns
+        -------
             zeros (Array): 1x1 zero vector
             data: (dict): empty dictionary
         """

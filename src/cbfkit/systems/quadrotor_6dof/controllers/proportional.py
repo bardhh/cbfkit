@@ -3,8 +3,7 @@ from jax import jit
 
 
 def proportional_controller(dynamics, Kp_pos, Kp_theta, desired_state):
-    """
-    Create a proportional-only controller for the given unicycle dynamics.
+    """Create a proportional-only controller for the given unicycle dynamics.
 
     :param dynamics: approximate unicycle dynamics ode
     :param Kp_pos: Position proportional gain.

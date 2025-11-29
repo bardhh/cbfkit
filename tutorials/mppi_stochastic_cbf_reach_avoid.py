@@ -1,6 +1,8 @@
-"""
-This file shows how we can use MPPI controller to achieve reach avoid tasks. Our reach avoid specification utilizes Sigmal Temporal Logic (STL) inspired robustness metrics.
-These robustness metrics are defined in cbfkit/utils/jax_stl.py and accomodated in the MPPI cost function below.
+"""Demonstrates how to use MPPI controller to achieve reach avoid tasks.
+
+Our reach avoid specification utilizes Sigmal Temporal Logic (STL) inspired robustness metrics.
+These robustness metrics are defined in cbfkit/utils/jax_stl.py and accomodated in the MPPI cost
+function below.
 """
 
 import os
@@ -41,6 +43,7 @@ sigma_matrix = 0.28 * jnp.eye(len(init_state))
 
 
 def sigma(x):
+    """Diffusion term."""
     return sigma_matrix
 
 
@@ -110,6 +113,7 @@ controller = cbf_controller(
 # MPPI stage cost
 @jit
 def stage_cost(state_and_time: Array, action: Array) -> Array:
+    """MPPI stage cost."""
     x_e, y_e = state_and_time[0], state_and_time[1]
     cost = 2.0 * ((x_e - desired_state[0]) ** 2 + (y_e - desired_state[1]) ** 2)
     # return cost
@@ -129,6 +133,7 @@ def stage_cost(state_and_time: Array, action: Array) -> Array:
 # MPPI terminal cost
 @jit
 def terminal_cost(state_and_time: Array, action: Array) -> Array:
+    """MPPI terminal cost."""
     x_e, y_e = state_and_time[0], state_and_time[1]
     cost = 10.0 * ((x_e - desired_state[0]) ** 2 + (y_e - desired_state[1]) ** 2)
     return cost  # comment this line to also include collision avoidance cost in terminal cost term

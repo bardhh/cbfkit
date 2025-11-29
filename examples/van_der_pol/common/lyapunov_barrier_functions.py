@@ -17,7 +17,8 @@ def fxts_lyapunov_conditions(c1: float, c2: float, e1: float, e2: float):
         e1 (float): exponential constant 1
         e2 (float): exponential constant 2
 
-    Returns:
+    Returns
+    -------
         callable[float]: FxTS Lyapunov conditions
     """
     return (
@@ -49,7 +50,8 @@ def fxts_lyapunov_barrier_vel_and_obs(
         e1 (float): exponential constant 1
         e2 (float): exponential constant 2
 
-    Returns:
+    Returns
+    -------
         LyapunovTuple: all inforrmation needed for CLF constraint in QP
     """
 

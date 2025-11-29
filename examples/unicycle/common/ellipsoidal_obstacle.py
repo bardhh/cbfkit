@@ -1,5 +1,4 @@
-"""
-Ellipsoidal Obstacle Scenario for Unicycle
+"""Ellipsoidal Obstacle Scenario for Unicycle.
 
 This module provides barrier functions for avoiding ellipsoidal obstacles.
 It now uses the core `cbfkit` library for the generic barrier logic.
@@ -25,8 +24,8 @@ cbf, cbf_grad, cbf_hess = ellipsoidal_barrier_factory(
 
 
 def stochastic_cbf(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array]:
-    """
-    Stochastic version (High Probability Safety).
+    """Stochastic version (High Probability Safety).
+
     Uses exponential transformation.
     """
 

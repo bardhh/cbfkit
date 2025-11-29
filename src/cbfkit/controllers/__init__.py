@@ -1,5 +1,4 @@
-"""
-CBFKit Controllers Module
+"""CBFKit Controllers Module.
 
 This module provides various control barrier function (CBF) and control lyapunov function (CLF)
 based controllers, as well as MPPI-based controllers.

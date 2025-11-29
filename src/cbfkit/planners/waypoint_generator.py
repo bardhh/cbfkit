@@ -1,22 +1,4 @@
-"""
-waypoint_generator.py
-================
-
-Generates the function for generating CBF-CLF-QP control laws of various forms.
-
-Functions
----------
--waypoint_generator: produces the generating function based on
-
-Notes
------
-Used in the generation of waypoint planner/controller laws.
-
-Examples
---------
->>> import cbfkit.planners as single_waypoint_planner
->>> target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
-"""
+"""Functions for generating waypoint laws."""
 
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -39,7 +21,8 @@ def waypoint_generator() -> Callable[..., PlannerCallable]:
 
     Args:
 
-    Returns:
+    Returns
+    -------
         (WaypointGenerator): function for generating single waypoint planner law
     """
 
@@ -52,7 +35,8 @@ def waypoint_generator() -> Callable[..., PlannerCallable]:
         Args:
             **kwargs (Dict[str, Any]): keyword arguments, e.g., RiskAwareParams for RA-CBF-CLF-QP
 
-        Returns:
+        Returns
+        -------
             PlannerCallable: function for computing control input based on CBF-CLF-QP
         """
         complete = False
@@ -65,12 +49,8 @@ def waypoint_generator() -> Callable[..., PlannerCallable]:
 
             Args:
                 t (float): time (in sec)
-                x (State): state vector
-
-            Returns:
-                PlannerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
-            """
-
+                                PlannerCallableReturns: tuple consisting of control solution (Array)
+                                and auxiliary data (Dict)"""
             return jittable_process(t, x, key, data)
 
         @jit
@@ -84,8 +64,10 @@ def waypoint_generator() -> Callable[..., PlannerCallable]:
                 x (State): state vector
                 u (Array): previous control input trajectory
 
-            Returns:
-                PlannerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
+            Returns
+            -------
+                PlannerCallableReturns: tuple consisting of control solution (Array)
+                and auxiliary data (Dict)
             """
             nonlocal complete
 

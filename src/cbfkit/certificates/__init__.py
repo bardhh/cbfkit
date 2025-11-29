@@ -1,8 +1,7 @@
-"""
-Certificate utilities for Control Barrier Functions and Control Lyapunov Functions.
+"""Certificate utilities for Control Barrier Functions and Control Lyapunov Functions.
 
-This module provides utilities for packaging, rectifying, and defining conditions
-for CBFs and CLFs used throughout cbfkit.
+This module provides utilities for packaging, rectifying, and defining conditions for CBFs and CLFs
+used throughout cbfkit.
 """
 
 from .packager import certificate_package, concatenate_certificates

@@ -1,3 +1,1 @@
-"""
-Common utilities and configurations for Single Integrator examples.
-"""
+"""Common utilities and configurations for Single Integrator examples."""

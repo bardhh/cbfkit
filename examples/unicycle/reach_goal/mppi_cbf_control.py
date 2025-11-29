@@ -49,14 +49,14 @@ unicycle_dynamics = plant(lam=1.0)
 # thousands of times per step (num_samples * prediction_horizon).
 @jit
 def stage_cost(state_and_time: Array, action: Array) -> Array:
-    """
-    Calculates the stage cost for the MPPI planner.
+    """Calculates the stage cost for the MPPI planner.
 
     Args:
         state_and_time (Array): The current state and time [x, y, v, theta, t]
         action (Array): The control action [a, omega]
 
-    Returns:
+    Returns
+    -------
         Array: The scalar cost.
     """
     # state: [x, y, v, theta]
@@ -70,14 +70,14 @@ def stage_cost(state_and_time: Array, action: Array) -> Array:
 
 @jit
 def terminal_cost(state_and_time: Array, action: Array) -> Array:
-    """
-    Calculates the terminal cost for the MPPI planner.
+    """Calculates the terminal cost for the MPPI planner.
 
     Args:
         state_and_time (Array): The current state and time [x, y, v, theta, t]
         action (Array): The control action [a, omega]
 
-    Returns:
+    Returns
+    -------
         Array: The scalar cost.
     """
     x, y = state_and_time[0], state_and_time[1]

@@ -5,9 +5,8 @@ from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
 
 
 def accel_unicycle_dynamics(**kwargs) -> DynamicsCallable:
-    """
-    Returns a function that represents the plant model,
-    which computes the drift vector 'f' and control matrix 'g' based on the given state.
+    """Returns a function that represents the plant model, which computes the drift vector 'f' and
+    control matrix 'g' based on the given state.
 
     States are the following:
         x: x-coordinate of unicycle c.o.m. (m)
@@ -22,21 +21,21 @@ def accel_unicycle_dynamics(**kwargs) -> DynamicsCallable:
     Args:
         kwargs: keyword arguments
 
-    Returns:
+    Returns
+    -------
         dynamics (Callable): takes state as input and returns dynamics components
             f, g of the form dx/dt = f(x) + g(x)u
-
     """
 
     @jit
     def dynamics(x: Array) -> DynamicsCallableReturns:
-        """
-        Computes the drift vector 'f' and control matrix 'g' based on the given state x.
+        """Computes the drift vector 'f' and control matrix 'g' based on the given state x.
 
         Args:
             x (Array): state vector
 
-        Returns:
+        Returns
+        -------
             dynamics (DynamicsCallable): takes state as input and returns dynamics components f, g
         """
         f = jnp.array([x[2] * jnp.cos(x[3]), x[2] * jnp.sin(x[3]), 0.0, 0.0])
