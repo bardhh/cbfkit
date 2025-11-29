@@ -55,14 +55,14 @@ ellipsoids = [
 
 barriers = [
     rectify_relative_degree(
-        function=ellipsoid_cbf(obs, ell),
+        function=ellipsoid_cbf(jnp.array(obs), jnp.array(ell)),
         system_dynamics=unicycle_dynamics,
         state_dim=len(init_state),
         form="exponential",
     )(
         certificate_conditions=zeroing_barriers.linear_class_k(5.0),
-        obstacle=obs,
-        ellipsoid=ell,
+        obstacle=jnp.array(obs),
+        ellipsoid=jnp.array(ell),
     )
     for obs, ell in zip(obstacles, ellipsoids)
 ]
