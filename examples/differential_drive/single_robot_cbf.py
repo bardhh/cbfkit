@@ -52,7 +52,7 @@ def create_robot_with_obstacles():
     # Define obstacles (following past_proj format)
     obstacles = [
         (2.0, 1.0, 0.0),  # Obstacle 1: (x, y, z)
-        (3.5, 0.5, 0.0),  # Obstacle 2: (x, y, z)
+        (4.5, 0.5, 0.0),  # Obstacle 2: (x, y, z)
     ]
 
     # --- MPPI Controller Setup ---
@@ -69,12 +69,32 @@ def create_robot_with_obstacles():
         # Penalize control effort
         cost_act = 0.01 * jnp.dot(action, action)
 
-        return cost_pos + cost_vel + cost_act
+        # Obstacle avoidance
+        cost_obs = 0.0
+        # Convert obstacles to JAX array for efficiency if list is large,
+        # but unrolling small list is fine for JIT
+        for obs in obstacles:
+            obs_pos = jnp.array(obs[:2])
+            dist = jnp.linalg.norm(state[:2] - obs_pos)
+            # Exponential barrier: rises sharply as dist decreases
+            # cost = weight * exp(-rate * (dist - safety_dist))
+            cost_obs += 1000.0 * jnp.exp(-5.0 * (dist - d_min_obstacle))
+
+        return cost_pos + cost_vel + cost_act + cost_obs
 
     def terminal_cost(state, action):
         # Higher penalty for final distance
         error_pos = state[:2] - desired_state[:2]
-        return 10.0 * jnp.dot(error_pos, error_pos)
+        cost_term = 10.0 * jnp.dot(error_pos, error_pos)
+
+        # Add obstacle cost to terminal state too
+        cost_obs = 0.0
+        for obs in obstacles:
+            obs_pos = jnp.array(obs[:2])
+            dist = jnp.linalg.norm(state[:2] - obs_pos)
+            cost_obs += 1000.0 * jnp.exp(-5.0 * (dist - d_min_obstacle))
+
+        return cost_term + cost_obs
 
     # MPPI parameters
     prediction_horizon = 100
