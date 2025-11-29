@@ -23,420 +23,337 @@ from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import (
     rectify_relative_degree,
 )
 
+"""
+Multi-agent CBF controller example for differential drive robots.
 
-class MultiAgentCBFController:
-    """Multi-agent CBF controller following past_proj structure but using CBFKit."""
+This example uses a centralized formulation where the state of all agents is concatenated
+into a single system state. This allows for efficient JIT compilation and handling of
+inter-agent constraints without re-instantiating controllers at every step.
+"""
+
+from jax import jacfwd, jit, vmap
+from jax.scipy.linalg import block_diag
+
+import cbfkit.simulation.simulator as sim
+
+# CBFKit imports
+from cbfkit.estimators import naive as estimator
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.sensors import perfect as sensor
+
+
+class CentralizedMultiAgentController:
+    """Centralized Multi-agent CBF controller."""
 
     def __init__(self, num_agents=2, num_humans=3, num_obstacles=2):
         self.num_agents = num_agents
         self.num_humans = num_humans
         self.num_obstacles = num_obstacles
+        self.state_dim_per_agent = 4
+        self.control_dim_per_agent = 2
+        self.total_state_dim = num_agents * self.state_dim_per_agent
+        self.total_control_dim = num_agents * self.control_dim_per_agent
 
-        # CBF parameters (following past_proj values)
-        self.alpha1_human = 1.0 * np.ones(num_humans)
-        self.alpha2_human = 2.0 * np.ones(num_humans)
-        self.alpha1_obstacle = 2.0 * np.ones(num_obstacles)
-        self.alpha2_obstacle = 6.0 * np.ones(num_obstacles)
-        self.alpha1_agent = 2.0
-        self.alpha2_agent = 5.0
+        # Environment
+        self.humans = [jnp.array([2.0 + j, 3.0 + j * 0.5, 0.0]) for j in range(num_humans)]
+        self.obstacles = [jnp.array([4.0 + j * 2, 2.0, 0.0]) for j in range(num_obstacles)]
 
-        # Control parameters
-        self.control_bound = 1.0
-        self.robot_radius = 0.3
+        # Parameters
+        self.control_bound = 10.0
         self.d_min_human = 0.8
         self.d_min_obstacle = 0.8
         self.d_min_agent = 0.6
 
-        # Goal parameters
-        self.k_x = 1.5
-        self.k_v = 3.0
-        self.k_omega = 1.5
+        # Single agent dynamics model (for reuse)
+        self.single_plant = unicycle.plant(l=1.0)
+        self.single_plant.a_max = self.control_bound
+        self.single_plant.omega_max = self.control_bound
 
-        # Initialize agents
-        self.agents = []
-        self.controllers = []
-        self.agent_states = []
-        self.agent_goals = []
+    def get_centralized_dynamics(self):
+        """Constructs the dynamics function for the full system state."""
 
-        # Create individual unicycle dynamics for each agent
-        for _ in range(num_agents):
-            dynamics = unicycle.plant(l=1.0)
-            dynamics.a_max = self.control_bound
-            dynamics.omega_max = self.control_bound
-            dynamics.v_max = 3.0
-            dynamics.goal_tol = 0.25
-            self.agents.append(dynamics)
+        def dynamics(x):
+            # x shape: (4 * N,)
+            x_reshaped = x.reshape(self.num_agents, self.state_dim_per_agent)
 
-    def setup_agents(self, initial_states, goals):
-        """Setup agent initial states and goals."""
-        self.agent_states = [jnp.array(state) for state in initial_states]
-        self.agent_goals = [jnp.array(goal) for goal in goals]
+            # Compute f, g for each agent
+            # single_plant returns f(4,), g(4,2)
+            def get_fg(xi):
+                return self.single_plant(xi)
 
-        from jax import random
+            fs, gs = vmap(get_fg)(x_reshaped)
 
-        # Create controllers for each agent
-        for i in range(self.num_agents):
-            # Create nominal controller for this agent
-            base_nom_controller = unicycle.controllers.proportional_controller(
-                dynamics=self.agents[i],
-                Kp_pos=self.k_x,
-                Kp_theta=self.k_omega,
-            )
+            # Flatten f: (N, 4) -> (4N,)
+            f_total = fs.flatten()
 
-            # Capture goal in closure and create a callable that matches the expected signature for manual calling
-            goal = self.agent_goals[i]
+            # Block diagonal g: (N, 4, 2) -> (4N, 2N)
+            # jax.scipy.linalg.block_diag requires unpacking
+            g_total = block_diag(*gs)
 
-            def make_nom_controller(base_ctrl=base_nom_controller, target=goal):
-                def ctrl_func(t, state):
-                    key = random.PRNGKey(0)
-                    u, _ = base_ctrl(t, state, key, target)
-                    return u
+            return f_total, g_total
 
-                return ctrl_func
+        return dynamics
 
-            # Store the nominal controller function
-            nom_controller = make_nom_controller()
-            # We attach it to the controller list or a separate list to use in step()
-            # But self.controllers stores the CBF controllers. Let's store nom_controllers separately.
-            if not hasattr(self, "nom_controllers"):
-                self.nom_controllers = []
-            self.nom_controllers.append(nom_controller)
+    def get_centralized_nominal_controller(self, goals):
+        """Constructs the nominal controller for the full system."""
+        # We need to bind the goals
 
-            # Create barriers for this agent
-            barriers = self._create_barriers_for_agent(i)
+        def nom_controller(t, x):
+            u_noms = []
+            for i in range(self.num_agents):
+                # Extract agent state
+                xi = x[i * 4 : (i + 1) * 4]
+                goal = goals[i]
 
-            # Create CBF controller
-            # nominal_input is NOT passed here
-            controller = cbf_controller(
-                control_limits=jnp.array([self.control_bound, self.control_bound]),
-                dynamics_func=self.agents[i],
-                barriers=barriers,
-            )
+                # Use proportional controller logic directly
+                # Copied/Adapted from unicycle.controllers.proportional_controller to avoid JIT nesting issues
+                # or simply call it if it's pure function.
 
-            self.controllers.append(controller)
+                # Logic:
+                # pos_error = goal[:2] - xi[:2]
+                # theta_d = atan2(ey, ex)
+                # v_d = kp * dist
+                # omega = ktheta * (theta_d - theta)
 
-    def _create_barriers_for_agent(self, agent_idx):
-        """Create barrier functions for a specific agent."""
+                k_pos = 1.5
+                k_theta = 1.5
+
+                error_pos = goal[:2] - xi[:2]
+                dist = jnp.linalg.norm(error_pos)
+                theta_d = jnp.arctan2(error_pos[1], error_pos[0])
+                theta_error = theta_d - xi[3]
+                theta_error = (theta_error + jnp.pi) % (2 * jnp.pi) - jnp.pi
+
+                v_cmd = k_pos * dist
+                v_cmd = jnp.minimum(2.0, v_cmd)  # Saturate
+
+                accel = k_pos * (v_cmd - xi[2])
+                omega = k_theta * theta_error
+
+                u_noms.append(jnp.array([accel, omega]))
+
+            return jnp.concatenate(u_noms)
+
+        return nom_controller
+
+    def get_barriers(self, dynamics_func):
+        """Constructs all barrier functions for the centralized system."""
         barriers = []
 
-        cbf_factory, _, _ = ellipsoidal_barrier_factory(
-            system_position_indices=(0, 1),
-            obstacle_position_indices=(0, 1),
-            ellipsoid_axis_indices=(0, 1),
-        )
-
-        # Human avoidance barriers
-        for j in range(self.num_humans):
-            human_pos = jnp.array([2.0 + j, 3.0 + j * 0.5, 0.0])  # Example human positions
-            barrier = rectify_relative_degree(
-                function=cbf_factory(human_pos, (self.d_min_human, self.d_min_human)),
-                system_dynamics=self.agents[agent_idx],
-                state_dim=4,
-                form="exponential",
-            )(
-                certificate_conditions=zeroing_barriers.linear_class_k(
-                    self.alpha1_human[j] + self.alpha2_human[j]
-                ),
-                obstacle=human_pos,
-                ellipsoid=(self.d_min_human, self.d_min_human),
-            )
-            barriers.append(barrier)
-
-        # Obstacle avoidance barriers
-        for j in range(self.num_obstacles):
-            obstacle_pos = jnp.array([4.0 + j * 2, 2.0, 0.0])  # Example obstacle positions
-            barrier = rectify_relative_degree(
-                function=cbf_factory(obstacle_pos, (self.d_min_obstacle, self.d_min_obstacle)),
-                system_dynamics=self.agents[agent_idx],
-                state_dim=4,
-                form="exponential",
-            )(
-                certificate_conditions=zeroing_barriers.linear_class_k(
-                    self.alpha1_obstacle[j] + self.alpha2_obstacle[j]
-                ),
-                obstacle=obstacle_pos,
-                ellipsoid=(self.d_min_obstacle, self.d_min_obstacle),
-            )
-            barriers.append(barrier)
-
-        # Agent-to-agent collision avoidance barriers
-        for j in range(self.num_agents):
-            if j != agent_idx:
-                # Create inter-agent barrier (will be updated with other agent's state)
-                other_agent_pos = jnp.array([0.0, 0.0, 0.0])  # Placeholder
-                barrier = rectify_relative_degree(
-                    function=cbf_factory(other_agent_pos, (self.d_min_agent, self.d_min_agent)),
-                    system_dynamics=self.agents[agent_idx],
-                    state_dim=4,
-                    form="exponential",
-                )(
-                    certificate_conditions=zeroing_barriers.linear_class_k(
-                        self.alpha1_agent + self.alpha2_agent
-                    ),
-                    obstacle=other_agent_pos,
-                    ellipsoid=(self.d_min_agent, self.d_min_agent),
-                )
-                barriers.append(barrier)
-
-        return concatenate_certificates(*barriers) if barriers else None
-
-    def step(self, dt, human_states=None, human_velocities=None):
-        """Execute one simulation step for all agents."""
-        if human_states is None:
-            human_states = [
-                jnp.array([2.0 + i, 3.0 + i * 0.5, 0.0, 0.0]) for i in range(self.num_humans)
-            ]
-        if human_velocities is None:
-            human_velocities = [jnp.array([0.1, 0.0, 0.0, 0.0]) for _ in range(self.num_humans)]
-
-        from jax import random
-
-        from cbfkit.utils.user_types import ControllerData
-
-        # Compute control inputs for all agents
-        controls = []
+        # 1. Static Obstacles & Humans
+        # For each agent i
         for i in range(self.num_agents):
-            # Update barriers with current positions of other agents
-            # This is a simplified approach - in practice, you'd want to update
-            # the barrier functions dynamically
+            idx_x = i * 4
+            idx_y = i * 4 + 1
 
-            # Compute nominal control
-            u_nom = self.nom_controllers[i](0.0, self.agent_states[i])
+            # Obstacles
+            for obs in self.obstacles:
 
-            # Compute control input - CBF controller takes (t, x, u_nom, key, data)
-            # We need to provide a key and a dummy data object
-            key = random.PRNGKey(0)
-            data = ControllerData()
+                def h_obs(x):
+                    dist_sq = (x[idx_x] - obs[0]) ** 2 + (x[idx_y] - obs[1]) ** 2
+                    return dist_sq - self.d_min_obstacle**2
 
-            control_input, _ = self.controllers[i](
-                t=0.0, x=self.agent_states[i], u_nom=u_nom, key=key, data=data
-            )
-            controls.append(control_input)
-
-        # Update agent states
-        new_states = []
-        for i in range(self.num_agents):
-            # Forward Euler integration using CBFKit dynamics
-            f_val, g_val = self.agents[i](self.agent_states[i])
-            xdot = f_val + g_val @ controls[i]
-            new_state = self.agent_states[i] + xdot * dt
-            new_states.append(new_state)
-
-        self.agent_states = new_states
-        return self.agent_states, controls
-
-    def run_simulation(self, tf=10.0, dt=0.01, save_results=True):
-        """Run multi-agent simulation."""
-        print(f"Running multi-agent simulation with {self.num_agents} agents...")
-
-        # Simulation data storage
-        t_span = np.arange(0, tf, dt)
-        states_history = {i: [self.agent_states[i]] for i in range(self.num_agents)}
-        controls_history = {i: [] for i in range(self.num_agents)}
-
-        # Main simulation loop
-        for step_idx, t in enumerate(t_span[1:]):
-            try:
-                states, controls = self.step(dt)
-
-                # Store data
-                for i in range(self.num_agents):
-                    states_history[i].append(states[i])
-                    controls_history[i].append(controls[i])
-
-                # Print progress every 100 steps
-                if step_idx % 100 == 0:
-                    print(f"Step {step_idx}, t={t:.2f}s")
-                    for i in range(self.num_agents):
-                        pos = states[i][:2]
-                        goal_dist = np.linalg.norm(pos - self.agent_goals[i][:2])
-                        print(
-                            f"  Agent {i+1}: pos=({pos[0]:.2f}, {pos[1]:.2f}), goal_dist={goal_dist:.2f}"
-                        )
-
-                # Check if all agents reached their goals
-                all_reached = True
-                for i in range(self.num_agents):
-                    goal_dist = np.linalg.norm(states[i][:2] - self.agent_goals[i][:2])
-                    if goal_dist > 0.5:
-                        all_reached = False
-                        break
-
-                if all_reached:
-                    print(f"All agents reached their goals at t={t:.2f}s")
-                    break
-
-            except Exception as e:
-                print(f"Error at step {step_idx}: {e}")
-                break
-
-        # Convert to numpy arrays
-        for i in range(self.num_agents):
-            states_history[i] = np.array(states_history[i])
-            if controls_history[i]:
-                controls_history[i] = np.array(controls_history[i])
-
-        if save_results:
-            self.plot_results(states_history, controls_history)
-
-        return states_history, controls_history
-
-    def plot_results(self, states_history, controls_history):
-        """Plot simulation results."""
-        _, axes = plt.subplots(2, 2, figsize=(12, 10))
-
-        # Plot trajectories
-        ax = axes[0, 0]
-        colors = ["b", "r", "g", "c", "m", "y"]
-
-        for i in range(self.num_agents):
-            states = states_history[i]
-            color = colors[i % len(colors)]
-
-            # Plot trajectory
-            ax.plot(states[:, 0], states[:, 1], color=color, linewidth=2, label=f"Agent {i+1}")
-
-            # Plot start and goal
-            ax.plot(states[0, 0], states[0, 1], "o", color=color, markersize=8)
-            ax.plot(self.agent_goals[i][0], self.agent_goals[i][1], "*", color=color, markersize=12)
-
-        # Plot obstacles
-        for j in range(self.num_obstacles):
-            obstacle_pos = [4.0 + j * 2, 2.0]
-            circle = plt.Circle(
-                obstacle_pos, self.d_min_obstacle, fill=False, color="k", linewidth=2
-            )
-            ax.add_patch(circle)
-
-        # Plot humans
-        for j in range(self.num_humans):
-            human_pos = [2.0 + j, 3.0 + j * 0.5]
-            circle = plt.Circle(
-                human_pos, self.d_min_human, fill=False, color="orange", linewidth=2
-            )
-            ax.add_patch(circle)
-
-        ax.set_xlabel("X (m)")
-        ax.set_ylabel("Y (m)")
-        ax.set_title("Multi-Agent Trajectories")
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        ax.axis("equal")
-
-        # Plot velocities
-        ax = axes[0, 1]
-        for i in range(self.num_agents):
-            states = states_history[i]
-            if len(states) > 1:
-                velocities = np.array([np.linalg.norm(states[j, 2:4]) for j in range(len(states))])
-                ax.plot(velocities, color=colors[i % len(colors)], label=f"Agent {i+1}")
-
-        ax.set_xlabel("Time Step")
-        ax.set_ylabel("Velocity (m/s)")
-        ax.set_title("Agent Velocities")
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-
-        # Plot control inputs
-        ax = axes[1, 0]
-        for i in range(self.num_agents):
-            controls = controls_history[i]
-            if len(controls) > 0:
-                controls = np.array(controls)
-                ax.plot(
-                    controls[:, 0],
-                    color=colors[i % len(colors)],
-                    linestyle="-",
-                    label=f"Agent {i+1} u1",
-                )
-                ax.plot(
-                    controls[:, 1],
-                    color=colors[i % len(colors)],
-                    linestyle="--",
-                    label=f"Agent {i+1} u2",
+                barriers.append(
+                    rectify_relative_degree(
+                        h_obs, dynamics_func, self.total_state_dim, form="exponential"
+                    )(zeroing_barriers.linear_class_k(5.0))
                 )
 
-        ax.set_xlabel("Time Step")
-        ax.set_ylabel("Control Input")
-        ax.set_title("Control Inputs")
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+            # Humans
+            for human in self.humans:
 
-        # Plot distances between agents
-        ax = axes[1, 1]
+                def h_hum(x):
+                    dist_sq = (x[idx_x] - human[0]) ** 2 + (x[idx_y] - human[1]) ** 2
+                    return dist_sq - self.d_min_human**2
+
+                barriers.append(
+                    rectify_relative_degree(
+                        h_hum, dynamics_func, self.total_state_dim, form="exponential"
+                    )(zeroing_barriers.linear_class_k(5.0))
+                )
+
+        # 2. Inter-Agent Collisions
         for i in range(self.num_agents):
             for j in range(i + 1, self.num_agents):
-                states_i = states_history[i]
-                states_j = states_history[j]
-                min_len = min(len(states_i), len(states_j))
-                distances = [
-                    np.linalg.norm(states_i[k, :2] - states_j[k, :2]) for k in range(min_len)
-                ]
-                ax.plot(distances, label=f"Agent {i+1} - Agent {j+1}")
+                idx_xi = i * 4
+                idx_yi = i * 4 + 1
+                idx_xj = j * 4
+                idx_yj = j * 4 + 1
 
-        ax.axhline(y=self.d_min_agent, color="r", linestyle="--", label="Min Distance")
-        ax.set_xlabel("Time Step")
-        ax.set_ylabel("Distance (m)")
-        ax.set_title("Inter-Agent Distances")
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+                def h_agent(x):
+                    dist_sq = (x[idx_xi] - x[idx_xj]) ** 2 + (x[idx_yi] - x[idx_yj]) ** 2
+                    return dist_sq - self.d_min_agent**2
 
-        plt.tight_layout()
-        plt.savefig("examples/differential_drive/results/multi_agent_cbf_results.png", dpi=150)
-        plt.show()
+                barriers.append(
+                    rectify_relative_degree(
+                        h_agent, dynamics_func, self.total_state_dim, form="exponential"
+                    )(zeroing_barriers.linear_class_k(5.0))
+                )
+
+        return concatenate_certificates(*barriers)
+
+    def create_controller(self, goals):
+        """Creates the full CBF controller."""
+        dynamics = self.get_centralized_dynamics()
+        nominal_controller = self.get_centralized_nominal_controller(goals)
+        barrier_package = self.get_barriers(dynamics)
+
+        # Wrap nominal controller to match signature (t, x, key, data) -> (u, data)
+        def nom_controller_wrapped(t, x, key, data):
+            return nominal_controller(t, x), {}
+
+        # Create CBF controller
+        # Note: we pass the wrapped nominal controller to the simulation,
+        # but we can pass the raw function to cbf_controller's nominal_input if we want
+        # the QP to use it. However, cbf_controller signature for nominal_input is
+        # actually just the vector u_nom computed outside usually.
+        # cbf_controller takes `nominal_input` as a FUNCTION if provided, or uses the one passed in loop.
+
+        # Actually, cbf_controller generator takes `nominal_input` (callable) as an option,
+        # but in the loop `controller(t, x, u_nom)` is called.
+        # We will let the simulator compute u_nom using `nominal_controller` and pass it to CBF.
+
+        cbf = cbf_controller(
+            control_limits=jnp.tile(
+                jnp.array([self.control_bound, self.control_bound]), self.num_agents
+            ),
+            dynamics_func=dynamics,
+            barriers=barrier_package,
+        )
+
+        return dynamics, nom_controller_wrapped, cbf
 
 
-def main():
-    """Main function to run the multi-agent CBF example."""
-    # Create controller
-    controller = MultiAgentCBFController(num_agents=2, num_humans=3, num_obstacles=2)
+def run_simulation():
+    """Run centralized multi-agent simulation."""
 
-    # Setup initial states and goals
-    initial_states = [
-        jnp.array([0.0, 0.0, 0.0, 0.0]),  # Agent 1: [x, y, theta, v]
-        jnp.array([0.0, 2.0, 0.0, 0.0]),  # Agent 2: [x, y, theta, v]
-    ]
+    print("Multi-Agent Centralized CBF Demo")
+    print("=" * 35)
 
-    goals = [
-        jnp.array([8.0, 4.0, 0.0, 0.0]),  # Agent 1 goal
-        jnp.array([8.0, 2.0, 0.0, 0.0]),  # Agent 2 goal
-    ]
-
-    # Setup agents
-    controller.setup_agents(initial_states, goals)
-
-    # Run simulation
-    states_history, _ = controller.run_simulation(
-        tf=5.0,  # Shorter simulation for testing
-        dt=0.05,  # Larger timestep for faster simulation
-        save_results=True,
+    # Setup
+    num_agents = 2
+    controller_factory = CentralizedMultiAgentController(
+        num_agents=num_agents, num_humans=3, num_obstacles=2
     )
 
-    # Performance analysis
-    print("\nPerformance Analysis:")
-    print("=" * 50)
+    # Initial Conditions
+    # Agent 1: (0, 0), Agent 2: (0, 2)
+    initial_states_list = [
+        jnp.array([0.0, 0.0, 0.0, 0.0]),
+        jnp.array([0.0, 2.0, 0.0, 0.0]),
+    ]
+    x0 = jnp.concatenate(initial_states_list)
 
-    for i in range(controller.num_agents):
-        final_state = states_history[i][-1]
-        goal_error = np.linalg.norm(final_state[:2] - controller.agent_goals[i][:2])
-        print(f"Agent {i+1} final goal error: {goal_error:.3f} m")
+    # Goals
+    # Agent 1 -> (8, 4), Agent 2 -> (8, 2)
+    goals = [
+        jnp.array([8.0, 4.0, 0.0, 0.0]),
+        jnp.array([8.0, 2.0, 0.0, 0.0]),
+    ]
 
-    # Check minimum distances
-    min_distances = []
-    for i in range(controller.num_agents):
-        for j in range(i + 1, controller.num_agents):
-            states_i = states_history[i]
-            states_j = states_history[j]
-            min_len = min(len(states_i), len(states_j))
-            distances = [np.linalg.norm(states_i[k, :2] - states_j[k, :2]) for k in range(min_len)]
-            min_dist = min(distances)
-            min_distances.append(min_dist)
-            print(f"Min distance Agent {i+1} - Agent {j+1}: {min_dist:.3f} m")
+    # Create System
+    dynamics, nominal_controller, safety_controller = controller_factory.create_controller(goals)
 
-    overall_min = min(min_distances) if min_distances else float("inf")
-    print(f"Overall minimum inter-agent distance: {overall_min:.3f} m")
-    print(f"Safety maintained: {'✅' if overall_min > controller.d_min_agent else '❌'}")
+    # Simulation
+    tf = 8.0
+    dt = 0.05
+
+    print("Running CBFKit simulation (Centralized)...")
+
+    x, u, z, p, c_keys, c_values, p_keys, p_values = sim.execute(
+        x0=x0,
+        dt=dt,
+        num_steps=int(tf / dt),
+        dynamics=dynamics,
+        integrator=integrator,
+        nominal_controller=nominal_controller,
+        controller=safety_controller,
+        sensor=sensor,
+        estimator=estimator,
+        filepath="examples/differential_drive/results/multi_agent_cbf_results",
+        verbose=True,
+    )
+
+    return x, u, controller_factory, goals
+
+
+def plot_results(x, u, factory, goals):
+    """Plot results separating the centralized state back into agents."""
+    num_agents = factory.num_agents
+
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+
+    # 1. Trajectories
+    ax = axes[0, 0]
+    colors = ["b", "r", "g", "c"]
+
+    for i in range(num_agents):
+        # Extract agent state: x[:, i*4 : i*4+2]
+        idx_x = i * 4
+        idx_y = i * 4 + 1
+        ax.plot(x[:, idx_x], x[:, idx_y], "-", linewidth=2, color=colors[i], label=f"Agent {i+1}")
+        ax.plot(x[0, idx_x], x[0, idx_y], "o", color=colors[i])
+        ax.plot(goals[i][0], goals[i][1], "*", markersize=12, color=colors[i])
+
+    # Obstacles
+    for obs in factory.obstacles:
+        circle = plt.Circle(
+            (obs[0], obs[1]), factory.d_min_obstacle, fill=True, color="k", alpha=0.3
+        )
+        ax.add_patch(circle)
+
+    # Humans
+    for hum in factory.humans:
+        circle = plt.Circle(
+            (hum[0], hum[1]), factory.d_min_human, fill=True, color="orange", alpha=0.3
+        )
+        ax.add_patch(circle)
+
+    ax.set_title("Trajectories")
+    ax.legend()
+    ax.axis("equal")
+    ax.grid(True)
+
+    # 2. Velocities
+    ax = axes[0, 1]
+    for i in range(num_agents):
+        idx_v = i * 4 + 2
+        ax.plot(x[:, idx_v], color=colors[i], label=f"Agent {i+1}")
+    ax.set_title("Velocities")
+    ax.legend()
+    ax.grid(True)
+
+    # 3. Controls
+    ax = axes[1, 0]
+    for i in range(num_agents):
+        idx_u1 = i * 2
+        idx_u2 = i * 2 + 1
+        ax.plot(u[:, idx_u1], color=colors[i], linestyle="-", label=f"A{i+1} Accel")
+        ax.plot(u[:, idx_u2], color=colors[i], linestyle="--", label=f"A{i+1} Omega")
+    ax.set_title("Controls")
+    ax.legend()
+    ax.grid(True)
+
+    # 4. Inter-agent Distances
+    ax = axes[1, 1]
+    for i in range(num_agents):
+        for j in range(i + 1, num_agents):
+            # dist(pos_i, pos_j)
+            pos_i = x[:, i * 4 : i * 4 + 2]
+            pos_j = x[:, j * 4 : j * 4 + 2]
+            dists = jnp.linalg.norm(pos_i - pos_j, axis=1)
+            ax.plot(dists, label=f"A{i+1}-A{j+1}")
+
+    ax.axhline(factory.d_min_agent, color="r", linestyle="--", label="Min Dist")
+    ax.set_title("Inter-Agent Distances")
+    ax.legend()
+    ax.grid(True)
+
+    plt.tight_layout()
+    plt.savefig("examples/differential_drive/results/multi_agent_cbf_centralized.png")
+    print("Saved plot to examples/differential_drive/results/multi_agent_cbf_centralized.png")
 
 
 if __name__ == "__main__":
-    main()
+    x, u, factory, goals = run_simulation()
+    plot_results(x, u, factory, goals)
