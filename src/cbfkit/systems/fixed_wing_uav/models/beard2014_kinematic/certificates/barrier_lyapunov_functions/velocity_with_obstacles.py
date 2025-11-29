@@ -1,7 +1,4 @@
-"""
-velocity_with_obstacles.py
-
-"""
+"""velocity_with_obstacles.py."""
 
 from typing import Callable, List
 
@@ -29,8 +26,8 @@ def cblf(
     robs: List[float],
     alpha: float,
 ) -> Callable[[Array], Array]:
-    """Barrier Lyapunov function for driving the vehicle to goal velocities
-    while avoiding obstacles.
+    """Barrier Lyapunov function for driving the vehicle to goal velocities while avoiding
+    obstacles.
 
     Args:
         state (Array): concatenated time and state vector
@@ -40,9 +37,9 @@ def cblf(
         robs (List): list of floats denoting obstacle radii
         alpha (float): class K function for 2nd order CBF
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
-
     """
     barriers = [cbf(obs, [ro, ro, ro], alpha) for (obs, ro) in zip(obstacles, robs)]
     control_lyap = clf(goal, rg)
@@ -64,8 +61,8 @@ def cblf_grad(
     robs: List[float],
     alpha: float,
 ) -> Callable[[Array], Array]:
-    """Jacobian for Barrier-Lyapunov function for driving the vehicle to goal velocities
-    while avoiding obstacles.
+    """Jacobian for Barrier-Lyapunov function for driving the vehicle to goal velocities while
+    avoiding obstacles.
 
     Args:
         state (Array): concatenated time and state vector
@@ -75,7 +72,8 @@ def cblf_grad(
         robs (List): list of floats denoting obstacle radii
         alpha (float): class K function for 2nd order CBF
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     jacobian = jacfwd(cblf(goal, rg, obstacles, robs, alpha))
@@ -94,8 +92,8 @@ def cblf_hess(
     robs: List[float],
     alpha: float,
 ) -> Callable[[Array], Array]:
-    """Hessian for Barrier-Lyapunov function for driving the vehicle to goal velocities
-    while avoiding obstacles.
+    """Hessian for Barrier-Lyapunov function for driving the vehicle to goal velocities while
+    avoiding obstacles.
 
     Args:
         state (Array): concatenated time and state vector
@@ -105,7 +103,8 @@ def cblf_hess(
         robs (List): list of floats denoting obstacle radii
         alpha (float): class K function for 2nd order CBF
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     hessian = jacfwd(jacrev(cblf(goal, rg, obstacles, robs, alpha)))

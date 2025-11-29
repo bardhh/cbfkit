@@ -1,8 +1,5 @@
-"""
-This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks
-to reach a goal region while avoiding dynamic obstacles.
-
-"""
+"""This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks to reach a goal
+region while avoiding dynamic obstacles."""
 
 from typing import List, Tuple
 
@@ -93,7 +90,8 @@ def execute(ii: int = 0) -> Tuple[Array, Array, Array, Array, List[str], List[Ar
     Args:
         int (ii): _description_
 
-    Returns:
+    Returns
+    -------
         List[Array]: _description_
     """
     key = random.PRNGKey(ii)

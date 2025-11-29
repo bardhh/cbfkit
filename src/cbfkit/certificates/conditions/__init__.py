@@ -1,6 +1,4 @@
-"""
-Certificate condition modules for barriers and lyapunovs.
-"""
+"""Certificate condition modules for barriers and lyapunovs."""
 
 from . import barrier_conditions, lyapunov_conditions
 

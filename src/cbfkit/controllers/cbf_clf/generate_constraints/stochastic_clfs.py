@@ -25,7 +25,10 @@ def generate_compute_stochastic_clf_constraints(
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
 ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
-    """Placeholder. Theory still in development."""
+    """Placeholder.
+
+    Theory still in development.
+    """
     """
     #! To Do: docstring
     """

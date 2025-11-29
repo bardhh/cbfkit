@@ -31,9 +31,9 @@ def V_pos(state: Array, goal: Array) -> Array:
         z (Array): concatenated time and state vector
         goal (Array): goal position vector [xd, yd, zd]
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
-
     """
     x, y, z, _, _, _, _, _, _, _, _, _, _ = state
     V = 0.5 * ((x - goal[0]) ** 2 + (y - goal[1]) ** 2 + (z - goal[2]) ** 2)
@@ -49,7 +49,8 @@ def dV_pos_dx(z: Array, goal: Array) -> Array:
         z (Array): concatenated time and state vector
         goal (Array): goal position vector [xd, yd, zd]
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(V_pos)(z, goal)
@@ -63,19 +64,21 @@ def dV2_pos_dx2(z: Array, goal: Array) -> Array:
         z (Array): concatenated time and state vector
         goal (Array): goal position vector [xd, yd, zd]
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(jacrev(V_pos))(z, goal)
 
 
 def position(goal: Array) -> CertificateCollection:
-    """Callable that generates Lyapunov function and its associated
+    """Callable that generates Lyapunov function and its associated.
 
     Args:
         goal (Array): goal position in inertial frame
 
-    Returns:
+    Returns
+    -------
         tuple: lists of functions
     """
 
@@ -110,9 +113,9 @@ def V_att(state: Array, lam: float) -> Array:
         z (Array): concatenated time and state vector
         l (float): length of lever arm
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
-
     """
     x, y, z, _, _, _, phi, theta, psi, _, _, _, _ = state
     # Pass phi, theta, psi as individual arguments if required, or the whole state?
@@ -131,7 +134,8 @@ def dV_att_dx(z: Array, lam: float) -> Array:
         z (Array): concatenated time and state vector
         l (float): length of lever arm
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(V_att)(z, lam)
@@ -145,13 +149,25 @@ def dV2_att_dx2(z: Array, lam: float) -> Array:
         z (Array): concatenated time and state vector
         l (float): length of lever arm
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(jacrev(V_att))(z, lam)
 
 
 def attitude(lam: float = 0.25) -> CertificateCollection:
+    """Callable that generates Lyapunov function and its associated functions for attitude
+    convergence.
+
+    Args:
+        lam (float): length of lever arm
+
+    Returns
+    -------
+        tuple: lists of functions (v_func, j_func, h_func, p_func, conditions)
+    """
+
     def v_func(t, x):
         return V_att(jnp.hstack([x, t]), lam)  # type: ignore[return-value]
 
@@ -177,14 +193,14 @@ def attitude(lam: float = 0.25) -> CertificateCollection:
 #! Velocity Convergence
 @jit
 def V_vel(state: Array, control: Callable[[float, Array], Tuple[Array, Array, Array]]) -> Array:
-    """Velocity convergence function (quadrotor has zero translational and rotational velocity at goal).
+    """Velocity convergence function (quadrotor has zero translational and rotational velocity).
 
     Arguments:
         z (Array): concatenated time and state vector
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
-
     """
     _, _, _, u, v, w, phi, theta, psi, p, q, r, _ = state
     # Pass individual Euler angles to rotation function
@@ -221,12 +237,14 @@ def V_vel(state: Array, control: Callable[[float, Array], Tuple[Array, Array, Ar
 
 @jit
 def dV_vel_dx(z: Array) -> Array:
-    """Jacobian for velocity convergence function (quadrotor has zero translational and rotational velocity at goal).
+    """Jacobian for velocity convergence function (quadrotor has zero translational and rotational
+    velocity).
 
     Arguments:
         z (Array): concatenated time and state vector
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(V_vel)(z)
@@ -234,24 +252,24 @@ def dV_vel_dx(z: Array) -> Array:
 
 @jit
 def dV2_vel_dx2(z: Array) -> Array:
-    """Hessian for velocity convergence function (quadrotor has zero translational and rotational velocity at goal).
+    """Hessian for velocity convergence function (quadrotor has zero translational and rotational
+    velocity).
 
     Arguments:
         z (Array): concatenated time and state vector
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(jacrev(V_vel))(z)
-
-
-def velocity_attitude(goal: Array) -> CertificateCollection:
-    """Callable that generates Lyapunov function and its associated
+    """Callable that generates Lyapunov function and its associated.
 
     Args:
         goal (Array): goal velocity and attitude
 
-    Returns:
+    Returns
+    -------
         tuple: lists of functions
     """
 
@@ -260,7 +278,8 @@ def velocity_attitude(goal: Array) -> CertificateCollection:
             jnp.hstack([x, t]), lambda s: (jnp.zeros(3), jnp.zeros(3), jnp.zeros(3))
         )  # Mock control? V_vel takes control callable.
         # Wait, V_vel signature is V_vel(state, control).
-        # Here we are not passing control? The implementation of velocity_attitude seems incomplete or broken as it doesn't take control input.
+        # Here we are not passing control? The implementation of velocity_attitude seems
+        # incomplete or broken as it doesn't take control input.
         # Assuming V_vel is correct, we need to fix how it is called or what is returned.
         # For now, let's fix the return structure.
         pass  # Placeholder
@@ -294,7 +313,8 @@ def V_com(
         goal (Array): goal position vector [xd, yd, zd]
         l (float): length of lever arm
 
-    Returns:
+    Returns
+    -------
         ret (float): value of composite function evaluated at time and state
     """
     arr = jnp.array([V_pos(state, goal), V_att(state, lam), V_vel(state, control)])
@@ -313,7 +333,8 @@ def dV_com_dx(
         goal (Array): goal position vector [xd, yd, zd]
         l (float): length of lever arm
 
-    Returns:
+    Returns
+    -------
         ret (float): value of composite function evaluated at time and state
     """
     return jacfwd(V_com)(z, control, goal, lam)
@@ -330,13 +351,25 @@ def dV2_com_dx2(
         goal (Array): goal position vector [xd, yd, zd]
         l (float): length of lever arm
 
-    Returns:
+    Returns
+    -------
         ret (float): value of composite function evaluated at time and state
     """
     return jacfwd(jacrev(V_com))(z, control, goal, lam)
 
 
 def composite(goal: Array, lam: float = 0.25) -> CertificateCollection:
+    """Callable that generates Lyapunov function and its associated functions for composite
+    convergence.
+
+    Args:
+        goal (Array): goal position vector [xd, yd, zd]
+        lam (float): length of lever arm
+
+    Returns
+    -------
+        tuple: lists of functions (v_func, j_func, h_func, p_func, conditions)
+    """
     control = double_integrator_control(goal, 0.01)
 
     def v_func(t, x):
@@ -373,9 +406,9 @@ def V_pv(state: Array, goal: Array, k1: float = 1.0, k3: float = 1.0, k5: float 
         k3 (float): positive gain
         k5 (float): positive gain
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
-
     """
     x, y, z, u, v, w, phi, theta, psi, _, _, _, _ = state
     x_dot = (
@@ -412,7 +445,8 @@ def dV_pv_dx(z: Array, goal: Array, k1: float = 1.0, k3: float = 1.0, k5: float 
         z (Array): concatenated time and state vector
         goal (Array): goal position vector [xd, yd, zd]
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(V_pv)(z, goal, k1, k3, k5)
@@ -426,7 +460,8 @@ def dV2_pv_dx2(z: Array, goal: Array, k1: float = 1.0, k3: float = 1.0, k5: floa
         z (Array): concatenated time and state vector
         goal (Array): goal position vector [xd, yd, zd]
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(jacrev(V_pv))(z, goal, k1, k3, k5)
@@ -438,6 +473,20 @@ from cbfkit.utils.user_types import CertificateCollection
 
 
 def position_velocity(goal: Array, k1: float, k3: float, k5: float) -> CertificateCollection:
+    """Callable that generates Lyapunov function and its associated functions for position and
+    velocity convergence.
+
+    Args:
+        goal (Array): goal position vector [xd, yd, zd]
+        k1 (float): positive gain
+        k3 (float): positive gain
+        k5 (float): positive gain
+
+    Returns
+    -------
+        tuple: lists of functions (v_func, j_func, h_func, p_func, conditions)
+    """
+
     def v_func(t, x):
         return V_pv(jnp.hstack([x, t]), goal, k1, k3, k5)  # type: ignore[return-value]
 
@@ -480,9 +529,9 @@ def V_geo(
         kx (float): position error gain
         kv (float): velocity error gain
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
-
     """
     x, y, z, u, v, w, phi, theta, psi, p, q, r, _ = state
 
@@ -566,7 +615,8 @@ def dV_geo_dx(
         kx (float): position error gain
         kv (float): velocity error gain
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(V_geo)(z, goal, k_lqr, m, kx, kv)
@@ -586,20 +636,22 @@ def dV2_geo_dx2(
         kx (float): position error gain
         kv (float): velocity error gain
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(jacrev(V_geo))(z, goal, k_lqr, m, kx, kv)
 
 
 def geometric(xd: Array, kx: float, kv: float, m: float, g: float) -> CertificateCollection:
-    """Callable that generates Geometric Lyapunov function
+    """Callable that generates Geometric Lyapunov function.
 
     Args:
         xd (Array): desired state
         kx, kv, m, g: parameters
 
-    Returns:
+    Returns
+    -------
         tuple: lists of functions
     """
 
@@ -629,17 +681,17 @@ def geometric(xd: Array, kx: float, kv: float, m: float, g: float) -> Certificat
 def double_integrator_control(
     xd: Array, dt: float
 ) -> Callable[[float, Array], Tuple[Array, Array, Array]]:
-    """
-    Creates a function to compute the desired accelerations for reaching a goal
-    location based on a double integrator model given the time and state vector.
+    """Creates a function to compute the desired accelerations for reaching a goal location based on
+    a double integrator model given the time and state vector.
 
-    Args:
+        Args:
         xd (Array): desired position vector
         dt (float): timestep length
 
-    Returns:
-        get_desired_pos_vel_acc (Callable): computes the desired position, velocity, and acceleration
-
+    Returns
+    -------
+        get_desired_pos_vel_acc (Callable): computes the desired position, velocity,
+        and acceleration.
     """
     # Generate A, B, Q, R for LQR
     A = jnp.zeros((6, 6))
@@ -654,19 +706,17 @@ def double_integrator_control(
 
     @jit
     def lqr_control(_t: float, x: Array) -> Tuple[Array, Array, Array]:
-        """
-        Computes desired position, velocity, and acceleration based on current and goal
-        states.
+        """Computes desired position, velocity, and acceleration based on current and goal states.
 
         Args:
             t (float): time in sec (unused)
             x (Array): state vector
 
-        Returns:
+        Returns
+        -------
             xd (Array): goal position vector
             vd (Array): goal velocity vector
             ad (Array): goal acceleration vector
-
         """
         # x is 12-dim state. angles are indices 6, 7, 8 (phi, theta, psi)
         phi, theta, psi = x[6], x[7], x[8]

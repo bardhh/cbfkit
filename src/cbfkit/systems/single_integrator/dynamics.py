@@ -3,8 +3,8 @@ from jax import Array, jit
 
 
 def two_dimensional_single_integrator(**kwargs):
-    """
-    Returns a function that represents the single integrator dynamics.
+    """Returns a function that represents the single integrator dynamics.
+
     x_dot = u
     """
 

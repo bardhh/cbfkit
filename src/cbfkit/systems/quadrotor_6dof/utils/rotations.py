@@ -4,15 +4,15 @@ from jax import Array, jit
 
 @jit
 def rotation_body_frame_to_inertial_frame(x: Array) -> Array:
-    """Computes the rotation matrix from the body-fixed frame to the inertial
-    frame based on the current state.
+    """Computes the rotation matrix from the body-fixed frame to the inertial frame based on the
+    current state.
 
     Arguments:
         x (Array): current quadrotor state
 
-    Returns:
+    Returns
+    -------
         rotation_matrix (Array): rotation matrix from body-fixed to inertial frame
-
     """
     rotation = jnp.array(
         [

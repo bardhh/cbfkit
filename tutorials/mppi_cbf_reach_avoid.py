@@ -30,8 +30,14 @@ obstacle = jnp.array([3, 3])
 obstacle_radius = 0.6
 
 # MPPI stage and terminal cost functions
-stage_cost_function = "0.2 * ( (x[0]-goal[0])**2 + (x[1]-goal[1])**2 )+ 10.0/max(array([(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius),0.01]))"  # MPPI stage cost function
-terminal_cost_function = "0.2 * ( (x[0]-goal[0])**2 + (x[1]-goal[1])**2 ) + 10.0/max(array([(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius),0.01]))"  # MPPI terminal cost function
+stage_cost_function = (
+    "0.2 * ( (x[0]-goal[0])**2 + (x[1]-goal[1])**2 )"
+    "+ 10.0/max(array([(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius),0.01]))"
+)  # MPPI stage cost function
+terminal_cost_function = (
+    "0.2 * ( (x[0]-goal[0])**2 + (x[1]-goal[1])**2 ) "
+    "+ 10.0/max(array([(linalg.norm(x[0:2]-obstacle[0:2])-obstacle_radius),0.01]))"
+)  # MPPI terminal cost function
 
 # Nominal controller - to be passed to CBF-QP controller
 nominal_control_law = "-k_p * (x[0]-xd[0]), -k_p * (x[1]-xd[1])"  # nominal controller

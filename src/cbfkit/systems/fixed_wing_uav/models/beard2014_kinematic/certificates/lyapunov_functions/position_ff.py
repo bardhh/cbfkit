@@ -1,8 +1,7 @@
-"""
-position_ff.py
+"""position_ff.py.
 
-This file contains a catalog of candidate lyapunov functions and their associated
-gradients, Hessians, etc., for use in control Lyapunov function-based controllers.
+This file contains a catalog of candidate lyapunov functions and their associated gradients,
+Hessians, etc., for use in control Lyapunov function-based controllers.
 """
 
 import jax.numpy as jnp
@@ -26,18 +25,17 @@ N = 6  # number of states
 ## Position Convergence
 @jit
 def clf(state: Array, goal: Array, T: float) -> Array:
-    """Future-focused position goal function (drive fixed-wing UAV
-    to a set of states within which a constant Vdot will drive it to
-    the goal location within time T).
+    """Future-focused position goal function (drive fixed-wing UAV to a set of states within which a
+    constant Vdot will drive it to the goal location within time T).
 
     Args:
         state (Array): concatenated time and state vector
         goal (Array): goal position vector [xg, yg, zg]
         T (float): time horizon
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
-
     """
     x, y, z, v, psi, gamma, _t = state
     xg, yg, zg = goal
@@ -54,16 +52,16 @@ def clf(state: Array, goal: Array, T: float) -> Array:
 
 @jit
 def clf_grad(state: Array, goal: Array, T: float) -> Array:
-    """Jacobian for future-focused position goal function (drive fixed-wing UAV
-    to a set of states within which a constant Vdot will drive it to
-    the goal location within time T).
+    """Jacobian for future-focused position goal function (drive fixed-wing UAV to a set of states
+    within which a constant Vdot will drive it to the goal location within time T).
 
     Args:
         state (Array): concatenated time and state vector
         goal (Array): goal position vector [xg, yg, zg]
         T (float): time horizon
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(clf)(state, goal, T)
@@ -71,16 +69,16 @@ def clf_grad(state: Array, goal: Array, T: float) -> Array:
 
 @jit
 def clf_hess(state: Array, goal: Array, T: float) -> Array:
-    """Hessian for future-focused position goal function (drive fixed-wing UAV
-    to a set of states within which a constant Vdot will drive it to
-    the goal location within time T).
+    """Hessian for future-focused position goal function (drive fixed-wing UAV to a set of states
+    within which a constant Vdot will drive it to the goal location within time T).
 
     Args:
         state (Array): concatenated time and state vector
         goal (Array): goal position vector [xg, yg, zg]
         T (float): time horizon
 
-    Returns:
+    Returns
+    -------
         ret (float): value of goal function evaluated at time and state
     """
     return jacfwd(jacrev(clf))(state, goal, T)

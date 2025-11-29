@@ -25,11 +25,13 @@ from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.bar
 
 
 def compute_theta_d(x, y, th):
+    """Compute desired theta."""
     thd = f"arctan2(yg - {y}, xg - {x})"
     return f"{th} + arctan2(sin({thd} - {th}), cos({thd} - {th}))"
 
 
 def norm(x, y):
+    """Compute norm string."""
     z = f"linalg.norm(array([{x} - xg, {y} - yg]))"
     return z
 

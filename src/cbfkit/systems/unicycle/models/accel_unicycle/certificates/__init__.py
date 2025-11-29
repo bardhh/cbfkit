@@ -1,6 +1,4 @@
-"""
-docstring
-"""
+"""docstring."""
 
 from . import barrier_functions, lyapunov_functions
 

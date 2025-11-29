@@ -27,7 +27,10 @@ def generate_compute_ra_cbf_constraints(
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
 ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
-    """Placeholder. Theory still in development."""
+    """Placeholder.
+
+    Theory still in development.
+    """
     compute_barrier_values = generate_compute_certificate_values(barriers)
 
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(

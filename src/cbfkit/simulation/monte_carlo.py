@@ -1,35 +1,24 @@
-"""
-title
-================
-
-Description of module
+"""Functions to aid in conducting Monte Carlo simulations.
 
 Functions
 ---------
--function(a): description
-
-Notes
------
-Various notes here
-
-Examples
---------
->>> import title
->>> run code
-
-"""
+_map_function(args)
+    Helper function for multiprocessing.
+conduct_monte_carlo(execute, n_trials, n_processes, **kwargs)
+    Conducts a Monte Carlo simulation."""
 
 import multiprocessing as mp
 from typing import Callable
 
 
 def _map_function(args):
-    """_summary_
+    """_summary_.
 
     Args:
         args (_type_): _description_
 
-    Returns:
+    Returns
+    -------
         _type_: _description_
     """
     func, trial_no, kwargs = args
@@ -37,7 +26,7 @@ def _map_function(args):
 
 
 def conduct_monte_carlo(execute: Callable, n_trials: int, n_processes: int = 1, **kwargs):
-    """_summary_
+    """_summary_.
 
     Args:
         execute (_type_): _description_

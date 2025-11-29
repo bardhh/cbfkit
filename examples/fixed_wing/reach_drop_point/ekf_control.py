@@ -1,8 +1,5 @@
-"""
-This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks
-to reach a goal region while avoiding dynamic obstacles.
-
-"""
+"""This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks to reach a goal
+region while avoiding dynamic obstacles."""
 
 import pickle
 

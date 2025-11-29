@@ -46,9 +46,9 @@ def ccbf_grad(
     Args:
         #! kwargs -- manually populate
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
-
     """
     jacobian = jacfwd(ccbf(constraint_functions, **kwargs))
 
@@ -59,10 +59,10 @@ def ccbf_grad(
         Args:
             state_and_time (Array): concatenated state vector and time
 
-        Returns:
+        Returns
+        -------
             Array: cbf jacobian (gradient)
         """
-
         return jacobian(state_and_time)
 
     return func
@@ -77,9 +77,9 @@ def ccbf_hess(
     Args:
         #! kwargs -- manually populate
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
-
     """
     hessian = jacrev(jacfwd(ccbf(constraint_functions, **kwargs)))
 
@@ -90,10 +90,10 @@ def ccbf_hess(
         Args:
             state_and_time (Array): concatenated state vector and time
 
-        Returns:
+        Returns
+        -------
             Array: cbf hessian
         """
-
         return hessian(state_and_time)
 
     return func

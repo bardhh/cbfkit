@@ -10,11 +10,9 @@ def velocity_with_flow(
     r: float,
     sigma: Optional[Array] = None,
 ) -> Callable[[Array], Tuple[Array, Array, Array]]:
-    """
-    Returns a function that represents the equations of motion for the Van der
-    Pol oscillator, and specifically returns them in the form of a drift vector
-    'f', control matrix 'g', and diffusion matrix 's' (the argument sigma) based
-    on the given state.
+    """Returns a function that represents the equations of motion for the Van der Pol oscillator,
+    and specifically returns them in the form of a drift vector 'f', control matrix 'g', and
+    diffusion matrix 's' (the argument sigma) based on the given state.
 
     The model characterized by this function may be found in Khalil's Nonlinear
     Systems book.
@@ -29,10 +27,10 @@ def velocity_with_flow(
     Args:
         sigma (Optional, Array): diffusion term in stochastic differential equation
 
-    Returns:
+    Returns
+    -------
         dynamics (Callable): takes state as input and returns dynamics components
             f, g, and s of the form dx = (f(x) + g(x)u)dt + s(x)dw
-
     """
     if sigma is not None:
         s = sigma
@@ -41,16 +39,15 @@ def velocity_with_flow(
 
     @jit
     def equations_of_motion(state: Array) -> Tuple[Array, Array, Array]:
-        """
-        Computes the drift vector 'f' and control matrix 'g' based on the given state x,
-        which consists of x1 ('position' coordinate) and x2 ('velocity' coordinate).
+        """Computes the drift vector 'f' and control matrix 'g' based on the given state x, which
+        consists of x1 ('position' coordinate) and x2 ('velocity' coordinate).
 
         Args:
             x (Array): state vector
 
-        Returns:
+        Returns
+        -------
             f, g, s (Tuple of Arrays): drift vector f, control matrix g, diffusion matrix s
-
         """
         nonlocal s
 

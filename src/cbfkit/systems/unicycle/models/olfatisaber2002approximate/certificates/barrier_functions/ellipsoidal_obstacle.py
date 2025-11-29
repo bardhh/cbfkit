@@ -1,11 +1,9 @@
-"""
-ellipsoidal_obstacle.py
+"""ellipsoidal_obstacle.py.
 
 Contains functions defining a CBF for collision avoidance wrt an ellipsoidal obstacle.
 
 Exportable:
     obstacle_ca
-
 """
 
 from typing import Callable
@@ -19,21 +17,21 @@ N = 3
 
 
 def cbf(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array]:
-    """Obstacle avoidance constraint function for approximate unicycle.
-    Super-level set convention.
+    """Obstacle avoidance constraint function for approximate unicycle. Super-level set convention.
 
     Args:
         x (array-like): concatenated time and state vector
         obstacle (Array): x, y, t state of obstacle
         ellipsoid (Array): list of 2D ellipsoid parameters
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
     """
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """ """
+        """"""
         x_e, y_e, _theta_e, _t = state_and_time
         x_o, y_o, _t = obstacle
         a1, a2 = ellipsoid
@@ -46,44 +44,46 @@ def cbf(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array]:
 
 
 def cbf_grad(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array]:
-    """Jacobian for obstacle avoidance constraint function for approximate unicycle.
-    Super-level set convention.
+    """Jacobian for obstacle avoidance constraint function for approximate unicycle. Super-level set
+    convention.
 
     Args:
         x (array-like): concatenated time and state vector
         obstacle (Array): x, y, t state of obstacle
         ellipsoid (Array): list of 2D ellipsoid parameters
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
     """
     jacobian = jacfwd(cbf(obstacle, ellipsoid))
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """ """
+        """"""
         return jacobian(state_and_time)
 
     return func
 
 
 def cbf_hess(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array]:
-    """Hessian for obstacle avoidance constraint function for approximate unicycle.
-    Super-level set convention.
+    """Hessian for obstacle avoidance constraint function for approximate unicycle. Super-level set
+    convention.
 
     Args:
         x (array-like): concatenated time and state vector
         obstacle (Array): x, y, t state of obstacle
         ellipsoid (Array): list of 2D ellipsoid parameters
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
     """
     hessian = jacrev(jacfwd(cbf(obstacle, ellipsoid)))
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """ """
+        """"""
         return hessian(state_and_time)
 
     return func

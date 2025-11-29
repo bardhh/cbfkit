@@ -5,7 +5,10 @@ from matplotlib.animation import FFMpegWriter
 
 
 class circle:
+    """Circle visualizer class."""
+
     def __init__(self, ax, pos=np.array([0, 0]), radius=1.0):
+        """Initialize circle."""
         self.X = pos
         self.radius = radius
         self.id = id
@@ -14,6 +17,7 @@ class circle:
         self.render(ax)
 
     def render(self, ax):
+        """Render the circle on the axes."""
         circ = plt.Circle(
             (self.X[0], self.X[1]), self.radius, linewidth=1, edgecolor="k", facecolor="k"
         )
@@ -25,6 +29,7 @@ def plot_trajectory(
     states,
     title=None,
 ):
+    """Plot the trajectory of the system states."""
     fig, axs = plt.subplots(1, 3, figsize=(12, 4))
 
     lbl = ["X", "Y", "Z"]
@@ -55,6 +60,8 @@ def animate(
     obstacle_radius=None,
     goal_radius=None,
 ):
+    """Animate the system behavior using FFMpeg."""
+
     def init(trajectory):
         trajectory[0].set_data([], [])
         plot_num_samples = mppi_args["plot_samples"]

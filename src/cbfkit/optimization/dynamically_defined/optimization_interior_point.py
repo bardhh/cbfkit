@@ -22,7 +22,8 @@ def generate_predictor_corrector_dynamical_solution(
         pd_matrix (Array): _description_
         dynamics (DynamicsCallable): _description_
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: _description_
     """
     n_con = pd_matrix.shape[0]
@@ -36,7 +37,8 @@ def generate_predictor_corrector_dynamical_solution(
         Args:
             z (Array): _description_
 
-        Returns:
+        Returns
+        -------
             Array: _description_
         """
         f, _ = dynamics(z)

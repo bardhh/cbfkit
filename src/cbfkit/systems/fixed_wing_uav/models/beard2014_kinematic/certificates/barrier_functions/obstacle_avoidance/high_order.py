@@ -1,4 +1,7 @@
-""" """
+"""high_order.py.
+
+Contains functions defining a high-order CBF wrt an ellipsoidal obstacle.
+"""
 
 from typing import Callable, List
 
@@ -23,9 +26,9 @@ def cbf(obstacle: Array, ellipsoid: List[float], alpha: float) -> Callable[[Arra
         ellipsoid (List): list of 3D ellipsoid parameters
         alpha (float): class K function (for 2nd order CBF)
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
-
     """
     x_o, y_o, z_o = obstacle
     a1, a2, a3 = ellipsoid
@@ -73,9 +76,9 @@ def cbf_grad(obstacle: Array, ellipsoid: List[float], alpha: float) -> Callable[
         ellipsoid (List): list of 3D ellipsoid parameters
         alpha (float): class K function (for 2nd order CBF)
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
-
     """
     jacobian = jacfwd(cbf(obstacle, ellipsoid, alpha))
 
@@ -94,9 +97,9 @@ def cbf_hess(obstacle: Array, ellipsoid: List[float], alpha: float) -> Callable[
         ellipsoid (List): list of 3D ellipsoid parameters
         alpha (float): class K function (for 2nd order CBF)
 
-    Returns:
+    Returns
+    -------
         ret (float): value of constraint function evaluated at time and state
-
     """
     hessian = jacrev(jacfwd(cbf(obstacle, ellipsoid, alpha)))
 

@@ -75,7 +75,8 @@ def execute(
     Args:
         int (ii): _description_
 
-    Returns:
+    Returns
+    -------
         List[Array]: _description_
     """
     key = random.PRNGKey(ii)

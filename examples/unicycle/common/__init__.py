@@ -1,3 +1,1 @@
-"""
-Common utilities and configurations for Unicycle examples.
-"""
+"""Common utilities and configurations for Unicycle examples."""

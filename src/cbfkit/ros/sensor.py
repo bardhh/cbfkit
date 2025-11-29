@@ -7,7 +7,8 @@ from jax import Array
 def sensor(compile_state: Callable[[], Array]) -> Callable[[], Tuple[float, Array]]:
     """Generates 'sense' function for ROS sensor object.
 
-    Returns:
+    Returns
+    -------
         Callable[[], Tuple[float, Array]]: _description_
     """
 

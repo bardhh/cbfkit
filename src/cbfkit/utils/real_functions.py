@@ -1,6 +1,4 @@
-"""
-real_functions
-================
+"""Real functions module.
 
 This file contains a collection of real functions.
 
@@ -17,8 +15,6 @@ Examples
 --------
 >>> from real_functions import *
 >>> val = tanh_sigmoid_func(2.7, 2.0)
-
-
 """
 
 import jax.numpy as jnp
@@ -34,7 +30,8 @@ def tanh_sigmoid(s: float, sbar: float, k: float = 100.0) -> Array:
         sbar (float): maximum value
         k (float, optional): gain. Defaults to 100.0.
 
-    Returns:
+    Returns
+    -------
         float: value of function evaluated
     """
     return s * (1 / 2 + 1 / 2 * jnp.tanh(k * s)) + (sbar - s) * (

@@ -1,5 +1,5 @@
-"""
-Test Module for conducting a Monte Carlo simulation of the unicycle system
+"""Test Module for conducting a Monte Carlo simulation of the unicycle system.
+
 =========================
 
 This module contains tests that simulate the unicycle system under various
@@ -91,10 +91,12 @@ DFDX = jacfwd(DYNAMICS)
 
 
 def H(x):
+    """Identity measurement function."""
     return x
 
 
 def DHDX(_x):
+    """Jacobian of identity measurement function."""
     return jnp.eye(N)
 
 
@@ -137,7 +139,6 @@ def initial_state():
 @pytest.mark.benchmark
 def test_execution_performance_jit(initial_state):
     """Tests that JIT-compiled execution is fast (average step < 1ms)."""
-
     planner_data = PlannerData(
         u_traj=None,
         x_traj=jnp.tile(GOAL.reshape(-1, 1), (1, N_STEPS + 1)),

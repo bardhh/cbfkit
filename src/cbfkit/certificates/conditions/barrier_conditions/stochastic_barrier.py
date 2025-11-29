@@ -59,7 +59,8 @@ def right_hand_side(alpha: float, beta: float) -> Callable[[Array], Array]:
     Args:
         None
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: Zeroing CBF barrier conditions
     """
     assert alpha >= 0

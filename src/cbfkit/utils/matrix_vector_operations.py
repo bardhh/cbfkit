@@ -1,6 +1,4 @@
-"""
-matrix_vector_operations
-================
+"""Matrix vector operations module.
 
 This file contains miscellaneous helper functions for performing
 operations involving matrices and vectors.
@@ -26,7 +24,6 @@ Examples
 >>> a_hat = hat(a)
 >>> a = = vee(a_hat)
 >>> double_a = block_diag_matrix(a_hat, a_hat)
-
 """
 
 import jax.numpy as jnp
@@ -42,10 +39,10 @@ def normalize(a: Array, axis: int = -1, order: int = 2) -> Array:
         axis (int, optional): axis of normalization. Defaults to -1.
         order (int, optional): norm to use (2 = Euclidean). Defaults to 2.
 
-    Returns:
+    Returns
+    -------
         Array: normalized array
     """
-
     l2 = jnp.atleast_1d(jnp.linalg.norm(a, order, axis))
     mask = l2 == 0
     modified_l2 = lax.cond(mask.any(), lambda x: jnp.where(mask, 1, x), lambda x: x, l2)
@@ -55,8 +52,9 @@ def normalize(a: Array, axis: int = -1, order: int = 2) -> Array:
 
 @jit
 def hat(v: Array) -> Array:
-    """Performs the hat operation on the given array (vector), e.g.,
+    """Performs the hat operation on the given array (vector).
 
+    e.g.,
     v_hat = [
         [0, -v[2], v[1]],
         [v[2], 0, -v[0]],
@@ -66,7 +64,8 @@ def hat(v: Array) -> Array:
     Args:
         v (Array): array on which to perform hat operation
 
-    Returns:
+    Returns
+    -------
         Array: hat matrix
     """
     assert len(v.shape) == 1 or (len(v.shape) < 2 and v.shape[-1] == 1)
@@ -75,8 +74,9 @@ def hat(v: Array) -> Array:
 
 @jit
 def vee(mat: Array) -> Array:
-    """Performs the V operation on a 3x3 matrix, e.g.,
+    """Performs the V operation on a 3x3 matrix.
 
+    e.g.,
     mat_vee = [
         (mat[2, 1] - mat[1, 2]) / 2,
         (mat[0, 2] - mat[2, 0]) / 2,
@@ -86,7 +86,8 @@ def vee(mat: Array) -> Array:
     Args:
         mat (Array): 3x3 matrix
 
-    Returns:
+    Returns
+    -------
         Array: resulting vector
     """
     assert mat.shape == (3, 3)
@@ -98,14 +99,14 @@ def vee(mat: Array) -> Array:
 
 @jit
 def block_diag_matrix(mat1: Array, mat2: Array) -> Array:
-    """Creates new block diagonal matrix block_mat = [[mat1, 0], [0, mat2]] from
-    two matrices mat1, mat2.
+    """Creates new block diagonal matrix block_mat = [[mat1, 0], [0, mat2]] from two matrices.
 
     Args:
         mat1 (Array): first matrix (top block)
         mat2 (Array): second matrix (bottom block)
 
-    Returns:
+    Returns
+    -------
         Array: blocked matrix
     """
     assert len(mat1.shape) == 2 and len(mat2.shape) == 2
@@ -121,6 +122,7 @@ def block_diag_matrix(mat1: Array, mat2: Array) -> Array:
 
 @jit
 def invert_array(a):
+    """Invert an array."""
     # Check if the array is already 2D
     if a.ndim == 1:
         # Reshape the vector into a 2D array (1x1 matrix)

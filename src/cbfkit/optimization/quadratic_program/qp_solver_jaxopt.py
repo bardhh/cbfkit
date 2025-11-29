@@ -1,34 +1,4 @@
-"""
-qp_solver_jax
-================
-
-This module implements a solver for quadratic programs using the Jax library.
-
-Functions
----------
--solve(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec): calculates solution to quadratic program specified by args
-
-Notes
------
-Quadratic Program takes the following form:
-min 1/2 x.T @ h_mat @ x + f_vec @ x
-subject to
-g_mat @ x <= h_vec
-a_mat @ x = b_vec
-
-Examples
---------
->>> import qp_solver_jax
->>> sol, status = qp_solver_jax.solve(
-        h_mat=jnp.eye(2),
-        f_vec=jnp.ones((2,))
-        g_mat=jnp.ones((2, 1))
-        h_vec=jnp.array([1.0])
-        a_mat=None,
-        b_vec=None
-    )
-
-"""
+"""Quadratic program solver using the Jaxopt library."""
 
 from typing import Optional, Tuple, Union
 
@@ -45,6 +15,15 @@ def solve_equality_constrained_qp(
     params_obj: Tuple[Array, Array],
     params_eq: Tuple[Array, Array],
 ) -> Tuple[Array, int]:
+    """Solves an equality constrained quadratic program.
+
+    Args:
+        params_obj (Tuple[Array, Array]): Quadratic cost parameters (P, q).
+        params_eq (Tuple[Array, Array]): Equality constraint parameters (A, b).
+
+    Returns:
+        Tuple[Array, int]: The solution to the QP and a status code.
+    """
     solution = EC_QP.run(
         params_obj=params_obj,
         params_eq=params_eq,
@@ -57,6 +36,16 @@ def solve_inequality_constrained_qp(
     params_eq: Optional[Tuple[Array, Array]],
     params_ineq: Optional[Tuple[Array, Array]],
 ) -> Tuple[Array, int]:
+    """Solves an inequality constrained quadratic program.
+
+    Args:
+        params_obj (Tuple[Array, Array]): Quadratic cost parameters (P, q).
+        params_eq (Optional[Tuple[Array, Array]]): Optional equality constraint parameters (A, b).
+        params_ineq (Optional[Tuple[Array, Array]]): Optional inequality constraint parameters (G, h).
+
+    Returns:
+        Tuple[Array, int]: The solution to the QP and a status code.
+    """
     sol, state = QP.run(
         params_obj=params_obj,
         params_eq=params_eq,
@@ -77,8 +66,7 @@ def solve(
     a_mat: Union[Array, None] = None,
     b_vec: Union[Array, None] = None,
 ) -> Tuple[Array, int]:
-    """
-    Solve a quadratic program using the cvxopt solver.
+    """Solve a quadratic program using the cvxopt solver.
 
     Args:
         h_mat: quadratic cost matrix
@@ -88,7 +76,8 @@ def solve(
         g_mat: linear equality constraint matrix
         h_vec: linear equality constraint vector
 
-    Returns:
+    Returns
+    -------
         sol['x']: Solution to the QP
     """
     params_obj = (h_mat, 0.5 * f_vec)

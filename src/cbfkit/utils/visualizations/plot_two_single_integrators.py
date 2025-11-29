@@ -8,6 +8,7 @@ def plot_trajectory(
     states,
     title=None,
 ):
+    """Plot the trajectory of two single integrators."""
     fig, axs = plt.subplots(1, 3, figsize=(12, 4))
 
     lbl = ["X", "Y", "Z"]
@@ -66,6 +67,8 @@ def animate(
     save_animation=False,
     animation_filename="system_behavior.gif",
 ):
+    """Animate the system behavior for two single integrators."""
+
     def init():
         trajectory1.set_data([], [])
         # etrajectory1.set_data([], [])

@@ -15,11 +15,10 @@ def ct_ukf_dtmeas(
     Arguments:
         dynamics (DynamicsCallable): function handle to computing nonlinear dynamics
 
-    Returns:
+    Returns
+    -------
         step_ukf (Callable): function handle to compute the next UKF observer state
-
     """
-
     predict = predict_ct_dtmeas(Q, dynamics, dt)
     update = update_dtmeas(R, h)
 
@@ -30,8 +29,8 @@ def ct_ukf_dtmeas(
         u: Optional[Array] = None,
         P: Optional[Array] = None,
     ) -> Tuple[Array, Array]:
-        """Continuous-time implementation of Unscented Kalman Filter (UKF) with
-        discrete-time measurements.
+        """Continuous-time implementation of Unscented Kalman Filter (UKF) with discrete-time
+        measurements.
 
         Arguments:
             t (float): time (in sec)
@@ -40,10 +39,10 @@ def ct_ukf_dtmeas(
             y (Array): measurement
             P (Array): Kalman covariance matrix
 
-        Returns:
+        Returns
+        -------
             x_new (Array): updated observer state
             P_new (Array): updated Kalman covariance matrix
-
         """
         if z is None or u is None or P is None:
             return initialize(y, R)
@@ -72,10 +71,10 @@ def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
         R (Array): measurement noise covariance matrix (proxy for initial covariance)
 
 
-    Returns:
+    Returns
+    -------
         z0 (Array): initial estimate of state
         P0 (Array): initial covariance of state estimate
-
     """
     return y, R
 
@@ -83,21 +82,23 @@ def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
 def predict_ct_dtmeas(
     Q: Array, dynamics: DynamicsCallable, dt: float
 ) -> Callable[[float, Array, Array, Array], Tuple[Array, Array, Array]]:
-    """Function defining the prediction step for the continuous-time EKF with discrete-time measurements.
+    """Function defining the prediction step for the continuous-time EKF with discrete-time
+    measurements.
 
     Arguments:
         Q (Array): positive definite process noise covariance
         dynamics (DynamicsCallable): function handle to computing the nonlinear system dynamics
         dt (float): timestep (sec)
 
-    Returns:
+    Returns
+    -------
         predict (Callable): function handle to compute EKF state and covariance matrix based on system model
-
     """
     sigma_points = generate_sigma_points(Q.shape[0])
 
     def predict(_t: float, z: Array, u: Array, P: Array) -> Tuple[Array, Array, Array]:
-        """Implementation of prediction step for the continuous-time EKF with discrete-time measurements.
+        """Implementation of prediction step for the continuous-time EKF with discrete-time
+        measurements.
 
         Arguments:
             t (float): time (sec)
@@ -105,11 +106,11 @@ def predict_ct_dtmeas(
             u (Array): control input
             P (Array): Kalman covariance matrix
 
-        Returns:
+        Returns
+        -------
             zk: predicted observer state
             Pk: predicted covariance matrix
             sk: predicted sigma points (through dynamics)
-
         """
         s, wa, wc = sigma_points(z, P)
 
@@ -142,9 +143,9 @@ def update_dtmeas(
         dhdx (Callable): linearized measurement model
 
 
-    Returns:
+    Returns
+    -------
         update (Callable): function handle to compute the updated EKF state and covariance matrix
-
     """
     sigma_points = generate_sigma_points(R.shape[0])
 
@@ -156,10 +157,10 @@ def update_dtmeas(
             y (Array): measurement
             P (Array): predicted Kalman covariance matrix
 
-        Returns:
+        Returns
+        -------
             z_new (Array): updated observer state
             P_new (Array): updated Kalman covariance matrix
-
         """
         s, wa, wc = sigma_points(z, P)
 
@@ -194,11 +195,11 @@ def generate_sigma_points(
         beta (float): sigma point parameter
         kappa (float): sigma point parameter
 
-    Returns:
+    Returns
+    -------
         sigma_points (Array): sigma points for unscented transform
         Wa (Array): weights for state estimation
         Wc (Array): weights for covariance estimation
-
     """
     # Initialize sigma points and weights
     Wa = jnp.zeros((2 * L + 1,))
@@ -241,7 +242,8 @@ def generate_sigma_points(
             z (Array): current state estimate
             P (Array): current UKF covariance matrix
 
-        Returns:
+        Returns
+        -------
             _type_: _description_
         """
         # Cholesky decomposition of covariance matrix

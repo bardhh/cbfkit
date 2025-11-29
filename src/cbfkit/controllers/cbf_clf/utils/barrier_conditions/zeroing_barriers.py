@@ -61,7 +61,8 @@ def linear_class_k(alpha: float) -> Callable[[Array], Array]:
     Args:
         None
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: Zeroing CBF barrier conditions
     """
     assert alpha >= 0
@@ -76,7 +77,8 @@ def cubic_class_k(alpha: float) -> Callable[[Array], Array]:
     Args:
         None
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: Zeroing CBF barrier conditions
     """
     assert alpha >= 0
@@ -91,7 +93,8 @@ def generic_class_k(alpha: Callable[[Array], Array]) -> Callable[[Array], Array]
     Args:
         None
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: Zeroing CBF barrier conditions
     """
 
@@ -101,7 +104,8 @@ def generic_class_k(alpha: Callable[[Array], Array]) -> Callable[[Array], Array]
         Args:
             h (Array): CBF value
 
-        Returns:
+        Returns
+        -------
             Array: value of composed alpha(h)
         """
         return alpha(h)

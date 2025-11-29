@@ -1,5 +1,6 @@
 """
 Test Module for cbfkit.optimization.quadratic_program solvers.
+
 =========================
 
 This module contains unit tests for functionalities in 'quadratic_program'
@@ -44,10 +45,8 @@ KEY = random.PRNGKey(0)
 
 
 class TestQuadraticProgramSolvers(unittest.TestCase):
-    """Takes care of unit tests intended to verify the intended performance
-    of quadratic program solvers.
-
-    """
+    """Takes care of unit tests intended to verify the intended performance of quadratic program
+    solvers."""
 
     eps = 1e-2
 
@@ -57,8 +56,8 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
     #     self._test_qp_feasible_inequality_only(qp_cvxopt.solve)
 
     def test_qp_jaxopt_feasible_inequality_only(self):
-        """Tests that the JAXOPT-based quadratic program solver computes
-        the correct solution for a sequence of problems with inequality constraints only."""
+        """Tests that the JAXOPT-based quadratic program solver computes the correct solution for a
+        sequence of problems with inequality constraints only."""
         self._test_qp_feasible_inequality_only(qp_jaxopt.solve)
 
     # def test_qp_casadi_feasible_inequality_only(self):
@@ -72,8 +71,8 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
     #     self._test_qp_feasible_equality_only(qp_cvxopt.solve)
 
     def test_qp_jaxopt_feasible_equality_only(self):
-        """Tests that the JAXOPT-based quadratic program solver computes the correct solution
-        for a sequence of problems with equality constraints only."""
+        """Tests that the JAXOPT-based quadratic program solver computes the correct solution for a
+        sequence of problems with equality constraints only."""
         self._test_qp_feasible_equality_only(qp_jaxopt.solve)
 
     # def test_qp_casadi_feasible_equality_only(self):
@@ -87,8 +86,8 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
     #     self._test_qp_feasible(qp_cvxopt.solve)
 
     def test_qp_jaxopt_feasible(self):
-        """Tests that the JAXOPT-based quadratic program solver computes the correct solution
-        for a sequence of problems with both inequality and equality constraints."""
+        """Tests that the JAXOPT-based quadratic program solver computes the correct solution for a
+        sequence of problems with both inequality and equality constraints."""
         self._test_qp_feasible(qp_jaxopt.solve)
 
     # def test_qp_casadi_feasible(self):
@@ -102,8 +101,8 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
     #     self._test_qp_infeasible(qp_cvxopt.solve)
 
     def test_qp_jaxopt_infeasible(self):
-        """Tests that the JAXOPT-based quadratic program solver correctly identifies that
-        the posed inequality/equality constrained problem is infeasible."""
+        """Tests that the JAXOPT-based quadratic program solver correctly identifies that the posed
+        inequality/equality constrained problem is infeasible."""
         self._test_qp_infeasible(qp_jaxopt.solve)
 
     # def test_qp_casadi_infeasible(self):
@@ -112,8 +111,8 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
     #     self._test_qp_infeasible(qp_casadi.solve)
 
     def _test_qp_feasible_inequality_only(self, solver: QpSolverCallable):
-        """Tests that the quadratic program solver computes the correct solution
-        for a sequence of problems with inequality constraints only."""
+        """Tests that the quadratic program solver computes the correct solution for a sequence of
+        problems with inequality constraints only."""
         n_tests = 30
 
         import time
@@ -161,8 +160,8 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
         print(f"test_qp_feasible_inequality_only: {time.time() - start}")
 
     def _test_qp_feasible_equality_only(self, solver: QpSolverCallable):
-        """Tests that the quadratic program solver computes the correct solution
-        for a sequence of problems with equality constraints only."""
+        """Tests that the quadratic program solver computes the correct solution for a sequence of
+        problems with equality constraints only."""
         n_tests = 30
 
         import time
@@ -201,8 +200,8 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
         print(f"test_qp_feasible_equality_only: {time.time() - start}")
 
     def _test_qp_feasible(self, solver: QpSolverCallable):
-        """Tests that the quadratic program solver computes the correct solution
-        for a sequence of problems with both inequality and equality constraints."""
+        """Tests that the quadratic program solver computes the correct solution for a sequence of
+        problems with both inequality and equality constraints."""
         n_tests = 30
 
         import time
@@ -246,8 +245,8 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
         print(f"test_qp_feasible: {time.time() - start}")
 
     def _test_qp_infeasible(self, solver: QpSolverCallable):
-        """Tests that the quadratic program solver correctly identifies that
-        the posed inequality/equality constrained problem is infeasible."""
+        """Tests that the quadratic program solver correctly identifies that the posed
+        inequality/equality constrained problem is infeasible."""
         n_tests = 30
 
         import time

@@ -19,7 +19,8 @@ def generate_stochastic_perturbation(
         sigma (Callable[Array, [Array]]): diffusion function of the state
         dt (float): simulation time interval (sec)
 
-    Returns:
+    Returns
+    -------
         Callable[Array, [Array]]: function to compute stochastic perturbation based on state
     """
 
@@ -31,7 +32,8 @@ def generate_stochastic_perturbation(
         Args:
             x (Array): state vector
 
-        Returns:
+        Returns
+        -------
             Array: value
         """
         nonlocal sigma
@@ -42,7 +44,7 @@ def generate_stochastic_perturbation(
         """"""
 
         def compute(subkey: Key) -> Array:
-            """TO DO"""
+            """TO DO."""
             nonlocal dt
             dw = random.normal(subkey, shape=(sigma_x.shape[1],)) * jnp.sqrt(dt)
             return jnp.matmul(sigma_x, dw) / dt
@@ -60,7 +62,8 @@ def generate_bounded_perturbation(
     Args:
         perturbation (Callable[Array, [Array]]): bounded perturbation of the form ||d(x)|| <= D
 
-    Returns:
+    Returns
+    -------
         Callable[Array, [Array]]: function to compute additive perturbation
     """
 
@@ -72,7 +75,8 @@ def generate_bounded_perturbation(
         Args:
             x (Array): state vector
 
-        Returns:
+        Returns
+        -------
             Array: value
         """
         nonlocal perturbation
@@ -84,7 +88,7 @@ def generate_bounded_perturbation(
 
         @jit
         def compute(_subkey: Key) -> Array:
-            """TO DO"""
+            """TO DO."""
             nonlocal perturbation_x
             return perturbation_x
 
@@ -103,19 +107,22 @@ def generate_affine_perturbation(
         parameter_vector (Array): vector of unknown (or known) parameters, possibly belonging
             to a bounded set
 
-    Returns:
+    Returns
+    -------
         Callable[Array, [Array]]: function to compute additive perturbation
     """
 
     def affine_perturbation(
         x: Array, _u: Array, _f: Array, _g: Array
     ) -> PerturbationCallableReturns:
-        """Computes value of an additive, parameter-affine perturbation of the form Delta(x) * theta.
+        """Computes value of an additive, parameter-affine perturbation of the form Delta(x) *
+        theta.
 
         Args:
             x (Array): state vector
 
-        Returns:
+        Returns
+        -------
             Array: value
         """
         nonlocal regressor, parameter_vector
@@ -127,7 +134,7 @@ def generate_affine_perturbation(
 
         @jit
         def compute(_subkey: Key) -> Array:
-            """TO DO"""
+            """TO DO."""
             nonlocal perturbation_x
             return perturbation_x
 

@@ -34,7 +34,8 @@ def robustness_two_norm(bound: Array) -> Callable[[Array], Array]:
     Args:
         bound (Array): upper bound on 2-norm of disturbance within operating domain
 
-    Returns:
+    Returns
+    -------
         Array: value of robustness term
     """
 
@@ -44,7 +45,8 @@ def robustness_two_norm(bound: Array) -> Callable[[Array], Array]:
         Args:
             jacobian (Array): dhdx
 
-        Returns:
+        Returns
+        -------
             Array: value
         """
         return jnp.linalg.norm(jacobian) * bound
@@ -58,7 +60,8 @@ def robustness_sup_norm(bound: Array) -> Callable[[Array], Array]:
     Args:
         bound (Array): upper bound on sup-norm of disturbance within operating domain
 
-    Returns:
+    Returns
+    -------
         Array: value of robustness term
     """
 
@@ -68,7 +71,8 @@ def robustness_sup_norm(bound: Array) -> Callable[[Array], Array]:
         Args:
             jacobian (Array): dhdx
 
-        Returns:
+        Returns
+        -------
             Array: value
         """
         return jnp.sum(jnp.abs(jacobian * bound))

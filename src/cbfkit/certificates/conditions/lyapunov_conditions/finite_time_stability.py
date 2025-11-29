@@ -65,7 +65,8 @@ def ft_s(c: float, e: float) -> Callable[[Array], Array]:
         c1 (float): convergence constant
         e1 (float): exponential constant
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: FTS Lyapunov conditions
     """
     return lambda V: lax.cond(V > 0, lambda _fake: -c * V**e, lambda _fake: 0.0, 0)

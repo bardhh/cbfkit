@@ -8,6 +8,7 @@ from cbfkit.utils.user_types import ControllerData, PlannerData
 
 
 def test_stepper_basic():
+    """Test basic stepper functionality."""
     # Setup
     dt = 0.1
     key = random.PRNGKey(0)
@@ -94,6 +95,7 @@ def test_stepper_basic():
 
 
 def test_stepper_controller_complete():
+    """Test stepper when controller completes early."""
     # Setup
     dt = 0.1
     key = random.PRNGKey(0)
@@ -144,6 +146,7 @@ def test_stepper_controller_complete():
 
 
 def test_stepper_planner_error():
+    """Test stepper when planner errors out."""
     # Setup
     dt = 0.1
     key = random.PRNGKey(0)

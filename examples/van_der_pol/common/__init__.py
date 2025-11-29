@@ -1,3 +1,1 @@
-"""
-Common utilities and configurations for Van der Pol examples.
-"""
+"""Common utilities and configurations for Van der Pol examples."""

@@ -15,15 +15,14 @@ from cbfkit.utils.user_types import (
 
 
 def fxt_lyapunov_controller(epsilon: float) -> ControllerCallable:
-    """
-    Create a zero controller for the given fixed-wing uav dynamics.
+    """Create a zero controller for the given fixed-wing uav dynamics.
 
     Args:
         None
 
-    Returns:
+    Returns
+    -------
         controller (Callable): handle to function computing zero control
-
     """
 
     @jit
@@ -40,7 +39,8 @@ def fxt_lyapunov_controller(epsilon: float) -> ControllerCallable:
             _t (float): time in sec
             x (Array): state vector (or estimate if using observer/estimator)
 
-        Returns:
+        Returns
+        -------
             u (Array): 1x1 zero vector
             data: (dict): empty dictionary
         """
@@ -58,15 +58,14 @@ def fxt_lyapunov_controller(epsilon: float) -> ControllerCallable:
 def fxt_stochastic_lyapunov_controller(
     epsilon: float, sigma_sum_squares: float
 ) -> ControllerCallable:
-    """
-    Create a zero controller for the given fixed-wing uav dynamics.
+    """Create a zero controller for the given fixed-wing uav dynamics.
 
     Args:
         None
 
-    Returns:
+    Returns
+    -------
         controller (Callable): handle to function computing zero control
-
     """
 
     @jit
@@ -83,7 +82,8 @@ def fxt_stochastic_lyapunov_controller(
             _t (float): time in sec
             x (Array): state vector (or estimate if using observer/estimator)
 
-        Returns:
+        Returns
+        -------
             u (Array): 1x1 zero vector
             data: (dict): empty dictionary
         """
@@ -109,15 +109,14 @@ def fxt_risk_aware_lyapunov_controller(
     t_reach: float,
     vartheta: float,
 ) -> ControllerCallable:
-    """
-    Create a zero controller for the given fixed-wing uav dynamics.
+    """Create a zero controller for the given fixed-wing uav dynamics.
 
     Args:
         None
 
-    Returns:
+    Returns
+    -------
         controller (Callable): handle to function computing zero control
-
     """
     a = 100.0
     b = 1.0
@@ -137,7 +136,8 @@ def fxt_risk_aware_lyapunov_controller(
             _t (float): time in sec
             x (Array): state vector (or estimate if using observer/estimator)
 
-        Returns:
+        Returns
+        -------
             u (Array): 1x1 zero vector
             data: (dict): empty dictionary
         """

@@ -5,10 +5,10 @@ from matplotlib.gridspec import GridSpec
 
 
 def plot_ellipse_3d(ax, center, radii, rotation, color="blue", alpha=0.2):
-    """
-    Plots a 3D ellipse on the provided axes.
+    """Plots a 3D ellipse on the provided axes.
 
-    Parameters:
+    Parameters
+    ----------
     - ax: the 3D axis to plot the ellipse on.
     - center: the center of the ellipse [x, y, z].
     - radii: the semi-axis lengths of the ellipse [rx, ry, rz].
@@ -32,9 +32,8 @@ def plot_ellipse_3d(ax, center, radii, rotation, color="blue", alpha=0.2):
 
 
 def point_to_ellipsoid_distance(p, c, r, R):
-    """
-    Compute the distance from point p to an ellipsoid centered at c, with radii r and rotation R.
-    """
+    """Compute the distance from point p to an ellipsoid centered at c, with radii r and rotation
+    R."""
     # Direction vector from c to p
     u = p - c
     norm_u = np.linalg.norm(u)
@@ -77,6 +76,7 @@ def animate_3d(
     save_animation=False,
     animation_filename="system_behavior.mp4",
 ):
+    """Animate 3D system behavior."""
     # Compute time vector
     time = np.arange(0, len(states) * dt, dt)
 
@@ -199,6 +199,7 @@ def animate_3d_multi_robot(
     include_min_distance_to_obstacles_plot=False,  # Control inclusion of min distance to obstacles
     threshold=None,
 ):
+    """Animate 3D multi-robot system behavior."""
     # Compute time vector
     time = np.arange(0, len(states) * dt, dt)
 
@@ -343,7 +344,8 @@ def animate_3d_multi_robot(
     if include_min_distance_to_obstacles_plot:
         if ellipse_centers is None or ellipse_radii is None or ellipse_rotations is None:
             raise ValueError(
-                "To compute distances to obstacles, ellipse_centers, ellipse_radii, and ellipse_rotations must be provided."
+                "To compute distances to obstacles, ellipse_centers, ellipse_radii, "
+                "and ellipse_rotations must be provided."
             )
 
         # Create obstacle distance subplot

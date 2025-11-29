@@ -1,6 +1,4 @@
-"""
-simulator
-================
+"""simulator.
 
 This module contains the functions responsible for simulating the trajectories
 of (controlled) dynamical systems over
@@ -17,10 +15,9 @@ Examples
 --------
 >>> import title
 >>> run code
-
 """
 
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import jax.tree_util
@@ -50,6 +47,19 @@ from cbfkit.utils.user_types import (
 from .simulator_jit import simulator_jit
 
 
+class _SimulationStepData(NamedTuple):
+    """Represents the data captured at a single simulation step."""
+
+    state: State
+    control: Control
+    estimate: Estimate
+    covariance: Covariance
+    controller_keys: List[str]
+    controller_values: List[Any]
+    planner_keys: List[str]
+    planner_values: List[Any]
+
+
 def stepper(
     dt: float,
     dynamics: DynamicsCallable,
@@ -76,6 +86,7 @@ def stepper(
     Tuple[Array, Array, Array, Array, ControllerData, PlannerData],
 ]:
     """Creates a closure to step the simulation forward by one timestep.
+
     ...
     """
 
@@ -88,7 +99,8 @@ def stepper(
         controller_data: Optional[ControllerData],
         planner_data: Optional[PlannerData],
     ) -> Tuple[Array, Array, Array, Array, ControllerData, PlannerData]:
-        """_summary_
+        """_summary_.
+
         ...
         """
         if controller_data is None:
@@ -221,9 +233,10 @@ def simulator(
     stl_trajectory_cost=None,
 ) -> Callable[
     [Array, Optional[ControllerData], Optional[PlannerData]],
-    Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]],
+    Iterator[_SimulationStepData],
 ]:
     """Generates an iterator for simulating the dynamical system over a fixed horizon.
+
     ...
     """
     # ... (defaults handling same as before) ...
@@ -299,9 +312,7 @@ def simulator(
         x: Array,
         controller_data: Optional[ControllerData] = None,
         planner_data: Optional[PlannerData] = None,
-    ) -> Iterator[
-        Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]
-    ]:
+    ) -> Iterator[_SimulationStepData]:  # Updated to yield _SimulationStepData
         if controller_data is None:
             controller_data = ControllerData()
         if planner_data is None:
@@ -309,7 +320,7 @@ def simulator(
         # No info on control/estimation
         u = None
         z = None
-        p = None
+        c = None  # Initialize covariance
 
         items = range(0, num_steps)
 
@@ -327,16 +338,27 @@ def simulator(
             # step(t, x, u, z, c, controller_data, planner_data)
             # Need to pass u=None, z=None/x, c=None (p)
             # But step now accepts Optional[Estimate] for z.
-            x, u, z, p, controller_data, planner_data = step(
-                dt * s, x, u, z, p, controller_data, planner_data
+            x_ret, u_ret, z_ret, c_ret, controller_data, planner_data = step(
+                dt * s, x, u, z, c, controller_data, planner_data
             )
-            # Removed log() call here
+            u = u_ret  # Update u for the next step's input
+            z = z_ret  # Update z for the next step's input
+            c = c_ret  # Update c for the next step's input
+            x = x_ret  # Update x for the next step's initial state
+
             xs = jnp.append(xs, x.reshape(-1, 1), axis=1)
             planner_data = planner_data._replace(xs=xs)
-            # None  # xs
-            yield x, u, z, p, list(controller_data._asdict().keys()), list(
-                controller_data._asdict().values()
-            ), list(planner_data._asdict().keys()), list(planner_data._asdict().values())
+
+            yield _SimulationStepData(
+                state=x,
+                control=u,
+                estimate=z,
+                covariance=c,
+                controller_keys=list(controller_data._asdict().keys()),
+                controller_values=list(controller_data._asdict().values()),
+                planner_keys=list(planner_data._asdict().keys()),
+                planner_values=list(planner_data._asdict().values()),
+            )
 
             if controller_data.complete:
                 if verbose:
@@ -345,9 +367,12 @@ def simulator(
 
             if controller_data.error:
                 if verbose:
-                    print(
-                        f"CONTROLLER ERROR: {controller_data.error_data if controller_data.error_data is not None else 'Unknown error'}"
+                    err_msg = (
+                        controller_data.error_data
+                        if controller_data.error_data is not None
+                        else "Unknown error"
                     )
+                    print(f"CONTROLLER ERROR: {err_msg}")
                 break
 
             if planner_data.error:
@@ -393,23 +418,28 @@ def execute(
         dynamics (DynamicsCallable): True system dynamics function.
         integrator (IntegratorCallable): Numerical integrator.
         planner (Optional[ControllerCallable], optional): Trajectory planner. Defaults to None.
-        nominal_controller (Optional[ControllerCallable], optional): Nominal controller. Defaults to None.
-        controller (Optional[ControllerCallable], optional): Safety controller (e.g., CBF). Defaults to None.
+        nominal_controller (Optional[ControllerCallable], optional): Nominal controller.
+        Defaults to None.
+        controller (Optional[ControllerCallable], optional): Safety controller (e.g., CBF).
+        Defaults to None.
         sensor (Optional[SensorCallable], optional): Sensor model. Defaults to None.
         estimator (Optional[EstimatorCallable], optional): State estimator. Defaults to None.
-        perturbation (Optional[PerturbationCallable], optional): Disturbance model. Defaults to None.
+        perturbation (Optional[PerturbationCallable], optional): Disturbance model.
+        Defaults to None.
         sigma (Optional[Array], optional): Noise covariance/parameters. Defaults to None.
         key (Optional[Array], optional): Random key for noise. Defaults to None.
         filepath (Optional[str], optional): Path to save log file. Defaults to None.
         verbose (Optional[bool], optional): Print progress/status. Defaults to True.
         controller_data (ControllerData, optional): Initial controller data. Defaults to None.
         planner_data (PlannerData, optional): Initial planner data. Defaults to None.
-        initial_covariance (Optional[Covariance], optional): Initial estimator covariance. Defaults to None.
+        initial_covariance (Optional[Covariance], optional): Initial estimator covariance.
+        Defaults to None.
         stl_trajectory_cost (Optional[Any], optional): STL cost object. Defaults to None.
         use_jit (bool, optional): If True, uses `jax.jit` for faster execution.
             JIT compilation requires that all callables are JIT-compatible. Defaults to False.
 
-    Returns:
+    Returns
+    -------
         Tuple containing:
             - states (Array): Trajectory of states (num_steps x state_dim).
             - controls (Array): Trajectory of control inputs.
@@ -420,7 +450,6 @@ def execute(
             - planner_keys (List[str]): Names of logged planner data fields.
             - planner_values (List[Array]): Logged planner data values.
     """
-
     # Handle defaults
     _sensor: SensorCallable
     if sensor is None:
@@ -569,7 +598,7 @@ def execute(
             p_val_t = [getattr(p_data_t, k) for k in p_keys]
             p_values.append(p_val_t)
 
-        simulation_data_list = []
+        simulation_data_list: List[_SimulationStepData] = []
         for t in range(num_steps):
             # We need to handle potential shape mismatches if JIT returns different shapes
             # Assuming xs, us, zs, cs are shaped (num_steps, ...)
@@ -582,10 +611,19 @@ def execute(
             c_val_t = c_values[t]
             p_val_t = p_values[t]
 
-            item = (x_t, u_t, z_t, c_t, c_keys, c_val_t, p_keys, p_val_t)
+            item = _SimulationStepData(
+                state=x_t,
+                control=u_t,
+                estimate=z_t,
+                covariance=c_t,
+                controller_keys=c_keys,
+                controller_values=c_val_t,
+                planner_keys=p_keys,
+                planner_values=p_val_t,
+            )
             simulation_data_list.append(item)
 
-        simulation_data = tuple(simulation_data_list)
+        simulation_data: Tuple[_SimulationStepData, ...] = tuple(simulation_data_list)
 
         if filepath is not None and verbose:
             # Now we can support logging in JIT!
@@ -612,7 +650,7 @@ def execute(
     )
 
     # Run simulation from initial state
-    simulation_data = tuple(
+    simulation_data: Tuple[_SimulationStepData, ...] = tuple(  # type: ignore
         simulate_iter(
             x0,
             controller_data,
@@ -624,36 +662,81 @@ def execute(
     return extract_and_log_data(filepath, simulation_data)
 
 
-#! Finish this function
-def extract_and_log_data(filepath: Optional[str], data):
-    """_summary_"""
+def extract_and_log_data(
+    filepath: Optional[str], data: Tuple[_SimulationStepData, ...]
+) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
+    """Extracts simulation data and optionally logs it to a file.
 
+    Args:
+        filepath (Optional[str]): Path to save the logged data. If None, no data is logged.
+        data (Tuple[_SimulationStepData, ...]): A tuple of _SimulationStepData objects,
+                                                  each representing a single simulation step.
+
+    Returns
+    -------
+        Tuple containing:
+            - states (Array): Trajectory of states (num_steps x state_dim).
+            - controls (Array): Trajectory of control inputs.
+            - estimates (Array): Trajectory of state estimates.
+            - covariances (Array): Trajectory of covariances.
+            - controller_keys (List[str]): Names of logged controller data fields.
+            - controller_values (List[Array]): Logged controller data values.
+            - planner_keys (List[str]): Names of logged planner data fields.
+            - planner_values (List[Array]): Logged planner data values.
+    """
     if len(data) > 0:
-        controller_data_keys = data[0][4]
-        controller_data_values = [sim_data[5] for sim_data in data]
+        first_step_data = data[0]
+        controller_data_keys: List[str] = first_step_data.controller_keys
+        planner_data_keys: List[str] = first_step_data.planner_keys
+
+        # Extract controller and planner data values over time
+        all_controller_values = [step.controller_values for step in data]
+        all_planner_values = [step.planner_values for step in data]
 
         if filepath is not None:
-            # Reconstruct log data
+            # Reconstruct log data for logging
             log_data = []
-            for i, values in enumerate(controller_data_values):
-                # values is a list of values corresponding to keys
-                entry = dict(zip(controller_data_keys, values))
-                log_data.append(entry)
+            for step_idx, step_data in enumerate(data):
+                step_log_entry = {
+                    "state": step_data.state,
+                    "control": step_data.control,
+                    "estimate": step_data.estimate,
+                    "covariance": step_data.covariance,
+                }
+                # Add controller data
+                for i, key in enumerate(controller_data_keys):
+                    step_log_entry[f"controller_{key}"] = all_controller_values[step_idx][i]
+                # Add planner data
+                for i, key in enumerate(planner_data_keys):
+                    step_log_entry[f"planner_{key}"] = all_planner_values[step_idx][i]
+                log_data.append(step_log_entry)
 
             write_log(filepath, log_data)
 
-    #! Somehow make these more modular?
-    states = jnp.array([sim_data[0] for sim_data in data])
-    controls = jnp.array([sim_data[1] for sim_data in data])
-    estimates = jnp.array([sim_data[2] for sim_data in data])
-    covariances = jnp.array([sim_data[3] for sim_data in data])
+    # Use descriptive unpacking for simulation data extraction
+    states = jnp.array([step.state for step in data])
+    controls = jnp.array([step.control for step in data])
+    estimates = jnp.array([step.estimate for step in data])
+    covariances = jnp.array([step.covariance for step in data])
 
     if len(data) > 0:
-        controller_data_keys = data[0][4]
-        controller_data_values = [sim_data[5] for sim_data in data]
-        planner_data_keys = data[0][6]
-        planner_data_values = [sim_data[7] for sim_data in data]
+        # These keys should be consistent across all steps
+        controller_data_keys = data[0].controller_keys
+        planner_data_keys = data[0].planner_keys
+
+        # Transpose the list of lists to get values for each key across all steps
+        # This will result in a list where each element corresponds to a key,
+        # and contains an array of that key's values across all simulation steps.
+        controller_data_values = [
+            jnp.array([step.controller_values[i] for step in data])
+            for i in range(len(controller_data_keys))
+        ]
+        planner_data_values = [
+            jnp.array([step.planner_values[i] for step in data])
+            for i in range(len(planner_data_keys))
+        ]
     else:
+        # If no data, return empty lists for keys and values
         controller_data_keys = []
         controller_data_values = []
         planner_data_keys = []
@@ -668,4 +751,4 @@ def extract_and_log_data(filepath: Optional[str], data):
         controller_data_values,
         planner_data_keys,
         planner_data_values,
-    )  # type: ignore[return-value]
+    )

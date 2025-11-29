@@ -60,7 +60,8 @@ def cbf_clf_qp_generator(
         generate_compute_cbf_constraints (GenerateComputeCertificateConstraintCallable)
         generate_compute_clf_constraints (GenerateComputeCertificateConstraintCallable)
 
-    Returns:
+    Returns
+    -------
         (CbfClfQpGenerator): function for generating CBF-CLF-QP control law
     """
 
@@ -85,7 +86,8 @@ def cbf_clf_qp_generator(
             p_mat (Optional[Union[Array, None]] = None): objective function matrix (quadratic term)
             **kwargs (Dict[str, Any]): keyword arguments, e.g., RiskAwareParams for RA-CBF-CLF-QP
 
-        Returns:
+        Returns
+        -------
             ControllerCallable: function for computing control input based on CBF-CLF-QP
         """
         complete = False

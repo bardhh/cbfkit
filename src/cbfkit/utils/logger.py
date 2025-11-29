@@ -1,6 +1,4 @@
-"""
-logger
-================
+"""Logger module.
 
 This module provides functions required for logging simulation data.
 
@@ -21,7 +19,6 @@ Examples
 >>> fpath = "point.csv"
 >>> logger.write_log(fpath, data)
 >>> x = logger.extract_log("x", data)
-
 """
 
 import os
@@ -39,9 +36,9 @@ def write_log(filepath: str, data: List[LogEntry]) -> None:
     filepath (str): path to save file
     data (List[LogEntry]): list of log entries
 
-    Returns:
+    Returns
+    -------
     None
-
     """
     folder_path = os.path.dirname(filepath)
     if folder_path and not os.path.exists(folder_path):
@@ -63,9 +60,9 @@ def extract_log(key: str, data: List[LogEntry]) -> List[Any]:
     key (str): key to the log
     data (List[LogEntry]): list of log entries
 
-    Returns:
+    Returns
+    -------
     key_data (list): data from log corresponding to key
-
     """
     return [entry[key] for entry in data]
 
@@ -80,8 +77,8 @@ def print_progress(
     fill: str = "█",
     printEnd: str = "\r",
 ) -> None:
-    """
-    Call in a loop to create terminal progress bar
+    r"""Call in a loop to create terminal progress bar.
+
     @params:
         iteration   - Required  : current iteration (Int)
         total       - Required  : total iterations (Int)

@@ -10,7 +10,7 @@ SCRIPTS_TO_TEST = [
     "examples/unicycle/reach_goal/mppi_cbf_control.py",
     "examples/unicycle/reach_goal/stochastic_cbf_control.py",
     "examples/unicycle/reach_goal/vanilla_cbf_control.py",
-    # "examples/unicycle/reach_goal/risk_aware_cbf_control.py", # Currently disabled, needs visualization fix
+    # "examples/unicycle/reach_goal/risk_aware_cbf_control.py",  # Disabled: needs visualization fix
     "tutorials/unicycle_reach_avoid.py",
     "tutorials/single_integrator_dynamic_obstacles.py",
     # "tutorials/mppi_stl_reach_avoid.py", # Requires complex setup or long run?
@@ -23,10 +23,7 @@ SCRIPTS_TO_TEST = [
 
 @pytest.mark.parametrize("script_path", SCRIPTS_TO_TEST)
 def test_example_script_execution(script_path):
-    """
-    Runs the specified example script as a subprocess and asserts it exits with code 0.
-    """
-
+    """Runs the specified example script as a subprocess and asserts it exits with code 0."""
     # Check if file exists
     if not os.path.exists(script_path):
         pytest.fail(f"Script not found: {script_path}")

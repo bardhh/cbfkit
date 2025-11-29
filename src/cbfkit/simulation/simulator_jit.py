@@ -38,14 +38,14 @@ def simulator_jit(
     initial_planner_data: PlannerData,
     initial_covariance: Optional[Covariance] = None,
 ) -> Tuple[jax.Array, jax.Array, jax.Array, jax.Array, ControllerData, PlannerData]:
-    """
-    JIT-compiled simulation loop using jax.lax.scan.
+    """JIT-compiled simulation loop using jax.lax.scan.
 
     Requires:
     - planner_data and controller_data must be initialized with JAX-compatible arrays
       (no None) for any fields that will be used/updated.
 
-    Returns:
+    Returns
+    -------
         xs, us, zs, cs, c_datas (stacked), p_datas (stacked)
     """
 

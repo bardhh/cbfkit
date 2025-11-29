@@ -65,7 +65,8 @@ def a_s() -> Callable[[Array], Array]:
     Args:
         None
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: AS Lyapunov conditions
     """
     return lambda V: jnp.array(0.0)

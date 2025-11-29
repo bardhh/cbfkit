@@ -38,11 +38,10 @@ def ct_ekf_dtmeas(
         h (Callable): measurement model
         dhdx (Callable): linearized measurement model
 
-    Returns:
+    Returns
+    -------
         step_ekf (Callable): function handle to compute the next EKF observer state
-
     """
-
     predict = predict_ct_dtmeas(Q, dynamics, dfdx, dt)
     update = update_dtmeas(R, h, dhdx)
 
@@ -53,8 +52,8 @@ def ct_ekf_dtmeas(
         u: Optional[Array] = None,
         P: Optional[Array] = None,
     ) -> Tuple[Array, Array]:
-        """Continuous-time implementation of Extended Kalman Filter (EKF) with
-        discrete-time measurements.
+        """Continuous-time implementation of Extended Kalman Filter (EKF) with discrete-time
+        measurements.
 
         Arguments:
             t (float): time (in sec)
@@ -63,10 +62,10 @@ def ct_ekf_dtmeas(
             u (Array or None): control input
             P (Array or None): Kalman covariance matrix
 
-        Returns:
+        Returns
+        -------
             z_new (Array): updated observer state
             P_new (Array): updated Kalman covariance matrix
-
         """
         if z is None or u is None or P is None:
             return initialize(y, R)
@@ -90,10 +89,10 @@ def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
         R (Array): measurement noise covariance matrix (proxy for initial covariance)
 
 
-    Returns:
+    Returns
+    -------
         z0 (Array): initial estimate of state
         P0 (Array): initial covariance of state estimate
-
     """
     return y, R
 
@@ -101,7 +100,8 @@ def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
 def predict_ct_dtmeas(
     Q: Array, dynamics: DynamicsCallable, dfdx: Callable, dt: float
 ) -> Callable[[Time, Array, Array, Array], Tuple[Array, Array]]:
-    """Function defining the prediction step for the continuous-time EKF with discrete-time measurements.
+    """Function defining the prediction step for the continuous-time EKF with discrete-time
+    measurements.
 
     Arguments:
         Q (Array): positive definite process noise covariance
@@ -109,13 +109,14 @@ def predict_ct_dtmeas(
         dfdx (Callable): linearized dynamics model
         dt (float): timestep (sec)
 
-    Returns:
+    Returns
+    -------
         predict (Callable): function handle to compute EKF state and covariance matrix based on system model
-
     """
 
     def predict(t: Time, z: Array, u: Array, P: Array) -> Tuple[Array, Array]:
-        """Implementation of prediction step for the continuous-time EKF with discrete-time measurements.
+        """Implementation of prediction step for the continuous-time EKF with discrete-time
+        measurements.
 
         Arguments:
             t (float): time (sec)
@@ -123,10 +124,10 @@ def predict_ct_dtmeas(
             u (Array): control input
             P (Array): Kalman covariance matrix
 
-        Returns:
+        Returns
+        -------
             xk: predicted observer state
             Pk: predicted covariance matrix
-
         """
         # Compute xdot from system dynamics
         f, g = dynamics(z)
@@ -156,9 +157,9 @@ def update_dtmeas(
         dhdx (Callable): linearized measurement model
 
 
-    Returns:
+    Returns
+    -------
         update (Callable): function handle to compute the updated EKF state and covariance matrix
-
     """
 
     def update(z: Array, y: Array, P: Array) -> Tuple[Array, Array]:
@@ -169,10 +170,10 @@ def update_dtmeas(
             y (Array): measurement
             P (Array): predicted Kalman covariance matrix
 
-        Returns:
+        Returns
+        -------
             x_new (Array): updated observer state
             P_new (Array): updated Kalman covariance matrix
-
         """
         H = dhdx(z)
         K = jnp.matmul(jnp.matmul(P, H.T), jnp.linalg.inv(jnp.matmul(jnp.matmul(H, P), H.T) + R))

@@ -15,13 +15,14 @@ from cbfkit.utils.user_types import DynamicsCallable
 def generate_augmented_dynamics(
     list_of_dynamics: List[DynamicsCallable],
 ) -> Callable[[Array], Tuple[Array, Array]]:
-    """Given a list of dynamics functions, generates a function to compute the augmented
-    system dynamics (f and g).
+    """Given a list of dynamics functions, generates a function to compute the augmented system
+    dynamics (f and g).
 
     Args:
         list_of_dynamics (List[DynamicsCallable]): each entry is a dynamics function returning f(x), g(x) given x
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: new dynamics function
     """
 
@@ -32,7 +33,8 @@ def generate_augmented_dynamics(
         Args:
             z (Array): augmented state vector
 
-        Returns:
+        Returns
+        -------
             Array: _description_
         """
         # first set of dynamics
@@ -58,9 +60,9 @@ def generate_t_dynamics(n_controls: int) -> Callable[[Array], Tuple[Array, Array
         Args:
             _z (Array): augmented state vector (unused)
 
-        Returns:
+        Returns
+        -------
             Tuple[Array, Array]: f and g for time dynamics (i.e., [1.0] and n_controls * [0])
-
         """
         return jnp.array([1.0]), jnp.zeros((1, n_controls))
 
@@ -70,8 +72,8 @@ def generate_t_dynamics(n_controls: int) -> Callable[[Array], Tuple[Array, Array
 def generate_w_dynamics(
     n_states: int, n_weights: int, n_controls: int
 ) -> Callable[[Array], Tuple[Array, Array]]:
-    """Generates adaptation weight dynamics for 2nd order system (i.e., this is just the wdot
-    not the w2dot terms).
+    """Generates adaptation weight dynamics for 2nd order system (i.e., this is just the wdot not
+    the w2dot terms).
 
     Args:
         n_states (int): number of states
@@ -79,8 +81,8 @@ def generate_w_dynamics(
         n_controls (int): number of controls
 
     Returns
+    -------
         Callable[[Array], Tuple[Array, Array]]: function to compute f(z) and g(z) control-affine dynamics
-
     """
 
     def w_dynamics(z: Array) -> Tuple[Array, Array]:
@@ -89,9 +91,9 @@ def generate_w_dynamics(
         Args:
             z (Array): augmented state vector
 
-        Returns:
+        Returns
+        -------
             Tuple[Array, Array]: f(z) and g(z) control-affine dynamics
-
         """
         return (
             z[n_states + n_weights : n_states + 2 * n_weights],

@@ -1,5 +1,5 @@
-"""
-Test Module for cbfkit.planners.waypoint
+"""Test Module for cbfkit.planners.waypoint.
+
 =========================
 
 This module contains unit tests for waypoint planners.
@@ -30,7 +30,8 @@ class TestWaypointPlanner(unittest.TestCase):
         # t, x, u_nom (not used), key, data
         t = 0.0
         x = jnp.zeros(3)
-        # PlannerCallable = Callable[[float, State, Optional[Control], Key, PlannerData], PlannerCallableReturns]
+        # PlannerCallable = Callable[[float, State, Optional[Control], Key, PlannerData],
+        #                             PlannerCallableReturns]
 
         # The waypoint_generator defines:
         # def process(t: float, x: State, u_nom: Control, key: Key, data: list)
@@ -41,7 +42,8 @@ class TestWaypointPlanner(unittest.TestCase):
 
         u_result, data_result = planner(t, x, None, KEY, PlannerData())
 
-        # Verify u_result is usually a zero array or similar, let's check implementation returns u_out = jnp.zeros(x.shape)
+        # Verify u_result is usually a zero array or similar, let's check implementation
+        # returns u_out = jnp.zeros(x.shape)
         # The implementation returns u_out, new_planner_data
         # u_out is jnp.zeros(x.shape)
         self.assertTrue(jnp.allclose(u_result, jnp.zeros_like(x)))

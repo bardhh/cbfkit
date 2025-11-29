@@ -69,7 +69,8 @@ def right_hand_side(
         eta (float): maximum value of dh/dx * sigma(x) in constraint set, i.e., sup_{x in S}||dh/dx * sigma(x)||
         time_period (float): length of time interval of system operation (in sec)
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: Risk-Aware Path Integral CBF barrier condition
     """
     assert 0 < rho < 1

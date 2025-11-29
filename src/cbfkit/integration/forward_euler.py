@@ -33,18 +33,17 @@ from jax import Array, jit
 
 @jit
 def forward_euler(x: Array, x_dot: Array, dt: float) -> Array:
-    """Performs numerical integration on current state (x) and current state
-    derivative (x_dot) over time interval of length dt according to Forward-Euler
-    discretization.
+    """Performs numerical integration on current state (x) and current state derivative (x_dot) over
+    time interval of length dt according to Forward-Euler discretization.
 
     Arguments:
         x: current state
         x_dot: current state derivative
         dt: timestep length (in sec)
 
-    Returns:
+    Returns
+    -------
         new_state
-
     """
     return x + x_dot * dt
 

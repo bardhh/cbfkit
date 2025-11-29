@@ -1,6 +1,4 @@
-"""
-user_types
-================
+"""User types module.
 
 This module contains a collection of user-defined Python types, for
 the purpose of type-hinting other modules in this repository.
@@ -42,7 +40,6 @@ Examples
 >>> from cbfkit.utils.user_types import *
 >>> import jax.numpy as jnp
 >>> x: State = jnp.array([1, 2, 2.4])
-
 """
 
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Protocol, Tuple, Union
@@ -61,6 +58,8 @@ NumSteps = int
 
 # Data Schemas
 class ControllerData(NamedTuple):
+    """Data structure for controller output."""
+
     error: bool = False
     error_data: Any = None
     complete: bool = False
@@ -71,6 +70,8 @@ class ControllerData(NamedTuple):
 
 
 class PlannerData(NamedTuple):
+    """Data structure for planner output."""
+
     u_traj: Optional[Array] = None
     x_traj: Optional[Array] = None
     prev_robustness: Optional[Union[float, Array]] = None
@@ -149,6 +150,8 @@ EstimatorCallable = Callable[
 
 # Sensor Callables
 class SensorCallable(Protocol):
+    """Protocol for sensor callables."""
+
     def __call__(
         self,
         t: Time,
@@ -157,7 +160,9 @@ class SensorCallable(Protocol):
         sigma: Optional[Array] = None,
         key: Optional[Array] = None,
         **kwargs: Any,
-    ) -> Array: ...
+    ) -> Array:
+        """Call method."""
+        ...
 
 
 # Integrator Callable
@@ -173,6 +178,8 @@ QpSolverCallable = Callable[
 
 # CBF-CLF-QP-Generators
 class GenerateComputeCertificateConstraintCallable(Protocol):
+    """Protocol for generating compute certificate constraint function."""
+
     def __call__(
         self,
         control_limits: Array,
@@ -180,8 +187,14 @@ class GenerateComputeCertificateConstraintCallable(Protocol):
         barriers: CertificateCollection = ([], [], [], [], []),
         lyapunovs: CertificateCollection = ([], [], [], [], []),
         **kwargs: Any,
-    ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]: ...
+    ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
+        """Call method."""
+        ...
+
+
 class CbfClfQpGenerator(Protocol):
+    """Protocol for CBF-CLF-QP generator."""
+
     def __call__(
         self,
         control_limits: Array,
@@ -190,11 +203,15 @@ class CbfClfQpGenerator(Protocol):
         lyapunovs: Optional[CertificateCollection] = ([], [], [], [], []),
         p_mat: Optional[Array] = None,
         **kwargs: Any,
-    ) -> ControllerCallable: ...
+    ) -> ControllerCallable:
+        """Call method."""
+        ...
 
 
 # ComputeCertificateConstraintFunctionGenerator
 class ComputeCertificateConstraintFunctionGenerator(Protocol):
+    """Protocol for computing certificate constraint function generator."""
+
     def __call__(
         self,
         control_limits: Array,
@@ -202,7 +219,9 @@ class ComputeCertificateConstraintFunctionGenerator(Protocol):
         barriers: CertificateCollection = ([], [], [], [], []),
         lyapunovs: CertificateCollection = ([], [], [], [], []),
         **kwargs: Any,
-    ) -> Callable[[Time, Array], Tuple[Array, Array, Dict[str, Any]]]: ...
+    ) -> Callable[[Time, Array], Tuple[Array, Array, Dict[str, Any]]]:
+        """Call method."""
+        ...
 
 
 # Miscellaneous
@@ -227,6 +246,8 @@ GenerateComputeTerminalCostCallable = Callable[
 
 
 class MppiGenerator(Protocol):
+    """Protocol for MPPI generator."""
+
     def __call__(
         self,
         control_limits: Array,
@@ -236,4 +257,6 @@ class MppiGenerator(Protocol):
         trajectory_cost: Optional[TrajectoryCostCallable] = None,
         mppi_args: Any = None,
         **kwargs: Any,
-    ) -> PlannerCallable: ...
+    ) -> PlannerCallable:
+        """Call method."""
+        ...

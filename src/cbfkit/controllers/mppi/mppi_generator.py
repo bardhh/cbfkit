@@ -65,7 +65,8 @@ def mppi_generator() -> MppiGenerator:
 
     Args:
 
-    Returns:
+    Returns
+    -------
         (MppiGenerator): function for generating MPPI control law
     """
 
@@ -88,7 +89,8 @@ def mppi_generator() -> MppiGenerator:
 
             **kwargs (Dict[str, Any]): keyword argumentsEEE
 
-        Returns:
+        Returns
+        -------
             PlannerCallable: function for computing control input based on MPPI
         """
         complete = False
@@ -120,7 +122,8 @@ def mppi_generator() -> MppiGenerator:
                 t (float): time (in sec)
                 x (State): state vector
 
-            Returns:
+            Returns
+            -------
                 PlannerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
             """
             t_float = cast(float, t)
@@ -137,7 +140,8 @@ def mppi_generator() -> MppiGenerator:
                 x (State): state vector
                 u (Array): previous control input trajectory
 
-            Returns:
+            Returns
+            -------
                 PlannerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
             """
             nonlocal complete

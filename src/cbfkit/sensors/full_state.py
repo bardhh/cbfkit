@@ -20,9 +20,9 @@ def perfect(
         t (float): time (sec)
         x (Array): state vector (ground truth)
 
-    Returns:
+    Returns
+    -------
         x (Array): state vector
-
     """
     return x
 
@@ -34,17 +34,16 @@ def unbiased_gaussian_noise(
     key: Optional[Key] = None,
     **kwargs: Any,
 ) -> Array:
-    """Senses the state subject to additive, unbiased (zero-mean), Gaussian
-    noise.
+    """Senses the state subject to additive, unbiased (zero-mean), Gaussian noise.
 
     Args:
         t (float): time (sec)
         x (Array): state vector (ground truth)
         sigma (Array): measurement model covariance matrix
 
-    Returns:
+    Returns
+    -------
         y (Array): measurement of full state vector
-
     """
     if sigma is None:
         sigma = 0.1 * jnp.eye((len(x)))

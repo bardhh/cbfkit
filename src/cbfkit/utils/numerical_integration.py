@@ -1,6 +1,4 @@
-"""
-numerical_integration
-================
+"""Numerical integration module.
 
 This module contains algorithms for numerically integrating ODEs forward in time.
 
@@ -25,7 +23,6 @@ Examples
 >>> dt = 1e-2
 >>> x_new = forward_euler(x, x_dot, dt)
 >>> x_new = solve_ivp(x, x_dot, dt)
-
 """
 
 import jax.numpy as jnp
@@ -35,36 +32,35 @@ from scipy.integrate import solve_ivp as solve
 
 @jit
 def forward_euler(x: Array, x_dot: Array, dt: float) -> Array:
-    """Performs numerical integration on current state (x) and current state
-    derivative (x_dot) over time interval of length dt according to Forward-Euler
-    discretization.
+    """Performs numerical integration on current state (x) and current state derivative (x_dot).
+
+    Uses Forward-Euler discretization over time interval of length dt.
 
     Arguments:
         x: current state
         x_dot: current state derivative
         dt: timestep length (in sec)
 
-    Returns:
+    Returns
+    -------
         new_state
-
     """
     return x + x_dot * dt
 
 
 def solve_ivp(x: Array, x_dot: Array, dt: float):
-    """Performs numerical integration on current state (x) and current state
-    derivative (x_dot) over time interval of length dt according to
-    scipy.integrate.solve_ivp
+    """Performs numerical integration on current state (x) and current state derivative (x_dot).
+
+    Uses scipy.integrate.solve_ivp over time interval of length dt.
 
     Arguments:
         x: current state
         x_dot: current state derivative
         dt: timestep length (in sec)
 
-    Returns:
+    Returns
+    -------
         new_state
-
     """
-
     sol = solve(x_dot, (0, dt), x, t_eval=jnp.linspace(0, dt, 100))
     return jnp.array(sol.y)

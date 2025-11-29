@@ -15,13 +15,14 @@ def clf(goal: Array, radius: float) -> Callable[[Array], Array]:
         goal (Array): [x, y] location of goal
         radius (float): goal radius
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: callable clf
     """
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """ """
+        """"""
         x_e, y_e, _theta_e, _t = state_and_time
         x_o, y_o, _ = goal
 
@@ -37,14 +38,15 @@ def clf_grad(goal: Array, radius: float) -> Callable[[Array], Array]:
         goal (Array): [x, y] location of goal
         radius (float): goal radius
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: callable clf
     """
     jacobian = jacfwd(clf(goal, radius))
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """ """
+        """"""
         return jacobian(state_and_time)
 
     return func
@@ -57,14 +59,15 @@ def clf_hess(goal: Array, radius: float) -> Callable[[Array], Array]:
         goal (Array): [x, y] location of goal
         radius (float): goal radius
 
-    Returns:
+    Returns
+    -------
         Callable[[Array], Array]: callable clf
     """
     hessian = jacrev(jacfwd(clf(goal, radius)))
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """ """
+        """"""
         return hessian(state_and_time)
 
     return func

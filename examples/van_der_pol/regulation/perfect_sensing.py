@@ -62,7 +62,8 @@ def execute(
     Args:
         int (ii): _description_
 
-    Returns:
+    Returns
+    -------
         List[Array]: _description_
     """
     x, u, z, p, c_keys, c_values, p_keys, p_values = sim.execute(
@@ -81,9 +82,16 @@ def execute(
     return x, u, z, p, c_keys, c_values, p_keys, p_values
 
 
-states, controls, estimates, covariances, data_keys, data_values, planner_keys, planner_values = (
-    execute()
-)
+(
+    states,
+    controls,
+    estimates,
+    covariances,
+    data_keys,
+    data_values,
+    planner_keys,
+    planner_values,
+) = execute()
 
 animate(
     states=states,

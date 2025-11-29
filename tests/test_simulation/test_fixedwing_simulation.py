@@ -62,10 +62,12 @@ DFDX = jacfwd(DYNAMICS)
 
 
 def H(x):
+    """Identity measurement function."""
     return x
 
 
 def DHDX(_x):
+    """Jacobian of identity measurement function."""
     return jnp.eye(N)
 
 
@@ -81,13 +83,14 @@ ESTIMATOR = ct_ekf_dtmeas(
 
 
 def execute(controller) -> Tuple[bool, int, Array]:
-    """_summary_
+    """Execute simulation.
 
     Args:
-        int (ii): _description_
+        controller (ControllerCallable): Controller to use.
 
-    Returns:
-        List[Array]: _description_
+    Returns
+    -------
+        Tuple[bool, int, Array]: Success flag, number of iterations, and final state.
     """
     x, _u, _z, _p, dkeys, dvalues, _planner_data, _planner_data_keys = sim.execute(
         x0=INITIAL_STATE,
@@ -116,10 +119,8 @@ def execute(controller) -> Tuple[bool, int, Array]:
 
 
 class TestFixedWingSimulation(unittest.TestCase):
-    """Takes care of unit tests intended to simulate versions of the
-    fixed-wing UAV reach drop point case study.
-
-    """
+    """Takes care of unit tests intended to simulate versions of the fixed-wing UAV reach drop point
+    case study."""
 
     def test_fixed_wing_risk_aware_fxt_clf_controller(self):
         """Tests the fixed-wing UAV simulation with a RA-FxT-CLF controller."""

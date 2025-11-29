@@ -76,8 +76,12 @@ mppi_args = {
 ##################################
 # Define STL constraint and trajectory cost (based on robustness metric)
 # The current implementation requires the trajectory_cost function to be defined two times
-# 1. stl_complete_trajectory_cost: computes STL robustness metric (for each constraint) on the complete state trajectory history maintained by the simulator. This function is used by the simulator.py
-# 2. stl_trajectory_cost: this function takes as input past STL robustness and a future predicted state and input trajectory to compute STL robustness (for all constraints combined) of concataneted past + future trajectory. This function is used by MPPI
+# 1. stl_complete_trajectory_cost: computes STL robustness metric (for each constraint)
+#    on the complete state trajectory history maintained by the simulator.
+#    This function is used by the simulator.py
+# 2. stl_trajectory_cost: this function takes as input past STL robustness and a future predicted
+#    state and input trajectory to compute STL robustness (for all constraints combined)
+#    of concataneted past + future trajectory. This function is used by MPPI
 ### TODO: make this more efficient by passing the same function to simulator.py and MPPi codes
 
 
@@ -85,8 +89,8 @@ mppi_args = {
 def stl_constraints(state_array, input_array):
     # low cost
     # but stl needs high reward
-    """
-    Returns a vector of constraint values g(x) such that the constraint is g(x)>=0
+    """Returns a vector of constraint values g(x) such that the constraint is g(x)>=0.
+
     Args:
         state: n X N
         input: m x N
@@ -120,6 +124,7 @@ def stl_constraints(state_array, input_array):
 
 @jit
 def stl_complete_trajectory_cost(dt: float, state_array: Array) -> Array:
+    """Compute STL robustness for the complete trajectory."""
     robustness = stl_constraints(state_array, None)
     time_stamps = jnp.linspace(0, state_array.shape[1] * dt, state_array.shape[1])
     h1 = jax_global(0, jnp.inf, -robustness[0, :], time_stamps)  # always satisfy this constraint
@@ -140,6 +145,7 @@ def stl_complete_trajectory_cost(dt: float, state_array: Array) -> Array:
 def stl_trajectory_cost(
     time: float, state_array: Array, input_array: Array, prev_robustness
 ) -> Array:
+    """Compute STL robustness for a predicted trajectory."""
     robustness = stl_constraints(state_array, input_array)
 
     time_stamps = jnp.linspace(
@@ -176,6 +182,7 @@ def stl_trajectory_cost(
 @jit
 def stage_cost(state_and_time: Array, action: Array) -> Array:
     """Function to be evaluated.
+
     Args: state_and_time (Array): concatenated state vector and time
     Returns: Array: cbf value
     """
@@ -188,6 +195,7 @@ def stage_cost(state_and_time: Array, action: Array) -> Array:
 @jit
 def terminal_cost(state_and_time: Array, action: Array) -> Array:
     """Function to be evaluated.
+
     Args: state_and_time (Array): concatenated state vector and time
     Returns: Array: cbf value
     """
