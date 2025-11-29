@@ -71,14 +71,9 @@ def ct_ekf_dtmeas(
         if z is None or u is None or P is None:
             return initialize(y, R)
 
-        # Cast t to float
-        t_float = (
-            float(t)
-            if isinstance(t, (float, int))
-            else float(cast(Array, t)[0]) if t.shape == (1,) else float(cast(Array, t))
-        )
-
-        z_predicted, P_predicted = predict(t_float, z, u, P)
+        # The 't' passed to predict needs to be a JAX-compatible type.
+        # Since 't' itself is already Time (Union[float, Array]), we pass it directly.
+        z_predicted, P_predicted = predict(t, z, u, P)
         z_new, P_new = update(z_predicted, y, P_predicted)
 
         return z_new, P_new
@@ -105,7 +100,7 @@ def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
 
 def predict_ct_dtmeas(
     Q: Array, dynamics: DynamicsCallable, dfdx: Callable, dt: float
-) -> Callable[[float, Array, Array, Array], Tuple[Array, Array]]:
+) -> Callable[[Time, Array, Array, Array], Tuple[Array, Array]]:
     """Function defining the prediction step for the continuous-time EKF with discrete-time measurements.
 
     Arguments:
@@ -119,7 +114,7 @@ def predict_ct_dtmeas(
 
     """
 
-    def predict(t: float, z: Array, u: Array, P: Array) -> Tuple[Array, Array]:
+    def predict(t: Time, z: Array, u: Array, P: Array) -> Tuple[Array, Array]:
         """Implementation of prediction step for the continuous-time EKF with discrete-time measurements.
 
         Arguments:
