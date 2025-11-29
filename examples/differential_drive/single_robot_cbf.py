@@ -52,8 +52,11 @@ def create_robot_with_obstacles():
     # Define obstacles (following past_proj format)
     obstacles = [
         (2.0, 1.0, 0.0),  # Obstacle 1: (x, y, z)
-        (4.5, 0.5, 0.0),  # Obstacle 2: (x, y, z)
+        (3.5, 0.5, 0.0),  # Obstacle 2: (x, y, z)
     ]
+
+    # Convert to JAX array for efficient vectorized computation in cost functions
+    obstacles_jax = jnp.array([obs[:2] for obs in obstacles])
 
     # --- MPPI Controller Setup ---
 
@@ -69,16 +72,18 @@ def create_robot_with_obstacles():
         # Penalize control effort
         cost_act = 0.01 * jnp.dot(action, action)
 
-        # Obstacle avoidance
-        cost_obs = 0.0
-        # Convert obstacles to JAX array for efficiency if list is large,
-        # but unrolling small list is fine for JIT
-        for obs in obstacles:
-            obs_pos = jnp.array(obs[:2])
-            dist = jnp.linalg.norm(state[:2] - obs_pos)
-            # Exponential barrier: rises sharply as dist decreases
-            # cost = weight * exp(-rate * (dist - safety_dist))
-            cost_obs += 1000.0 * jnp.exp(-5.0 * (dist - d_min_obstacle))
+        # Obstacle avoidance (Vectorized)
+        # Calculate diffs: state position - obstacle positions
+        # state[:2] is (2,), obstacles_jax is (N, 2) -> broadcast subtraction
+        diffs = state[:2] - obstacles_jax
+        dists = jnp.linalg.norm(diffs, axis=1)
+
+        # Exponential barrier
+        # We want zero cost when far, high cost when close
+        # dists - d_min_obstacle: positive when safe, negative when unsafe
+        # -5.0 gain makes it decay quickly
+        # jnp.sum sums up costs from all obstacles
+        cost_obs = jnp.sum(1000.0 * jnp.exp(-5.0 * (dists - d_min_obstacle)))
 
         return cost_pos + cost_vel + cost_act + cost_obs
 
@@ -88,11 +93,9 @@ def create_robot_with_obstacles():
         cost_term = 10.0 * jnp.dot(error_pos, error_pos)
 
         # Add obstacle cost to terminal state too
-        cost_obs = 0.0
-        for obs in obstacles:
-            obs_pos = jnp.array(obs[:2])
-            dist = jnp.linalg.norm(state[:2] - obs_pos)
-            cost_obs += 1000.0 * jnp.exp(-5.0 * (dist - d_min_obstacle))
+        diffs = state[:2] - obstacles_jax
+        dists = jnp.linalg.norm(diffs, axis=1)
+        cost_obs = jnp.sum(1000.0 * jnp.exp(-5.0 * (dists - d_min_obstacle)))
 
         return cost_term + cost_obs
 
