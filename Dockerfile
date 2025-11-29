@@ -39,8 +39,19 @@ COPY pyproject.toml ./
 # Set the PYTHONPATH to include /home and project directories
 ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 
-# Install dependencies using uv
-RUN uv pip install .
+# Copy dependency definitions first to leverage caching
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies using uv (system-wide)
+# We use --no-root to install only dependencies defined in pyproject.toml/uv.lock
+# This prevents the command from failing due to missing source code
+RUN uv pip install --system --no-root .
+
+# Copy the project files
+COPY . .
+
+# Install the project itself
+RUN uv pip install --system .
 
 # Source the ROS 2 environment for all users when starting a shell
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
