@@ -12,6 +12,7 @@ class BaseConfig:
     initial_state = jnp.array([x_rand, y_rand, a_rand])
     desired_state = jnp.array([0.0, 0.0, 0])
     Q = 0.5 * jnp.eye(len(initial_state))
+    actuation_limits = jnp.array([10.0, 10.0])  # Default actuation limits
 
 
 class PerfectMeasurementsConfig(BaseConfig):
