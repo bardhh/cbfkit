@@ -40,7 +40,7 @@ drift = [f"{v} * cos({th})", f"{v} * sin({th})", "0", "0"]
 control_mat = ["[0, 0]", "[0, 0]", "[1, 0]", "[0, 1]"]
 barriers = [f"({x} - xo)**2 + ({y} - yo)**2 - r**2", f"l**2 - {v}**2"]
 params["cbf"] = [{"xo: float": 1.0, "yo: float": 1.0, "r: float": 1.0}, {"l: float": 1.0}]
-u_nom = f"jnp.array([kp * ({norm(x ,y)} - {v}), kp * ({compute_theta_d(x, y, th)} - {th})])"
+u_nom = f"array([kp * ({norm(x ,y)} - {v}), kp * ({compute_theta_d(x, y, th)} - {th})])"
 params["controller"] = {"kp: float": 1.0, "xg: float": 1.0, "yg: float": 1.0}
 
 generate_model(

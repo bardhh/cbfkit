@@ -112,6 +112,9 @@ CONTROLLER = vanilla_cbf_clf_qp_controller(
     dynamics_func=DYNAMICS,
     barriers=BARRIERS,
     relaxable_clf=True,
+    relaxable_cbf=True,
+    slack_bound_cbf=1e10,
+    slack_penalty_cbf=1.0,
 )
 
 
@@ -160,7 +163,9 @@ def execute(_ii: int, use_jit: bool = False) -> bool:
     )
 
     if "error" in dkeys:
-        if dvalues[-1][dkeys.index("error")]:
+        err_idx = dkeys.index("error")
+        # Check if any step reported an error
+        if any(step_vals[err_idx] for step_vals in dvalues):
             return False
 
     return True

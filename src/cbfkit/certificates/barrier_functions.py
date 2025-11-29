@@ -29,9 +29,9 @@ def ellipsoidal_barrier(
         Array: The barrier function value.
     """
     # Extract position components
-    pos = state_and_time[jnp.array(system_position_indices)]
-    obs_pos = obstacle_state[jnp.array(obstacle_position_indices)]
-    axes = ellipsoid_axes[jnp.array(ellipsoid_axis_indices)]
+    pos = jnp.take(jnp.array(state_and_time), jnp.array(system_position_indices))
+    obs_pos = jnp.take(jnp.array(obstacle_state), jnp.array(obstacle_position_indices))
+    axes = jnp.take(jnp.array(ellipsoid_axes), jnp.array(ellipsoid_axis_indices))
 
     # Compute barrier value
     # ((x - xo) / a)^2 - 1

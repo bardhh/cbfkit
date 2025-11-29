@@ -74,8 +74,7 @@ def test_infeasible_qp_behavior():
 
     # Expect u=0 because QP failed and fallback is 0
     assert jnp.abs(u_vanilla[0]) < 1e-6, f"Vanilla QP should fail and return 0, got {u_vanilla}"
-    assert data_vanilla["error"]
-
+    assert data_vanilla.error
     # 2. Relaxable Case (Should succeed and return saturated limit 0.5)
     controller_relaxable = vanilla_cbf_clf_qp_controller(
         control_limits=jnp.array([0.5]),
@@ -98,7 +97,7 @@ def test_infeasible_qp_behavior():
     assert (
         jnp.abs(u_relaxable[0] - 0.5) < 1e-3
     ), f"Relaxable QP should return max control 0.5, got {u_relaxable}"
-    assert not data_relaxable["error"]
+    assert not data_relaxable.error
 
 
 if __name__ == "__main__":
