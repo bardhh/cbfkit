@@ -29,16 +29,18 @@ from cbfkit.controllers.cbf_clf.utils.certificate_packager import (
 from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import (
     rectify_relative_degree,
 )
+from cbfkit.controllers.mppi.mppi_generator import mppi_generator
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator
 from cbfkit.sensors import perfect as sensor
+from cbfkit.utils.user_types import PlannerData
 
 
 def create_robot_with_obstacles():
     """Create a single robot with obstacle avoidance using CBFKit framework."""
 
     # Robot parameters (following past_proj structure)
-    control_bound = 100.0
+    control_bound = 5.0  # Increased for MPPI freedom
     d_min_obstacle = 0.8
 
     # Create unicycle dynamics
@@ -58,18 +60,56 @@ def create_robot_with_obstacles():
         (3.5, 0.5, 0.0),  # Obstacle 2: (x, y, z)
     ]
 
-    # Create nominal controller with higher gains for better goal reaching
-    # proportional_controller returns a function with signature (t, state, key, desired_state)
-    nom_controller_func = unicycle.controllers.proportional_controller(
-        dynamics=dynamics,
-        Kp_pos=3.0,  # Higher gain for faster convergence
-        Kp_theta=5.0,
+    # --- MPPI Controller Setup ---
+
+    # Cost functions
+    def stage_cost(state, action):
+        # Penalize distance to goal
+        error_pos = state[:2] - desired_state[:2]
+        cost_pos = 2.0 * jnp.dot(error_pos, error_pos)
+
+        # Penalize high velocity (optional, to keep it smooth)
+        cost_vel = 0.1 * state[2] ** 2
+
+        # Penalize control effort
+        cost_act = 0.01 * jnp.dot(action, action)
+
+        return cost_pos + cost_vel + cost_act
+
+    def terminal_cost(state, action):
+        # Higher penalty for final distance
+        error_pos = state[:2] - desired_state[:2]
+        return 10.0 * jnp.dot(error_pos, error_pos)
+
+    # MPPI parameters
+    prediction_horizon = 50
+    control_dim = 2
+    mppi_args = {
+        "robot_state_dim": 4,
+        "robot_control_dim": control_dim,
+        "prediction_horizon": prediction_horizon,  # 5.0 seconds at dt=0.1
+        "num_samples": 500,
+        "time_step": 0.1,
+        "use_GPU": False,
+        "costs_lambda": 0.1,
+        "cost_perturbation": 0.1,
+    }
+
+    # Create MPPI planner
+    # mppi_generator returns a function factory, which we call to get the planner
+    planner = mppi_generator()(
+        control_limits=jnp.array([control_bound, control_bound]),
+        dynamics_func=dynamics,
+        stage_cost=stage_cost,
+        terminal_cost=terminal_cost,
+        mppi_args=mppi_args,
     )
 
-    # Define the nominal controller for sim.execute
-    # Signature: (t, x, key, planner_data/None) -> (u, data)
-    def nominal_control_law(t, x, key, _):
-        return nom_controller_func(t, x, key, desired_state)
+    # Initialize planner data with zero trajectory
+    # Shape must match what MPPI expects: (horizon, control_dim)
+    init_planner_data = PlannerData(u_traj=jnp.zeros((prediction_horizon, control_dim)))
+
+    # --- CBF Setup ---
 
     # Create barrier functions for each obstacle
     cbf_factory, _, _ = ellipsoidal_barrier_factory(
@@ -88,7 +128,7 @@ def create_robot_with_obstacles():
             state_dim=4,
             form="exponential",
         )(
-            certificate_conditions=zeroing_barriers.linear_class_k(5.0),  # past_proj alpha values
+            certificate_conditions=zeroing_barriers.linear_class_k(5.0),
             obstacle=jnp.array(obs),
             ellipsoid=(d_min_obstacle, d_min_obstacle),
         )
@@ -98,7 +138,6 @@ def create_robot_with_obstacles():
     barrier_package = concatenate_certificates(*barriers)
 
     # Create CBF controller using CBFKit framework
-    # Note: nominal_input is NOT passed here; it is handled by the simulator/stepper
     controller = cbf_controller(
         control_limits=jnp.array([control_bound, control_bound]),
         dynamics_func=dynamics,
@@ -108,7 +147,8 @@ def create_robot_with_obstacles():
     return (
         dynamics,
         controller,
-        nominal_control_law,
+        planner,
+        init_planner_data,
         init_state,
         desired_state,
         obstacles,
@@ -119,14 +159,15 @@ def create_robot_with_obstacles():
 def run_simulation():
     """Run the single robot simulation using CBFKit."""
 
-    print("Single Robot CBF Navigation Demo")
+    print("Single Robot CBF Navigation Demo (MPPI + CBF)")
     print("=" * 35)
 
     # Setup robot and scenario
     (
         dynamics,
         controller,
-        nominal_controller,
+        planner,
+        init_planner_data,
         init_state,
         desired_state,
         obstacles,
@@ -140,7 +181,7 @@ def run_simulation():
     print()
 
     # Simulation parameters
-    tf = 12.0  # More time to reach goal
+    tf = 12.0
     dt = 0.1
 
     print("Running CBFKit simulation...")
@@ -152,8 +193,9 @@ def run_simulation():
         num_steps=int(tf / dt),
         dynamics=dynamics,
         integrator=integrator,
-        nominal_controller=nominal_controller,
-        controller=controller,
+        planner=planner,  # Pass MPPI planner here
+        planner_data=init_planner_data,  # Pass initialized data
+        controller=controller,  # CBF filters the planner's output
         sensor=sensor,
         estimator=estimator,
         filepath="examples/differential_drive/results/single_robot_cbf_results",
