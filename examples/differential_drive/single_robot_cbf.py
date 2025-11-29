@@ -20,16 +20,11 @@ import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import (
-    zeroing_barriers,
-)
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import (
-    concatenate_certificates,
-)
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import (
-    rectify_relative_degree,
-)
+from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
+from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
+from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
 from cbfkit.controllers.mppi.mppi_generator import mppi_generator
+from cbfkit.controllers.mppi.mppi_visualize import initialize_mppi_plots, update_mppi_plot
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator
 from cbfkit.sensors import perfect as sensor
@@ -82,15 +77,15 @@ def create_robot_with_obstacles():
         return 10.0 * jnp.dot(error_pos, error_pos)
 
     # MPPI parameters
-    prediction_horizon = 50
+    prediction_horizon = 100
     control_dim = 2
     mppi_args = {
         "robot_state_dim": 4,
         "robot_control_dim": control_dim,
         "prediction_horizon": prediction_horizon,  # 5.0 seconds at dt=0.1
-        "num_samples": 500,
+        "num_samples": 2000,
         "time_step": 0.1,
-        "use_GPU": False,
+        "use_GPU": True,
         "costs_lambda": 0.1,
         "cost_perturbation": 0.1,
     }
@@ -128,7 +123,7 @@ def create_robot_with_obstacles():
             state_dim=4,
             form="exponential",
         )(
-            certificate_conditions=zeroing_barriers.linear_class_k(5.0),
+            certificate_conditions=zeroing_barriers.linear_class_k(1.0),
             obstacle=jnp.array(obs),
             ellipsoid=(d_min_obstacle, d_min_obstacle),
         )
@@ -200,9 +195,10 @@ def run_simulation():
         estimator=estimator,
         filepath="examples/differential_drive/results/single_robot_cbf_results",
         verbose=True,
+        use_jit=True,
     )
 
-    return x, u, z, p, c_keys, c_values, desired_state, obstacles, d_min_obstacle
+    return x, u, z, p, c_keys, c_values, p_keys, p_values, desired_state, obstacles, d_min_obstacle
 
 
 def plot_results(states, controls, desired_state, obstacles, d_min_obstacle):
@@ -278,7 +274,9 @@ def plot_results(states, controls, desired_state, obstacles, d_min_obstacle):
     plt.close()
 
 
-def create_animation(states, controls, desired_state, obstacles, d_min_obstacle):
+def create_animation(
+    states, controls, desired_state, obstacles, d_min_obstacle, p_keys=None, p_values=None
+):
     """Create animated visualization of the single robot simulation."""
     print("Creating animation...")
 
@@ -299,6 +297,30 @@ def create_animation(states, controls, desired_state, obstacles, d_min_obstacle)
     ax.set_title("Single Robot CBF Navigation Animation", fontsize=14)
     ax.grid(True, alpha=0.3)
     ax.set_aspect("equal")
+
+    # Initialize MPPI plots if data is available
+    mppi_plots = None
+    if p_keys is not None and p_values is not None:
+        if "sampled_x_traj" in p_keys and "x_traj" in p_keys:
+            # Assuming we can get dimensions from the first frame of data
+            # sampled_x_traj shape: (num_steps, samples * state_dim, horizon)
+            idx_sampled = p_keys.index("sampled_x_traj")
+            sampled_data = p_values[idx_sampled]
+
+            if len(sampled_data) > 0:
+                num_samples_dim, horizon = sampled_data[0].shape
+                state_dim = 4  # Known from context
+                num_samples = num_samples_dim // state_dim
+
+                # Limit number of samples plotted to avoid clutter/slowness
+                plot_samples = min(num_samples, 50)
+
+                mppi_plots = initialize_mppi_plots(
+                    ax,
+                    plot_num_samples=plot_samples,
+                    prediction_horizon=horizon,
+                    robot_state_dim=state_dim,
+                )
 
     # Draw static elements
     # Obstacles
@@ -412,6 +434,17 @@ def create_animation(states, controls, desired_state, obstacles, d_min_obstacle)
             control = controls[frame]
             control_text.set_text(f"Acceleration: {control[0]:.2f}\nAngular vel: {control[1]:.2f}")
 
+        # Update MPPI plots
+        if mppi_plots is not None and frame < len(p_values[0]):
+            idx_sampled = p_keys.index("sampled_x_traj")
+            idx_selected = p_keys.index("x_traj")
+
+            sampled_traj = p_values[idx_sampled][frame]
+            selected_traj = p_values[idx_selected][frame]
+
+            # The update_mppi_plot function expects numpy arrays, JAX arrays should be fine
+            update_mppi_plot(mppi_plots, sampled_traj, selected_traj)
+
         # Check obstacle distances for safety warning
         min_obs_dist = float("inf")
         for obs in obstacles:
@@ -426,7 +459,15 @@ def create_animation(states, controls, desired_state, obstacles, d_min_obstacle)
         else:
             robot_circle.set_facecolor("blue")
 
-        return [robot_circle, arrow_ref[0], trail_line, time_text, status_text, control_text]
+        artists = [robot_circle, arrow_ref[0], trail_line, time_text, status_text, control_text]
+
+        # Add MPPI artists if they exist
+        if mppi_plots is not None:
+            for line_list in mppi_plots["sampled_trajectories_handle"]:
+                artists.extend(line_list)
+            artists.extend(mppi_plots["selected_trajectory_handle"])
+
+        return artists
 
     # Create animation
     anim = animation.FuncAnimation(
@@ -523,6 +564,8 @@ def main():
         _,
         c_keys,
         c_values,
+        p_keys,  # planner keys
+        p_values,  # planner values
         desired_state,
         obstacles,
         d_min_obstacle,
@@ -533,7 +576,7 @@ def main():
     plot_results(states, controls, desired_state, obstacles, d_min_obstacle)
 
     # Create animation
-    create_animation(states, controls, desired_state, obstacles, d_min_obstacle)
+    create_animation(states, controls, desired_state, obstacles, d_min_obstacle, p_keys, p_values)
 
     # Analyze performance
     analyze_performance(
