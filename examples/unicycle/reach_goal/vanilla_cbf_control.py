@@ -1,3 +1,9 @@
+import os
+import sys
+
+# Add the project root directory to the python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
