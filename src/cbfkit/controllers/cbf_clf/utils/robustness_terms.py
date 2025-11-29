@@ -23,8 +23,9 @@ Examples
 """
 
 from typing import Callable
-from jax import Array
+
 import jax.numpy as jnp
+from jax import Array
 
 
 def robustness_two_norm(bound: Array) -> Callable[[Array], Array]:
@@ -51,7 +52,7 @@ def robustness_two_norm(bound: Array) -> Callable[[Array], Array]:
     return compute
 
 
-def robustness_sup_norm(bound: Array) -> Array:
+def robustness_sup_norm(bound: Array) -> Callable[[Array], Array]:
     """Compute robustness term (sup-norm) in CBF condition.
 
     Args:

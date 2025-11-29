@@ -34,7 +34,7 @@ Notes
 This file was initially written for a Python 3.11 distribution, for which the
 native typing module contains a TypeAlias object. We had to revert to Python 3.8
 for ROS-noetic, and TypeAlias does not exist in this distribution. Therefore, the
-convention MyType = Type was originally written as MyType: TypeAlias = Type, 
+convention MyType = Type was originally written as MyType: TypeAlias = Type,
 but this has been removed by necessity.
 
 Examples
@@ -45,15 +45,19 @@ Examples
 
 """
 
-from typing import Callable, Tuple, Dict, Any, List, Union, Optional, NamedTuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Protocol, Tuple, Union
+
 from jax import Array, random
 
 # Define types for readability
+Time = Union[float, Array]
 State = Array
 Control = Array
 Estimate = Array
 Covariance = Array
-Key = int
+Key = Array
+NumSteps = int
+
 
 # Data Schemas
 class ControllerData(NamedTuple):
@@ -65,19 +69,21 @@ class ControllerData(NamedTuple):
     u_nom: Optional[Array] = None
     sub_data: Dict[str, Any] = {}
 
+
 class PlannerData(NamedTuple):
     u_traj: Optional[Array] = None
     x_traj: Optional[Array] = None
-    prev_robustness: Optional[float] = None
+    prev_robustness: Optional[Union[float, Array]] = None
     error: bool = False
     xs: Optional[Array] = None
     sampled_x_traj: Optional[Array] = None
 
+
 # Certificate (Barrier, Lyapunov, Barrier-Lyapunov, etc.) Function Callables
-CertificateCallable = Callable[[float, State], Array]
-CertificateJacobianCallable = Callable[[float, State], Array]
-CertificateHessianCallable = Callable[[float, State], Array]
-CertificatePartialCallable = Callable[[float, State], Array]
+CertificateCallable = Callable[[Time, State], Array]
+CertificateJacobianCallable = Callable[[Time, State], Array]
+CertificateHessianCallable = Callable[[Time, State], Array]
+CertificatePartialCallable = Callable[[Time, State], Array]
 CertificateConditionsCallable = Callable[[Array], Array]
 CertificateCollection = Tuple[
     List[CertificateCallable],
@@ -93,6 +99,9 @@ CertificateTuple = Tuple[
     CertificatePartialCallable,
     CertificateConditionsCallable,
 ]
+BarrierTuple = CertificateTuple
+LyapunovTuple = CertificateTuple
+
 
 # Predictive Barrier Function Callable
 PredictiveBarrierCollectionCallable = Callable[
@@ -111,28 +120,49 @@ DynamicsCallableReturns = Tuple[Array, Array]
 DynamicsCallable = Callable[[State], DynamicsCallableReturns]
 
 # Perturbation Callables
-PerturbationCallableReturns = Callable[[random.PRNGKey], Array]
+PerturbationCallableReturns = Callable[[Key], Array]
 PerturbationCallable = Callable[[State, Control, Array, Array], PerturbationCallableReturns]
 
 # Controller Callables
+
 ControllerCallableReturns = Tuple[Array, ControllerData]
-ControllerCallable = Callable[[float, State], ControllerCallableReturns]
+
+ControllerCallable = Callable[
+    [Time, State, Optional[Control], Key, ControllerData], ControllerCallableReturns
+]
+
+NominalControllerCallable = Callable[[Time, State, Key, Optional[State]], ControllerCallableReturns]
+
 
 # Planner Callables
 PlannerCallableReturns = Tuple[Array, PlannerData]
-PlannerCallable = Callable[[float, State], PlannerCallableReturns]
+PlannerCallable = Callable[
+    [Time, State, Optional[Control], Key, PlannerData], PlannerCallableReturns
+]
 
 # Estimator Callables
 EstimatorCallable = Callable[
-    [float, Array, Array, Optional[Union[Array, None]], Optional[Union[Array, None]]],
-    Tuple[Array, Array],
+    [Time, Array, Array, Optional[Array], Optional[Array]],
+    Tuple[State, Covariance],
 ]
 
+
 # Sensor Callables
-SensorCallable = Callable[[float, Array], Array]
+class SensorCallable(Protocol):
+    def __call__(
+        self,
+        t: Time,
+        x: Array,
+        *,
+        sigma: Optional[Array] = None,
+        key: Optional[Array] = None,
+        **kwargs: Any,
+    ) -> Array: ...
+
 
 # Integrator Callable
 IntegratorCallable = Callable[[State, Array, float], State]
+
 
 # QP Solver Callables
 QpSolverCallable = Callable[
@@ -140,33 +170,42 @@ QpSolverCallable = Callable[
     Tuple[Array, Dict[str, Any]],
 ]
 
+
 # CBF-CLF-QP-Generators
-GenerateComputeCertificateConstraintCallable = Callable[
-    [Array, DynamicsCallable, CertificateCollection, CertificateCollection, Dict[str, Any]],
-    Callable[[float, State], Tuple[Array, Array]],
-]
-CbfClfQpGenerator = Callable[
-    [
-        Array,
-        ControllerCallable,
-        DynamicsCallable,
-        CertificateCollection,
-        CertificateCollection,
-        Union[Array, None],
-        Dict[str, Any],
-    ],
-    ControllerCallable,
-]
+class GenerateComputeCertificateConstraintCallable(Protocol):
+    def __call__(
+        self,
+        control_limits: Array,
+        dyn_func: DynamicsCallable,
+        barriers: CertificateCollection = ([], [], [], [], []),
+        lyapunovs: CertificateCollection = ([], [], [], [], []),
+        **kwargs: Any,
+    ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]: ...
+class CbfClfQpGenerator(Protocol):
+    def __call__(
+        self,
+        control_limits: Array,
+        dynamics_func: DynamicsCallable,
+        barriers: Optional[CertificateCollection] = ([], [], [], [], []),
+        lyapunovs: Optional[CertificateCollection] = ([], [], [], [], []),
+        p_mat: Optional[Array] = None,
+        **kwargs: Any,
+    ) -> ControllerCallable: ...
+
 
 # ComputeCertificateConstraintFunctionGenerator
-ComputeCertificateConstraintFunctionGenerator = Callable[
-    [DynamicsCallable, CertificateCollection, Array, Dict[str, Any]],
-    Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]],
-]
+class ComputeCertificateConstraintFunctionGenerator(Protocol):
+    def __call__(
+        self,
+        control_limits: Array,
+        dyn_func: DynamicsCallable,
+        barriers: CertificateCollection = ([], [], [], [], []),
+        lyapunovs: CertificateCollection = ([], [], [], [], []),
+        **kwargs: Any,
+    ) -> Callable[[Time, Array], Tuple[Array, Array, Dict[str, Any]]]: ...
+
 
 # Miscellaneous
-Time = float
-NumSteps = int
 
 # Cost function Callables
 TrajectoryCostCallableReturns = Tuple[Array]
@@ -179,21 +218,22 @@ TerminalCostCallable = Callable[[State, Control], TerminalCostCallableReturns]
 # CBF-CLF-QP-Generators
 GenerateComputeStageCostCallable = Callable[
     [Array, DynamicsCallable, StageCostCallable, TerminalCostCallable, Dict[str, Any]],
-    Callable[[float, State], Tuple[Array, Array]],
+    Callable[[Time, State], Tuple[Array, Array]],
 ]
 GenerateComputeTerminalCostCallable = Callable[
     [Array, DynamicsCallable, StageCostCallable, TerminalCostCallable, Dict[str, Any]],
-    Callable[[float, State], Tuple[Array, Array]],
+    Callable[[Time, State], Tuple[Array, Array]],
 ]
-MppiGenerator = Callable[
-    [
-        Array,
-        ControllerCallable,
-        DynamicsCallable,
-        StageCostCallable,
-        TerminalCostCallable,
-        Union[Array, None],
-        Dict[str, Any],
-    ],
-    ControllerCallable,
-]
+
+
+class MppiGenerator(Protocol):
+    def __call__(
+        self,
+        control_limits: Array,
+        dynamics_func: DynamicsCallable,
+        stage_cost: Optional[StageCostCallable] = None,
+        terminal_cost: Optional[TerminalCostCallable] = None,
+        trajectory_cost: Optional[TrajectoryCostCallable] = None,
+        mppi_args: Any = None,
+        **kwargs: Any,
+    ) -> PlannerCallable: ...

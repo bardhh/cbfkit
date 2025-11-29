@@ -22,7 +22,7 @@ Examples
 >>> from cbfkit.certificates import concatenate_certificates
 >>> from cbfkit.certificates.conditions.barrier_conditions.stochastic_barriers import linear_class_k
 >>> from cbfkit.controllers.cbf_clf import robust_cbf_clf_qp_controller
->>> 
+>>>
 >>> nominal_controller = unicycle.controllers.proportional_controller(k=1.0)
 >>> actuation_limits = jnp.array([2.0, jnp.pi / 2])
 >>> dynamics = unicycle.plant(l=1.0)
@@ -31,7 +31,7 @@ Examples
 >>> barrier = unicycle.certificate_function.barrier_functions.ellipsoidal_obstacle.obstacle_ca(
 >>>     obstacle=obstacle, ellipsoid=ellipsoid
 >>> )
->>> 
+>>>
 >>> controller = stochastic_cbf_clf_qp_controller(
 >>>     nominal_input=nominal_controller,
 >>>     dynamics_func=dynamics,
@@ -41,6 +41,7 @@ Examples
 """
 
 from cbfkit.utils.user_types import CbfClfQpGenerator
+
 from .cbf_clf_qp_generator import cbf_clf_qp_generator
 from .generate_constraints import (
     generate_compute_stochastic_cbf_constraints,

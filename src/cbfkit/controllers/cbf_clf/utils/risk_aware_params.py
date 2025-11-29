@@ -30,7 +30,8 @@ Examples
 
 """
 
-from typing import Union, Optional, Callable
+from typing import Callable, Optional, Union
+
 from jax import Array
 
 
@@ -50,26 +51,28 @@ class RiskAwareParams:
         self,
         t_max: Optional[Union[float, None]] = None,
         p_bound: Optional[Union[float, None]] = None,
-        gamma: Optional[Union[float, None]] = None,
+        gamma: Optional[Union[float, Array, None]] = None,
         eta: Optional[Union[float, None]] = None,
         epsilon: Optional[Union[float, None]] = None,
         lambda_h: Optional[Union[float, None]] = None,
         lambda_generator: Optional[Union[float, None]] = None,
         sigma: Optional[Union[Callable[[Array], Array], None]] = None,
         varsigma: Optional[Union[Callable[[Array], Array], None]] = None,
+        integrator_states: Optional[Union[Array, None]] = None,
     ):
         """Constructor method for RiskAwareParams.
 
         Args:
             t_max (Optional[Union[float, None]] = None): maximum system operation time (sec)
             p_bound (Optional[Union[float, None]] = None): maximum tolerable risk of CBF constraint violation
-            gamma (Optional[Union[float, None]] = None): max value of CBF in set of initial conditions
+            gamma (Optional[Union[float, Array, None]] = None): max value of CBF in set of initial conditions
             eta (Optional[Union[float, None]] = None): maximum dB/dx * sigma(x) term within constraint set
             epsilon (Optional[Union[float, None]] = None): maximum dB/dx * sigma(x) term within constraint set
             lambda_h (Optional[Union[float, None]] = None): maximum dB/dx * sigma(x) term within constraint set
             lambda_generator (Optional[Union[float, None]] = None): maximum dB/dx * sigma(x) term within constraint set
             sigma (Optional[Union[Callable[[Array], Array], None]] = None): diffusion function in stochastic plant dynamics
             varsigma (Optional[Union[Callable[[Array], Array], None]] = None): diffusion function in stochastic measurement dynamics
+            integrator_states (Optional[Union[Array, None]] = None): states for path integral control
         """
         self.t_max = t_max
         self.p_bound = p_bound
@@ -80,4 +83,4 @@ class RiskAwareParams:
         self.lambda_generator = lambda_generator
         self.sigma = sigma
         self.varsigma = varsigma
-        self.integrator_states = None  # Initialized by controller
+        self.integrator_states = integrator_states

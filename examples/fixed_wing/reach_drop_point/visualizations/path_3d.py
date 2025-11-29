@@ -1,8 +1,8 @@
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from jax import Array
 from typing import List
+
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
+from jax import Array
 from matplotlib.animation import FuncAnimation
 
 
@@ -26,7 +26,7 @@ def plot(
         y_sphere = r * jnp.sin(phi) * jnp.sin(theta) + obstacle[1]
         z_sphere = r * jnp.cos(phi) + obstacle[2]
 
-        ax.plot_surface(x_sphere, y_sphere, z_sphere, color="r", alpha=0.6)
+        ax.plot_surface(x_sphere, y_sphere, z_sphere, color="r", alpha=0.6)  # type: ignore[attr-defined]
 
     # Show plot
     plt.show()
@@ -49,14 +49,14 @@ def animate(
 
     for obstacle, r in zip(obstacles, r_obs):
         # Add spherical patch
-        theta, phi = jnp.mgrid[0 : 2 * jnp.pi : 20j, 0 : jnp.pi : 10j]
+        theta, phi = jnp.mgrid[0 : 2 * jnp.pi : 20j, 0 : jnp.pi : 10j]  # type: ignore[misc]
 
         # Spherical to Cartesian
         x_ellipse = r[0] * jnp.sin(phi) * jnp.cos(theta) + obstacle[0]
         y_ellipse = r[1] * jnp.sin(phi) * jnp.sin(theta) + obstacle[1]
         z_ellipse = r[2] * jnp.cos(phi) + obstacle[2]
 
-        ax.plot_surface(x_ellipse, y_ellipse, z_ellipse, color="r", alpha=0.4)
+        ax.plot_surface(x_ellipse, y_ellipse, z_ellipse, color="r", alpha=0.4)  # type: ignore[attr-defined]
 
     # Update function for animation
     def update(num):

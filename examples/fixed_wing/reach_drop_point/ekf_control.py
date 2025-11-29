@@ -4,25 +4,28 @@ to reach a goal region while avoiding dynamic obstacles.
 
 """
 
-import numpy as np
+import pickle
+
 import jax.numpy as jnp
+import numpy as np
+
 import cbfkit.simulation.simulator as sim
-from cbfkit.systems.fixed_wing_uav.models import beard2014_kinematic as fixed_wing_uav
-from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.estimators import ct_ekf_dtmeas
-from cbfkit.integration import forward_euler as integrator
-from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
+from cbfkit.certificates.conditions.lyapunov_conditions.fixed_time_stability import fxt_s
 from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
     estimate_feedback_risk_aware_cbf_clf_qp_controller,
 )
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
-    RiskAwareParams,
-)
-from cbfkit.certificates.conditions.lyapunov_conditions.fixed_time_stability import (
-    fxt_s,
-)
-
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.estimators import ct_ekf_dtmeas
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
+from cbfkit.sensors import unbiased_gaussian_noise as sensor
+from cbfkit.systems.fixed_wing_uav.models import beard2014_kinematic as fixed_wing_uav
+from cbfkit.utils.user_types import PlannerData
 from examples.fixed_wing.common.config import ekf_estimation as setup
+from examples.fixed_wing.reach_drop_point.visualizations.animate_2d_path import (
+    animate as animate_2d,
+)
+from examples.fixed_wing.reach_drop_point.visualizations.path_3d import animate as animate_3d
 
 lyapunov_barrier_package = (
     fixed_wing_uav.certificates.barrier_lyapunov_functions.velocity_with_obstacles
@@ -44,8 +47,16 @@ dynamics = fixed_wing_uav.plant()
 dfdx = fixed_wing_uav.plant_jacobians()
 
 nominal_controller = fixed_wing_uav.controllers.zero_controller()
-h = lambda x: x
-dhdx = lambda _x: np.eye((len(setup.initial_state)))
+
+
+def h(x):
+    return x
+
+
+def dhdx(_x):
+    return jnp.eye((len(setup.initial_state)))
+
+
 estimator = ct_ekf_dtmeas(
     Q=setup.Q,
     R=setup.R,
@@ -64,7 +75,7 @@ risk_aware_clf_params = RiskAwareParams(
     epsilon=setup.epsilon,
     lambda_h=setup.lambda_h,
     lambda_generator=setup.lambda_generator,
-    varsigma=setup.R,
+    varsigma=lambda x: setup.R,
 )
 
 controller = estimate_feedback_risk_aware_cbf_clf_qp_controller(
@@ -77,7 +88,7 @@ controller = estimate_feedback_risk_aware_cbf_clf_qp_controller(
 
 
 x, u, z, p, dkeys, dvalues, planner_data, planner_data_keys = sim.execute(
-    x0=setup.initial_state,
+    x0=jnp.array(setup.initial_state),
     dt=setup.dt,
     num_steps=N_STEPS,
     dynamics=dynamics,
@@ -88,7 +99,7 @@ x, u, z, p, dkeys, dvalues, planner_data, planner_data_keys = sim.execute(
     estimator=estimator,
     sigma=setup.R,
     perturbation=generate_stochastic_perturbation(sigma=lambda x: setup.Q, dt=setup.dt),
-    planner_data={"x_traj": jnp.zeros((12, N_STEPS + 1))},
+    planner_data=PlannerData(x_traj=jnp.zeros((12, N_STEPS + 1))),
     use_jit=True,
 )
 
@@ -101,22 +112,14 @@ save_data = {
 }
 
 # Save data to file
-import pickle
-
 with open(setup.pkl_file, "wb") as file:
     pickle.dump(save_data, file)
 
 
-from examples.fixed_wing.reach_drop_point.visualizations.animate_2d_path import (
-    animate as animate_2d,
-)
-
-from examples.fixed_wing.reach_drop_point.visualizations.path_3d import animate as animate_3d
-
 animate_3d(
     trajectory=x,
     obstacles=setup.obstacle_locations,
-    r_obs=setup.ellipsoid_radii,
+    r_obs=[[float(val) for val in r] for r in setup.ellipsoid_radii],
     dt=setup.dt,
     save_animation=True,
     animation_filename="examples/fixed_wing/reach_drop_point/results/3d_animation",
@@ -127,7 +130,7 @@ animate_2d(
     desired_state=setup.desired_state,
     desired_state_radius=0.1,
     obstacles=setup.obstacle_locations,
-    r_obs=setup.ellipsoid_radii,
+    r_obs=[[float(val) for val in r] for r in setup.ellipsoid_radii],
     x_lim=(-100, 1000),
     y_lim=(-100, 500),
     dt=setup.dt,

@@ -1,11 +1,7 @@
 import jax.numpy as jnp
-from jax import jit, Array, jacfwd
-from typing import Optional, Union, Callable
+from jax import Array, jacfwd, jit
+
 from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
-from cbfkit.modeling.additive_disturbances import (
-    generate_stochastic_perturbation,
-    generate_bounded_perturbation,
-)
 
 g_accel = 9.81
 
@@ -94,7 +90,6 @@ def plant() -> DynamicsCallable:
 
 
 def plant_jacobians():
-
     jacobian = jacfwd(plant())
 
     def func(x: Array) -> Array:

@@ -33,10 +33,10 @@ Examples
 >>> ellipsoid = jnp.array([1.0, 0.5])
 >>> barrier = unicycle.certificate_function.barrier_functions.ellipsoidal_obstacle.obstacle_ca(
 >>>     certificate_conditions=linear_class_k(1.0),
->>>     obstacle=obstacle, 
+>>>     obstacle=obstacle,
 >>>     ellipsoid=ellipsoid
 >>> )
->>> 
+>>>
 >>> controller = robust_cbf_clf_qp_controller(
 >>>     nominal_input=nominal_controller,
 >>>     dynamics_func=dynamics,
@@ -45,14 +45,15 @@ Examples
 >>> )
 """
 
-from cbfkit.utils.user_types import ControllerCallable
+from cbfkit.utils.user_types import CbfClfQpGenerator
+
 from .cbf_clf_qp_generator import cbf_clf_qp_generator
 from .generate_constraints import (
     generate_compute_robust_cbf_constraints,
     generate_compute_robust_clf_constraints,
 )
 
-robust_cbf_clf_qp_controller: ControllerCallable = cbf_clf_qp_generator(
+robust_cbf_clf_qp_controller: CbfClfQpGenerator = cbf_clf_qp_generator(
     generate_compute_robust_cbf_constraints,
     generate_compute_robust_clf_constraints,
 )

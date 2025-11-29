@@ -13,12 +13,13 @@ import cbfkit.planners as single_waypoint_planner
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
-from cbfkit.certificates.conditions.barrier_conditions import stochastic_barrier, zeroing_barriers
+from cbfkit.certificates.conditions.barrier_conditions import stochastic_barrier
 from cbfkit.controllers.cbf_clf import stochastic_cbf_clf_qp_controller as cbf_controller
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator
 from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
 from cbfkit.sensors import perfect as sensor
+from examples.unicycle.common.ellipsoidal_obstacle import stochastic_cbf as ellipsoid_cbf
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/generated"
@@ -37,7 +38,11 @@ actuation_constraints = jnp.array([100.0, 100.0])  # Effectively, no control lim
 
 # Dynamics Noise matris
 sigma_matrix = 0.28 * jnp.eye(len(init_state))
-sigma = lambda x: sigma_matrix
+
+
+def sigma(x):
+    return sigma_matrix
+
 
 # Obstacle setup
 obstacles = [
@@ -68,15 +73,14 @@ uniycle_nom_controller = unicycle.controllers.proportional_controller(
 )
 
 # Barrier constraint functions
-from examples.unicycle.common.ellipsoidal_obstacle import stochastic_cbf as ellipsoid_cbf
 
 # ...
 
 barriers = [
     rectify_relative_degree(
         function=ellipsoid_cbf(
-            obs,
-            ell,
+            jnp.array(obs),
+            jnp.array(ell),
         ),
         system_dynamics=unicycle_dynamics,
         state_dim=len(init_state),
@@ -171,7 +175,10 @@ u_guess = jnp.append(
     axis=1,
 )
 
-#
+from cbfkit.utils.user_types import ControllerData, PlannerData
+
+# ...
+
 (
     x,
     u,
@@ -194,8 +201,8 @@ u_guess = jnp.append(
     estimator=estimator,
     perturbation=generate_stochastic_perturbation(sigma=sigma, dt=dt),
     filepath=file_path + "vanilla_cbf_results",
-    planner_data={"u_traj": u_guess, "prev_robustness": None},
-    controller_data={},
+    planner_data=PlannerData(u_traj=u_guess, prev_robustness=None),
+    controller_data=ControllerData(),
     use_jit=True,
 )
 

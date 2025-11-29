@@ -29,7 +29,7 @@ Examples
 """
 
 import jax.numpy as jnp
-from jax import Array, jit
+from jax import Array
 from scipy.integrate import solve_ivp as solve
 
 

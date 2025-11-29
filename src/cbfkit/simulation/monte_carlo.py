@@ -18,6 +18,7 @@ Examples
 >>> run code
 
 """
+
 import multiprocessing as mp
 from typing import Callable
 

@@ -1,12 +1,13 @@
+from typing import List, Optional, Tuple
+
 import jax.numpy as jnp
-from jax import jit, jacfwd, jacrev, Array
-from typing import Optional
+from jax import Array, jacfwd, jacrev, jit
+
 from cbfkit.utils.user_types import (
-    BarrierCallable,
-    BarrierJacobianCallable,
-    BarrierHessianCallable,
-    BarrierPartialCallable,
-    BarrierTuple,
+    CertificateCallable,
+    CertificateHessianCallable,
+    CertificateJacobianCallable,
+    CertificatePartialCallable,
 )
 
 # number of states
@@ -67,24 +68,36 @@ def dh2_att_dx2(z: Array, att_limit: float) -> Array:
     return jacfwd(jacrev(h_att))(z, att_limit)
 
 
-def attitude(limit: float) -> BarrierTuple:
-    b_func: BarrierCallable = lambda t, x: h_att(jnp.hstack([x, t]), limit)  # type: ignore[return-value]
-    j_func: BarrierJacobianCallable = lambda t, x: dh_att_dx(jnp.hstack([x, t]), limit)[:N]  # type: ignore[return-value]
-    h_func: BarrierHessianCallable = lambda t, x: dh2_att_dx2(jnp.hstack([x, t]), limit)[:N, :N]  # type: ignore[return-value]
-    p_func: BarrierPartialCallable = lambda t, x: dh_att_dx(jnp.hstack([x, t]), limit)[-1]  # type: ignore[return-value]
+def attitude(limit: float) -> Tuple[
+    List[CertificateCallable],
+    List[CertificateJacobianCallable],
+    List[CertificateHessianCallable],
+    List[CertificatePartialCallable],
+]:
+    def b_func(t, x):
+        return h_att(jnp.hstack([x, t]), limit)  # type: ignore[return-value]
+
+    def j_func(t, x):
+        return dh_att_dx(jnp.hstack([x, t]), limit)[:N]  # type: ignore[return-value]
+
+    def h_func(t, x):
+        return dh2_att_dx2(jnp.hstack([x, t]), limit)[:N, :N]  # type: ignore[return-value]
+
+    def p_func(t, x):
+        return dh_att_dx(jnp.hstack([x, t]), limit)[-1]  # type: ignore[return-value]
 
     return (
-        b_func,
-        j_func,
-        h_func,
-        p_func,
+        [b_func],
+        [j_func],
+        [h_func],
+        [p_func],
     )
 
 
 ###############################################################################
 #! Altitude Constraint
 @jit
-def h_alt(z: Array, alt_limit: float, k: Optional[float] = 2.0, n: Optional[int] = 2) -> Array:
+def h_alt(z: Array, alt_limit: float, k: float = 2.0, n: int = 2) -> Array:
     """Altitude constraint function (prevent quadrotor from crashing into ground or ceiling).
 
     Arguments:
@@ -136,17 +149,29 @@ def dh2_alt_dx2(z: Array, alt_limit: float) -> Array:
     return jacfwd(jacrev(h_alt))(z, alt_limit)
 
 
-def altitude(limit: float) -> BarrierTuple:
-    b_func: BarrierCallable = lambda t, x: h_alt(jnp.hstack([x, t]), limit)  # type: ignore[return-value]
-    j_func: BarrierJacobianCallable = lambda t, x: dh_alt_dx(jnp.hstack([x, t]), limit)[:N]  # type: ignore[return-value]
-    h_func: BarrierHessianCallable = lambda t, x: dh2_alt_dx2(jnp.hstack([x, t]), limit)[:N, :N]  # type: ignore[return-value]
-    p_func: BarrierPartialCallable = lambda t, x: dh_alt_dx(jnp.hstack([x, t]), limit)[-1]  # type: ignore[return-value]
+def altitude(limit: float) -> Tuple[
+    List[CertificateCallable],
+    List[CertificateJacobianCallable],
+    List[CertificateHessianCallable],
+    List[CertificatePartialCallable],
+]:
+    def b_func(t, x):
+        return h_alt(jnp.hstack([x, t]), limit)  # type: ignore[return-value]
+
+    def j_func(t, x):
+        return dh_alt_dx(jnp.hstack([x, t]), limit)[:N]  # type: ignore[return-value]
+
+    def h_func(t, x):
+        return dh2_alt_dx2(jnp.hstack([x, t]), limit)[:N, :N]  # type: ignore[return-value]
+
+    def p_func(t, x):
+        return dh_alt_dx(jnp.hstack([x, t]), limit)[-1]  # type: ignore[return-value]
 
     return (
-        b_func,
-        j_func,
-        h_func,
-        p_func,
+        [b_func],
+        [j_func],
+        [h_func],
+        [p_func],
     )
 
 

@@ -1,12 +1,14 @@
-import jax.numpy as jnp
-from jax import jit, Array
 from typing import Optional, Union
+
+import jax.numpy as jnp
+from jax import Array, jit
+
 from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
 
 
 def reverse_van_der_pol_oscillator(
     epsilon: float,
-    sigma: Optional[Union[float, None]] = None,
+    sigma: Optional[Union[float, Array, None]] = None,
 ) -> DynamicsCallable:
     """
     Returns a function that represents the equations of motion for the Van der

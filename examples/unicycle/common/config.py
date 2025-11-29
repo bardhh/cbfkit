@@ -1,5 +1,6 @@
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
+
 
 class BaseConfig:
     x_max = 5.0
@@ -12,17 +13,22 @@ class BaseConfig:
     desired_state = jnp.array([0.0, 0.0, 0])
     Q = 0.5 * jnp.eye(len(initial_state))
 
+
 class PerfectMeasurementsConfig(BaseConfig):
     R = None
+
 
 class EKFEstimationConfig(BaseConfig):
     R = 0.05 * jnp.eye(len(BaseConfig.initial_state))
 
+
 class UKFEstimationConfig(BaseConfig):
     R = 0.05 * jnp.eye(len(BaseConfig.initial_state))
 
+
 class HybridEstimationConfig(BaseConfig):
     R = 0.05 * jnp.eye(len(BaseConfig.initial_state))
+
 
 # Aliases matching original module names for compatibility
 perfect_state_measurements = PerfectMeasurementsConfig

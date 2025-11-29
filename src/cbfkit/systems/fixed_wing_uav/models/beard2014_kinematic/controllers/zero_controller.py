@@ -1,9 +1,18 @@
 import jax.numpy as jnp
-from jax import jit, Array
-from cbfkit.utils.user_types import ControllerCallable, ControllerCallableReturns
+from jax import Array, jit
+
+from cbfkit.utils.user_types import (
+    Control,
+    ControllerCallableReturns,
+    ControllerData,
+    Key,
+    NominalControllerCallable,
+    Optional,
+    State,
+)
 
 
-def zero_controller() -> ControllerCallable:
+def zero_controller() -> NominalControllerCallable:
     """
     Create a zero controller for the given fixed-wing uav dynamics.
 
@@ -16,19 +25,26 @@ def zero_controller() -> ControllerCallable:
     """
 
     @jit
-    def controller(_t: float, _state: Array, _key: Array = None, _xd: Array = None) -> ControllerCallableReturns:
-        """Computes zero control input (4x1).
+    def controller(
+        _t: float,
+        _state: State,
+        _key: Key,
+        _xd: Optional[State] = None,
+    ) -> ControllerCallableReturns:
+        """Computes zero control input (3x1).
 
         Args:
             _t (float): time in sec
             _state (Array): state vector (or estimate if using observer/estimator)
+            _key (Key): unused
+            _xd (Optional[State]): unused
 
         Returns:
-            zeros (Array): 4x1 zero vector
-            data: (dict): empty dictionary
+            zeros (Array): 3x1 zero vector
+            data: ControllerData: empty ControllerData
         """
         # logging data
-        data = {}
+        data = ControllerData()
 
         return jnp.zeros((3,)), data
 

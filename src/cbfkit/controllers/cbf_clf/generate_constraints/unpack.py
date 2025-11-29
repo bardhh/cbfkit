@@ -4,23 +4,26 @@ unpack.py
 
 """
 
-from typing import List, Dict, Any
-from jax import Array
+from typing import Any, Dict
+
 import jax.numpy as jnp
+from jax import Array
+
+from cbfkit.utils.user_types import CertificateCollection
 
 
 def unpack_for_cbf(
     control_limits: Array,
-    barriers: List,
-    lyapunovs: List,
+    barriers: CertificateCollection,
+    lyapunovs: CertificateCollection,
     **kwargs: Dict[str, Any],
 ):
     """Unpacks information required to generate CLF constraints of arbitrary type.
 
     Args:
         control_limits (Array): _description_
-        functions (List): _description_
-        lyapunovs (List): _description_
+        functions (CertificateCollection): _description_
+        lyapunovs (CertificateCollection): _description_
 
     Returns:
         _type_: _description_
@@ -54,16 +57,16 @@ def unpack_for_cbf(
 
 def unpack_for_clf(
     control_limits: Array,
-    lyapunovs: List,
-    barriers: List,
+    lyapunovs: CertificateCollection,
+    barriers: CertificateCollection,
     **kwargs: Dict[str, Any],
 ):
     """Unpacks information required to generate CLF constraints of arbitrary type.
 
     Args:
         control_limits (Array): _description_
-        functions (List): _description_
-        barriers (List): _description_
+        functions (CertificateCollection): _description_
+        barriers (CertificateCollection): _description_
 
     Returns:
         _type_: _description_

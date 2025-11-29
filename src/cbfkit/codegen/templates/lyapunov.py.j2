@@ -63,7 +63,7 @@ def clf_grad({{ clf_args }}**kwargs) -> Callable[[Array], Array]:
         Returns:
             Array: clf jacobian (gradient)
         """
-        
+
         return jacobian(state_and_time)
 
     return func

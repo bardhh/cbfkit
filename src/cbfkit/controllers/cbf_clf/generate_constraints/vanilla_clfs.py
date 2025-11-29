@@ -1,19 +1,14 @@
-"""
-#! docstring
-"""
+from typing import Any, Callable, Dict, Tuple
 
-from typing import Callable, Tuple, Dict, Any
 import jax.numpy as jnp
 from jax import Array, jit, lax
-from cbfkit.utils.user_types import (
-    DynamicsCallable,
-    CertificateCollection,
-    State,
-)
-from .unpack import unpack_for_clf
+
+from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable, State, Time
+
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
+from .unpack import unpack_for_clf
 
 
 ####################################################################################################
@@ -24,7 +19,7 @@ def generate_compute_vanilla_clf_constraints(
     barriers: CertificateCollection = ([], [], [], [], []),
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
-) -> Callable[[float, State], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """
     #! To Do: docstring
     """
@@ -34,10 +29,10 @@ def generate_compute_vanilla_clf_constraints(
     )
 
     @jit
-    def compute_clf_constraints(t: float, x: State) -> Tuple[Array, Array]:
+    def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
         """Computes CBF and CLF constraints."""
         nonlocal a_clf, b_clf
-        data = {}
+        data: Dict[str, Any] = {}
         dyn_f, dyn_g = dyn_func(x)
 
         if n_lfs > 0:

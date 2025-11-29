@@ -42,15 +42,14 @@ Example
 >>> print(cbf(jnp.array([0.5, 0.5, -0.1, 0, 0.2, 0])))
 """
 
-from typing import Callable, Union, List
-from jax import random, jacfwd, jacrev, Array, jit
+from typing import Callable, List, Union
+
 import jax.numpy as jnp
-import jaxlib
 import numpy as np
-from cbfkit.certificates import (
-    certificate_package,
-)
-from cbfkit.utils.user_types import DynamicsCallable, CertificateCollection
+from jax import Array, jacfwd, jacrev, jit, random
+
+from cbfkit.certificates import certificate_package
+from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable
 
 # For random sample generation
 KEY = random.PRNGKey(0)
@@ -65,12 +64,12 @@ def kwargs_wrapper(func: Callable) -> Callable:
 
 
 def rectify_relative_degree(
-    function: Callable[[float, Array], Array],
+    function: Callable[[Array], Array],
     system_dynamics: DynamicsCallable,
     state_dim: int,
     roots: Union[Array, None] = None,
     form: str = "exponential",
-) -> CertificateCollection:
+) -> Callable[..., CertificateCollection]:
     """Rectifies the relative degree of the provided constraint function with respect to
     the system dynamics deriving a new exponential- or high-order-CBF.
 
@@ -104,7 +103,6 @@ def rectify_relative_degree(
         polynomial_coefficients = polynomial_coefficients_from_roots(roots)
 
         def cbf(**kwargs):
-
             @jit
             def func(x: Array) -> Array:
                 return jnp.sum(
@@ -138,18 +136,21 @@ def rectify_relative_degree(
 
     elif form == "high-order":
 
-        def cbf(x: Array) -> Array:
-            return function_list[0](x)
+        def cbf(**kwargs):
+            def func(x: Array) -> Array:
+                return function_list[0](x)
+
+            return func
 
     return certificate_package(cbf, cbf_grad, cbf_hess, state_dim)
 
 
 def compute_function_list(
-    function: Callable[[float, Array], Array],
+    function: Callable[[Array], Array],
     system_dynamics: DynamicsCallable,
     state_dim: int,
     form: str = "exponential",
-    func_list: Union[List[Callable[[float, Array], Array]], None] = None,
+    func_list: Union[List[Callable[[Array], Array]], None] = None,
     subkey: Union[Array, None] = None,
     n_samples: int = 10,
 ):
@@ -174,15 +175,15 @@ def compute_function_list(
     func_list.append(function)
 
     if subkey is None:
-        subkey = SUBKEY
+        subkey = SUBKEY  # type: ignore[assignment]
     else:
-        _, subkey = random.split(KEY)
+        _, subkey = random.split(KEY)  # type: ignore[assignment]
 
     # Do this at every level
-    samples = random.normal(subkey, (n_samples, state_dim))
+    samples = random.normal(subkey, (n_samples, state_dim))  # type: ignore[arg-type]
     jacobian = jacfwd(function)
 
-    total = 0
+    total = jnp.array(0.0)
     for sample in samples:
         _, dyn_g = system_dynamics(sample[:-1])
         grad = jacobian(sample)[:-1]

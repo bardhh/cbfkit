@@ -1,6 +1,16 @@
+from typing import Any, Dict, Optional
+
 import jax.numpy as jnp
-from jax import jit, Array
-from cbfkit.utils.user_types import ControllerCallable, ControllerCallableReturns
+from jax import Array, jit
+
+from cbfkit.utils.user_types import (
+    Control,
+    ControllerCallable,
+    ControllerCallableReturns,
+    ControllerData,
+    Key,
+    State,
+)
 
 
 def zero_controller() -> ControllerCallable:
@@ -16,7 +26,13 @@ def zero_controller() -> ControllerCallable:
     """
 
     @jit
-    def controller(_t: float, _state: Array) -> ControllerCallableReturns:
+    def controller(
+        _t: float,
+        _state: State,
+        _u_nom: Optional[Control] = None,
+        _key: Optional[Key] = None,
+        _data: Optional[ControllerData] = None,
+    ) -> ControllerCallableReturns:
         """Computes zero control input (1x1).
 
         Args:
@@ -28,8 +44,8 @@ def zero_controller() -> ControllerCallable:
             data: (dict): empty dictionary
         """
         # logging data
-        data = {}
+        data: Dict[str, Any] = {}
 
-        return jnp.zeros((2,)), data
+        return jnp.zeros((2,)), ControllerData(sub_data=data)
 
     return controller

@@ -22,11 +22,11 @@ Examples
 """
 
 import jax.numpy as jnp
-from jax import jit
+from jax import Array, jit
 
 
 @jit
-def tanh_sigmoid(s: float, sbar: float, k: float = 100.0) -> float:
+def tanh_sigmoid(s: float, sbar: float, k: float = 100.0) -> Array:
     """Computes the value of the hyperbolic tangent sigmoid function.
 
     Args:

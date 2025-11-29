@@ -8,16 +8,17 @@ Exportable:
 
 """
 
-from jax import jit, jacfwd, jacrev, Array
-from cbfkit.certificates import (
-    certificate_package,
-)
+from typing import Callable
+
 import jax.numpy as jnp
+from jax import Array, jacfwd, jacrev, jit
+
+from cbfkit.certificates import certificate_package
 
 N = 3
 
 
-def cbf(obstacle: Array, ellipsoid: Array) -> Array:
+def cbf(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array]:
     """Obstacle avoidance constraint function for approximate unicycle.
     Super-level set convention.
 
@@ -44,7 +45,7 @@ def cbf(obstacle: Array, ellipsoid: Array) -> Array:
     return func
 
 
-def cbf_grad(obstacle: Array, ellipsoid: Array) -> Array:
+def cbf_grad(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array]:
     """Jacobian for obstacle avoidance constraint function for approximate unicycle.
     Super-level set convention.
 
@@ -66,7 +67,7 @@ def cbf_grad(obstacle: Array, ellipsoid: Array) -> Array:
     return func
 
 
-def cbf_hess(obstacle: Array, ellipsoid: Array) -> Array:
+def cbf_hess(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array]:
     """Hessian for obstacle avoidance constraint function for approximate unicycle.
     Super-level set convention.
 

@@ -1,9 +1,10 @@
+from typing import Callable, Optional, Tuple, Union, cast
+
 import jax.numpy as jnp
 from jax import Array
-from typing import Tuple, Callable, Union, Optional
 
-from cbfkit.utils.user_types import DynamicsCallable
 from cbfkit.integration import forward_euler as integrate
+from cbfkit.utils.user_types import DynamicsCallable, EstimatorCallable, Time
 
 from .ekf import ct_ekf_dtmeas
 from .ukf import ct_ukf_dtmeas
@@ -17,7 +18,7 @@ def ct_hybrid_ekf_ukf_dtmeas(
     h: Callable,
     dhdx: Callable,
     dt: float,
-) -> Callable[[float, Array, Array, Array], Tuple[Array, Array]]:
+) -> EstimatorCallable:
     """Function defining the continuous-time hybrid EKF/UKF estimator with
     discrete-time measurements.
 
@@ -38,15 +39,15 @@ def ct_hybrid_ekf_ukf_dtmeas(
     step_ukf = ct_ukf_dtmeas(Q, R, dynamics, h, dt)
 
     def step_hybrid_ekf_ukf(
-        t: float,
+        t: Time,
         y: Array,
-        z: Optional[Union[Array, None]] = None,
-        u: Optional[Union[Array, None]] = None,
-        P: Optional[Union[Array, None]] = None,
-    ):
+        z: Optional[Array] = None,
+        u: Optional[Array] = None,
+        P: Optional[Array] = None,
+    ) -> Tuple[Array, Array]:
         """"""
 
-        if z is None and u is None and P is None:
+        if z is None or u is None or P is None:
             return initialize(y, R)
 
         ze, Pe = step_ekf(t, y, z, u, P[: len(z), :])
@@ -64,7 +65,7 @@ def ct_hybrid_ekf_ukf_dtmeas(
 
 
 #! Possibly implement this in a better fashion in the future
-def initialize(y: Array, R: Array) -> Array:
+def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
     """Initialization for the continuous-time EKF with discrete-time measurements.
 
     Arguments:
@@ -111,12 +112,12 @@ def predict_ct_dtmeas(
 
         """
         # Compute xdot from system dynamics
-        f, g, _ = dynamics(z)
+        f, g = dynamics(z)
         zdot = f + jnp.matmul(g, u)
         zk = integrate(z, zdot, dt)
 
         # Compute Pdot from covariance dynamics
-        Ff, Fg, _ = dfdx(z)
+        Ff, Fg = dfdx(z)
         F = Ff + jnp.einsum("ijk,j->ik", Fg, u)
         # F = Ff + jnp.einsum('ijk,j->ki', Fg, u)
         Pdot = jnp.matmul(F, P) + jnp.matmul(P, F.T) + Q
@@ -129,7 +130,7 @@ def predict_ct_dtmeas(
 
 def update_dtmeas(
     R: Array, h: Callable[[Array], Array], dhdx: Callable[[Array], Array]
-) -> Callable[[float, Array, Array], Tuple[Array, Array]]:
+) -> Callable[[Array, Array, Array], Tuple[Array, Array]]:
     """Function defining the update step for (any) EKF with discrete-time measurements.
 
     Arguments:

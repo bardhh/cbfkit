@@ -30,10 +30,11 @@ Examples
 
 """
 
+from typing import Optional, Tuple, Union
+
 # import jax.numpy as jnp
-from jax import Array, jit, lax
-from typing import Union, Tuple
-from jaxopt import OSQP, EqualityConstrainedQP, BoxOSQP
+from jax import Array, jit
+from jaxopt import OSQP, EqualityConstrainedQP
 
 # Instantiate QP solver objects
 QP = OSQP()
@@ -53,8 +54,8 @@ def solve_equality_constrained_qp(
 
 def solve_inequality_constrained_qp(
     params_obj: Tuple[Array, Array],
-    params_eq: Tuple[Array, Array],
-    params_ineq: Tuple[Array, Array],
+    params_eq: Optional[Tuple[Array, Array]],
+    params_ineq: Optional[Tuple[Array, Array]],
 ) -> Tuple[Array, int]:
     sol, state = QP.run(
         params_obj=params_obj,

@@ -1,10 +1,6 @@
 import jax.numpy as jnp
-import numpy as np
-import cvxpy as cp
-from jax import random, Array, jit
+from jax import Array, random
 from scipy.linalg import block_diag
-from cvxpylayers.jax import CvxpyLayer
-
 
 KEY = random.PRNGKey(758493)  # Random seed is explicit in JAX
 EPS = 1e-1

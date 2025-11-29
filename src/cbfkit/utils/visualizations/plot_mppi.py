@@ -1,17 +1,10 @@
-import matplotlib
-
 # matplotlib.use("macosx")
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-from matplotlib.patches import Ellipse
-from typing import List
-from jax import Array
 import numpy as np
-import jax.numpy as jnp
+from matplotlib.animation import FuncAnimation
 
 
 class circle:
-
     def __init__(self, ax, pos=np.array([0, 0]), radius=1.0):
         self.X = pos
         self.radius = radius
@@ -109,10 +102,8 @@ def animate(
         )
     )
 
-    if obstacle != None:
+    if obstacle is not None:
         circle(ax, pos=obstacle, radius=obstacle_radius)
-
-    from matplotlib import animation
 
     trajectory = [0] * (1 + mppi_args["plot_samples"] + 1)
     (trajectory[0],) = ax.plot([], [], "k")

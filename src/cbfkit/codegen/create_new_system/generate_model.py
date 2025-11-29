@@ -105,8 +105,8 @@ def generate_model(
     model_name: str,
     drift_dynamics: Union[str, List[str]],
     control_matrix: Union[str, List[str]],
-    stage_cost_function: Optional[Union[str, List, None]] = None,
-    terminal_cost_function: Optional[Union[str, List, None]] = None,
+    stage_cost_function: Optional[str] = None,
+    terminal_cost_function: Optional[str] = None,
     barrier_funcs: Optional[Union[str, List, None]] = None,
     lyapunov_funcs: Optional[Union[str, List, None]] = None,
     nominal_controller: Optional[Union[str, List, None]] = None,
@@ -116,20 +116,20 @@ def generate_model(
         params = {}
 
     # Process drift dynamics
-    if type(drift_dynamics) == str:
+    if isinstance(drift_dynamics, str):
         n_states = len(drift_dynamics.split(","))
         drift_dynamics_str = drift_dynamics
-    elif type(drift_dynamics) == list:
+    elif isinstance(drift_dynamics, list):
         n_states = len(drift_dynamics)
         drift_dynamics_str = "[" + ",".join(drift_dynamics) + "]"
     else:
         raise TypeError("drift_dynamics is not type str or list!")
 
     # Process control matrix
-    if type(control_matrix) == str:
+    if isinstance(control_matrix, str):
         n_controls = len(control_matrix.split("],")[0].split(","))
         control_matrix_str = control_matrix
-    elif type(control_matrix) == list:
+    elif isinstance(control_matrix, list):
         n_controls = len(control_matrix[0].split(","))
         control_matrix_str = "[" + ",".join(control_matrix) + "]"
     else:
@@ -266,7 +266,7 @@ def generate_model(
         barrier_folder = (
             model_folder + DELIMITER + "certificate_functions" + DELIMITER + "barrier_functions"
         )
-        if type(barrier_funcs) is str:
+        if isinstance(barrier_funcs, str):
             n_bars = 1
             barrier_funcs = [barrier_funcs]
         else:
@@ -306,7 +306,7 @@ def generate_model(
             model_folder + DELIMITER + "certificate_functions" + DELIMITER + "lyapunov_functions"
         )
 
-        if type(lyapunov_funcs) is str:
+        if isinstance(lyapunov_funcs, str):
             n_lfs = 1
             lyapunov_funcs = [lyapunov_funcs]
         else:
@@ -342,7 +342,7 @@ def generate_model(
 
     control_folder = model_folder + DELIMITER + "controllers"
     if nominal_controller is not None:
-        if type(nominal_controller) is str:
+        if isinstance(nominal_controller, str):
             n_cons = 1
             nominal_controller = [nominal_controller]
         else:

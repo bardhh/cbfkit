@@ -1,55 +1,39 @@
-"""
-This module provides a template for example simulations designed to be run from
-the interpreter via ''python examples/template.py''.
-
-It does not define any new functions, and primarily loads modules from the
-src/cbfkit tree.
-
-"""
-
+import multiprocessing as mp
 import os
+import pickle
+from typing import Any, List, Optional, Tuple
+
 import jax.numpy as jnp
 import numpy as np
-from jax import jacfwd, Array
-from typing import List
+from jax import Array, jacfwd
+
+import cbfkit.simulation.simulator as sim
+
+# Load dynamics, sensors, controller, estimator, integrator
+import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import e_s
+
+# Import controller functions
+from cbfkit.controllers.cbf_clf.risk_aware_path_integral_cbf_clf_qp_control_laws import (
+    risk_aware_path_integral_cbf_clf_qp_controller as cbf_controller,
+)
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.estimators import ct_ekf_dtmeas as ekf
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.sensors import unbiased_gaussian_noise as sensor
+
+# Load initial conditions
+from cbfkit.utils.user_types import PlannerData
+from examples.unicycle.common.config import ekf_state_estimation as initial_conditions
+from examples.unicycle.common.visualizations import plot_trajectory
 
 # Whether or not to simulate, plot
 plot = 1
 save = 1
 save_path = "examples/unicycle/start_to_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
 file_name = os.path.basename(__file__)[:-8]
-
-# Load system module
-import cbfkit.simulation.simulator as sim
-
-# Load dynamics, sensors, controller, estimator, integrator
-import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
-
-from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.estimators import ct_ekf_dtmeas as ekf
-from cbfkit.integration import forward_euler as integrator
-
-# Import controller functions
-from cbfkit.controllers.cbf_clf.risk_aware_path_integral_cbf_clf_qp_control_laws import (
-    risk_aware_path_integral_cbf_clf_qp_controller as cbf_controller,
-)
-from cbfkit.certificates.conditions.barrier_conditions import (
-    zeroing_barriers,
-)
-from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
-    e_s,
-)
-from cbfkit.certificates import (
-    concatenate_certificates,
-)
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
-    RiskAwareParams,
-)
-
-# Load initial conditions
-from examples.unicycle.common.config import (
-    ekf_state_estimation as initial_conditions,
-)
 
 # Define time parameters
 tf = 2.0
@@ -64,10 +48,21 @@ N_STATES = len(initial_conditions.desired_state)
 N_CONTROLS = 2
 
 # Define dynamics, controller, and estimator with specified parameters
-approx_unicycle_dynamics = unicycle.plant(l=1.0)
-dfdx = lambda x: jacfwd(approx_unicycle_dynamics)(x)
-h = lambda x: x
-dhdx = lambda x: jnp.eye((len(initial_conditions.initial_state)))
+approx_unicycle_dynamics = unicycle.plant(lam=1.0)
+
+
+def dfdx(x):
+    return jacfwd(approx_unicycle_dynamics)(x)
+
+
+def h(x):
+    return x
+
+
+def dhdx(x):
+    return jnp.eye((len(initial_conditions.initial_state)))
+
+
 nominal_controller = unicycle.controllers.zero_controller()
 scale_factor = 1.25
 estimator = ekf(
@@ -126,75 +121,178 @@ risk_aware_lyapunov_params = RiskAwareParams(
 )
 
 
+# N_TRIALS: num_sims
+# N_STEPS: num_steps
+# N_STATES: n_states
+# N_CONTROLS: n_controls
+
+# Define variables for execute function to access
+n_sims = N_TRIALS
+num_steps = N_STEPS
+N = N_STEPS
+
+# x0s for monte carlo simulation
+x0s = [initial_conditions.initial_state for _ in range(N_TRIALS)]
+
+# Optional arguments for sim.execute (if not defined elsewhere)
+planner = None
+perturbation = None
+sigma = None
+
+
+import functools
+import os
+
+# Load dynamics, sensors, controller, estimator, integrator
+import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import e_s
+
+# Import controller functions
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.estimators import ct_ekf_dtmeas as ekf
+
+# Load initial conditions
+from cbfkit.utils.user_types import (
+    Control,
+    ControllerCallable,
+    DynamicsCallable,
+    EstimatorCallable,
+    IntegratorCallable,
+    Key,
+    NominalControllerCallable,
+    PerturbationCallable,
+    PlannerCallable,
+    SensorCallable,
+    State,
+)
+from examples.unicycle.common.config import ekf_state_estimation as initial_conditions
+
+# Whether or not to simulate, plot
+plot = 1
+save = 1
+save_path = "examples/unicycle/start_to_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
+file_name = os.path.basename(__file__)[:-8]
+
+# Define time parameters
+tf = 2.0
+dt = 0.01
+n_steps = int(tf / dt)
+
+X_MAX = 5.0
+Y_MAX = 5.0
+N_TRIALS = 50
+N_STEPS = int(tf / dt)
+N_STATES = len(initial_conditions.desired_state)
+N_CONTROLS = 2
+
+# N_TRIALS: num_sims
+# N_STEPS: num_steps
+# N_STATES: n_states
+# N_CONTROLS: n_controls
+
+# Define variables for execute function to access
+n_sims = N_TRIALS
+num_steps = N_STEPS
+N = N_STEPS
+
+# x0s for monte carlo simulation
+x0s = [initial_conditions.initial_state for _ in range(N_TRIALS)]
+
+# Optional arguments for sim.execute (if not defined elsewhere)
+planner = None
+perturbation = None
+sigma = None
+
+
 # Define simulation function, including post-processing of data
-def execute_simulation(ii: int) -> List[Array]:
-    # Generate random initial condition (position within 5x5 box, angle within +/- pi/4 of heading to goal)
-    np.random.seed(ii)
-    x_rand = np.random.uniform(low=-X_MAX, high=X_MAX)
-    y_rand = np.random.uniform(low=-Y_MAX, high=Y_MAX)
-    a_rand = jnp.arctan2(
-        initial_conditions.desired_state[1] - y_rand, initial_conditions.desired_state[0] - x_rand
-    ) + np.random.uniform(low=-jnp.pi / 4, high=jnp.pi / 4)
-    init_state = jnp.array([x_rand, y_rand, a_rand])
-
-    controller = cbf_controller(
-        control_limits=jnp.array([100.0, 100.0]),
-        dynamics_func=approx_unicycle_dynamics,
-        barriers=barrier_packages,
-        lyapunovs=lyapunov_packages,
-        relaxable_clf=True,
-        ra_cbf_params=risk_aware_barrier_params,
-        ra_clf_params=risk_aware_lyapunov_params,
-    )
-
-    # Execute simulation
-    x, u, z, p, data, data_keys, planner_data, planner_data_keys = sim.execute(
-        x0=init_state,
+def execute_trial(
+    ii: int,
+    n_sims: int,
+    x0s: List[Array],
+    dt: float,
+    num_steps: int,
+    dynamics: DynamicsCallable,
+    integrator: IntegratorCallable,
+    planner: Optional[PlannerCallable],
+    nominal_controller: Optional[NominalControllerCallable],
+    controller: Optional[ControllerCallable],
+    sensor: SensorCallable,
+    estimator: EstimatorCallable,
+    perturbation: Optional[PerturbationCallable],
+    sigma: Optional[Array],
+    N: int,
+    initial_conditions: Any,
+    tf: float,
+) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
+    print(f"Simulation {ii+1}/{n_sims}")
+    x0 = x0s[ii]
+    x, u, z, p, data_keys, data_values, planner_keys, planner_values = sim.execute(
+        x0=x0,
         dt=dt,
-        num_steps=int(tf / dt),
-        dynamics=approx_unicycle_dynamics,
+        num_steps=num_steps,
+        dynamics=dynamics,
         integrator=integrator,
+        planner=planner,
         nominal_controller=nominal_controller,
         controller=controller,
         sensor=sensor,
         estimator=estimator,
-        sigma=initial_conditions.R,
-        filepath=save_path + file_name,
-        planner_data={
-            "u_traj": None,
-            "x_traj": jnp.tile(
-                initial_conditions.desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)
-            ),
-            "prev_robustness": None,
-        },
+        perturbation=perturbation,
+        sigma=sigma,
+        planner_data=sim.PlannerData(
+            u_traj=jnp.zeros((2, N)),
+            x_traj=jnp.tile(initial_conditions.desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
+            prev_robustness=None,
+        ),
         use_jit=True,
     )
 
-    return [x, u]
+    return x, u, z, p, data_keys, data_values, planner_keys, planner_values
 
 
 # Needed for multiprocessing
 if __name__ == "__main__":
-    import pickle
     import multiprocessing as mp
-    import matplotlib.pyplot as plt
+    import pickle
 
     simulate = 1
     plot = 1
 
     if simulate:
+        # Create a partial function with all necessary arguments bound
+        execute_with_globals = functools.partial(
+            execute_trial,
+            n_sims=n_sims,
+            x0s=x0s,
+            dt=dt,
+            num_steps=num_steps,
+            dynamics=approx_unicycle_dynamics,
+            integrator=integrator,
+            planner=planner,
+            nominal_controller=nominal_controller,
+            controller=cbf_controller,
+            sensor=sensor,
+            estimator=estimator,
+            perturbation=perturbation,
+            sigma=sigma,
+            N=N,
+            initial_conditions=initial_conditions,
+            tf=tf,
+        )
         # Create a multiprocessing Pool
         with mp.Pool(processes=8) as pool:
             # Process the items in parallel
-            results = pool.map(execute_simulation, range(N_TRIALS))
+            results = pool.map(execute_with_globals, range(N_TRIALS))
 
         # Close the pool and wait for the processes to finish
         pool.close()
         pool.join()
 
         # Convert the results to a NumPy array
-        state_record = [np.array(result[0]) for result in results]
-        control_record = [np.array(result[1]) for result in results]
+        state_record = [result[0] for result in results]
+        control_record = [result[1] for result in results]
 
         # Convert data to dict object
         save_data = {}
@@ -203,13 +301,13 @@ if __name__ == "__main__":
             save_data[save_keys[i]] = array
 
         # Save data in pickle format
-        with open(save_path + file_name + ".pkl", "wb") as file:
-            pickle.dump(save_data, file)
+        with open(save_path + file_name + ".pkl", "wb") as f_save:
+            pickle.dump(save_data, f_save)
 
     else:
         # Load data from file
-        with open(save_path + file_name + ".pkl", "rb") as file:
-            loaded_data = pickle.load(file)
+        with open(save_path + file_name + ".pkl", "rb") as f_load:
+            loaded_data = pickle.load(f_load)
 
         print("Data Loaded.")
 
@@ -240,10 +338,8 @@ if __name__ == "__main__":
         fig.savefig(save_path + file_name + ".png")
         print(f"Figure saved to: {save_path + file_name}.png")
 
-    final_deviation = np.array(
+    final_deviation = jnp.array(
         [rec[-1, :2] - initial_conditions.desired_state[:2] for rec in state_record]
     )
-    success_fraction = (
-        len(final_deviation[np.where(jnp.linalg.norm(final_deviation, axis=1) < 0.25)]) / N_TRIALS
-    )
+    success_fraction = jnp.sum(jnp.linalg.norm(final_deviation, axis=1) < 0.25) / N_TRIALS
     print(f"Success Fraction: {success_fraction:.2f}")

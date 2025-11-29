@@ -4,35 +4,36 @@ to reach a goal region while avoiding dynamic obstacles.
 
 """
 
-from typing import List
-from jax import Array, random
-import numpy as np
+from typing import List, Tuple
 
 import jax.numpy as jnp
+import numpy as np
+from jax import Array, random
+
 import cbfkit.simulation.simulator as sim
-from cbfkit.simulation.monte_carlo import conduct_monte_carlo
-from cbfkit.systems import single_integrator
-from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.estimators import ct_ukf_dtmeas
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.certificates import concatenate_certificates
 from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
     risk_aware_cbf_clf_qp_controller,
 )
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
-    RiskAwareParams,
-)
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.estimators import ct_ukf_dtmeas
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.sensors import unbiased_gaussian_noise as sensor
+from cbfkit.simulation.monte_carlo import conduct_monte_carlo
+from cbfkit.systems import single_integrator
 from examples.single_integrator.common.config import ukf_state_estimation as setup
-
 from examples.single_integrator.common.lyapunov_functions import fxts_lyapunov
 
 # Lyapunov Barrier Functions
-lyapunovs = fxts_lyapunov(
-    setup.desired_state,
-    setup.goal_radius,
-    setup.c1,
-    setup.c2,
-    setup.e1,
-    setup.e2,
+lyapunovs = concatenate_certificates(
+    fxts_lyapunov(
+        setup.desired_state,
+        setup.goal_radius,
+        setup.c1,
+        setup.c2,
+        setup.e1,
+        setup.e2,
+    )
 )
 
 # number of simulation steps
@@ -41,7 +42,12 @@ N_STEPS = int(setup.tf / setup.dt)
 # Define dynamics, controller, and estimator with specified parameters
 dynamics = single_integrator.two_dimensional_single_integrator(r=setup.goal_radius, sigma=setup.Q)
 nominal_controller = single_integrator.zero_controller()
-h = lambda x: x
+
+
+def h(x):
+    return x
+
+
 estimator = ct_ukf_dtmeas(
     Q=setup.Q,
     R=setup.R,
@@ -61,7 +67,6 @@ ra_clf_params = RiskAwareParams(
 )
 
 controller = risk_aware_cbf_clf_qp_controller(
-    nominal_input=nominal_controller,
     dynamics_func=dynamics,
     lyapunovs=lyapunovs,
     control_limits=setup.actuation_limits,
@@ -82,7 +87,7 @@ controller = risk_aware_cbf_clf_qp_controller(
 # )
 
 
-def execute(ii: int = 0) -> List[Array]:
+def execute(ii: int = 0) -> Tuple[Array, Array, Array, Array, List[str], List[Array], bool, float]:
     """_summary_
 
     Args:
@@ -98,7 +103,7 @@ def execute(ii: int = 0) -> List[Array]:
         np.pi / 2 * initial_quadrant + np.pi / 4 + (random.uniform(k2) - 0.5) * np.pi / 4
     )
     initial_radius = float(1.0 + random.uniform(k3) * (np.sqrt(2) - 1.0))
-    initial_state = np.array(
+    initial_state = jnp.array(
         [initial_radius * np.cos(initial_angle), initial_radius * np.sin(initial_angle)]
     )
 
@@ -113,12 +118,7 @@ def execute(ii: int = 0) -> List[Array]:
         num_steps=N_STEPS,
     )
 
-    # Reformat results as numpy arrays
-    x = np.array(x)
-    u = np.array(u)
-    z = np.array(z)
-    p = np.array(p)
-    success = np.linalg.norm(x[-1]) < setup.goal_radius
+    success = jnp.linalg.norm(x[-1]) < setup.goal_radius
     completion_time = x.shape[0] * setup.dt
     print(f"Completed Trial No. {ii}")
 

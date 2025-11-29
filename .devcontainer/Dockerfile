@@ -40,7 +40,7 @@ COPY pyproject.toml ./
 ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 
 # Install dependencies using uv
-RUN uv pip install . 
+RUN uv pip install .
 
 # Source the ROS 2 environment for all users when starting a shell
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc

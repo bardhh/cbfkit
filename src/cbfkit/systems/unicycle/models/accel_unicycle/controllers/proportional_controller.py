@@ -21,27 +21,27 @@ def proportional_controller(dynamics, Kp_pos, Kp_theta):
         # Compute the error between the current state and the desired state
         error_pos = jnp.subtract(xd[:2], state[:2])
         theta_d = jnp.arctan2(error_pos[1], error_pos[0])
-        
+
         # Calculate distance to goal
         dist = jnp.linalg.norm(error_pos)
-        
+
         # Calculate robust heading error in [-pi, pi]
         theta_error = theta_d - theta
         theta_error = (theta_error + jnp.pi) % (2 * jnp.pi) - jnp.pi
-        
+
         # Desired velocity
         # Saturate max desired velocity at 2.0 (as in original)
         v_d = Kp_pos * dist
         v_d = jnp.minimum(2.0, v_d)
-        
+
         # Coupling: Slow down if not facing goal to turn in place
         # Use a cosine factor or similar. If error is 90 deg, v_d becomes 0.
         # v_d = v_d * jnp.maximum(0.0, jnp.cos(theta_error))
-        
+
         # Acceleration control
         # Using Kp_pos as gain for velocity error as well (heuristic from original)
         accel = Kp_pos * (v_d - v)
-        
+
         # Angular velocity control
         omega = Kp_theta * theta_error
 

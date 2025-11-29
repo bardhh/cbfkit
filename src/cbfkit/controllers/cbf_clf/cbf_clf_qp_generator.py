@@ -26,26 +26,27 @@ Examples
 >>> )
 """
 
-from typing import Union, Dict, Any, Optional
-import jax.numpy as jnp
-from jax import Array, lax, jit
+from typing import Any, Dict, Optional, Union
 
+import jax.numpy as jnp
+from jax import Array, jit, lax
+
+from cbfkit.optimization.quadratic_program import solve as solve_qp
 from cbfkit.utils.user_types import (
     CbfClfQpGenerator,
     CertificateCollection,
     ControllerCallable,
     ControllerCallableReturns,
+    ControllerData,
     DynamicsCallable,
     GenerateComputeCertificateConstraintCallable,
-    State,
-    Control,
     Key,
-    ControllerData,
+    State,
 )
-from cbfkit.optimization.quadratic_program import solve as solve_qp
+
 from .generate_constraints import (
-    generate_compute_input_constraints,
     generate_compute_cbf_clf_constraints,
+    generate_compute_input_constraints,
 )
 
 
@@ -77,9 +78,9 @@ def cbf_clf_qp_generator(
             control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.]
             nominal_input (ControllerCallable): function to compute the nominal input
             dynamics_func (DynamicsCallable): function to compute dynamics based on current state
-            barriers (Optional[CertificateCollection] = ([], [], [], [], [])): collection of barrier functions,
+            barriers (CertificateCollection = ([], [], [], [], [])): collection of barrier functions,
                 gradients, hessians, dh/dt, conditions
-            lyapunovs (Optional[CertificateCollection] = ([], [], [], [], [])): collection of lyapunov functions,
+            lyapunovs (CertificateCollection = ([], [], [], [], [])): collection of lyapunov functions,
                 gradients, hessians, dV/dt,  conditions
             p_mat (Optional[Union[Array, None]] = None): objective function matrix (quadratic term)
             **kwargs (Dict[str, Any]): keyword arguments, e.g., RiskAwareParams for RA-CBF-CLF-QP
@@ -89,6 +90,15 @@ def cbf_clf_qp_generator(
         """
         complete = False
         n_con = len(control_limits)
+
+        # Ensure barriers and lyapunovs are not None
+        if barriers is None:
+            barriers = ([], [], [], [], [])
+        if lyapunovs is None:
+            lyapunovs = ([], [], [], [], [])
+
+        assert barriers is not None
+        assert lyapunovs is not None
 
         if "tunable_class_k" in kwargs and kwargs["tunable_class_k"]:
             b_funcs, _, _, _, _ = barriers
@@ -115,7 +125,13 @@ def cbf_clf_qp_generator(
             penalty_cbf = kwargs.get("slack_penalty_cbf", 2e3)
             penalty_clf = kwargs.get("slack_penalty_clf", 2e3)
             p_mat = jnp.diag(
-                jnp.hstack([jnp.ones((n_con,)), penalty_cbf * jnp.ones((n_bfs,)), penalty_clf * jnp.ones((n_lfs,))])
+                jnp.hstack(
+                    [
+                        jnp.ones((n_con,)),
+                        penalty_cbf * jnp.ones((n_bfs,)),
+                        penalty_clf * jnp.ones((n_lfs,)),
+                    ]
+                )
             )
 
         compute_input_constraints = generate_compute_input_constraints(control_limits)

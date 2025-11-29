@@ -19,7 +19,7 @@ Examples
 >>> from jax import jacfwd, jacrev
 >>> from cbfkit.certificates import certificate_package, concatenate_certificates
 >>> from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
->>> 
+>>>
 >>> def cbf(limit):
 >>>     def func(x):
 >>>         return x[0] - limit
@@ -36,38 +36,40 @@ Examples
 >>>     def func(x):
 >>>         return hessian(x)
 >>>     return func
->>> 
+>>>
 >>> package1 = certificate_package(cbf, cbf_grad, cbf_hess, n=1)
 >>> package2 = certificate_package(cbf, cbf_grad, cbf_hess, n=1)
 >>>
 >>> limit = 1.0
 >>> alpha = 1.0
 >>> barriers = concatenate_certificates(
->>>     package1(certificate_conditions=linear_class_k(alpha), limit=limit), 
+>>>     package1(certificate_conditions=linear_class_k(alpha), limit=limit),
 >>>     package2(certificate_conditions=linear_class_k(alpha), limit=-limit),
 >>> )
 
 """
 
+from typing import Any, Callable, Dict, List, Tuple
+
 import jax.numpy as jnp
 from jax import Array, jit
-from typing import Dict, Any, Callable
+
 from cbfkit.utils.user_types import (
     CertificateCallable,
-    CertificateJacobianCallable,
-    CertificateHessianCallable,
-    CertificatePartialCallable,
+    CertificateCollection,
     CertificateConditionsCallable,
-    CertificateTuple,
+    CertificateHessianCallable,
+    CertificateJacobianCallable,
+    CertificatePartialCallable,
 )
 
 
 def certificate_package(
-    func: Callable[[Dict[str, Any]], Callable[[Array], Array]],
-    func_grad: Callable[[Dict[str, Any]], Callable[[Array], Array]],
-    func_hess: Callable[[Dict[str, Any]], Callable[[Array], Array]],
+    func: Callable[..., Callable[[Array], Array]],
+    func_grad: Callable[..., Callable[[Array], Array]],
+    func_hess: Callable[..., Callable[[Array], Array]],
     n: int,
-) -> Callable[[Dict[str, Any]], CertificateTuple]:
+) -> Callable[..., CertificateCollection]:
     """Function for packaging and later creating CBF executables.
 
     Args:
@@ -77,13 +79,13 @@ def certificate_package(
         n (int): state dimension
 
     Returns:
-        CertificateTuple: _description_
+        CertificateCollection: _description_
     """
 
     def package(
         certificate_conditions: CertificateConditionsCallable,
         **kwargs: Dict[str, Any],
-    ) -> CertificateTuple:
+    ) -> CertificateCollection:
         """_summary_
 
         Args:
@@ -94,11 +96,11 @@ def certificate_package(
         Returns:
             BarrierTuple: _description_
         """
-        v_func: CertificateCallable = func(**kwargs)
-        j_func: CertificateJacobianCallable = func_grad(**kwargs)
-        h_func: CertificateHessianCallable = func_hess(**kwargs)
-        t_func: CertificatePartialCallable = func_grad(**kwargs)
-        c_func: CertificateConditionsCallable = certificate_conditions
+        v_func = func(**kwargs)
+        j_func = func_grad(**kwargs)
+        h_func = func_hess(**kwargs)
+        t_func = func_grad(**kwargs)
+        c_func = certificate_conditions
 
         @jit
         def v_(t: float, x: Array) -> Array:
@@ -127,20 +129,28 @@ def certificate_package(
     return package
 
 
-def concatenate_certificates(*tuples: CertificateTuple):
+def concatenate_certificates(*tuples: CertificateCollection) -> CertificateCollection:
     """_summary_
 
     Returns:
         _type_: _description_
     """
-    # Initialize an empty tuple to store the result
-    result_tuple = ()
+    if not tuples:
+        return ([], [], [], [], [])
 
-    # Iterate through the tuples and concatenate the lists
-    for tup in zip(*tuples):
-        # Use list comprehension to concatenate corresponding lists
-        result_list = [x for sublist in tup for x in sublist]
-        # Append the result_list to the result_tuple
-        result_tuple += (result_list,)
+    # Initialize empty lists for each component of CertificateCollection
+    v_list = []
+    j_list = []
+    h_list = []
+    t_list = []
+    c_list = []
 
-    return result_tuple
+    # Iterate through the tuples and extend the lists
+    for tup in tuples:
+        v_list.extend(tup[0])
+        j_list.extend(tup[1])
+        h_list.extend(tup[2])
+        t_list.extend(tup[3])
+        c_list.extend(tup[4])
+
+    return (v_list, j_list, h_list, t_list, c_list)

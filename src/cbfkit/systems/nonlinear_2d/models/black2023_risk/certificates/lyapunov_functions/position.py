@@ -6,12 +6,9 @@ gradients, Hessians, etc., for use in control Lyapunov function-based controller
 """
 
 import jax.numpy as jnp
-from jax import jit, jacfwd, jacrev, Array
+from jax import Array, jacfwd, jacrev, jit
+
 from cbfkit.utils.user_types import (
-    LyapunovCallable,
-    LyapunovJacobianCallable,
-    LyapunovHessianCallable,
-    LyapunovPartialCallable,
     LyapunovTuple,
 )
 
@@ -84,14 +81,26 @@ def position(goal: Array, r: float) -> LyapunovTuple:
     Returns:
         LyapunovTuple: _description_
     """
-    v_func: LyapunovCallable = lambda t, x: V_pos(jnp.hstack([x, t]), goal, r)  # type: ignore[return-value]
-    j_func: LyapunovJacobianCallable = lambda t, x: dV_pos_dx(jnp.hstack([x, t]), goal, r)[:N]  # type: ignore[return-value]
-    h_func: LyapunovHessianCallable = lambda t, x: dV2_pos_dx2(jnp.hstack([x, t]), goal, r)[:N, :N]  # type: ignore[return-value]
-    p_func: LyapunovPartialCallable = lambda t, x: dV_pos_dx(jnp.hstack([x, t]), goal, r)[-1]  # type: ignore[return-value]
+
+    def v_func(t, x):
+        return V_pos(jnp.hstack([x, t]), goal, r)  # type: ignore[return-value]
+
+    def j_func(t, x):
+        return dV_pos_dx(jnp.hstack([x, t]), goal, r)[:N]  # type: ignore[return-value]
+
+    def h_func(t, x):
+        return dV2_pos_dx2(jnp.hstack([x, t]), goal, r)[:N, :N]  # type: ignore[return-value]
+
+    def p_func(t, x):
+        return dV_pos_dx(jnp.hstack([x, t]), goal, r)[-1]  # type: ignore[return-value]
+
+    def c_func(v):
+        return 0.0
 
     return (
-        [v_func],
-        [j_func],
-        [h_func],
-        [p_func],
+        v_func,
+        j_func,
+        h_func,
+        p_func,
+        c_func,
     )

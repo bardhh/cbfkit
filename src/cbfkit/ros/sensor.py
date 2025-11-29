@@ -1,5 +1,6 @@
-import rospy
 from typing import Callable, Tuple
+
+import rospy
 from jax import Array
 
 

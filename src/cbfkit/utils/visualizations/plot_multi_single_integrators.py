@@ -1,11 +1,6 @@
-import matplotlib
-
 # matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from matplotlib.patches import Ellipse
-from typing import List
-from jax import Array
 
 
 #! PLOTTING
@@ -55,7 +50,6 @@ def animate(
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
 
-    desired_state_radius = 0.1
     # for i in range(num_robots):
     #     ax.plot(
     #         desired_state[2 * i],
@@ -74,8 +68,6 @@ def animate(
     #             linewidth=1,
     #         )
     #     )
-
-    from matplotlib import animation
 
     trajectory = [0] * num_robots
     for i in range(num_robots):

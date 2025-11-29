@@ -1,19 +1,19 @@
 import jax.numpy as jnp
 
-import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
 import cbfkit.simulation.simulator as sim
-from cbfkit.sensors import perfect as sensor
+import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator
+from cbfkit.sensors import perfect as sensor
+from cbfkit.systems.unicycle import proportional_controller
+from cbfkit.utils.user_types import PlannerData
 
-approx_unicycle_dynamics = unicycle.plant(l=1.0)
+approx_unicycle_dynamics = unicycle.plant(lam=1.0)
 init_state = jnp.array([0.0, 0.0, jnp.pi / 4])
 desired_state = jnp.array([4.0, 4.0, 0])
 
 # For start-to-goal without obstacles, use proportional controller
-controller = unicycle.controllers.proportional_controller(
-    dynamics=approx_unicycle_dynamics, Kp_pos=1, Kp_theta=0.01
-)
+controller = proportional_controller(dynamics=approx_unicycle_dynamics, Kp_pos=1, Kp_theta=0.01)
 
 tf = 10.0
 dt = 0.01
@@ -27,11 +27,11 @@ x, u, z, p, data_keys, data_values, planner_data, planner_data_keys = sim.execut
     nominal_controller=controller,
     sensor=sensor,
     estimator=estimator,
-    planner_data={
-        "u_traj": None,
-        "x_traj": jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
-        "prev_robustness": None,
-    },
+    planner_data=PlannerData(
+        u_traj=None,
+        x_traj=jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
+        prev_robustness=None,
+    ),
     use_jit=True,
 )
 
@@ -43,6 +43,7 @@ save = 1
 
 if plot:
     import matplotlib.pyplot as plt
+
     from examples.unicycle.common.visualizations import plot_trajectory
 
     plot_trajectory(
@@ -60,6 +61,7 @@ if animate:
 
     animate_trajectory(
         states=bicycle_states,
+        estimates=jnp.zeros_like(bicycle_states),
         desired_state=desired_state,
         desired_state_radius=0.1,
         x_lim=(-2, 6),

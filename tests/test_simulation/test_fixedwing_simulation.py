@@ -1,55 +1,25 @@
-"""
-Test Module for simulating the fixed-wing UAV system
-=========================
-
-This module contains tests for simulating the fixed-wing UAV system under
-various model dynamics.
-
-Tests
------
-Reach the drop point:
-- test_fixed_wing_risk_aware_fxt_clf_controller
-- test_fixed_wing_clf_controller
-
-Setup
------
-- No set up required
-
-Examples
---------
-To run all tests in this module (from the root of the repository):
-    $ python -m unittest tests.test_simulation.test_fixedwing_simulation.py
-"""
-
 import unittest
-from typing import List
+from typing import List, Tuple
+
 import jax.numpy as jnp
-from jax import jacfwd, Array
+from jax import Array, jacfwd
 
 import cbfkit.simulation.simulator as sim
-from cbfkit.controllers.cbf_clf import (
-    vanilla_cbf_clf_qp_controller,
-)
-from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
-    risk_aware_cbf_clf_qp_controller,
-)
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
-    RiskAwareParams,
-)
-from cbfkit.certificates import (
-    concatenate_certificates,
-)
-from cbfkit.certificates.conditions.lyapunov_conditions.fixed_time_stability import (
-    fxt_s,
-)
-from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.estimators import ct_ekf_dtmeas
-from cbfkit.integration import forward_euler as integrator
-from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
-
 
 # Simulation-specific
 import cbfkit.systems.fixed_wing_uav.models.beard2014_kinematic as uav
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates.conditions.lyapunov_conditions.fixed_time_stability import fxt_s
+from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
+    risk_aware_cbf_clf_qp_controller,
+)
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.estimators import ct_ekf_dtmeas
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
+from cbfkit.sensors import unbiased_gaussian_noise as sensor
+from cbfkit.utils.user_types import PlannerData
 
 # Simulation setup
 N = 6  # n_states
@@ -89,8 +59,16 @@ LYAPUNOVS = concatenate_certificates(l1)
 DYNAMICS = uav.plant()
 NOMINAL_CONTROLLER = uav.controllers.zero_controller()
 DFDX = jacfwd(DYNAMICS)
-H = lambda x: x
-DHDX = lambda _x: jnp.eye(N)
+
+
+def H(x):
+    return x
+
+
+def DHDX(_x):
+    return jnp.eye(N)
+
+
 ESTIMATOR = ct_ekf_dtmeas(
     Q=Q,
     R=R,
@@ -102,7 +80,7 @@ ESTIMATOR = ct_ekf_dtmeas(
 )
 
 
-def execute(controller) -> List[Array]:
+def execute(controller) -> Tuple[bool, int, Array]:
     """_summary_
 
     Args:
@@ -123,11 +101,11 @@ def execute(controller) -> List[Array]:
         sensor=sensor,
         estimator=ESTIMATOR,
         sigma=R,
-        planner_data={
-            "u_traj": None,
-            "x_traj": jnp.tile(GOAL.reshape(-1, 1), (1, N_STEPS + 1)),
-            "prev_robustness": None,
-        },
+        planner_data=PlannerData(
+            u_traj=None,
+            x_traj=jnp.tile(GOAL.reshape(-1, 1), (1, N_STEPS + 1)),
+            prev_robustness=None,
+        ),
     )
 
     if "error" in dkeys:

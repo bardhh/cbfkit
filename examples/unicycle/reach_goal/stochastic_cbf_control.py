@@ -1,23 +1,21 @@
 import jax.numpy as jnp
 
-import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 import cbfkit.simulation.simulator as sim
+import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
+from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import stochastic_barrier
+from cbfkit.controllers.cbf_clf import stochastic_cbf_clf_qp_controller as cbf_controller
+from cbfkit.estimators import naive as estimator
+from cbfkit.integration import forward_euler as integrator
 from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
-from cbfkit.controllers.cbf_clf import (
-    stochastic_cbf_clf_qp_controller as cbf_controller,
-)
-from cbfkit.certificates import (
-    concatenate_certificates,
-)
-from cbfkit.certificates.conditions.barrier_conditions import (
-    stochastic_barrier,
-)
-from cbfkit.certificates import (
-    rectify_relative_degree,
-)
-
+from cbfkit.sensors import perfect as sensor
 from cbfkit.utils.user_types import PlannerData
 from examples.unicycle.common.ellipsoidal_obstacle import stochastic_cbf as ellipsoid_cbf
+from examples.unicycle.common.visualizations import animate, plot_trajectory
+
+plot = 1
+should_animate = 1  # Renamed from animate
+save = 0
 
 # Simulation parameters
 tf = 10.0
@@ -29,7 +27,11 @@ init_state = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
 desired_state = jnp.array([2.0, 4.0, 0.0, 0.0])
 actuation_constraints = jnp.array([100.0, 100.0])  # Effectively, no control limits
 sigma_matrix = 0.1 * jnp.eye(len(init_state))
-sigma = lambda x: sigma_matrix
+
+
+def sigma(x):
+    return sigma_matrix
+
 
 uniycle_nom_controller = unicycle.controllers.proportional_controller(
     dynamics=unicycle_dynamics,
@@ -55,16 +57,16 @@ ellipsoids = [
 barriers = [
     rectify_relative_degree(
         function=ellipsoid_cbf(
-            obs,
-            ell,
+            jnp.array(obs),
+            jnp.array(ell),
         ),
         system_dynamics=unicycle_dynamics,
         state_dim=len(init_state),
         form="exponential",
     )(
         certificate_conditions=stochastic_barrier.right_hand_side(alpha=1.0, beta=1.0),
-        obstacle=obs,
-        ellipsoid=ell,
+        obstacle=jnp.array(obs),
+        ellipsoid=jnp.array(ell),
     )
     for obs, ell in zip(obstacles, ellipsoids)
 ]
@@ -79,12 +81,6 @@ controller = cbf_controller(
     sigma=sigma,
 )
 
-# Simulation imports
-from cbfkit.integration import forward_euler as integrator
-from cbfkit.sensors import perfect as sensor
-from cbfkit.estimators import naive as estimator
-
-
 x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     x0=init_state,
     dt=dt,
@@ -97,18 +93,10 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     estimator=estimator,
     perturbation=generate_stochastic_perturbation(sigma=sigma, dt=dt),
     filepath=file_path + "stochastic_cbf_results",
-    planner_data=PlannerData(
-        x_traj=jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1))
-    ),
+    planner_data=PlannerData(x_traj=jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1))),
 )
 
-plot = 1
-animate = 1
-save = 0
-
 if plot:
-    from examples.unicycle.common.visualizations import plot_trajectory
-
     plot_trajectory(
         states=x,
         desired_state=desired_state,
@@ -120,9 +108,7 @@ if plot:
         title="System Behavior",
     )
 
-if animate:
-    from examples.unicycle.common.visualizations import animate
-
+if should_animate:  # Changed from if animate:
     animate(
         states=x,
         estimates=z,

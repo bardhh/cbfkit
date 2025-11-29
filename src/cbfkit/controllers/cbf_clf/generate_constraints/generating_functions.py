@@ -2,15 +2,18 @@
 #! docstring
 """
 
-from typing import Callable, Tuple
+from typing import Any, Callable, Dict, Tuple
+
 import jax.numpy as jnp
-from jax import Array, jit, vmap, lax
+from jax import Array, jit, lax, vmap
+
 from cbfkit.utils.user_types import (
-    DynamicsCallable,
     CertificateCollection,
-    State,
     ComputeCertificateConstraintFunctionGenerator,
+    DynamicsCallable,
+    State,
 )
+
 from ..utils.utils import block_diag_matrix_from_vec, interleave_arrays
 
 
@@ -49,7 +52,7 @@ def generate_compute_cbf_clf_constraints(
     barriers: CertificateCollection = ([], [], [], [], []),
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs,
-) -> Callable[[float, Array], Tuple[Array, Array, bool]]:
+) -> Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]]:
     """_summary_
 
     Args:
@@ -61,7 +64,7 @@ def generate_compute_cbf_clf_constraints(
         lyapunovs (CertificateCollection, optional): _description_. Defaults to ([], [], [], [], []).
 
     Returns:
-        Callable[[float, Array], Tuple[Array, Array, bool]]: _description_
+        Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]]: _description_
     """
     compute_cbf_constraints = generate_compute_cbf_constraints(
         control_limits, dyn_func, barriers, lyapunovs, **kwargs
@@ -71,7 +74,7 @@ def generate_compute_cbf_clf_constraints(
     )
 
     @jit
-    def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, bool]:
+    def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, Dict[str, Any]]:
         """_summary_
 
         Returns:

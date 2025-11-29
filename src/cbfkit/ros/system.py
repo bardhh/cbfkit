@@ -1,10 +1,11 @@
 """module docstring here"""
 
-
 from typing import Callable
+
 import rospy
-from cbfkit.utils.user_types import ControllerCallable, SensorCallable
 from std_msgs.msg import Float64
+
+from cbfkit.utils.user_types import ControllerCallable, SensorCallable
 
 NODE_NAME = rospy.get_name()
 execution_time_publisher = rospy.Publisher(f"/{NODE_NAME}/execution_time", Float64, queue_size=1)

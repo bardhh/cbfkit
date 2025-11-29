@@ -1,10 +1,10 @@
 import jax.numpy as jnp
 from typing import *
 from jax import jit, Array, lax
-from cbfkit.utils.user_types import ControllerCallable, ControllerCallableReturns, Key, ControllerData
+from cbfkit.utils.user_types import NominalControllerCallable, ControllerCallableReturns, Key, ControllerData
 
 
-def controller_{{ index }}({{ control_args }}) -> ControllerCallable:
+def controller_{{ index }}({{ control_args }}) -> NominalControllerCallable:
     """
     Create a controller for the given dynamics.
 
@@ -17,14 +17,14 @@ def controller_{{ index }}({{ control_args }}) -> ControllerCallable:
     """
 
     @jit
-    def controller(t: float, x: Array, key: Key, xd: Array) -> ControllerCallableReturns:
+    def controller(t: float, x: Array, key: Key, xd: Optional[Array]) -> ControllerCallableReturns:
         """Computes control input.
 
         Args:
             t (float): time in sec
             x (Array): state vector
             key (Key): random key
-            xd (Array): desired state
+            xd (Optional[Array]): desired state
 
         Returns:
             unom (Array): vector

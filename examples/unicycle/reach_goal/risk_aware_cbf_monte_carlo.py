@@ -1,36 +1,34 @@
-import jax.numpy as jnp
-import pickle
-from jax import random, Array
 import multiprocessing as mp
-import numpy as np
-from typing import List
-import matplotlib.pyplot as plt
-from cbfkit.utils import print_progress
+import pickle
+from typing import List, Tuple
 
-import cbfkit.systems.unicycle as unicycle
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+from jax import Array, random
+
 import cbfkit.simulation.simulator as sim
-from cbfkit.controllers.cbf_clf import (
-    # adaptive_cbf_clf_controller,
-    # adaptive_risk_aware_cbf_clf_controller as cbf_controller,
-    # adaptive_stochastic_cbf_controller as cbf_controller,
-    # cbf_clf_controller,
-    risk_aware_cbf_clf_qp_controller as cbf_controller,
-    # stochastic_cbf_controller,
-)
-from cbfkit.systems.unicycle.models.olfatisaber2002approximate.certificates.lyapunov_functions.reach import reach_goal
-from cbfkit.certificates.conditions.lyapunov_conditions.fixed_time_stability import fxt_s
+import cbfkit.systems.unicycle as unicycle
 from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates.conditions.lyapunov_conditions.fixed_time_stability import fxt_s
+from cbfkit.controllers.cbf_clf import (
+    risk_aware_cbf_clf_qp_controller as cbf_controller,  # adaptive_cbf_clf_controller,; adaptive_risk_aware_cbf_clf_controller as cbf_controller,; adaptive_stochastic_cbf_controller as cbf_controller,; cbf_clf_controller,; stochastic_cbf_controller,
+)
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator
 from cbfkit.sensors import perfect as sensor
-from cbfkit.estimators import naive as estimator
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.systems.unicycle.models.olfatisaber2002approximate.certificates.lyapunov_functions.reach import (
+    reach_goal,
+)
+from cbfkit.utils import print_progress
+from cbfkit.utils.user_types import PlannerData
 
-approx_unicycle_dynamics = unicycle.approx_unicycle_dynamics(l=1.0)
+approx_unicycle_dynamics = unicycle.approx_unicycle_dynamics(lam=1.0)
 desired_state = jnp.array([0.0, 0.0, 0])
 
 Q = 0.5 * jnp.eye(3)
 ra_clf_params = RiskAwareParams(
-    t_max=2.0, # tf
+    t_max=2.0,  # tf
     p_bound=0.1,
     gamma=0.5,
     eta=10.0,
@@ -51,7 +49,7 @@ controller = cbf_controller(
         reach_goal(
             certificate_conditions=fxt_s(c1=2.0, c2=2.0, e1=0.9, e2=1.1),
             goal=desired_state,
-            radius=0.1
+            radius=0.1,
         )
     ),
     ra_clf_params=ra_clf_params,
@@ -71,19 +69,31 @@ progress_update_percent = 10
 
 
 # Define simulation function, including post-processing of data
-def execute_simulation(ii: int) -> List[Array]:
+def execute_simulation(
+    ii: int,
+) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
     # Generate random initial condition (position within 5x5 box, angle within +/- pi/4 of heading to goal)
-    np.random.seed(ii)
-    x_rand = np.random.uniform(low=-X_MAX, high=X_MAX)
-    y_rand = np.random.uniform(low=-Y_MAX, high=Y_MAX)
-    a_rand = jnp.arctan2(desired_state[1] - y_rand, desired_state[0] - x_rand) + np.random.uniform(
-        low=-jnp.pi / 4, high=jnp.pi / 4
+    key = random.PRNGKey(ii)
+    k1, k2, k3 = random.split(key, 3)
+    x_rand = random.uniform(k1, shape=(), minval=-X_MAX, maxval=X_MAX)
+    y_rand = random.uniform(k2, shape=(), minval=-Y_MAX, maxval=Y_MAX)
+    a_rand = jnp.arctan2(desired_state[1] - y_rand, desired_state[0] - x_rand) + random.uniform(
+        k3, shape=(), minval=-jnp.pi / 4, maxval=jnp.pi / 4
     )
     init_state = jnp.array([x_rand, y_rand, a_rand])
 
     # Execute simulation
-    states, controls, estimates, covariances, data_keys, data_values, planner_data, planner_data_keys = sim.execute(
-        x0=init_state, # Changed from initial_conditions.initial_state
+    (
+        states,
+        controls,
+        estimates,
+        covariances,
+        data,
+        data_keys,
+        planner_data,
+        planner_data_keys,
+    ) = sim.execute(
+        x0=init_state,  # Changed from initial_conditions.initial_state
         dynamics=approx_unicycle_dynamics,
         sensor=sensor,
         controller=controller,
@@ -91,12 +101,12 @@ def execute_simulation(ii: int) -> List[Array]:
         estimator=estimator,
         integrator=integrator,
         dt=dt,
-        num_steps=N_STEPS, # Changed from n_steps
-        planner_data={
-            "u_traj": None,
-            "x_traj": jnp.tile(desired_state.reshape(-1, 1), (1, N_STEPS + 1)),
-            "prev_robustness": None,
-        },
+        num_steps=N_STEPS,  # Changed from n_steps
+        planner_data=PlannerData(
+            u_traj=None,
+            x_traj=jnp.tile(desired_state.reshape(-1, 1), (1, N_STEPS + 1)),
+            prev_robustness=None,
+        ),
     )
 
     # Format data as jax numpy arrays
@@ -104,7 +114,16 @@ def execute_simulation(ii: int) -> List[Array]:
 
     print_progress(ii, N_TRIALS)
 
-    return [states, controls, [], []]
+    return (
+        states,
+        controls,
+        estimates,
+        covariances,
+        data,
+        data_keys,
+        planner_data,
+        planner_data_keys,
+    )
 
 
 # Needed for multiprocessing
@@ -114,8 +133,9 @@ if __name__ == "__main__":
 
     if simulate:
         import os
+
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        
+
         # Create a multiprocessing Pool
         # Use n_processes=1 to avoid JAX pickling issues unless we handle it carefully
         with mp.Pool(processes=1) as pool:
@@ -127,10 +147,10 @@ if __name__ == "__main__":
         pool.join()
 
         # Convert the results to a NumPy array
-        state_record = np.array([result[0] for result in results], dtype=object)
-        control_record = np.array([result[1] for result in results], dtype=object)
-        lyapunov_record = np.array([result[2] for result in results], dtype=object)
-        w_record = np.array([result[3] for result in results], dtype=object)
+        state_record = [result[0] for result in results]
+        control_record = [result[1] for result in results]
+        lyapunov_record = [result[2] for result in results]
+        w_record = [result[3] for result in results]
 
         # Convert data to dict object
         save_data = {}
@@ -142,16 +162,17 @@ if __name__ == "__main__":
         with open(filepath, "wb") as file:
             pickle.dump(save_data, file)
 
-    # Load data from file
-    with open(filepath, "rb") as file:
-        loaded_data = pickle.load(file)
+    else:
+        # Load data from file
+        with open(filepath, "rb") as read_file:
+            loaded_data = pickle.load(read_file)
 
-    print("Data Loaded.")
+        print("Data Loaded.")
 
-    state_trajectories = loaded_data["state_record"]
-    control_trajectories = loaded_data["control_record"]
-    lyapunov_trajectories = loaded_data["lyapunov_record"]
-    w_trajectories = loaded_data["w_record"]
+        state_trajectories = loaded_data["state_record"]
+        control_trajectories = loaded_data["control_record"]
+        lyapunov_trajectories = loaded_data["lyapunov_record"]
+        w_trajectories = loaded_data["w_record"]
 
     if plot:
         fig, ax = plt.subplots()
@@ -181,10 +202,8 @@ if __name__ == "__main__":
 
         plt.show()
 
-    final_deviation = np.array([traj[-1, :2] - desired_state[:2] for traj in state_trajectories])
-    success_fraction = (
-        len(final_deviation[np.where(jnp.linalg.norm(final_deviation, axis=1) < 0.25)]) / N_TRIALS
-    )
+    final_deviation = jnp.array([traj[-1, :2] - desired_state[:2] for traj in state_trajectories])
+    success_fraction = jnp.sum(jnp.linalg.norm(final_deviation, axis=1) < 0.25) / N_TRIALS
     print(f"Success Fraction: {success_fraction:.2f}")
 
 

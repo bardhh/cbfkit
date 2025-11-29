@@ -1,9 +1,11 @@
+from typing import Callable, List
+
 from jax import Array, lax
-from typing import List
-from cbfkit.utils.user_types import LyapunovTuple
-from cbfkit.systems.fixed_wing_uav.certificates.barrier_lyapunov_function_catalog import (
+
+from cbfkit.systems.fixed_wing_uav.models.beard2014_kinematic.certificates.barrier_lyapunov_functions import (
     velocity_with_obstacles,
 )
+from cbfkit.utils.user_types import CertificateCollection, LyapunovTuple
 
 
 def fxts_lyapunov_conditions(c1: float, c2: float, e1: float, e2: float):
@@ -19,11 +21,7 @@ def fxts_lyapunov_conditions(c1: float, c2: float, e1: float, e2: float):
         callable[float]: FxTS Lyapunov conditions
     """
     return (
-        [
-            lambda V: lax.cond(
-                V > 0, lambda _fake: -c1 * V**e1 - c2 * V**e2, lambda _fake: 0.0, 0
-            )
-        ],
+        [lambda V: lax.cond(V > 0, lambda _fake: -c1 * V**e1 - c2 * V**e2, lambda _fake: 0.0, 0.0)],
     )
 
 
@@ -37,7 +35,7 @@ def fxts_lyapunov_barrier_vel_and_obs(
     c2: float,
     e1: float,
     e2: float,
-) -> LyapunovTuple:
+) -> Callable[[], CertificateCollection]:
     """Generates Lyapunov functions, jacobians, hessians for use in CLF control law.
 
     Args:
@@ -56,8 +54,14 @@ def fxts_lyapunov_barrier_vel_and_obs(
     """
 
     def funcs():
-        return velocity_with_obstacles(goal, r, obstacles, robs, alpha) + fxts_lyapunov_conditions(
-            c1, c2, e1, e2
+        cert_collection = velocity_with_obstacles(goal, r, obstacles, robs, alpha)
+        conditions = fxts_lyapunov_conditions(c1, c2, e1, e2)
+        return (
+            cert_collection[0],
+            cert_collection[1],
+            cert_collection[2],
+            cert_collection[3],
+            cert_collection[4] + conditions[0],
         )
 
     return funcs

@@ -1,6 +1,17 @@
+from typing import Any, Dict, Optional
+
 import jax.numpy as jnp
-from jax import jit, Array, scipy
-from cbfkit.utils.user_types import ControllerCallable, ControllerCallableReturns
+from jax import Array, jit, scipy
+
+from cbfkit.utils.user_types import (
+    Control,
+    ControllerCallable,
+    ControllerCallableReturns,
+    ControllerData,
+    Key,
+    State,
+    Time,
+)
 
 
 def fxt_lyapunov_controller(epsilon: float) -> ControllerCallable:
@@ -16,7 +27,13 @@ def fxt_lyapunov_controller(epsilon: float) -> ControllerCallable:
     """
 
     @jit
-    def controller(_t: float, x: Array) -> ControllerCallableReturns:
+    def controller(
+        _t: Time,
+        x: State,
+        _u_nom: Optional[Control] = None,
+        _key: Optional[Key] = None,
+        _data: Optional[ControllerData] = None,
+    ) -> ControllerCallableReturns:
         """Computes Lyapunov function-based control input (1x1).
 
         Args:
@@ -31,9 +48,9 @@ def fxt_lyapunov_controller(epsilon: float) -> ControllerCallable:
         fV = -((V) ** 0.5) - (V) ** 1.5
         ux2 = (fV + 2 * x[0] * x[1]) / 2 + epsilon * (1 - x[0] ** 2) * x[1] ** 2 - x[0] * x[1]
         # logging data
-        data = {}
+        data: Dict[str, Any] = {}
 
-        return jnp.array([ux2]), data
+        return jnp.array([ux2]), ControllerData(sub_data=data)
 
     return controller
 
@@ -53,7 +70,13 @@ def fxt_stochastic_lyapunov_controller(
     """
 
     @jit
-    def controller(_t: float, x: Array) -> ControllerCallableReturns:
+    def controller(
+        _t: Time,
+        x: State,
+        _u_nom: Optional[Control] = None,
+        _key: Optional[Key] = None,
+        _data: Optional[ControllerData] = None,
+    ) -> ControllerCallableReturns:
         """Computes Lyapunov function-based control input (1x1).
 
         Args:
@@ -72,9 +95,9 @@ def fxt_stochastic_lyapunov_controller(
             - x[0] * x[1]
         )
         # logging data
-        data = {}
+        data: Dict[str, Any] = {}
 
-        return jnp.array([ux2]), data
+        return jnp.array([ux2]), ControllerData(sub_data=data)
 
     return controller
 
@@ -101,7 +124,13 @@ def fxt_risk_aware_lyapunov_controller(
     r = jnp.sqrt(2 * t_reach) * vartheta * scipy.special.erfinv(2 * pg - 1)
 
     # @jit
-    def controller(_t: float, x: Array) -> ControllerCallableReturns:
+    def controller(
+        _t: Time,
+        x: State,
+        _u_nom: Optional[Control] = None,
+        _key: Optional[Key] = None,
+        _data: Optional[ControllerData] = None,
+    ) -> ControllerCallableReturns:
         """Computes Lyapunov function-based control input (1x1).
 
         Args:
@@ -120,8 +149,8 @@ def fxt_risk_aware_lyapunov_controller(
             - x[0] * x[1]
         )
         # logging data
-        data = {}
+        data: Dict[str, Any] = {}
 
-        return jnp.array([ux2]), data
+        return jnp.array([ux2]), ControllerData(sub_data=data)
 
     return controller

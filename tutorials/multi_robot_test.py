@@ -1,7 +1,18 @@
-from jax import Array, jit
+import functools
+from typing import Any, Dict
+
 import jax.numpy as jnp
 import numpy as np
-import functools
+
+import cbfkit.controllers.cbf_clf as cbf_clf_controllers
+import cbfkit.simulation.simulator as sim
+import tutorials.multi_augmented_single_integrators as multi_augmented_single_integrators  # type: ignore[import]
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import e_s
+from cbfkit.estimators import naive as estimator
+from cbfkit.sensors import perfect as sensor
+from cbfkit.utils.numerical_integration import forward_euler as integrator
 
 target_directory = "./tutorials"
 model_name = "multi_augmented_single_integrators"
@@ -20,7 +31,7 @@ for i in range(num_robots):
     INITIAL_STATE[2 * i] = 2 * np.cos(2 * np.pi * i / num_robots + theta_disturbance)
     INITIAL_STATE[2 * i + 1] = 2 * np.sin(2 * np.pi * i / num_robots + theta_disturbance)
     goals[2 * i] = -2 * np.cos(2 * np.pi * i / num_robots) + 0.1
-params = {}
+params: Dict[str, Any] = {}
 
 state_constraint_funcs = []
 for i in range(num_robots):
@@ -36,38 +47,6 @@ for i in range(num_robots):
             "goal: float": goals[2 * i : 2 * i + 2],
         }
     )
-
-# Provides access to execute (sim.execute)
-import cbfkit.simulation.simulator as sim
-
-# Access to CBF-CLF-QP control law
-import cbfkit.controllers.cbf_clf as cbf_clf_controllers
-
-# Necessary housekeeping for using multiple CBFs/CLFs
-from cbfkit.certificates import (
-    concatenate_certificates,
-)
-
-# Suite of zeroing barrier function derivative conditions (forms of Class K functions)
-from cbfkit.certificates.conditions.barrier_conditions import (
-    zeroing_barriers,
-)
-
-# Exponentially stable derivative condition for CLF
-from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
-    e_s,
-)
-
-# Assuming perfect, complete state information
-from cbfkit.sensors import perfect as sensor
-
-# With perfect sensing, we can use a naive estimate of the state
-from cbfkit.estimators import naive as estimator
-
-# Use forward-Euler numerical integration scheme
-from cbfkit.utils.numerical_integration import forward_euler as integrator
-
-import tutorials.multi_augmented_single_integrators as multi_augmented_single_integrators
 
 # Simulation Parameters
 SAVE_FILE = f"tutorials/{model_name}/simulation_data"  # automatically uses .csv format
@@ -105,7 +84,7 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
 )
 
 x, _u, _z, _p, dkeys, dvalues, pkeys, pvalues = sim.execute(
-    x0=INITIAL_STATE,
+    x0=jnp.array(INITIAL_STATE),
     dt=DT,
     num_steps=N_STEPS,
     dynamics=dynamics,

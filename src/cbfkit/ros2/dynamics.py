@@ -1,5 +1,6 @@
 from typing import Callable, List
-from jax import jit, Array
+
+from jax import Array
 
 
 def dynamics(

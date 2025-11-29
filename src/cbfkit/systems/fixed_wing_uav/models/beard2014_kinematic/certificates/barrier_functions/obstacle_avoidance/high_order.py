@@ -1,12 +1,11 @@
-"""
-"""
+""" """
+
+from typing import Callable, List
 
 import jax.numpy as jnp
-from jax import jit, jacfwd, jacrev, Array
-from typing import List
-from cbfkit.certificates import (
-    certificate_package,
-)
+from jax import Array, jacfwd, jacrev, jit
+
+from cbfkit.certificates import certificate_package
 
 N = 6
 
@@ -16,7 +15,7 @@ N = 6
 ###############################################################################
 
 
-def cbf(obstacle: Array, ellipsoid: List[float], alpha: float) -> Array:
+def cbf(obstacle: Array, ellipsoid: List[float], alpha: float) -> Callable[[Array], Array]:
     """Obstacle avoidance constraint function for Fixed-Wing UAV. Super-level set convention.
 
     Args:
@@ -33,7 +32,6 @@ def cbf(obstacle: Array, ellipsoid: List[float], alpha: float) -> Array:
 
     @jit
     def func(state_and_time: Array) -> Array:
-
         # States
         x_e, y_e, z_e, v_e, psi_e, gamma_e, _t = state_and_time
         # x_o, y_o, z_o, v_o, psi_o, gamma_o, _t = obstacle
@@ -66,7 +64,7 @@ def cbf(obstacle: Array, ellipsoid: List[float], alpha: float) -> Array:
     return func
 
 
-def cbf_grad(obstacle: Array, ellipsoid: List[float], alpha: float) -> Array:
+def cbf_grad(obstacle: Array, ellipsoid: List[float], alpha: float) -> Callable[[Array], Array]:
     """Jacobian for the obstacle avoidance constraint function for Fixed-Wing UAV.
 
     Args:
@@ -88,7 +86,7 @@ def cbf_grad(obstacle: Array, ellipsoid: List[float], alpha: float) -> Array:
     return func
 
 
-def cbf_hess(obstacle: Array, ellipsoid: List[float], alpha: float) -> Array:
+def cbf_hess(obstacle: Array, ellipsoid: List[float], alpha: float) -> Callable[[Array], Array]:
     """Hessian for the obstacle avoidance constraint function for Fixed-Wing UAV.
 
     Args:

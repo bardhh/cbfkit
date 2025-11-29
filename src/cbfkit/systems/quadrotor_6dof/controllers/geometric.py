@@ -1,12 +1,20 @@
+from typing import Callable, Optional, Tuple
+
 import jax.numpy as jnp
-from typing import Callable, Tuple
-from jax import jit, Array
 from control import lqr
-from cbfkit.utils.matrix_vector_operations import normalize, hat, vee
-from cbfkit.utils.user_types import DynamicsCallable, ControllerCallable, ControllerCallableReturns
-from ..utils.rotations import rotation_body_frame_to_inertial_frame
-from ..models.quadrotor_6dof_dynamics import g_accel as g
+from jax import Array, jit
+
+from cbfkit.utils.matrix_vector_operations import hat, normalize, vee
+from cbfkit.utils.user_types import (
+    ControllerCallable,
+    ControllerCallableReturns,
+    ControllerData,
+    DynamicsCallable,
+)
+
 from ..certificates.lyapunov_functions import V_pv as V
+from ..models.quadrotor_6dof_dynamics import g_accel as g
+from ..utils.rotations import rotation_body_frame_to_inertial_frame
 
 
 def geometric_controller(
@@ -65,11 +73,20 @@ def geometric_controller(
     tg = 10.0
     c1, e1, e2 = 0.5, 0.5, 1.5
     c2 = 1 / ((e2 - 1) * (tg - 1 / (c1 * (1 - e1))))
-    fV = lambda x: -c1 * V(x, desired_state) ** e1 - c2 * V(x, desired_state) ** e2
+
+    def fV(x):
+        return -c1 * V(x, desired_state) ** e1 - c2 * V(x, desired_state) ** e2
+
     get_desired_pos_vel_acc = lyapunov_control(desired_state, dt, fV)
 
     @jit
-    def controller(t: float, x: Array) -> ControllerCallableReturns:
+    def controller(
+        t: float,
+        x: Array,
+        _u_nom: Optional[Array] = None,
+        _key: Optional[Array] = None,
+        _data: Optional[ControllerData] = None,
+    ) -> ControllerCallableReturns:
         """
         Computes control input.
 
@@ -85,7 +102,12 @@ def geometric_controller(
         nonlocal _b1_d, e3, j_vec
 
         _, _, _, _, _, _, _, theta, psi, _, _, _ = x
-        _, _, _, _, _, _, phi_dot, theta_dot, psi_dot, _, _, _ = dynamics(x)[0]
+        # dynamics returns (f, g), we unpack the first element which is f?
+        # The original code was: dynamics(x)[0]. This seems to imply dynamics(x) returns a tuple/list and the first element is f.
+        # Assuming dynamics(x) -> (f, g) or similar.
+        # And unpacking f: _, _, _, _, _, _, phi_dot, theta_dot, psi_dot, _, _, _ = f
+        f_val, _ = dynamics(x)
+        _, _, _, _, _, _, phi_dot, theta_dot, psi_dot, _, _, _ = f_val
 
         # Get rotation matrix
         body_to_inertial_rotation = rotation_body_frame_to_inertial_frame(x)
@@ -147,7 +169,7 @@ def geometric_controller(
 
         inputs = jnp.hstack([f, moments])
 
-        return inputs, {}
+        return inputs, ControllerData()
 
     return controller
 

@@ -20,7 +20,7 @@ Examples
 >>> from jax import jacfwd, jacrev
 >>> from cbfkit.certificates import certificate_package, concatenate_certificates
 >>> from cbfkit.certificates.conditions.lyapunov_conditions import e_s, fxt_s
->>> 
+>>>
 >>> def clf(goal):
 >>>     def func(x):
 >>>         return x[0] - goal
@@ -37,22 +37,24 @@ Examples
 >>>     def func(x):
 >>>         return hessian(x)
 >>>     return func
->>> 
+>>>
 >>> package1 = certificate_package(clf, clf_grad, clf_hess, n=1)
 >>>
 >>> goal = 1.0
 >>> c1, c2, e1, e2 = 1.0, 1.0, 0.75, 1.25
 >>> as_lyapunov = concatenate_certificates(
->>>     package1(certificate_conditions=e_s(c1), goal=goal), 
+>>>     package1(certificate_conditions=e_s(c1), goal=goal),
 >>> )
 >>> fxts_lyapunov = concatenate_certificates(
->>>     package1(certificate_conditions=fxt_s(c1, c2, e1, e2), goal=goal), 
+>>>     package1(certificate_conditions=fxt_s(c1, c2, e1, e2), goal=goal),
 >>> )
 
 """
 
 from typing import Callable
-from jax import lax, Array
+
+import jax.numpy as jnp
+from jax import Array
 
 
 def a_s() -> Callable[[Array], Array]:
@@ -66,4 +68,4 @@ def a_s() -> Callable[[Array], Array]:
     Returns:
         Callable[[Array], Array]: AS Lyapunov conditions
     """
-    return lambda V: 0.0
+    return lambda V: jnp.array(0.0)

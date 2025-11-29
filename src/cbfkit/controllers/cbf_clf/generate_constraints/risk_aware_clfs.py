@@ -2,22 +2,19 @@
 #! docstring
 """
 
-from typing import Callable, Tuple, Dict, Any
+from typing import Any, Callable, Dict, Tuple
+
 import jax.numpy as jnp
 from jax import Array, jit, lax, scipy
-from cbfkit.utils.user_types import (
-    DynamicsCallable,
-    CertificateCollection,
-    State,
-)
-from .unpack import unpack_for_clf
+
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
+from cbfkit.estimators.kalman_filters.ekf import get_global_k_ekf
+from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable, State, Time
+
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
-from cbfkit.estimators.kalman_filters.ekf import get_global_k_ekf
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
-    RiskAwareParams,
-)
+from .unpack import unpack_for_clf
 
 
 ####################################################################################################
@@ -28,7 +25,7 @@ def generate_compute_ra_clf_constraints(
     barriers: CertificateCollection = ([], [], [], [], []),
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
-) -> Callable[[float, State], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """
     #! To Do: docstring
     """
@@ -39,22 +36,26 @@ def generate_compute_ra_clf_constraints(
 
     # Check for Risk-Aware Params object
     if "ra_clf_params" in kwargs:
-        ra_params = kwargs["ra_clf_params"]
+        ra_params: RiskAwareParams = kwargs["ra_clf_params"]  # type: ignore[assignment]
+        assert ra_params.t_max is not None
+        assert ra_params.eta is not None
+        assert ra_params.p_bound is not None
         r_buffer = float(
             jnp.sqrt(2 * ra_params.t_max)
             * ra_params.eta
             * scipy.special.erfinv(2 * ra_params.p_bound - 1)
         )
     else:
-        ra_params = RiskAwareParams(sigma=lambda _: None)
+        ra_params = RiskAwareParams(sigma=lambda x: jnp.zeros((x.shape[0], 1)))
         r_buffer = 0.0
 
     @jit
-    def compute_clf_constraints(t: float, x: State) -> Tuple[Array, Array]:
+    def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
         """Computes CBF and CLF constraints."""
         nonlocal a_clf, b_clf
-        data = {}
+        data: Dict[str, Any] = {}
         dyn_f, dyn_g = dyn_func(x)
+        assert ra_params.sigma is not None
         sigma = ra_params.sigma(x)
 
         if n_lfs > 0:
@@ -88,7 +89,7 @@ def generate_compute_estimate_feedback_ra_clf_constraints(
     barriers: CertificateCollection = ([], [], [], [], []),
     lyapunovs: CertificateCollection = ([], [], [], [], []),
     **kwargs: Dict[str, Any],
-) -> Callable[[float, State], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """
     #! To Do: docstring
     """
@@ -99,7 +100,12 @@ def generate_compute_estimate_feedback_ra_clf_constraints(
 
     # Check for Risk-Aware Params object
     if "ra_clf_params" in kwargs:
-        ra_params = kwargs["ra_clf_params"]
+        ra_params: RiskAwareParams = kwargs["ra_clf_params"]  # type: ignore[assignment]
+        assert ra_params.t_max is not None
+        assert ra_params.eta is not None
+        assert ra_params.p_bound is not None
+        assert ra_params.epsilon is not None
+        assert ra_params.lambda_generator is not None
         r_buffer = float(
             jnp.sqrt(2 * ra_params.t_max)
             * ra_params.eta
@@ -107,20 +113,21 @@ def generate_compute_estimate_feedback_ra_clf_constraints(
             + ra_params.epsilon * ra_params.lambda_generator
         )
     else:
-        ra_params = RiskAwareParams(sigma=lambda _: None)
+        ra_params = RiskAwareParams(sigma=lambda x: jnp.zeros((x.shape[0], 1)))
         r_buffer = 0.0
 
     @jit
-    def compute_clf_constraints(t: float, x: State) -> Tuple[Array, Array]:
+    def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
         """Computes CBF and CLF constraints."""
         nonlocal a_clf, b_clf
-        data = {}
+        data: Dict[str, Any] = {}
         dyn_f, dyn_g = dyn_func(x)
         k_mat = get_global_k_ekf()
 
         if n_lfs > 0:
             lf_x, lj_x, lh_x, dlf_t, lc_x = compute_lyapunov_values(t, x)
-            product_varsigma_and_k = jnp.matmul(ra_params.varsigma, k_mat)
+            assert ra_params.varsigma is not None
+            product_varsigma_and_k = jnp.matmul(ra_params.varsigma(x), k_mat)
             traces = jnp.array(
                 [
                     0.5
@@ -132,6 +139,8 @@ def generate_compute_estimate_feedback_ra_clf_constraints(
                     for lh_ii in lh_x
                 ]
             )
+            assert ra_params.lambda_h is not None
+            assert ra_params.epsilon is not None
             estimate_feedback_term = (
                 ra_params.lambda_h * ra_params.epsilon * jnp.linalg.norm(jnp.matmul(lj_x, k_mat))
             )

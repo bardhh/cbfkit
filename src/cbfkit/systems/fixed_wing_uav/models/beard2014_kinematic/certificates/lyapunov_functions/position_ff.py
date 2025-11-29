@@ -6,10 +6,9 @@ gradients, Hessians, etc., for use in control Lyapunov function-based controller
 """
 
 import jax.numpy as jnp
-from jax import jit, jacfwd, jacrev, Array
-from cbfkit.certificates import (
-    certificate_package,
-)
+from jax import Array, jacfwd, jacrev, jit
+
+from cbfkit.certificates import certificate_package
 
 # from cbfkit.utils.user_types import (
 #     CertificateCallable,

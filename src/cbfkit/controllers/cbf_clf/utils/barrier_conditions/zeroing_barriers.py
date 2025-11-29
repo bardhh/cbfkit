@@ -20,7 +20,7 @@ Examples
 >>> from jax import jacfwd, jacrev
 >>> from cbfkit.certificates import certificate_package, concatenate_certificates
 >>> from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
->>> 
+>>>
 >>> def cbf(limit):
 >>>     def func(x):
 >>>         return x[0] - limit
@@ -37,18 +37,19 @@ Examples
 >>>     def func(x):
 >>>         return hessian(x)
 >>>     return func
->>> 
+>>>
 >>> package = certificate_package(cbf, cbf_grad, cbf_hess, n=1)
 >>>
 >>> limit = 1.0
 >>> alpha = 1.0
 >>> barriers = concatenate_certificates(
->>>     package(certificate_conditions=linear_class_k(alpha), limit=limit), 
+>>>     package(certificate_conditions=linear_class_k(alpha), limit=limit),
 >>> )
 
 """
 
 from typing import Callable
+
 from jax import Array
 
 

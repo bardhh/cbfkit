@@ -21,29 +21,22 @@ To run all tests in this module (from the root of the repository):
 
 import unittest
 from typing import List
+
 import jax.numpy as jnp
-from jax import jacfwd, Array
-from numpy import random
-
-from cbfkit.simulation import simulator as sim
-from cbfkit.simulation import monte_carlo
-from cbfkit.controllers.cbf_clf import (
-    vanilla_cbf_clf_qp_controller,
-)
-from cbfkit.certificates import (
-    concatenate_certificates,
-)
-from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import (
-    linear_class_k,
-)
-from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.estimators import ct_ekf_dtmeas
-from cbfkit.integration import forward_euler as integrator
-from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
-
+from jax import Array, jacfwd, random
 
 # Simulation-specific
 import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
+from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+from cbfkit.estimators import ct_ekf_dtmeas
+from cbfkit.integration import forward_euler as integrator
+from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
+from cbfkit.sensors import unbiased_gaussian_noise as sensor
+from cbfkit.simulation import monte_carlo
+from cbfkit.simulation import simulator as sim
+from cbfkit.utils.user_types import PlannerData
 
 # Simulation setup
 N = 3  # n_states
@@ -88,15 +81,23 @@ bars = [
 ]
 BARRIERS = concatenate_certificates(*bars)
 
-DYNAMICS = unicycle.plant(l=1.0)
+DYNAMICS = unicycle.plant(lam=1.0)
 NOMINAL_CONTROLLER = unicycle.controllers.proportional_controller(
     dynamics=DYNAMICS,
     Kp_pos=1.0,
     Kp_theta=0.01,
 )
 DFDX = jacfwd(DYNAMICS)
-H = lambda x: x
-DHDX = lambda _x: jnp.eye(N)
+
+
+def H(x):
+    return x
+
+
+def DHDX(_x):
+    return jnp.eye(N)
+
+
 ESTIMATOR = ct_ekf_dtmeas(
     Q=Q,
     R=R,
@@ -114,7 +115,7 @@ CONTROLLER = vanilla_cbf_clf_qp_controller(
 )
 
 
-def execute(_ii: int, use_jit: bool = False) -> List[Array]:
+def execute(_ii: int, use_jit: bool = False) -> bool:
     """_summary_
 
     Args:
@@ -124,11 +125,13 @@ def execute(_ii: int, use_jit: bool = False) -> List[Array]:
         List[Array]: _description_
     """
     invalid_initial_condition = True
+    key = random.PRNGKey(_ii)
     # Generate random initial condition
     while invalid_initial_condition:
-        x_rand = random.uniform(low=-x_max, high=x_max)
-        y_rand = random.uniform(low=-y_max, high=y_max)
-        a_rand = random.uniform(low=-jnp.pi, high=jnp.pi)
+        key, subkey1, subkey2, subkey3 = random.split(key, 4)
+        x_rand = random.uniform(subkey1, shape=(), minval=-x_max, maxval=x_max)
+        y_rand = random.uniform(subkey2, shape=(), minval=-y_max, maxval=y_max)
+        a_rand = random.uniform(subkey3, shape=(), minval=-jnp.pi, maxval=jnp.pi)
         initial_state = jnp.array([x_rand, y_rand, a_rand])
 
         invalid_initial_condition = any(
@@ -148,11 +151,11 @@ def execute(_ii: int, use_jit: bool = False) -> List[Array]:
         sensor=sensor,
         estimator=ESTIMATOR,
         sigma=R,
-        planner_data={
-            "u_traj": None,
-            "x_traj": jnp.tile(GOAL.reshape(-1, 1), (1, N_STEPS + 1)),
-            "prev_robustness": None,
-        },
+        planner_data=PlannerData(
+            u_traj=None,
+            x_traj=jnp.tile(GOAL.reshape(-1, 1), (1, N_STEPS + 1)),
+            prev_robustness=None,
+        ),
         use_jit=use_jit,
     )
 
@@ -174,8 +177,9 @@ def run_monte_carlo(n_trials: int, use_jit: bool = False) -> bool:
     """
     # Partial application to pass use_jit
     from functools import partial
+
     execute_fn = partial(execute, use_jit=use_jit)
-    
+
     successes = monte_carlo.conduct_monte_carlo(
         execute_fn,
         n_trials,

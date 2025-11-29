@@ -1,7 +1,22 @@
 import jax.numpy as jnp
-from jax import Array
+from jax import Array, jit
 
-def zero_controller(dynamics=None, **kwargs):
-    def controller(t: float, x: Array, key: Array = None, xd: Array = None):
-        return jnp.zeros(2), {}
+from cbfkit.utils.user_types import (
+    Control,
+    ControllerCallableReturns,
+    ControllerData,
+    Key,
+    NominalControllerCallable,
+    Optional,
+    State,
+)
+
+
+def zero_controller(dynamics=None, **kwargs) -> NominalControllerCallable:
+    @jit
+    def controller(
+        t: float, x: State, key: Key, xd: Optional[State] = None
+    ) -> ControllerCallableReturns:
+        return jnp.zeros(2), ControllerData()
+
     return controller

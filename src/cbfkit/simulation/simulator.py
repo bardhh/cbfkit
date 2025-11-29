@@ -24,10 +24,9 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import jax.tree_util
-from jax import Array, jit, random
+from jax import Array, random
 from tqdm import tqdm
 
-from cbfkit.utils.jax_stl import *
 from cbfkit.utils.logger import write_log
 from cbfkit.utils.user_types import (
     Control,
@@ -38,11 +37,14 @@ from cbfkit.utils.user_types import (
     Estimate,
     EstimatorCallable,
     IntegratorCallable,
+    Key,
+    NominalControllerCallable,
     PerturbationCallable,
     PlannerCallable,
     PlannerData,
     SensorCallable,
     State,
+    Time,
 )
 
 from .simulator_jit import simulator_jit
@@ -52,79 +54,55 @@ def stepper(
     dt: float,
     dynamics: DynamicsCallable,
     integrator: IntegratorCallable,
-    planner: PlannerCallable,
-    nominal_controller: ControllerCallable,
-    controller: ControllerCallable,
+    planner: Optional[PlannerCallable],
+    nominal_controller: Optional[NominalControllerCallable],
+    controller: Optional[ControllerCallable],
     sensor: SensorCallable,
     estimator: EstimatorCallable,
     perturbation: PerturbationCallable,
     sigma: Array,
-    key: random.PRNGKey,
+    key: Key,
     stl_trajectory_cost,
-) -> Tuple[State, Dict[str, Any]]:
+) -> Callable[
+    [
+        Time,
+        State,
+        Optional[Control],
+        Optional[Estimate],
+        Optional[Covariance],
+        Optional[ControllerData],
+        Optional[PlannerData],
+    ],
+    Tuple[Array, Array, Array, Array, ControllerData, PlannerData],
+]:
     """Creates a closure to step the simulation forward by one timestep.
-
-    This function sets up the simulation environment including dynamics,
-    controllers, estimators, and sensors. It returns a `step` function
-    that, when called, advances the state of the system by `dt`.
-
-    The returned `step` closure performs the following operations:
-    1. Generates sensor measurements from the current state.
-    2. Updates the state estimate using the estimator.
-    3. Computes the true dynamics at the current state.
-    4. Plans a trajectory if a planner is provided.
-    5. Computes the nominal control input.
-    6. Computes the final control input using the controller (e.g., CBF-QP).
-    7. Applies perturbations (e.g., noise) to the dynamics.
-    8. Integrates the dynamics to obtain the next state.
-
-    Args:
-        dt (float): The timestep for the simulation (in seconds).
-        dynamics (DynamicsCallable): Function to compute true system dynamics f(x) and g(x).
-        integrator (IntegratorCallable): Function to integrate dynamics over the timestep.
-        planner (PlannerCallable): Function to plan a reference trajectory.
-        nominal_controller (ControllerCallable): Function to compute nominal control input.
-        controller (ControllerCallable): Function to compute safety-critical control input.
-        sensor (SensorCallable): Function to generate sensor measurements.
-        estimator (EstimatorCallable): Function to estimate state from measurements.
-        perturbation (PerturbationCallable): Function to apply disturbances to dynamics.
-        sigma (Array): Noise covariance parameter for sensors/dynamics.
-        key (random.PRNGKey): JAX random key for stochasticity.
-        stl_trajectory_cost (Optional[Callable]): Cost function for STL specifications.
-
-    Returns:
-        Callable: A `step` function that takes (t, x, u, z, c, data) and returns
-        updated (x, u, z, c, data) for the next timestep.
+    ...
     """
 
     def step(
-        t: float,
+        t: Time,
         x: State,
-        u: Control,
-        z: Estimate,
-        c: Covariance,
-        controller_data: ControllerData,
-        planner_data: PlannerData,
+        u: Optional[Control],
+        z: Optional[Estimate],
+        c: Optional[Covariance],
+        controller_data: Optional[ControllerData],
+        planner_data: Optional[PlannerData],
     ) -> Tuple[Array, Array, Array, Array, ControllerData, PlannerData]:
         """_summary_
-
-        Args:
-            t (float): time (sec)
-            x (Array): state vector
-            u (Array): control input vector
-            z (Array): state estimate vector
-            c (Array): covariance matrix of state estimate
-
-        Returns:
-            x (Array): state vector
-            u (Array): control input vector
-            z (Array): state estimate vector
-            c (Array): covariance matrix of state estimate
-            data (dict): contains other relevant simulation data
+        ...
         """
+        if controller_data is None:
+            controller_data = ControllerData()
+        if planner_data is None:
+            planner_data = PlannerData()
+
         # Nonlocal key (argument to parent function) for random noise generation
         nonlocal key
-        key, subkey = random.split(key)
+        key, subkey = random.split(key)  # type: ignore
+
+        # Handle initial estimate if None
+        if z is None:
+            z = x  # Assume perfect knowledge initially if not provided
 
         # Sensor measurement
         y = sensor(t, x, sigma=sigma, key=key)
@@ -149,9 +127,17 @@ def stepper(
             planner_data = planner_data._replace(prev_robustness=None)
 
         if planner is not None:
-            u_planner, planner_data = planner(t, z, None, subkey, planner_data)
+            assert planner is not None
+            u_planner, planner_data = planner(t, z, None, subkey, planner_data)  # type: ignore
             if planner_data.error:
-                return x, u, z, c, controller_data, planner_data
+                return (
+                    x,
+                    u if u is not None else jnp.zeros(g.shape[1]),
+                    z,
+                    c if c is not None else jnp.zeros((len(z), len(z))),
+                    controller_data,
+                    planner_data,
+                )
         else:
             planner_data = planner_data._replace(u_traj=None)
         planner_data = planner_data._replace(prev_robustness=None)
@@ -166,21 +152,35 @@ def stepper(
             timestep_idx = jnp.round(t / dt).astype(int)
             # Clamp to valid range [0, N-1] where N is number of columns in x_traj
             timestep_idx = jnp.clip(timestep_idx, 0, planner_data.x_traj.shape[1] - 1)
-            u, _ = nominal_controller(t, z, subkey, planner_data.x_traj[:, timestep_idx])
+            u, _ = nominal_controller(t, z, subkey, planner_data.x_traj[:, timestep_idx])  # type: ignore
         else:
-            if nominal_controller == None:
+            if nominal_controller is None:
                 # print(f"WARNING: Nominal controller not defined. Setting to zero input")
                 u = jnp.zeros((g.shape[1],))
             else:
-                u, _ = nominal_controller(t, z, subkey, None)
+                u, _ = nominal_controller(t, z, subkey, None)  # type: ignore
 
         # Compute control input using controller
         if controller is not None:
-            u, controller_data = controller(t, z, u, subkey, controller_data)
+            u, controller_data = controller(t, z, u, subkey, controller_data)  # type: ignore
             if controller_data.error:
-                return x, u, z, c, controller_data, planner_data
+                return (
+                    x,
+                    u,
+                    z,
+                    c if c is not None else jnp.zeros((len(z), len(z))),
+                    controller_data,
+                    planner_data,
+                )
             if controller_data.complete:
-                return x, u, z, c, controller_data, planner_data
+                return (
+                    x,
+                    u,
+                    z,
+                    c if c is not None else jnp.zeros((len(z), len(z))),
+                    controller_data,
+                    planner_data,
+                )
         else:
             controller_data = ControllerData()
 
@@ -188,14 +188,18 @@ def stepper(
         p = perturbation(x, u, f, g)
 
         # Continuous-time dynamics (inclusive of SDEs)
-        key, subkey = random.split(key)
-        xdot = f + jnp.matmul(g, u) + p(subkey)
+        key, subkey = random.split(key)  # type: ignore
+        xdot = f + jnp.matmul(g, u) + p(subkey)  # type: ignore
 
         # Hmm. only way is to initialize integrator for specific dynamics beforehand
         # for sampled data systems
         x = integrator(x, xdot, dt)
 
-        return x, u, z, c, controller_data, planner_data
+        # Ensure return types
+        u_ret = u
+        c_ret = c if c is not None else jnp.zeros((len(z), len(z)))
+
+        return x, u_ret, z, c_ret, controller_data, planner_data
 
     return step
 
@@ -205,63 +209,87 @@ def simulator(
     num_steps: int,
     dynamics: DynamicsCallable,
     integrator: IntegratorCallable,
-    planner: PlannerCallable,
-    nominal_controller: ControllerCallable,
-    controller: ControllerCallable,
-    sensor: SensorCallable,
-    estimator: EstimatorCallable,
-    perturbation: PerturbationCallable,
-    sigma: Array,
-    key: random.PRNGKey,
+    planner: Optional[PlannerCallable],
+    nominal_controller: Optional[NominalControllerCallable],
+    controller: Optional[ControllerCallable],
+    sensor: Optional[SensorCallable],
+    estimator: Optional[EstimatorCallable],
+    perturbation: Optional[PerturbationCallable],
+    sigma: Optional[Array],
+    key: Array,
     verbose: Optional[bool] = True,
     stl_trajectory_cost=None,
-) -> Callable[[Array], Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array]]]]:
+) -> Callable[
+    [Array, Optional[ControllerData], Optional[PlannerData]],
+    Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]],
+]:
     """Generates an iterator for simulating the dynamical system over a fixed horizon.
-
-    This function configures the simulation loop using the provided components
-    (dynamics, controller, etc.). It returns a callable that, when invoked with an
-    initial state, returns an iterator. This iterator yields the system state and
-    data at each timestep.
-
-    Args:
-        dt (float): The timestep for the simulation (in seconds).
-        num_steps (int): Total number of timesteps to simulate.
-        dynamics (DynamicsCallable): Function to compute true system dynamics.
-        integrator (IntegratorCallable): Function to integrate dynamics.
-        planner (PlannerCallable): Function to plan trajectories.
-        nominal_controller (ControllerCallable): Function for nominal control.
-        controller (ControllerCallable): Function for safety filter/control.
-        sensor (SensorCallable): Function for sensor measurements.
-        estimator (EstimatorCallable): Function for state estimation.
-        perturbation (PerturbationCallable): Function for dynamics perturbations.
-        sigma (Array): Noise parameters.
-        key (random.PRNGKey): JAX random key.
-        verbose (bool, optional): If True, shows a progress bar. Defaults to True.
-        stl_trajectory_cost (Optional[Callable], optional): STL cost function. Defaults to None.
-
-    Returns:
-        Callable[[Array], Iterator]: A function that accepts an initial state `x0`
-        and returns an iterator. The iterator yields tuples containing:
-            - x (Array): Current state vector.
-            - u (Array): Applied control input.
-            - z (Array): Estimated state vector.
-            - p (Array): Estimation covariance/metadata.
-            - c_keys (List[str]): Keys for controller data.
-            - c_vals (List[Array]): Values for controller data.
-            - p_keys (List[str]): Keys for planner data.
-            - p_vals (List[Array]): Values for planner data.
+    ...
     """
+    # ... (defaults handling same as before) ...
+    # Handle defaults for Optional callables
+    sensor_func: SensorCallable
+    if sensor is None:
+
+        def _default_sensor(
+            t: Time,
+            x: Array,
+            *,
+            sigma: Optional[Array] = None,
+            key: Optional[Array] = None,
+            **kwargs: Any,
+        ) -> Array:
+            return x
+
+        sensor_func = _default_sensor
+    else:
+        sensor_func = sensor
+
+    estimator_func: EstimatorCallable
+    if estimator is None:
+
+        def _default_estimator(t, y, z, u, c):
+            return y, c
+
+        estimator_func = _default_estimator
+    else:
+        estimator_func = estimator
+
+    perturbation_func: PerturbationCallable
+    if perturbation is None:
+
+        def _default_perturbation(x, u, f, g):
+            def p(key):
+                return jnp.zeros(x.shape)
+
+            return p
+
+        perturbation_func = _default_perturbation
+    else:
+        perturbation_func = perturbation
+
+    sigma_val: Array
+    if sigma is None:
+        sigma_val = jnp.zeros(0)  # Dummy sigma
+    else:
+        sigma_val = sigma
+
+    assert sensor_func is not None
+    assert estimator_func is not None
+    assert perturbation_func is not None
+    assert sigma_val is not None
+
     # Define step function
     step = stepper(
         dynamics=dynamics,
-        sensor=sensor,
+        sensor=sensor_func,
         planner=planner,
         nominal_controller=nominal_controller,
         controller=controller,
-        estimator=estimator,
-        perturbation=perturbation,
+        estimator=estimator_func,
+        perturbation=perturbation_func,
         integrator=integrator,
-        sigma=sigma,
+        sigma=sigma_val,
         dt=dt,
         key=key,
         stl_trajectory_cost=stl_trajectory_cost,
@@ -269,9 +297,11 @@ def simulator(
 
     def simulate_iter(
         x: Array,
-        controller_data: ControllerData = None,
-        planner_data: PlannerData = None,
-    ) -> Iterator[Tuple[Array, Array, Array, Array, List[str], List[Array]]]:
+        controller_data: Optional[ControllerData] = None,
+        planner_data: Optional[PlannerData] = None,
+    ) -> Iterator[
+        Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]
+    ]:
         if controller_data is None:
             controller_data = ControllerData()
         if planner_data is None:
@@ -286,19 +316,23 @@ def simulator(
         if verbose:
             items = tqdm(items)
 
-        xs = jnp.copy(x.reshape(-1, 1))
-
         # Simulate remaining timesteps
-        planner_data = planner_data._replace(xs=xs)
+        if planner_data.xs is None:
+            xs = jnp.copy(x.reshape(-1, 1))
+        else:
+            xs = planner_data.xs
+
         for s in items:
+            # Fix: Step arguments
+            # step(t, x, u, z, c, controller_data, planner_data)
+            # Need to pass u=None, z=None/x, c=None (p)
+            # But step now accepts Optional[Estimate] for z.
             x, u, z, p, controller_data, planner_data = step(
                 dt * s, x, u, z, p, controller_data, planner_data
             )
             # Removed log() call here
             xs = jnp.append(xs, x.reshape(-1, 1), axis=1)
-            planner_data = planner_data._replace(
-                xs=jnp.append(planner_data.xs, x.reshape(-1, 1), axis=1)
-            )
+            planner_data = planner_data._replace(xs=xs)
             # None  # xs
             yield x, u, z, p, list(controller_data._asdict().keys()), list(
                 controller_data._asdict().values()
@@ -330,22 +364,22 @@ def execute(
     num_steps: int,
     dynamics: DynamicsCallable,
     integrator: IntegratorCallable,
-    planner: Optional[Union[ControllerCallable, None]] = None,
-    nominal_controller: Optional[Union[ControllerCallable, None]] = None,
-    controller: Optional[Union[ControllerCallable, None]] = None,
+    planner: Optional[PlannerCallable] = None,
+    nominal_controller: Optional[NominalControllerCallable] = None,
+    controller: Optional[ControllerCallable] = None,
     sensor: Optional[Union[SensorCallable, None]] = None,
     estimator: Optional[Union[EstimatorCallable, None]] = None,
     perturbation: Optional[Union[PerturbationCallable, None]] = None,
     sigma: Optional[Union[Array, None]] = None,
-    key: Optional[Union[random.PRNGKey, None]] = None,
+    key: Optional[Union[Array, None]] = None,
     filepath: Optional[str] = None,
     verbose: Optional[bool] = True,
-    controller_data: ControllerData = None,
-    planner_data: PlannerData = None,
+    controller_data: Optional[ControllerData] = None,
+    planner_data: Optional[PlannerData] = None,
     initial_covariance: Optional[Covariance] = None,
     stl_trajectory_cost=None,
     use_jit: bool = False,
-) -> Tuple[Array, List[str], List[Array]]:
+) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
     """Executes a complete simulation of the dynamical system.
 
     This function runs the simulation for `num_steps` starting from `x0`.
@@ -365,7 +399,7 @@ def execute(
         estimator (Optional[EstimatorCallable], optional): State estimator. Defaults to None.
         perturbation (Optional[PerturbationCallable], optional): Disturbance model. Defaults to None.
         sigma (Optional[Array], optional): Noise covariance/parameters. Defaults to None.
-        key (Optional[random.PRNGKey], optional): Random key for noise. Defaults to None.
+        key (Optional[Array], optional): Random key for noise. Defaults to None.
         filepath (Optional[str], optional): Path to save log file. Defaults to None.
         verbose (Optional[bool], optional): Print progress/status. Defaults to True.
         controller_data (ControllerData, optional): Initial controller data. Defaults to None.
@@ -387,35 +421,64 @@ def execute(
             - planner_values (List[Array]): Logged planner data values.
     """
 
-    if nominal_controller is None:
-        pass
-
-    if controller is None:
-        pass
-
-    if planner is None:
-        pass
-
+    # Handle defaults
+    _sensor: SensorCallable
     if sensor is None:
-        pass
 
+        def _default_sensor(
+            t: Time,
+            x: Array,
+            *,
+            sigma: Optional[Array] = None,
+            key: Optional[Array] = None,
+            **kwargs: Any,
+        ) -> Array:
+            return x
+
+        _sensor = _default_sensor
+    else:
+        _sensor = sensor
+
+    _estimator: EstimatorCallable
     if estimator is None:
-        pass
 
+        def _default_estimator(
+            t: Time,
+            y: Array,
+            z: Array,
+            u: Optional[Array],
+            c: Optional[Array],
+        ) -> Tuple[Array, Array]:
+            return y, c if c is not None else jnp.zeros((len(y), len(y)))
+
+        _estimator = _default_estimator
+    else:
+        _estimator = estimator
+
+    _perturbation: PerturbationCallable
     if perturbation is None:
 
-        def perturbation(x, _u, _f, _g):
-            def p(_subkey):
+        def _default_perturbation(
+            x: Array, u: Array, f: Array, g: Array
+        ) -> Callable[[Array], Array]:
+            def p(key: Array) -> Array:
                 return jnp.zeros(x.shape)
 
             return p
 
+        _perturbation = _default_perturbation
+    else:
+        _perturbation = perturbation
+
+    sigma_val: Array
     if sigma is None:
-        pass
+        sigma_val = jnp.zeros(0)
+    else:
+        sigma_val = sigma
 
     # Generate key for randomization
     if key is None:
-        key = random.PRNGKey(0)
+        key = random.PRNGKey(0)  # type: ignore
 
     # Ensure data structures are NamedTuples
     if controller_data is None:
@@ -441,12 +504,12 @@ def execute(
         if verbose:
             print("Warming up JIT...")
 
-        prime_key1, prime_key2, prime_key3 = random.split(key, 3)
+        prime_key1, prime_key2, prime_key3 = random.split(key, 3)  # type: ignore
 
         # Prime Planner
         if planner is not None:
             # Dummy z (estimate) = x0
-            _, p_data = planner(0.0, x0, None, prime_key1, p_data)
+            _, p_data = planner(0.0, x0, None, prime_key1, p_data)  # type: ignore
 
         # Prime Nominal (optional, usually stateless, but good for consistency)
         # u_nom_dummy, _ = nominal_controller(0.0, x0, prime_key2, None)
@@ -456,7 +519,7 @@ def execute(
             # Need a dummy u_nom
             f_dummy, g_dummy = dynamics(x0)
             u_nom_dummy = jnp.zeros((g_dummy.shape[1],))
-            _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)
+            _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
         if verbose:
             print("JIT compilation/execution started. No progress bar will be shown.")
@@ -470,11 +533,11 @@ def execute(
             planner=planner,
             nominal_controller=nominal_controller,
             controller=controller,
-            sensor=sensor,
-            estimator=estimator,
-            perturbation=perturbation,
-            sigma=sigma,
-            key=key,
+            sensor=_sensor,
+            estimator=_estimator,
+            perturbation=_perturbation,
+            sigma=sigma_val,
+            key=key,  # type: ignore
             initial_state=x0,
             initial_controller_data=c_data,
             initial_planner_data=p_data,
@@ -506,7 +569,7 @@ def execute(
             p_val_t = [getattr(p_data_t, k) for k in p_keys]
             p_values.append(p_val_t)
 
-        simulation_data = []
+        simulation_data_list = []
         for t in range(num_steps):
             # We need to handle potential shape mismatches if JIT returns different shapes
             # Assuming xs, us, zs, cs are shaped (num_steps, ...)
@@ -520,9 +583,9 @@ def execute(
             p_val_t = p_values[t]
 
             item = (x_t, u_t, z_t, c_t, c_keys, c_val_t, p_keys, p_val_t)
-            simulation_data.append(item)
+            simulation_data_list.append(item)
 
-        simulation_data = tuple(simulation_data)
+        simulation_data = tuple(simulation_data_list)
 
         if filepath is not None and verbose:
             # Now we can support logging in JIT!
@@ -539,21 +602,21 @@ def execute(
         planner,
         nominal_controller,
         controller,
-        sensor,
-        estimator,
-        perturbation,
-        sigma,
-        key,
-        verbose,
-        stl_trajectory_cost,
+        sensor=_sensor,
+        estimator=_estimator,
+        perturbation=_perturbation,
+        sigma=sigma_val,
+        key=key,  # type: ignore
+        verbose=verbose,
+        stl_trajectory_cost=stl_trajectory_cost,
     )
 
     # Run simulation from initial state
     simulation_data = tuple(
         simulate_iter(
             x0,
-            controller_data=controller_data,
-            planner_data=planner_data,
+            controller_data,
+            planner_data,
         )
     )
 
@@ -562,7 +625,7 @@ def execute(
 
 
 #! Finish this function
-def extract_and_log_data(filepath: str, data):
+def extract_and_log_data(filepath: Optional[str], data):
     """_summary_"""
 
     if len(data) > 0:

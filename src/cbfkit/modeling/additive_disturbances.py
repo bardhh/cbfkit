@@ -3,13 +3,16 @@
 """
 
 from typing import Callable
+
 import jax.numpy as jnp
 from jax import Array, jit, random
+
+from cbfkit.utils.user_types import Key, PerturbationCallable, PerturbationCallableReturns
 
 
 def generate_stochastic_perturbation(
     sigma: Callable[[Array], Array], dt: float
-) -> Callable[[Array], Array]:
+) -> PerturbationCallable:
     """Generates additive, stochastic perturbation function given sigma (diffusion function).
 
     Args:
@@ -22,7 +25,7 @@ def generate_stochastic_perturbation(
 
     def stochastic_perturbation(
         x: Array, _u: Array, _f: Array, _g: Array
-    ) -> Callable[[Array], Callable[[random.PRNGKey], Array]]:
+    ) -> PerturbationCallableReturns:
         """Computes value of stochastic perturbation.
 
         Args:
@@ -35,10 +38,10 @@ def generate_stochastic_perturbation(
         sigma_x = sigma(x)
         return generate_compute(sigma_x)
 
-    def generate_compute(sigma_x: Array) -> Callable[[random.PRNGKey], Array]:
+    def generate_compute(sigma_x: Array) -> PerturbationCallableReturns:
         """"""
 
-        def compute(subkey: random.PRNGKey) -> Array:
+        def compute(subkey: Key) -> Array:
             """TO DO"""
             nonlocal dt
             dw = random.normal(subkey, shape=(sigma_x.shape[1],)) * jnp.sqrt(dt)
@@ -50,8 +53,8 @@ def generate_stochastic_perturbation(
 
 
 def generate_bounded_perturbation(
-    perturbation: Callable[[Array], Array]
-) -> Callable[[Array], Array]:
+    perturbation: Callable[[Array], Array],
+) -> PerturbationCallable:
     """Generates additive, bounded perturbation to system dynamics.
 
     Args:
@@ -63,7 +66,7 @@ def generate_bounded_perturbation(
 
     def bounded_perturbation(
         x: Array, _u: Array, _f: Array, _g: Array
-    ) -> Callable[[Array], Callable[[random.PRNGKey], Array]]:
+    ) -> PerturbationCallableReturns:
         """Computes value of stochastic perturbation.
 
         Args:
@@ -76,11 +79,11 @@ def generate_bounded_perturbation(
         perturb = perturbation(x)
         return generate_compute(perturb)
 
-    def generate_compute(perturbation_x: Array) -> Callable[[random.PRNGKey], Array]:
+    def generate_compute(perturbation_x: Array) -> PerturbationCallableReturns:
         """"""
 
         @jit
-        def compute(_subkey: random.PRNGKey) -> Array:
+        def compute(_subkey: Key) -> Array:
             """TO DO"""
             nonlocal perturbation_x
             return perturbation_x
@@ -92,7 +95,7 @@ def generate_bounded_perturbation(
 
 def generate_affine_perturbation(
     regressor: Callable[[Array], Array], parameter_vector: Array
-) -> Callable[[Array], Array]:
+) -> PerturbationCallable:
     """Generates additive, bounded perturbation to system dynamics.
 
     Args:
@@ -106,7 +109,7 @@ def generate_affine_perturbation(
 
     def affine_perturbation(
         x: Array, _u: Array, _f: Array, _g: Array
-    ) -> Callable[[Array], Callable[[random.PRNGKey], Array]]:
+    ) -> PerturbationCallableReturns:
         """Computes value of an additive, parameter-affine perturbation of the form Delta(x) * theta.
 
         Args:
@@ -119,11 +122,11 @@ def generate_affine_perturbation(
         perturb = jnp.matmul(regressor(x), parameter_vector)
         return generate_compute(perturb)
 
-    def generate_compute(perturbation_x: Array) -> Callable[[random.PRNGKey], Array]:
+    def generate_compute(perturbation_x: Array) -> PerturbationCallableReturns:
         """"""
 
         @jit
-        def compute(_subkey: random.PRNGKey) -> Array:
+        def compute(_subkey: Key) -> Array:
             """TO DO"""
             nonlocal perturbation_x
             return perturbation_x

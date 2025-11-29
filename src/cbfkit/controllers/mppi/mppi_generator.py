@@ -37,26 +37,27 @@ Examples
 >>> )
 """
 
-from typing import Union, Dict, Any, Optional
+from typing import Any, Dict, Optional, cast
+
 import jax.numpy as jnp
-from jax import Array, lax, jit
-from .mppi_source import setup_mppi
+from jax import Array, jit
 
 from cbfkit.utils.user_types import (
-    MppiGenerator,
-    ControllerCallable,
-    ControllerCallableReturns,
-    DynamicsCallable,
-    GenerateComputeStageCostCallable,
-    GenerateComputeTerminalCostCallable,
-    State,
     Control,
-    TrajectoryCostCallable,
-    StageCostCallable,
-    TerminalCostCallable,
+    DynamicsCallable,
     Key,
+    MppiGenerator,
+    PlannerCallable,
+    PlannerCallableReturns,
     PlannerData,
+    StageCostCallable,
+    State,
+    TerminalCostCallable,
+    Time,
+    TrajectoryCostCallable,
 )
+
+from .mppi_source import setup_mppi
 
 
 def mppi_generator() -> MppiGenerator:
@@ -71,12 +72,12 @@ def mppi_generator() -> MppiGenerator:
     def generate_mppi(
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        trajectory_cost: TrajectoryCostCallable,
-        stage_cost: StageCostCallable,
-        terminal_cost: TerminalCostCallable,
-        mppi_args: list,
+        stage_cost: Optional[StageCostCallable] = None,
+        terminal_cost: Optional[TerminalCostCallable] = None,
+        trajectory_cost: Optional[TrajectoryCostCallable] = None,
+        mppi_args: Any = None,
         **kwargs: Dict[str, Any],
-    ) -> ControllerCallable:
+    ) -> PlannerCallable:
         """Produces the function to deploy a MPPI control law.
 
         Args:
@@ -88,7 +89,7 @@ def mppi_generator() -> MppiGenerator:
             **kwargs (Dict[str, Any]): keyword argumentsEEE
 
         Returns:
-            ControllerCallable: function for computing control input based on MPPI
+            PlannerCallable: function for computing control input based on MPPI
         """
         complete = False
         n_con = len(control_limits)
@@ -111,8 +112,8 @@ def mppi_generator() -> MppiGenerator:
 
         # TODO: define State, Control Trajectory types??
         def process(
-            t: float, x: State, u_nom: Control, key: Key, data: PlannerData
-        ) -> ControllerCallableReturns:
+            t: Time, x: State, u_nom: Optional[Control], key: Key, data: PlannerData
+        ) -> PlannerCallableReturns:
             """MPPI control law.
 
             Args:
@@ -120,15 +121,15 @@ def mppi_generator() -> MppiGenerator:
                 x (State): state vector
 
             Returns:
-                ControllerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
+                PlannerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
             """
-
-            return jittable_process(t, x, key, data)
+            t_float = cast(float, t)
+            return jittable_process(t_float, x, key, data)
 
         @jit
         def jittable_process(
             t: float, x: State, key: Key, data: PlannerData
-        ) -> ControllerCallableReturns:
+        ) -> PlannerCallableReturns:
             """JIT-compatible portion of the MPPI control law.
 
             Args:
@@ -137,7 +138,7 @@ def mppi_generator() -> MppiGenerator:
                 u (Array): previous control input trajectory
 
             Returns:
-                ControllerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
+                PlannerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
             """
             nonlocal complete
 

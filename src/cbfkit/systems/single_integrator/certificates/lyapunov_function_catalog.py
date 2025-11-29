@@ -5,14 +5,16 @@ This file contains a catalog of candidate lyapunov functions and their associate
 gradients, Hessians, etc., for use in control Lyapunov function-based controllers.
 """
 
+from typing import List, Tuple
+
 import jax.numpy as jnp
-from jax import jit, jacfwd, jacrev, Array
+from jax import Array, jacfwd, jacrev, jit
+
 from cbfkit.utils.user_types import (
     CertificateCallable,
-    CertificateJacobianCallable,
     CertificateHessianCallable,
+    CertificateJacobianCallable,
     CertificatePartialCallable,
-    CertificateTuple,
 )
 
 # constants
@@ -74,7 +76,12 @@ def dV2_pos_dx2(state: Array, goal: Array, r: float) -> Array:
     return jacfwd(jacrev(V_pos))(state, goal, r)
 
 
-def position(goal: Array, r: float) -> CertificateTuple:
+def position(goal: Array, r: float) -> Tuple[
+    List[CertificateCallable],
+    List[CertificateJacobianCallable],
+    List[CertificateHessianCallable],
+    List[CertificatePartialCallable],
+]:
     """Callable that generates Lyapunov function and its associated
 
     Args:
@@ -82,12 +89,20 @@ def position(goal: Array, r: float) -> CertificateTuple:
         T (float): lookahead time horizon
 
     Returns:
-        CertificateTuple: _description_
+        tuple: lists of functions
     """
-    v_func: CertificateCallable = lambda t, x: V_pos(jnp.hstack([x, t]), goal, r)  # type: ignore[return-value]
-    j_func: CertificateJacobianCallable = lambda t, x: dV_pos_dx(jnp.hstack([x, t]), goal, r)[:N]  # type: ignore[return-value]
-    h_func: CertificateHessianCallable = lambda t, x: dV2_pos_dx2(jnp.hstack([x, t]), goal, r)[:N, :N]  # type: ignore[return-value]
-    p_func: CertificatePartialCallable = lambda t, x: dV_pos_dx(jnp.hstack([x, t]), goal, r)[-1]  # type: ignore[return-value]
+
+    def v_func(t, x):
+        return V_pos(jnp.hstack([x, t]), goal, r)  # type: ignore[return-value]
+
+    def j_func(t, x):
+        return dV_pos_dx(jnp.hstack([x, t]), goal, r)[:N]  # type: ignore[return-value]
+
+    def h_func(t, x):
+        return dV2_pos_dx2(jnp.hstack([x, t]), goal, r)[:N, :N]  # type: ignore[return-value]
+
+    def p_func(t, x):
+        return dV_pos_dx(jnp.hstack([x, t]), goal, r)[-1]  # type: ignore[return-value]
 
     return (
         [v_func],

@@ -24,7 +24,7 @@ CBFKit is a Python/ROS2 toolbox designed to facilitate safe planning and control
 - **Efficiency:** Leverages JAX for efficient automatic differentiation and jaxopt for fast quadratic program (QP) solving, enabling real-time control applications. Includes optional **JIT compilation** (`use_jit=True`) for high-performance simulation loops.
 - **Code Generation:** Simplifies model creation with automatic code generation for dynamics, controllers, and certificate functions.
 - **Usability:** Includes tutorials and examples for a smooth learning curve and rapid prototyping.
-- **Functional Programming:** Built on functional programming principles, emphasizing data immutability and programmatic determinism. 
+- **Functional Programming:** Built on functional programming principles, emphasizing data immutability and programmatic determinism.
 
 ## Supported Models
 CBFKit accommodates a range of control-affine system models:
@@ -114,7 +114,7 @@ We recommend going through the tutorials in the following order to get familiar 
 
 
 
-## Simulation Architecture 
+## Simulation Architecture
 - Every simulation must define a **planner**, **nominal controller**, and a **controller** where the output of planner is passed to nominal controller and the output of nominal controller is then passed to the controller. The **nominal controller** is expected to designed to generate control input that steers towards a state waypoint. The **controller** is designed to be a filter after nominal controller.
 - The planner can return a state or control input trajectory. If the planner returns a control input trajectory, the nominal controller is skipped and the controller is directly employed. If the planner returns a state trajectory, then the nominal controller is called first to convert the desired state into corresponding control input command which is then passed to the controller.
 
@@ -123,7 +123,7 @@ The flowchart below summarizes the architecture
 ![cbfkit_architecture](https://github.com/user-attachments/assets/9ca32a8d-4fb5-420d-8742-cb6545a65889)
 
 Each function (dynamics, cost, constraint, controller) must follow a specific structure.
-- dynamics: 
+- dynamics:
    * Input arguments:  x (state)
    * Return arguments:  f, g (dynamics matrix for affine dynamics x_dot = f(x) + g(x)u)
 - nominal controller:
@@ -223,7 +223,7 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     dynamics=unicycle_dynamics,
     integrator=integrator,
     planner=mppi_local_planner,
-    nominal_controller=None, 
+    nominal_controller=None,
     controller=controller,
     sensor=sensor,
     estimator=estimator,

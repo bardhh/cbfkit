@@ -1,11 +1,13 @@
 import jax.numpy as jnp
-from jax import jit, Array
+from jax import Array, jit
+
 
 def two_dimensional_single_integrator(**kwargs):
     """
     Returns a function that represents the single integrator dynamics.
     x_dot = u
     """
+
     @jit
     def dynamics(state: Array):
         f = jnp.zeros(2)

@@ -33,11 +33,11 @@ To run all tests in this module (from the root of the repository):
 """
 
 import unittest
+
 import jax.numpy as jnp
 from jax import random
-import cbfkit.optimization.quadratic_program.qp_solver_cvxopt as qp_cvxopt
+
 import cbfkit.optimization.quadratic_program.qp_solver_jaxopt as qp_jaxopt
-import cbfkit.optimization.quadratic_program.qp_solver_casadi as qp_casadi
 from cbfkit.utils.user_types import QpSolverCallable
 
 KEY = random.PRNGKey(0)

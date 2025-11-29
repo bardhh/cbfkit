@@ -2,9 +2,12 @@
 #! docstring
 
 """
+
 import unittest
+
 import jax.numpy as jnp
 from jax import random
+
 import cbfkit.systems as systems
 
 KEY = random.PRNGKey(0)
@@ -20,7 +23,7 @@ class TestCbfkitModels(unittest.TestCase):
     def test_unicycle_model(self):
         """Tests that the unicycle dynamics model is correct according to a
         selection of benchmarks."""
-        dynamics = systems.unicycle.models.olfatisaber2002approximate.plant(l=1.0)
+        dynamics = systems.unicycle.models.olfatisaber2002approximate.plant(lam=1.0)
 
         state_1 = jnp.array([0.0, 0.0, 0.0])
         f, g = dynamics(state_1)

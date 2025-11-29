@@ -53,4 +53,3 @@
 | `simulate_mppi_cbf_ellipsoidal_stochastic_cbf.py` | `mppi_stochastic_cbf_reach_avoid.py` | |
 | `simulate_mppi_stl.py` | `mppi_stl_reach_avoid.py` | |
 | `test.py` | `multi_robot_test.py` | Avoid generic `test.py` name. |
-
