@@ -1,3 +1,4 @@
+from .activated_cbfs import generate_compute_activated_cbf_constraints
 from .consolidated_cbfs import generate_compute_consolidated_cbf_constraints
 from .generating_functions import (
     generate_compute_cbf_clf_constraints,
@@ -36,4 +37,5 @@ __all__ = [
     "generate_compute_stochastic_clf_constraints",
     "generate_compute_vanilla_clf_constraints",
     "generate_compute_zeroing_cbf_constraints",
+    "generate_compute_activated_cbf_constraints",
 ]
