@@ -354,6 +354,121 @@ def plot_results(x, u, factory, goals):
     print("Saved plot to examples/differential_drive/results/multi_agent_cbf_centralized.png")
 
 
+def animate_results(x, u, factory, goals):
+    """Create animated visualization of the multi-agent simulation."""
+    import matplotlib.animation as animation
+    from matplotlib.patches import Circle
+
+    print("Creating animation...")
+
+    num_agents = factory.num_agents
+
+    # Setup figure and axis
+    fig, ax = plt.subplots(figsize=(12, 10))
+
+    # Determine bounds
+    all_x = []
+    all_y = []
+    for i in range(num_agents):
+        all_x.extend(x[:, i * 4])
+        all_y.extend(x[:, i * 4 + 1])
+        all_x.append(goals[i][0])
+        all_y.append(goals[i][1])
+
+    for obs in factory.obstacles:
+        all_x.append(obs[0])
+        all_y.append(obs[1])
+
+    margin = 1.0
+    x_min, x_max = min(all_x) - margin, max(all_x) + margin
+    y_min, y_max = min(all_y) - margin, max(all_y) + margin
+
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Y (m)")
+    ax.set_title("Multi-Agent CBF Animation")
+    ax.grid(True, alpha=0.3)
+    ax.set_aspect("equal")
+
+    # Static Elements
+    # Obstacles
+    for obs in factory.obstacles:
+        circle = Circle((obs[0], obs[1]), factory.d_min_obstacle, fill=True, color="k", alpha=0.3)
+        ax.add_patch(circle)
+
+    # Humans
+    for hum in factory.humans:
+        circle = Circle((hum[0], hum[1]), factory.d_min_human, fill=True, color="orange", alpha=0.3)
+        ax.add_patch(circle)
+
+    # Goals
+    colors = ["b", "r", "g", "c"]
+    for i in range(num_agents):
+        ax.plot(
+            goals[i][0],
+            goals[i][1],
+            "*",
+            markersize=15,
+            color=colors[i % len(colors)],
+            markeredgecolor="black",
+        )
+
+    # Dynamic Elements
+    agent_circles = []
+    trails = []
+
+    for i in range(num_agents):
+        color = colors[i % len(colors)]
+        # Agent body
+        circle = Circle((0, 0), 0.3, fill=True, color=color, alpha=0.8, zorder=5)
+        ax.add_patch(circle)
+        agent_circles.append(circle)
+
+        # Trail
+        (trail,) = ax.plot([], [], "-", color=color, alpha=0.5, linewidth=2)
+        trails.append(trail)
+
+    time_text = ax.text(0.02, 0.95, "", transform=ax.transAxes)
+
+    def animate(frame):
+        # Time
+        t = frame * 0.05  # dt = 0.05
+        time_text.set_text(f"Time: {t:.2f}s")
+
+        for i in range(num_agents):
+            idx_x = i * 4
+            idx_y = i * 4 + 1
+
+            # Update position
+            pos_x = x[frame, idx_x]
+            pos_y = x[frame, idx_y]
+            agent_circles[i].center = (pos_x, pos_y)
+
+            # Update trail
+            trails[i].set_data(x[: frame + 1, idx_x], x[: frame + 1, idx_y])
+
+        return agent_circles + trails + [time_text]
+
+    anim = animation.FuncAnimation(fig, animate, frames=len(x), interval=50, blit=True)
+
+    try:
+        filepath = "examples/differential_drive/results/multi_agent_cbf.mp4"
+        anim.save(filepath, writer="ffmpeg", fps=20)
+        print(f"Saved animation to {filepath}")
+    except Exception as e:
+        print(f"Could not save MP4: {e}")
+        try:
+            filepath = "examples/differential_drive/results/multi_agent_cbf.gif"
+            anim.save(filepath, writer="pillow", fps=20)
+            print(f"Saved animation to {filepath}")
+        except Exception as e2:
+            print(f"Could not save GIF either: {e2}")
+
+    plt.close()
+
+
 if __name__ == "__main__":
     x, u, factory, goals = run_simulation()
     plot_results(x, u, factory, goals)
+    animate_results(x, u, factory, goals)
