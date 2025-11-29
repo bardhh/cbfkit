@@ -52,8 +52,8 @@ def create_robot_with_obstacles():
 
     # Define obstacles (following past_proj format)
     obstacles = [
-        (2.0, 1.0, 0.0),  # Obstacle 1: (x, y, z)
-        (3.5, 0.5, 0.0),  # Obstacle 2: (x, y, z)
+        (1.5, 1.3, 0.0),  # Obstacle 1: (x, y, z)
+        (3.5, 1.0, 0.0),  # Obstacle 2: (x, y, z)
     ]
 
     # Convert to JAX array for efficient vectorized computation in cost functions
@@ -74,7 +74,7 @@ def create_robot_with_obstacles():
         # Obstacle avoidance (Vectorized)
         diffs = state[:2] - obstacles_jax
         dists = jnp.linalg.norm(diffs, axis=1)
-        cost_obs = jnp.sum(1000.0 * jnp.exp(-5.0 * (dists - d_min_obstacle)))
+        cost_obs = jnp.sum(100.0 * jnp.exp(-5.0 * (dists - d_min_obstacle)))
 
         return cost_goal + cost_obs
 
@@ -101,7 +101,7 @@ def create_robot_with_obstacles():
         "robot_state_dim": 4,
         "robot_control_dim": control_dim,
         "prediction_horizon": prediction_horizon,  # 5.0 seconds at dt=0.1
-        "num_samples": 1000,
+        "num_samples": 5000,
         "time_step": 0.1,
         "use_GPU": True,
         "costs_lambda": 0.1,
