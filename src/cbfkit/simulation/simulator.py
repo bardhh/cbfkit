@@ -721,20 +721,61 @@ def extract_and_log_data(
 
     if len(data) > 0:
         # These keys should be consistent across all steps
-        controller_data_keys = data[0].controller_keys
-        planner_data_keys = data[0].planner_keys
+        raw_c_keys = data[0].controller_keys
+        raw_p_keys = data[0].planner_keys
 
-        # Transpose the list of lists to get values for each key across all steps
-        # This will result in a list where each element corresponds to a key,
-        # and contains an array of that key's values across all simulation steps.
-        controller_data_values = [
-            jnp.array([step.controller_values[i] for step in data])
-            for i in range(len(controller_data_keys))
-        ]
-        planner_data_values = [
-            jnp.array([step.planner_values[i] for step in data])
-            for i in range(len(planner_data_keys))
-        ]
+        controller_data_keys = []
+        controller_data_values = []
+
+        for i, key in enumerate(raw_c_keys):
+            vals = [step.controller_values[i] for step in data]
+
+            # Find the first non-None value to determine the type
+            first_valid_val = next((v for v in vals if v is not None), None)
+
+            # 1. Skip if all values are None
+            if first_valid_val is None:
+                continue
+
+            # 2. Skip unsupported types (Dicts, Strings, etc. cannot be stacked into JAX arrays)
+            if isinstance(first_valid_val, (dict, str, list, tuple)):
+                continue
+
+            # 3. Handle ragged data (mixture of None and values)
+            # JAX cannot stack None with Arrays. If data is ragged, we must skip it
+            # or fill it. For safety in a generic simulator, we skip inconsistent fields.
+            if any(v is None for v in vals):
+                continue
+
+            # 4. Attempt to stack
+            # At this point, we have consistent, non-None, non-container values.
+            # They should be stackable. If strict shape mismatches occur here,
+            # we allow the error to propagate because that indicates a logic error
+            # in the controller (returning variable-sized arrays for the same field).
+            arr = jnp.array(vals)
+            controller_data_keys.append(key)
+            controller_data_values.append(arr)
+
+        planner_data_keys = []
+        planner_data_values = []
+
+        for i, key in enumerate(raw_p_keys):
+            vals = [step.planner_values[i] for step in data]
+
+            first_valid_val = next((v for v in vals if v is not None), None)
+
+            if first_valid_val is None:
+                continue
+
+            if isinstance(first_valid_val, (dict, str, list, tuple)):
+                continue
+
+            if any(v is None for v in vals):
+                continue
+
+            arr = jnp.array(vals)
+            planner_data_keys.append(key)
+            planner_data_values.append(arr)
     else:
         # If no data, return empty lists for keys and values
         controller_data_keys = []
