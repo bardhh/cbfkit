@@ -252,6 +252,17 @@ def execute_trial(
     return x, u, z, p, data_keys, data_values, planner_keys, planner_values
 
 
+# Instantiate the controller
+controller_instance = cbf_controller(
+    control_limits=initial_conditions.actuation_limits,
+    dynamics_func=approx_unicycle_dynamics,
+    barriers=barrier_packages,
+    lyapunovs=lyapunov_packages,
+    ra_cbf_params=risk_aware_barrier_params,
+    ra_clf_params=risk_aware_lyapunov_params,
+    nominal_input=nominal_controller,
+)
+
 # Needed for multiprocessing
 if __name__ == "__main__":
     import multiprocessing as mp
@@ -272,7 +283,7 @@ if __name__ == "__main__":
             integrator=integrator,
             planner=planner,
             nominal_controller=nominal_controller,
-            controller=cbf_controller,
+            controller=controller_instance,
             sensor=sensor,
             estimator=estimator,
             perturbation=perturbation,
