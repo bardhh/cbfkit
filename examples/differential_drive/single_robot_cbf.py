@@ -8,6 +8,7 @@ simulation capabilities for a single robot with obstacle avoidance.
 import jax.numpy as jnp
 import matplotlib
 import numpy as np
+from jax import Array, jit
 
 matplotlib.use("Agg")
 import matplotlib.animation as animation
@@ -35,14 +36,14 @@ def create_robot_with_obstacles():
     """Create a single robot with obstacle avoidance using CBFKit framework."""
 
     # Robot parameters (following past_proj structure)
-    control_bound = 5.0  # Increased for MPPI freedom
+    control_bound = 20.0  # Increased for MPPI freedom
     d_min_obstacle = 0.8
 
     # Create unicycle dynamics
     dynamics = unicycle.plant(l=1.0)
     dynamics.a_max = control_bound
     dynamics.omega_max = control_bound
-    dynamics.v_max = 3.0
+    dynamics.v_max = 5.0
     dynamics.goal_tol = 0.25
 
     # Define scenario
@@ -55,62 +56,39 @@ def create_robot_with_obstacles():
         (3.5, 0.5, 0.0),  # Obstacle 2: (x, y, z)
     ]
 
-    # Convert to JAX array for efficient vectorized computation in cost functions
-    obstacles_jax = jnp.array([obs[:2] for obs in obstacles])
-
     # --- MPPI Controller Setup ---
 
     # Cost functions
-    def stage_cost(state, action):
+    @jit
+    def stage_cost(state_and_time: Array, action: Array) -> Array:
         # Penalize distance to goal
-        error_pos = state[:2] - desired_state[:2]
-        cost_pos = 2.0 * jnp.dot(error_pos, error_pos)
+        x, y = state_and_time[0], state_and_time[1]
+        xd, yd = desired_state[0], desired_state[1]
 
-        # Penalize high velocity (optional, to keep it smooth)
-        cost_vel = 0.1 * state[2] ** 2
+        dist_sq = (x - xd) ** 2 + (y - yd) ** 2
+        return 10.0 * dist_sq
 
-        # Penalize control effort
-        cost_act = 0.01 * jnp.dot(action, action)
-
-        # Obstacle avoidance (Vectorized)
-        # Calculate diffs: state position - obstacle positions
-        # state[:2] is (2,), obstacles_jax is (N, 2) -> broadcast subtraction
-        diffs = state[:2] - obstacles_jax
-        dists = jnp.linalg.norm(diffs, axis=1)
-
-        # Exponential barrier
-        # We want zero cost when far, high cost when close
-        # dists - d_min_obstacle: positive when safe, negative when unsafe
-        # -5.0 gain makes it decay quickly
-        # jnp.sum sums up costs from all obstacles
-        cost_obs = jnp.sum(1000.0 * jnp.exp(-5.0 * (dists - d_min_obstacle)))
-
-        return cost_pos + cost_vel + cost_act + cost_obs
-
-    def terminal_cost(state, action):
+    @jit
+    def terminal_cost(state_and_time: Array, action: Array) -> Array:
         # Higher penalty for final distance
-        error_pos = state[:2] - desired_state[:2]
-        cost_term = 10.0 * jnp.dot(error_pos, error_pos)
+        x, y = state_and_time[0], state_and_time[1]
+        xd, yd = desired_state[0], desired_state[1]
 
-        # Add obstacle cost to terminal state too
-        diffs = state[:2] - obstacles_jax
-        dists = jnp.linalg.norm(diffs, axis=1)
-        cost_obs = jnp.sum(1000.0 * jnp.exp(-5.0 * (dists - d_min_obstacle)))
-
-        return cost_term + cost_obs
+        dist_sq = (x - xd) ** 2 + (y - yd) ** 2
+        return 100.0 * dist_sq
 
     # MPPI parameters
-    prediction_horizon = 100
+    prediction_horizon = 50
     control_dim = 2
     mppi_args = {
         "robot_state_dim": 4,
         "robot_control_dim": control_dim,
         "prediction_horizon": prediction_horizon,  # 5.0 seconds at dt=0.1
-        "num_samples": 2000,
+        "num_samples": 500,
         "time_step": 0.1,
         "use_GPU": True,
         "costs_lambda": 0.1,
-        "cost_perturbation": 0.1,
+        "cost_perturbation": 0.5,
     }
 
     # Create MPPI planner

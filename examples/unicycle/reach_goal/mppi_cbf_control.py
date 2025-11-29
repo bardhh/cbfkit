@@ -1,7 +1,12 @@
+import os
+import sys
 from typing import List, Tuple, TypedDict
 
 import jax.numpy as jnp
 from jax import Array, jit
+
+# Add the project root directory to the python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 import cbfkit.controllers.mppi as mppi_planner
 import cbfkit.simulation.simulator as sim
