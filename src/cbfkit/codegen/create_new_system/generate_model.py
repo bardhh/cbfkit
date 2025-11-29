@@ -33,7 +33,18 @@ from jinja2 import Environment, FileSystemLoader
 op_sys = platform.system()
 DELIMITER = "/" if op_sys == "Darwin" or op_sys == "Linux" else "\\"
 INIT_CONTENTS = ""
-JAX_EXPRESSIONS = ["exp", "pi", "cos", "sin", "tan", "linalg.norm", "array", "max"]
+JAX_EXPRESSIONS = [
+    "exp",
+    "pi",
+    "cos",
+    "sin",
+    "tan",
+    "linalg.norm",
+    "array",
+    "max",
+    "arctan",
+    "arctan2",
+]
 
 # Jinja2 Setup
 # Assuming templates are in ../templates relative to this file

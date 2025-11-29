@@ -11,6 +11,7 @@ import jax.numpy as jnp
 from jax import random
 
 import cbfkit.planners as planners
+from cbfkit.utils.user_types import PlannerData
 
 KEY = random.PRNGKey(0)
 
@@ -38,15 +39,17 @@ class TestWaypointPlanner(unittest.TestCase):
         # user_types says: PlannerCallable = Callable[[float, State, PlannerData], ...]?
         # Let's check user_types.py again to be sure about PlannerCallable signature.
 
-        u_result, data_result = planner(t, x, None, KEY, {})
+        u_result, data_result = planner(t, x, None, KEY, PlannerData())
 
-        # Verify u_result is None (as per implementation)
-        self.assertIsNone(u_result)
+        # Verify u_result is usually a zero array or similar, let's check implementation returns u_out = jnp.zeros(x.shape)
+        # The implementation returns u_out, new_planner_data
+        # u_out is jnp.zeros(x.shape)
+        self.assertTrue(jnp.allclose(u_result, jnp.zeros_like(x)))
 
         # Verify x_traj in data
-        self.assertTrue("x_traj" in data_result)
+        self.assertIsNotNone(data_result.x_traj)
         expected_traj = target_state.reshape(-1, 1)
-        self.assertTrue(jnp.allclose(data_result["x_traj"], expected_traj))
+        self.assertTrue(jnp.allclose(data_result.x_traj, expected_traj))
 
 
 if __name__ == "__main__":
