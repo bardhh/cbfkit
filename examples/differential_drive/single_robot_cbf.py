@@ -36,8 +36,8 @@ def create_robot_with_obstacles():
     """Create a single robot with obstacle avoidance using CBFKit framework."""
 
     # Robot parameters (following past_proj structure)
-    control_bound = 20.0  # Increased for MPPI freedom
-    d_min_obstacle = 0.8
+    control_bound = 10.0  # Increased for MPPI freedom
+    d_min_obstacle = 0.7
 
     # Create unicycle dynamics
     dynamics = unicycle.plant(l=1.0)
@@ -56,26 +56,43 @@ def create_robot_with_obstacles():
         (3.5, 0.5, 0.0),  # Obstacle 2: (x, y, z)
     ]
 
+    # Convert to JAX array for efficient vectorized computation in cost functions
+    obstacles_jax = jnp.array([obs[:2] for obs in obstacles])
+
     # --- MPPI Controller Setup ---
 
     # Cost functions
     @jit
-    def stage_cost(state_and_time: Array, action: Array) -> Array:
+    def stage_cost(state: Array, action: Array) -> Array:
         # Penalize distance to goal
-        x, y = state_and_time[0], state_and_time[1]
+        x, y = state[0], state[1]
         xd, yd = desired_state[0], desired_state[1]
 
         dist_sq = (x - xd) ** 2 + (y - yd) ** 2
-        return 10.0 * dist_sq
+        cost_goal = 10.0 * dist_sq
+
+        # Obstacle avoidance (Vectorized)
+        diffs = state[:2] - obstacles_jax
+        dists = jnp.linalg.norm(diffs, axis=1)
+        cost_obs = jnp.sum(1000.0 * jnp.exp(-5.0 * (dists - d_min_obstacle)))
+
+        return cost_goal + cost_obs
 
     @jit
-    def terminal_cost(state_and_time: Array, action: Array) -> Array:
+    def terminal_cost(state: Array, action: Array) -> Array:
         # Higher penalty for final distance
-        x, y = state_and_time[0], state_and_time[1]
+        x, y = state[0], state[1]
         xd, yd = desired_state[0], desired_state[1]
 
         dist_sq = (x - xd) ** 2 + (y - yd) ** 2
-        return 100.0 * dist_sq
+        cost_goal = 100.0 * dist_sq
+
+        # Obstacle avoidance
+        diffs = state[:2] - obstacles_jax
+        dists = jnp.linalg.norm(diffs, axis=1)
+        cost_obs = jnp.sum(1000.0 * jnp.exp(-5.0 * (dists - d_min_obstacle)))
+
+        return cost_goal + cost_obs
 
     # MPPI parameters
     prediction_horizon = 50
@@ -84,11 +101,11 @@ def create_robot_with_obstacles():
         "robot_state_dim": 4,
         "robot_control_dim": control_dim,
         "prediction_horizon": prediction_horizon,  # 5.0 seconds at dt=0.1
-        "num_samples": 500,
+        "num_samples": 1000,
         "time_step": 0.1,
         "use_GPU": True,
         "costs_lambda": 0.1,
-        "cost_perturbation": 0.5,
+        "cost_perturbation": 0.1,
     }
 
     # Create MPPI planner
@@ -124,7 +141,7 @@ def create_robot_with_obstacles():
             state_dim=4,
             form="exponential",
         )(
-            certificate_conditions=zeroing_barriers.linear_class_k(1.0),
+            certificate_conditions=zeroing_barriers.linear_class_k(10.0),
             obstacle=jnp.array(obs),
             ellipsoid=(d_min_obstacle, d_min_obstacle),
         )
