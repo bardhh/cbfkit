@@ -53,8 +53,8 @@ def solve_inequality_constrained_qp(
     )
     status = state.status
     # 1: SOLVED, 2: MAX_ITER_REACHED
-    # We consider both as success for now to avoid dropping control inputs
-    return sol.primal, (status == 1) | (status == 2)
+    success = (status == 1) | (status == 2)
+    return sol.primal, success
 
 
 @jit
@@ -86,4 +86,4 @@ def solve(
 
     sol, status = solve_inequality_constrained_qp(params_obj, params_eq, params_ineq)
 
-    return status * sol, status
+    return sol, status

@@ -103,7 +103,6 @@ def stepper(
                 )
         else:
             planner_data = planner_data._replace(u_traj=None)
-        planner_data = planner_data._replace(prev_robustness=None)
 
         if (planner is not None) and (planner_data.u_traj is not None):
             u = u_planner

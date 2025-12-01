@@ -65,11 +65,15 @@ def setup_mppi(
             perturbation: random perturbation trajectory of all samples
             costs: cost of each sampled trajectory
         """
-        costs = costs - jnp.min(costs)
-        costs = costs / jnp.max(costs)
+        # Normalize costs in a numerically stable way
+        costs_shifted = costs - jnp.min(costs)
+        scale = jnp.maximum(jnp.max(costs_shifted), 1e-8)
+        costs_norm = costs_shifted / scale
         lambd = costs_lambda
-        weights = jnp.exp(-1.0 / lambd * costs)  # higher cost -> higher weight
-        normalization_factor = jnp.sum(weights)
+        log_weights = -costs_norm / jnp.maximum(lambd, 1e-8)
+        max_logw = jnp.max(log_weights)
+        weights = jnp.exp(log_weights - max_logw)
+        normalization_factor = jnp.maximum(jnp.sum(weights), 1e-8)
 
         def body(i, inputs):
             U = inputs
