@@ -210,7 +210,7 @@ def cbf_clf_qp_generator(
             u = lax.cond(
                 status,
                 lambda _fake: jnp.array(sol[:n_con]).reshape((n_con,)),
-                lambda _fake: jnp.zeros((n_con,)),
+                lambda _fake: u_nom[:n_con],
                 0,
             )
 
@@ -231,7 +231,7 @@ def cbf_clf_qp_generator(
                 sol=jnp.array(sol),
                 u=u,
                 u_nom=u_nom,
-                sub_data=sub_data,
+                sub_data=sub_data or {},
             )
 
             return u, data

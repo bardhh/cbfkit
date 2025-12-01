@@ -122,17 +122,28 @@ def simulator_jit(
         else:
             u = u_nom
 
-        # 7. Perturbation
-        p = perturbation(x, u, f, g)
+        # Early stop conditions: planner/controller error or goal complete
+        stop = (
+            controller_data.error
+            | controller_data.complete
+            | (planner is not None and planner_data.error)
+        )
 
-        # 8. Integration
-        key, subkey = random.split(key)
+        # 7. Perturbation and integration (skipped if stopped)
+        def _integrate(_):
+            p = perturbation(x, u, f, g)
+            key_int, subkey = random.split(key)
 
-        def vector_field(s):
-            f_s, g_s = dynamics(s)
-            return f_s + jnp.matmul(g_s, u) + p(subkey)
+            def vector_field(s):
+                f_s, g_s = dynamics(s)
+                return f_s + jnp.matmul(g_s, u) + p(subkey)
 
-        x_next = integrator(x, vector_field, dt)
+            return key_int, integrator(x, vector_field, dt)
+
+        def _hold(_):
+            return key, x
+
+        key, x_next = lax.cond(stop, _hold, _integrate, operand=None)
 
         if progress_callback is not None and progress_interval > 0:
             should_report = jnp.logical_or(

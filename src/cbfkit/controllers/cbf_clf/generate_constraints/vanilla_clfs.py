@@ -50,7 +50,13 @@ def generate_compute_vanilla_clf_constraints(
                 a_clf = a_clf.at[:, -n_lfs:].set(-lc_x)
                 b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f))
 
-            complete = lax.cond(jnp.all(lf_x < 0), lambda _fake: True, lambda _fake: False, 0)
+            # Treat goal reached when Lyapunov value is sufficiently small
+            complete = lax.cond(
+                jnp.all(lf_x <= kwargs.get("clf_complete_tol", 1e-3)),
+                lambda _fake: True,
+                lambda _fake: False,
+                0,
+            )
 
             data["lfs"] = lf_x
             data["complete"] = complete

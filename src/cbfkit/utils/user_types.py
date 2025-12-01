@@ -66,7 +66,7 @@ class ControllerData(NamedTuple):
     sol: Optional[Array] = None
     u: Optional[Array] = None
     u_nom: Optional[Array] = None
-    sub_data: Dict[str, Any] = {}
+    sub_data: Optional[Dict[str, Any]] = None
 
 
 class PlannerData(NamedTuple):

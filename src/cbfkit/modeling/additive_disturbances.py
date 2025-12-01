@@ -46,8 +46,9 @@ def generate_stochastic_perturbation(
         def compute(subkey: Key) -> Array:
             """TO DO."""
             nonlocal dt
-            dw = random.normal(subkey, shape=(sigma_x.shape[1],)) * jnp.sqrt(dt)
-            return jnp.matmul(sigma_x, dw) / dt
+            # Discretize SDE: x_{k+1} = x_k + f dt + sigma sqrt(dt) w, w ~ N(0,I)
+            dw = random.normal(subkey, shape=(sigma_x.shape[1],))
+            return jnp.matmul(sigma_x, dw) * jnp.sqrt(dt)
 
         return compute
 

@@ -64,9 +64,9 @@ def controller_wrapper(
 
         try:
             u, data = controller(_t_float, x, u_nom, key, data)
-            if "sub_data" in data._asdict() and "violated" in data.sub_data:
-                if data.sub_data["violated"]:
-                    raise ValueError("Violation of Safety Constraint!")
+            sub_data = data.sub_data or {}
+            if "violated" in sub_data and sub_data["violated"]:
+                raise ValueError("Violation of Safety Constraint!")
         except ValueError as e:
             LOGGER.error(str(e))
             u, data = backup_controller(_t_float, x, u_nom, key, data)

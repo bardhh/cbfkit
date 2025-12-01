@@ -196,7 +196,7 @@ def compute_function_list(
     state_dim: int,  # state_dim is now combined state+time dimension
     form: str = "exponential",
     func_list: Union[List[Callable[[Array], Array]], None] = None,
-    subkey: Union[jaxlib.xla_extension.ArrayImpl, None] = None,
+    _subkey: Union[jaxlib.xla_extension.ArrayImpl, None] = None,
     n_samples: int = 10,
 ):
     """Computes the cascading list of derivatives/functions for rectifying the relative degree of
@@ -208,7 +208,6 @@ def compute_function_list(
         state_dim (int): state dimension (combined state+time)
         form (str, optional): cascading procedure name. Defaults to "exponential".
         func_list (Union[List[Callable[[Array], Array]], None], optional): cascaded list of functions. Defaults to None.
-        subkey (Union[jaxlib.xla_extension.ArrayImpl, None], optional): random subkey. Defaults to None.
         n_samples (int, optional): number of samples used to determine relative-degree. Defaults to 10.
 
     Returns
@@ -220,47 +219,34 @@ def compute_function_list(
 
     func_list.append(function)
 
-    if subkey is None:
-        subkey = SUBKEY
-    else:
-        global KEY
-        # Split the existing subkey for a new one, this is standard JAX practice
-        KEY, subkey = random.split(KEY)  # Use global KEY to keep splitting correctly
-
-    # Do this at every level
-    samples = random.normal(subkey, (n_samples, state_dim))
+    # Deterministically probe a small set of points to detect non-zero Lie derivatives.
     jacobian = jacfwd(function)
+    probe_points = jnp.vstack(
+        [
+            jnp.zeros((1, state_dim)),
+            jnp.eye(state_dim)[: n_samples - 1, :],
+        ]
+    )
 
-    total = jnp.array(0.0)  # Initialize as JAX Array
-    for sample in samples:
-        # system_dynamics expects Array (State). The input sample is (state_dim+1) combining x and t.
-        # So we pass sample[:-1] as state and last element as time if needed.
-        # For DynamicsCallable, it's just state.
+    total = jnp.array(0.0)
+    for sample in probe_points:
         _, dyn_g = system_dynamics(sample[:-1])
-        # jacobian(function) now takes Array. `jacobian(sample)` is okay.
-        grad = jacobian(sample)[:-1]  # Exclude time derivative
+        grad = jacobian(sample)[:-1]
         total += jnp.sum(jnp.abs(jnp.matmul(grad, dyn_g)))
 
     def exponential_new_func(x_and_t: Array):
-        # x_and_t combines state and time.
-        # system_dynamics takes only state (x_and_t[:-1])
-        # function is also assumed to take x_and_t
         f_val, _ = system_dynamics(x_and_t[:-1])
-        return jnp.matmul(
-            jacobian(x_and_t)[:-1], f_val
-        )  # derivative w.r.t state, multiplied by drift
+        return jnp.matmul(jacobian(x_and_t)[:-1], f_val)
 
     def highorder_new_func(x_and_t: Array):
         f_val, _ = system_dynamics(x_and_t[:-1])
         return jnp.matmul(jacobian(x_and_t)[:-1], f_val) + function(x_and_t)
 
-    if total == 0:
+    if total <= 1e-9:
         if form == "exponential":
             new_func = exponential_new_func
-
         elif form == "high-order":
             new_func = highorder_new_func
-
         else:
             new_func = highorder_new_func
 
@@ -270,7 +256,8 @@ def compute_function_list(
             state_dim,
             form,
             func_list,
-            subkey,
+            None,
+            n_samples,
         )
 
     return func_list
