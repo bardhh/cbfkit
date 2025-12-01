@@ -11,9 +11,9 @@ import cbfkit.controllers.mppi as mppi_planner
 import cbfkit.planners as single_waypoint_planner
 import cbfkit.simulation.simulator as sim
 from cbfkit.estimators import naive as estimator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 from cbfkit.utils.jax_stl import jax_and, jax_finally, jax_global, jax_or
-from cbfkit.utils.numerical_integration import forward_euler as integrator
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/generated"

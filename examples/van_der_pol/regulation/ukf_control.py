@@ -10,7 +10,7 @@ from jax import jacfwd
 
 import cbfkit.simulation.simulator as sim
 from cbfkit.estimators import ct_ukf_dtmeas as ukf
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.systems.unicycle.models.olfatisaber2002approximate import dynamics as unicycle
 from cbfkit.systems.unicycle.models.olfatisaber2002approximate.controllers.proportional_controller import (

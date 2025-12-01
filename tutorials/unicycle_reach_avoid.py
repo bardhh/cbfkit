@@ -12,7 +12,7 @@ from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import l
 from cbfkit.codegen.create_new_system.generate_model import generate_model
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
 from cbfkit.estimators import naive
-from cbfkit.integration import forward_euler
+from cbfkit.integration import runge_kutta_4
 from cbfkit.sensors import perfect
 from cbfkit.simulation import simulator
 from cbfkit.utils.user_types import PlannerData
@@ -88,7 +88,7 @@ x_sim, u_sim, z_sim, p_sim, dkeys, dvals, planner_data, planner_data_keys = simu
     dt=1e-2,
     num_steps=1000,
     dynamics=dynamics,
-    integrator=forward_euler,
+    integrator=runge_kutta_4,
     nominal_controller=nominal_controller_func,
     controller=controller,
     sensor=perfect,

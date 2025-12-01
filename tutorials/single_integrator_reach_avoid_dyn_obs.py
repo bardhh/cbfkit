@@ -188,7 +188,7 @@ controller = vanilla_cbf_clf_qp_controller(
 #####################################################################
 
 from cbfkit.estimators import naive
-from cbfkit.integration import forward_euler
+from cbfkit.integration import runge_kutta_4
 from cbfkit.sensors import perfect as sensor
 
 # change the sensors for noisy data
@@ -201,7 +201,7 @@ x, u, z, p, dkeys, dvals = simulator.execute(
     dt=1e-2,
     num_steps=1000,
     dynamics=dynamics,
-    integrator=forward_euler,
+    integrator=runge_kutta_4,
     controller=controller,
     sensor=sensor,
     estimator=naive,

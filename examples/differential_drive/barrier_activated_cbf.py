@@ -26,7 +26,7 @@ from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
 from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 
 

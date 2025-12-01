@@ -84,8 +84,8 @@ from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapu
     e_s,
 )
 from cbfkit.estimators import naive as estimator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
-from cbfkit.utils.numerical_integration import forward_euler as integrator
 from tutorials import mppi_cbf_si
 
 # Load dynamics, cost functions and constraint functions that were auto-generated

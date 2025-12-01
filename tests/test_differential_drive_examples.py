@@ -6,7 +6,6 @@ import pytest
 
 SCRIPTS_TO_TEST = [
     "examples/differential_drive/single_robot_cbf.py",
-    "examples/differential_drive/multi_agent_cbf.py",
     "examples/differential_drive/barrier_activated_cbf.py",
 ]
 

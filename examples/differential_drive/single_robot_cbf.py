@@ -27,7 +27,7 @@ from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_rel
 from cbfkit.controllers.mppi.mppi_generator import mppi_generator
 from cbfkit.controllers.mppi.mppi_visualize import initialize_mppi_plots, update_mppi_plot
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 from cbfkit.utils.user_types import PlannerData
 

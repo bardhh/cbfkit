@@ -86,13 +86,22 @@ CertificateJacobianCallable = Callable[[Time, State], Array]
 CertificateHessianCallable = Callable[[Time, State], Array]
 CertificatePartialCallable = Callable[[Time, State], Array]
 CertificateConditionsCallable = Callable[[Array], Array]
-CertificateCollection = Tuple[
-    List[CertificateCallable],
-    List[CertificateJacobianCallable],
-    List[CertificateHessianCallable],
-    List[CertificatePartialCallable],
-    List[CertificateConditionsCallable],
-]
+
+
+class CertificateCollection(NamedTuple):
+    """Collection of certificate functions and their derivatives."""
+
+    functions: List[CertificateCallable]
+    jacobians: List[CertificateJacobianCallable]
+    hessians: List[CertificateHessianCallable]
+    partials: List[CertificatePartialCallable]
+    conditions: List[CertificateConditionsCallable]
+
+
+# Default empty collection
+EMPTY_CERTIFICATE_COLLECTION = CertificateCollection([], [], [], [], [])
+
+
 CertificateTuple = Tuple[
     CertificateCallable,
     CertificateJacobianCallable,
@@ -166,7 +175,8 @@ class SensorCallable(Protocol):
 
 
 # Integrator Callable
-IntegratorCallable = Callable[[State, Array, float], State]
+VectorFieldCallable = Callable[[State], Array]
+IntegratorCallable = Callable[[State, VectorFieldCallable, float], State]
 
 
 # QP Solver Callables
@@ -184,8 +194,8 @@ class GenerateComputeCertificateConstraintCallable(Protocol):
         self,
         control_limits: Array,
         dyn_func: DynamicsCallable,
-        barriers: CertificateCollection = ([], [], [], [], []),
-        lyapunovs: CertificateCollection = ([], [], [], [], []),
+        barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
         **kwargs: Any,
     ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
         """Call method."""
@@ -199,8 +209,8 @@ class CbfClfQpGenerator(Protocol):
         self,
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        barriers: Optional[CertificateCollection] = ([], [], [], [], []),
-        lyapunovs: Optional[CertificateCollection] = ([], [], [], [], []),
+        barriers: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Array] = None,
         **kwargs: Any,
     ) -> ControllerCallable:
@@ -216,8 +226,8 @@ class ComputeCertificateConstraintFunctionGenerator(Protocol):
         self,
         control_limits: Array,
         dyn_func: DynamicsCallable,
-        barriers: CertificateCollection = ([], [], [], [], []),
-        lyapunovs: CertificateCollection = ([], [], [], [], []),
+        barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
         **kwargs: Any,
     ) -> Callable[[Time, Array], Tuple[Array, Array, Dict[str, Any]]]:
         """Call method."""

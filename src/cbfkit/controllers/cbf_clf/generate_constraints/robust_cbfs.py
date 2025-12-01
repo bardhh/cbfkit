@@ -7,7 +7,13 @@ from typing import Any, Callable, Dict, Tuple
 import jax.numpy as jnp
 from jax import Array, jit, lax
 
-from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable, State, Time
+from cbfkit.utils.user_types import (
+    EMPTY_CERTIFICATE_COLLECTION,
+    CertificateCollection,
+    DynamicsCallable,
+    State,
+    Time,
+)
 
 from ..utils.robustness_terms import robustness_sup_norm, robustness_two_norm
 from .generating_functions import (
@@ -21,8 +27,8 @@ from .unpack import unpack_for_cbf
 def generate_compute_robust_cbf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
-    barriers: CertificateCollection = ([], [], [], [], []),
-    lyapunovs: CertificateCollection = ([], [], [], [], []),
+    barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
+    lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Dict[str, Any],
 ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """

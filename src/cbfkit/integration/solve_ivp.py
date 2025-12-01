@@ -28,23 +28,34 @@ Examples
 
 """
 
+from typing import Callable
+
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 from scipy.integrate import solve_ivp as solve
 
 
-def solve_ivp(x: Array, x_dot: Array, dt: float):
-    """Performs numerical integration on current state (x) and current state derivative (x_dot) over
-    time interval of length dt according to scipy.integrate.solve_ivp.
+def solve_ivp(x: Array, vector_field: Callable[[Array], Array], dt: float) -> Array:
+    """Performs numerical integration on current state (x) using the vector field
+    over time interval of length dt according to scipy.integrate.solve_ivp.
 
     Arguments:
         x: current state
-        x_dot: current state derivative
+        vector_field: function f(x) -> x_dot
         dt: timestep length (in sec)
 
     Returns
     -------
         new_state
     """
-    sol = solve(x_dot, (0, dt), x, t_eval=jnp.linspace(0, dt, 100))
-    return jnp.array(sol.y)
+
+    # Wrap the vector field for scipy (which expects f(t, y) and uses numpy arrays)
+    def fun(t, y):
+        return np.array(vector_field(jnp.array(y)))
+
+    # Solve
+    sol = solve(fun, (0, dt), np.array(x))
+
+    # Return final state
+    return jnp.array(sol.y[:, -1])

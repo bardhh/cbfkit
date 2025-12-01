@@ -26,7 +26,7 @@ from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.recti
     rectify_relative_degree,
 )
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
 from cbfkit.sensors import perfect as sensor
 

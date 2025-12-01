@@ -19,7 +19,7 @@ import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 from cbfkit.controllers.mppi.mppi_generator import mppi_generator
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 from cbfkit.systems.pedestrian import CrowdManager
 from cbfkit.systems.pedestrian.behaviors import social_force_policy

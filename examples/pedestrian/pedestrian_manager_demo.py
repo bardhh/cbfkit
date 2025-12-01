@@ -30,7 +30,7 @@ from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import (
 )
 from cbfkit.controllers.mppi.mppi_generator import mppi_generator
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 
 # --- New Imports ---

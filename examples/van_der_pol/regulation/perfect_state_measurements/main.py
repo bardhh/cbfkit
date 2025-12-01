@@ -14,7 +14,7 @@ from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_contr
     cbf_clf_controller,
 )
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.models import van_der_pol
 from cbfkit.sensors import perfect as sensor
 from examples.van_der_pol.ra_fxt_clbf.lyapunov_functions import fxts_lyapunov

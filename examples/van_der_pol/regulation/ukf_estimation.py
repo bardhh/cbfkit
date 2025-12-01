@@ -19,7 +19,7 @@ save = 1
 # Load system module
 import cbfkit.system as system
 from cbfkit.estimators import ct_ukf_dtmeas as ukf
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 
 # Load dynamics, sensors, controller, estimator, integrator
 from cbfkit.models import unicycle

@@ -33,6 +33,7 @@ from jax import Array, jit, lax
 
 from cbfkit.optimization.quadratic_program import solve as solve_qp
 from cbfkit.utils.user_types import (
+    EMPTY_CERTIFICATE_COLLECTION,
     CbfClfQpGenerator,
     CertificateCollection,
     ControllerCallable,
@@ -68,8 +69,8 @@ def cbf_clf_qp_generator(
     def generate_cbf_clf_controller(
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        barriers: Optional[CertificateCollection] = ([], [], [], [], []),
-        lyapunovs: Optional[CertificateCollection] = ([], [], [], [], []),
+        barriers: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Union[Array, None]] = None,
         **kwargs: Dict[str, Any],
     ) -> ControllerCallable:
@@ -84,7 +85,8 @@ def cbf_clf_qp_generator(
             lyapunovs (CertificateCollection = ([], [], [], [], [])): collection of lyapunov functions,
                 gradients, hessians, dV/dt,  conditions
             p_mat (Optional[Union[Array, None]] = None): objective function matrix (quadratic term)
-            **kwargs (Dict[str, Any]): keyword arguments, e.g., RiskAwareParams for RA-CBF-CLF-QP
+            **kwargs (Dict[str, Any]): keyword arguments, e.g., RiskAwareParams for RA-CBF-CLF-QP.
+                relaxable_clf (bool): whether to treat CLF as a soft constraint (default: True).
 
         Returns
         -------
@@ -95,9 +97,9 @@ def cbf_clf_qp_generator(
 
         # Ensure barriers and lyapunovs are not None
         if barriers is None:
-            barriers = ([], [], [], [], [])
+            barriers = EMPTY_CERTIFICATE_COLLECTION
         if lyapunovs is None:
-            lyapunovs = ([], [], [], [], [])
+            lyapunovs = EMPTY_CERTIFICATE_COLLECTION
 
         assert barriers is not None
         assert lyapunovs is not None
@@ -115,13 +117,15 @@ def cbf_clf_qp_generator(
         else:
             n_bfs = 0
 
-        if "relaxable_clf" not in kwargs:
-            n_lfs = 0
-        elif kwargs["relaxable_clf"]:
+        # Default to relaxable CLF for robustness unless explicitly disabled
+        relaxable_clf = kwargs.get("relaxable_clf", True)
+        if relaxable_clf:
             l_funcs, _, _, _, _ = lyapunovs
             n_lfs = len(l_funcs)
             slack_clf = kwargs.get("slack_bound_clf", 1e9)
             control_limits = jnp.hstack([control_limits, slack_clf * jnp.ones((n_lfs,))])
+        else:
+            n_lfs = 0
 
         if p_mat is None:
             penalty_cbf = kwargs.get("slack_penalty_cbf", 2e3)

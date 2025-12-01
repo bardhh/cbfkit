@@ -6,13 +6,14 @@ This module contains functions to package certificate functions and their gradie
 
 Functions
 ---------
--certificate_package: packages the certificate function and its gradients
+-certificate_package: packages the certificate function and its gradients. Supports automated
+ differentiation if gradients/Hessians are not provided.
 -concatenate_certificates: combines multiple certificate packages into usable form
 
 Notes
 -----
 The functions in this module are important to the definition and use of CBFs
-and CLFs for control.
+and CLFs for control. Returns `CertificateCollection` NamedTuples.
 
 Examples
 --------
@@ -25,36 +26,24 @@ Examples
 >>>         return x[0] - limit
 >>>     return func
 >>>
->>> def cbf_grad(limit):
->>>     jacobian = jacfwd(cbf(limit))
->>>     def func(x):
->>>         return jacobian(x)
->>>     return func
->>>
->>> def cbf_hess(limit):
->>>     hessian = jacrev(jacfwd(cbf(limit)))
->>>     def func(x):
->>>         return hessian(x)
->>>     return func
->>>
->>> package1 = certificate_package(cbf, cbf_grad, cbf_hess, n=1)
->>> package2 = certificate_package(cbf, cbf_grad, cbf_hess, n=1)
+>>> # Auto-diff example
+>>> package1 = certificate_package(cbf, n=1)
 >>>
 >>> limit = 1.0
 >>> alpha = 1.0
 >>> barriers = concatenate_certificates(
 >>>     package1(certificate_conditions=linear_class_k(alpha), limit=limit),
->>>     package2(certificate_conditions=linear_class_k(alpha), limit=-limit),
 >>> )
 
 """
 
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 import jax.numpy as jnp
-from jax import Array, jit
+from jax import Array, grad, hessian, jit
 
 from cbfkit.utils.user_types import (
+    EMPTY_CERTIFICATE_COLLECTION,
     CertificateCallable,
     CertificateCollection,
     CertificateConditionsCallable,
@@ -66,16 +55,18 @@ from cbfkit.utils.user_types import (
 
 def certificate_package(
     func: Callable[..., Callable[[Array], Array]],
-    func_grad: Callable[..., Callable[[Array], Array]],
-    func_hess: Callable[..., Callable[[Array], Array]],
-    n: int,
+    func_grad: Optional[Callable[..., Callable[[Array], Array]]] = None,
+    func_hess: Optional[Callable[..., Callable[[Array], Array]]] = None,
+    n: int = 0,
 ) -> Callable[..., CertificateCollection]:
     """Function for packaging and later creating CBF executables.
 
     Args:
-        func (Callable): certificate function
-        func_grad (Callable): certificate gradient vector function
-        func_hess (Callable): certificate hessian matrix function
+        func (Callable): certificate function factory
+        func_grad (Callable, optional): certificate gradient vector function factory.
+            If None, computed automatically using jax.grad.
+        func_hess (Callable, optional): certificate hessian matrix function factory.
+            If None, computed automatically using jax.hessian.
         n (int): state dimension
 
     Returns
@@ -99,9 +90,21 @@ def certificate_package(
             BarrierTuple: _description_
         """
         v_func = func(**kwargs)
-        j_func = func_grad(**kwargs)
-        h_func = func_hess(**kwargs)
-        t_func = func_grad(**kwargs)
+
+        if func_grad is None:
+            # Auto-differentiate
+            j_func = grad(v_func)
+            t_func = j_func
+        else:
+            j_func = func_grad(**kwargs)
+            t_func = func_grad(**kwargs)
+
+        if func_hess is None:
+            # Auto-differentiate
+            h_func = hessian(v_func)
+        else:
+            h_func = func_hess(**kwargs)
+
         c_func = certificate_conditions
 
         @jit
@@ -110,17 +113,20 @@ def certificate_package(
 
         @jit
         def j_(t: float, x: Array) -> Array:
+            # Gradient w.r.t x is the first n elements
             return j_func(jnp.hstack([x, t]))[:n]
 
         @jit
         def h_(t: float, x: Array) -> Array:
+            # Hessian w.r.t x is the top-left nxn block
             return h_func(jnp.hstack([x, t]))[:n, :n]
 
         @jit
         def t_(t: float, x: Array) -> Array:
+            # Partial w.r.t t is the last element of the gradient
             return t_func(jnp.hstack([x, t]))[-1]
 
-        return (
+        return CertificateCollection(
             [v_],
             [j_],
             [h_],
@@ -139,7 +145,7 @@ def concatenate_certificates(*tuples: CertificateCollection) -> CertificateColle
         _type_: _description_
     """
     if not tuples:
-        return ([], [], [], [], [])
+        return EMPTY_CERTIFICATE_COLLECTION
 
     # Initialize empty lists for each component of CertificateCollection
     v_list = []
@@ -156,4 +162,4 @@ def concatenate_certificates(*tuples: CertificateCollection) -> CertificateColle
         t_list.extend(tup[3])
         c_list.extend(tup[4])
 
-    return (v_list, j_list, h_list, t_list, c_list)
+    return CertificateCollection(v_list, j_list, h_list, t_list, c_list)

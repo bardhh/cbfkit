@@ -28,31 +28,22 @@ Examples
 
 """
 
-from jax import Array, jit
+from typing import Callable
+
+from jax import Array
 
 
-@jit
-def forward_euler(x: Array, x_dot: Array, dt: float) -> Array:
-    """Performs numerical integration on current state (x) and current state derivative (x_dot) over
-    time interval of length dt according to Forward-Euler discretization.
+def forward_euler(x: Array, vector_field: Callable[[Array], Array], dt: float) -> Array:
+    """Performs numerical integration on current state (x) using the vector field
+    over time interval of length dt according to Forward-Euler discretization.
 
     Arguments:
         x: current state
-        x_dot: current state derivative
+        vector_field: function f(x) -> x_dot
         dt: timestep length (in sec)
 
     Returns
     -------
         new_state
     """
-    return x + x_dot * dt
-
-
-# @jit
-# def step_with_diffrax(y, u, dt):
-#     solution = diffeqsolve(term, solver, t0=0, t1=dt, dt0=dt / 5, y0=np.append(y, u, axis=0))
-#     return solution.ys[0, :-1].reshape(-1, 1)
-
-
-def setup_forward_euler(x, xdot_func, dt):
-    return forward_euler(x + xdot_func(x), dt)  # use any other integrator here
+    return x + vector_field(x) * dt

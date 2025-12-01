@@ -77,7 +77,7 @@ controller = cbf_controller(
 from cbfkit.estimators import naive as estimator
 
 # Simulation imports
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 
 x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(

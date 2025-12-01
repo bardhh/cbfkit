@@ -6,6 +6,7 @@ from jax import Array, jacfwd, jacrev, jit, lax
 from cbfkit.certificates import certificate_package
 from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
 from cbfkit.utils.user_types import (
+    EMPTY_CERTIFICATE_COLLECTION,
     CertificateCallable,
     CertificateCollection,
     DynamicsCallable,
@@ -104,8 +105,8 @@ def ccbf_hess(
 def generate_compute_consolidated_cbf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
-    barriers: CertificateCollection = ([], [], [], [], []),
-    lyapunovs: CertificateCollection = ([], [], [], [], []),
+    barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
+    lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Dict[str, Any],
 ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """

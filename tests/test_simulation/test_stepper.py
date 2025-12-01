@@ -19,8 +19,7 @@ def test_stepper_basic():
     mock_dynamics.return_value = (jnp.array([0.1]), jnp.array([[1.0]]))  # f, g
 
     mock_integrator = Mock()
-    mock_integrator.side_effect = lambda x, xdot, dt: x + xdot * dt
-
+    mock_integrator.side_effect = lambda x, vf, dt: x + vf(x) * dt
     mock_planner = Mock()
     # returns u_planner, planner_data
     mock_planner.return_value = (jnp.array([1.0]), PlannerData(u_traj=jnp.array([1.0])))
