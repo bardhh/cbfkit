@@ -11,8 +11,8 @@ from cbfkit.certificates import concatenate_certificates
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import e_s
 from cbfkit.estimators import naive as estimator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
-from cbfkit.utils.numerical_integration import forward_euler as integrator
 
 target_directory = "./tutorials"
 model_name = "multi_augmented_single_integrators"

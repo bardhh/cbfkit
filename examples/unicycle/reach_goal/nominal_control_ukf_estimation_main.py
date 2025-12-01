@@ -25,7 +25,7 @@ import cbfkit.simulation.simulator as sim
 # Load dynamics, sensors, controller, estimator, integrator
 import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
 from cbfkit.estimators import ct_ukf_dtmeas as ukf
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 
@@ -40,11 +40,11 @@ dt = 0.01
 n_steps = int(tf / dt)
 
 # Define dynamics, controller, and estimator with specified parameters
-approx_unicycle_dynamics = unicycle.plant(l=1.0)
+dynamics = unicycle.plant(lam=1.0)
 
 
 def dfdx(x):
-    return jacfwd(approx_unicycle_dynamics)(x)
+    return jacfwd(unicycle.plant)(x)
 
 
 def h(x):
@@ -56,7 +56,7 @@ def dhdx(x):
 
 
 controller = unicycle.controllers.proportional_controller(
-    dynamics=approx_unicycle_dynamics,
+    dynamics=dynamics,
     Kp_pos=1.0,
     Kp_theta=1.0,
 )
@@ -64,7 +64,7 @@ scale_factor = 1.25
 estimator = ukf(
     Q=initial_conditions.Q * scale_factor,
     R=initial_conditions.R * scale_factor,
-    dynamics=approx_unicycle_dynamics,
+    dynamics=dynamics,
     h=h,
     dt=dt,
 )
@@ -74,7 +74,7 @@ x, u, z, p, data, data_keys, planner_data, planner_data_keys = sim.execute(
     x0=initial_conditions.initial_state,
     dt=dt,
     num_steps=int(tf / dt),
-    dynamics=approx_unicycle_dynamics,
+    dynamics=dynamics,
     integrator=integrator,
     nominal_controller=controller,
     sensor=sensor,

@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from jax import Array, jit, lax, vmap
 
 from cbfkit.utils.user_types import (
+    EMPTY_CERTIFICATE_COLLECTION,
     CertificateCollection,
     ComputeCertificateConstraintFunctionGenerator,
     DynamicsCallable,
@@ -50,8 +51,8 @@ def generate_compute_cbf_clf_constraints(
     generate_compute_clf_constraints: ComputeCertificateConstraintFunctionGenerator,
     control_limits: Array,
     dyn_func: DynamicsCallable,
-    barriers: CertificateCollection = ([], [], [], [], []),
-    lyapunovs: CertificateCollection = ([], [], [], [], []),
+    barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
+    lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs,
 ) -> Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]]:
     """_summary_

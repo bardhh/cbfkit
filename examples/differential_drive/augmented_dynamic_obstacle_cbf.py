@@ -33,7 +33,7 @@ from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import (
     vanilla_cbf_clf_qp_controller as cbf_controller,
 )
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 
 # --- Augmented Dynamics Helpers ---

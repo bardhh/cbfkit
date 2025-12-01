@@ -116,14 +116,14 @@ def predict_ct_dtmeas(
         # Compute xdot from system dynamics
         f, g = dynamics(z)
         zdot = f + jnp.matmul(g, u)
-        zk = integrate(z, zdot, dt)
+        zk = integrate(z, lambda _: zdot, dt)
 
         # Compute Pdot from covariance dynamics
         Ff, Fg = dfdx(z)
         F = Ff + jnp.einsum("ijk,j->ik", Fg, u)
         # F = Ff + jnp.einsum('ijk,j->ki', Fg, u)
         Pdot = jnp.matmul(F, P) + jnp.matmul(P, F.T) + Q
-        Pk = integrate(P, Pdot, dt)
+        Pk = integrate(P, lambda _: Pdot, dt)
 
         return zk, Pk
 

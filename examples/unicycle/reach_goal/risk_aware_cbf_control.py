@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 from cbfkit.systems.unicycle import proportional_controller
 from cbfkit.utils.user_types import PlannerData

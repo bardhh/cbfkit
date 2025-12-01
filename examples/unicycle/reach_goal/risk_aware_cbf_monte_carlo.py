@@ -15,7 +15,7 @@ from cbfkit.controllers.cbf_clf import (
 )
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 from cbfkit.systems.unicycle.models.olfatisaber2002approximate.certificates.lyapunov_functions.reach import (
     reach_goal,

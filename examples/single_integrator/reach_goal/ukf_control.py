@@ -14,7 +14,7 @@ from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
 )
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.estimators import ct_ukf_dtmeas
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.simulation.monte_carlo import conduct_monte_carlo
 from cbfkit.systems import single_integrator

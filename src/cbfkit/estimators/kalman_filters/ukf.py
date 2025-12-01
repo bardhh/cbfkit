@@ -119,7 +119,9 @@ def predict_ct_dtmeas(
         sk = jnp.zeros(s.shape)
         for ii, ss in enumerate(s):
             f, g = dynamics(ss)
-            sk = sk.at[ii, :].set(integrate(ss, f + jnp.matmul(g, u), dt))
+            # Wrap pre-computed derivative in a callable for the integrator interface
+            val = f + jnp.matmul(g, u)
+            sk = sk.at[ii, :].set(integrate(ss, lambda _: val, dt))
 
         # Compute predicted state estimate
         zk = jnp.dot(wa, sk)

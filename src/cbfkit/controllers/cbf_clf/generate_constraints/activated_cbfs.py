@@ -4,7 +4,13 @@ import jax.numpy as jnp
 from jax import Array, jit, lax
 
 from cbfkit.controllers.cbf_clf.utils.barrier_activation import compute_activation_weights
-from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable, State, Time
+from cbfkit.utils.user_types import (
+    EMPTY_CERTIFICATE_COLLECTION,
+    CertificateCollection,
+    DynamicsCallable,
+    State,
+    Time,
+)
 
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
@@ -17,8 +23,8 @@ from .unpack import unpack_for_cbf
 def generate_compute_activated_cbf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
-    barriers: CertificateCollection = ([], [], [], [], []),
-    lyapunovs: CertificateCollection = ([], [], [], [], []),
+    barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
+    lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Dict[str, Any],
 ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """

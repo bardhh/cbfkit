@@ -49,8 +49,8 @@ import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
 import cbfkit.controllers_and_planners.waypoint as single_waypoint_planner
 import cbfkit.simulation.simulator as sim
 from cbfkit.estimators import naive as estimator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
-from cbfkit.utils.numerical_integration import forward_euler as integrator
 from tutorials import mppi_cbf_stl
 
 dynamics = mppi_cbf_stl.plant()

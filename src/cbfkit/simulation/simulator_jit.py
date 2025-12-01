@@ -127,8 +127,12 @@ def simulator_jit(
 
         # 8. Integration
         key, subkey = random.split(key)
-        xdot = f + jnp.matmul(g, u) + p(subkey)
-        x_next = integrator(x, xdot, dt)
+
+        def vector_field(s):
+            f_s, g_s = dynamics(s)
+            return f_s + jnp.matmul(g_s, u) + p(subkey)
+
+        x_next = integrator(x, vector_field, dt)
 
         if progress_callback is not None and progress_interval > 0:
             should_report = jnp.logical_or(

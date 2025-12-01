@@ -13,7 +13,7 @@ from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
 )
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.estimators import ct_ekf_dtmeas
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.systems.fixed_wing_uav.models import beard2014_kinematic as fixed_wing_uav

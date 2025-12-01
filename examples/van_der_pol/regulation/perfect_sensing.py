@@ -10,7 +10,7 @@ from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
 )
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 from cbfkit.systems import van_der_pol
 from examples.van_der_pol.common.config import perfect_state_measurements as setup

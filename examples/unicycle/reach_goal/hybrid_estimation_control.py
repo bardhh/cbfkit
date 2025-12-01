@@ -10,7 +10,7 @@ from jax import jacfwd
 
 import cbfkit.simulation.simulator as sim
 from cbfkit.estimators import ct_hybrid_ekf_ukf_dtmeas as hybrid_ekf_ukf
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.systems import unicycle
 from cbfkit.utils.user_types import PlannerData

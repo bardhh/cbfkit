@@ -14,7 +14,7 @@ from cbfkit.certificates import concatenate_certificates, rectify_relative_degre
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
 from cbfkit.estimators import naive as estimator
-from cbfkit.integration import forward_euler as integrator
+from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
 from cbfkit.systems.unicycle.models.accel_unicycle import plant
 from cbfkit.utils.user_types import PlannerData
