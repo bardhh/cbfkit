@@ -51,7 +51,7 @@ def nominal_controller(t, x, key, data=None):
 
 def main():
     dt = 0.1
-    tf = 10.0
+    tf = 20.0
     num_steps = int(tf / dt)
 
     # System
@@ -79,7 +79,7 @@ def main():
         "radius": radius,
     }
 
-    params = {"htype": "dist_cone", "S": 15, "beta": 0.99}
+    params = {"htype": "dist", "S": 15, "beta": 0.99}
     noise_params = [[0.01] * 4, [0.01] * 4]
 
     controller = adaptive_cvar_cbf_controller(
@@ -88,13 +88,15 @@ def main():
 
     # Integrator (Euler for simplicity matching the discrete logic)
     def integrator(x, xdot, dt):
-        return x + xdot * dt
+        return x + xdot(x) * dt
 
     # Simulation
     print("Starting Simulation...")
 
     import jax.random as random
 
+    # Seed numpy for consistent uncertainty generation
+    np.random.seed(42)
     key = random.PRNGKey(0)
 
     sim_iter = simulator.simulator(
@@ -125,8 +127,15 @@ def main():
         controls.append(step_data.control)
 
         if step_data.controller_values:
-            # Check beta/cost if logged
-            pass
+            keys = step_data.controller_keys
+            vals = step_data.controller_values
+            if "sub_data" in keys:
+                idx = keys.index("sub_data")
+                sub_data = vals[idx]
+                if isinstance(sub_data, dict) and "solver_status" in sub_data:
+                    status = sub_data["solver_status"]
+                    if status not in ["Solve_Succeeded", "Solved_To_Acceptable_Level"]:
+                        print(f"Step {len(states)}: Solver failed with status: {status}")
 
         if jnp.linalg.norm(step_data.state[:2] - jnp.array([4.0, 4.0])) < 0.5:
             print("Goal Reached!")

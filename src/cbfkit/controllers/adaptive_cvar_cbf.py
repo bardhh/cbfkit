@@ -119,9 +119,16 @@ class AdaptiveCVaRBarrierSolver:
                 log_data = {
                     "beta": beta_val,
                     "cost": res["f"].full().flatten()[0],
+                    "solver_status": stat,
                     "h_vals": [],  # Populate if needed
                 }
                 break
+            else:
+                log_data = {
+                    "beta": beta_val,
+                    "cost": np.nan,
+                    "solver_status": stat,
+                }
 
         if u_opt is None:
             # Fallback? Return nominal or zeros?
@@ -130,7 +137,6 @@ class AdaptiveCVaRBarrierSolver:
         return u_opt, log_data
 
     def _solve_one_iter(self, x, u_nom, robot_pmf, robot_wu, robot_wx, obs_pmfs, obs_wu, obs_wx):
-
         u = ca.MX.sym("u", self.m, 1)
         n_zeta = len(self.obstacles)  # + len(all_robots) - 1 (assuming single robot for now)
         n_eta = n_zeta * self.S
@@ -354,7 +360,6 @@ def adaptive_cvar_cbf_controller(
         key: Key,
         data: ControllerData,
     ) -> Tuple[Array, ControllerData]:
-
         # Check if we need to retrieve state from data?
         # For now, solver keeps its own state (prev_solu).
         # Ideally, we should load/save prev_solu from/to `data.sub_data`.
