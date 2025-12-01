@@ -240,6 +240,8 @@ def execute(
     initial_covariance: Optional[Covariance] = None,
     stl_trajectory_cost=None,
     use_jit: bool = False,
+    jit_progress: bool = False,
+    jit_progress_interval: int = 50,
 ) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
     """Executes a complete simulation of the dynamical system.
 
@@ -273,6 +275,10 @@ def execute(
         stl_trajectory_cost (Optional[Any], optional): STL cost object. Defaults to None.
         use_jit (bool, optional): If True, uses `jax.jit` for faster execution.
             JIT compilation requires that all callables are JIT-compatible. Defaults to False.
+        jit_progress (bool, optional): Show a host-side progress bar during JIT execution.
+            Disabled by default to avoid overhead; requires `verbose=True` to display.
+        jit_progress_interval (int, optional): Number of steps between progress updates when
+            `jit_progress` is enabled. Defaults to 50.
 
     Returns
     -------
@@ -311,6 +317,9 @@ def execute(
     elif isinstance(planner_data, dict):
         planner_data = PlannerData(**planner_data)
 
+    if jit_progress and jit_progress_interval <= 0:
+        raise ValueError("jit_progress_interval must be positive when jit_progress is enabled.")
+
     if use_jit:
         # JIT Execution Path
 
@@ -331,6 +340,21 @@ def execute(
         )
         sigma_val = sigma if sigma is not None else jnp.zeros(0)
 
+        progress_cb: Optional[ProgressCallback] = None
+        progress_hook = None
+        if verbose and jit_progress:
+            progress_cb = ProgressCallback()
+            progress_cb.on_start(total_steps=num_steps, dt=dt)
+            last_step_reported = -1
+
+            def progress_hook(step_idx: int) -> None:
+                nonlocal last_step_reported
+                if progress_cb and progress_cb.pbar:
+                    step_delta = step_idx - last_step_reported
+                    if step_delta > 0:
+                        progress_cb.pbar.update(step_delta)
+                        last_step_reported = step_idx
+
         if verbose:
             print("Warming up JIT...")
 
@@ -345,7 +369,13 @@ def execute(
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
         if verbose:
-            print("JIT compilation/execution started. No progress bar will be shown.")
+            if progress_cb:
+                print(
+                    f"JIT compilation/execution started. Progress updates every "
+                    f"{jit_progress_interval} steps."
+                )
+            else:
+                print("JIT compilation/execution started. No progress bar will be shown.")
 
         xs, us, zs, cs, c_datas, p_datas = simulator_jit(
             dt=dt,
@@ -364,10 +394,17 @@ def execute(
             initial_controller_data=c_data,
             initial_planner_data=p_data,
             initial_covariance=initial_covariance,
+            progress_callback=progress_hook,
+            progress_interval=jit_progress_interval,
         )
+        # Ensure progress callbacks flush before printing completion.
+        xs.block_until_ready()
 
         if verbose:
             print("JIT execution completed.")
+
+        if progress_cb:
+            progress_cb.on_end(success=True)
 
         # Unpack JIT results into SimulationStepData list
         c_keys = list(c_datas._fields)

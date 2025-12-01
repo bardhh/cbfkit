@@ -1,6 +1,7 @@
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import jax
+import jax.debug as jdebug
 import jax.numpy as jnp
 from jax import lax, random
 
@@ -37,12 +38,15 @@ def simulator_jit(
     initial_controller_data: ControllerData,
     initial_planner_data: PlannerData,
     initial_covariance: Optional[Covariance] = None,
+    progress_callback: Optional[Callable[[int], None]] = None,
+    progress_interval: int = 1,
 ) -> Tuple[jax.Array, jax.Array, jax.Array, jax.Array, ControllerData, PlannerData]:
     """JIT-compiled simulation loop using jax.lax.scan.
 
     Requires:
     - planner_data and controller_data must be initialized with JAX-compatible arrays
       (no None) for any fields that will be used/updated.
+    - Optional host-side progress reporting can be enabled via `progress_callback`.
 
     Returns
     -------
@@ -125,6 +129,21 @@ def simulator_jit(
         key, subkey = random.split(key)
         xdot = f + jnp.matmul(g, u) + p(subkey)
         x_next = integrator(x, xdot, dt)
+
+        if progress_callback is not None and progress_interval > 0:
+            should_report = jnp.logical_or(
+                step_idx == num_steps - 1, step_idx % progress_interval == 0
+            )
+
+            def _report(idx):
+                # Host-side hook so we can surface progress without breaking JIT.
+                def _do_report(step_value):
+                    progress_callback(int(step_value))
+
+                # ordered=True so progress updates are not reordered or dropped.
+                jdebug.callback(_do_report, idx, ordered=True)
+
+            lax.cond(should_report, _report, lambda _: None, step_idx)
 
         # Update time
         t_next = t + dt
