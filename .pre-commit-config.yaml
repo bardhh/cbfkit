@@ -30,4 +30,4 @@ repos:
         entry: mypy
         language: system
         types: [python]
-        exclude: ^examples/
+        exclude: ^(examples/|tutorials/|tutorials/wip/|build/)

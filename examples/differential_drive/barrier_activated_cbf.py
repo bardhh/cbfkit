@@ -19,20 +19,12 @@ from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 from cbfkit.controllers.cbf_clf.barrier_activated_cbf_clf_qp_control_laws import (
     barrier_activated_cbf_clf_qp_controller as cbf_controller,
 )
-from cbfkit.controllers.cbf_clf.utils.barrier_activation import (
-    compute_activation_weights,
-)
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import (
-    zeroing_barriers,
-)
+from cbfkit.controllers.cbf_clf.utils.barrier_activation import compute_activation_weights
+from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
 
 # Fixed imports to match project structure
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import (
-    concatenate_certificates,
-)
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import (
-    rectify_relative_degree,
-)
+from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
+from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator
 from cbfkit.sensors import perfect as sensor
@@ -159,11 +151,11 @@ def run_simulation():
 
 
 def plot_results(states, controls, goal_state, obstacles, d_min):
-    """Create enhanced visualization with trajectory phases."""
+    """Create visualization with trajectory phases."""
 
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
 
-    # Enhanced trajectory plot with phase coloring
+    # Trajectory plot with phase coloring
     ax1.set_facecolor("#f8f9fa")
 
     # Plot trajectory with progress coloring
@@ -342,7 +334,7 @@ def plot_results(states, controls, goal_state, obstacles, d_min):
 def create_animation(states, goal_state, obstacles, d_min):
     """Create enhanced animation with barrier activation visualization."""
 
-    print("Creating enhanced animation...")
+    print("Creating animation...")
 
     fig, ax = plt.subplots(figsize=(14, 10))
     ax.set_facecolor("#f8f9fa")
