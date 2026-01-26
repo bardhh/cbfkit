@@ -60,4 +60,7 @@ system = true
 [dependency-groups]
 dev = [
     "mypy>=1.18.2",
+    "pytest>=9.0.2",
+    "python-dotenv>=1.2.1",
+    "ruff>=0.14.14",
 ]
