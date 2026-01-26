@@ -134,14 +134,14 @@ def run_simulation():
     # 1. Define Systems
     # Robot
     robot_dyn = unicycle.plant(l=1.0)
-    robot_dyn.a_max = 5.0
-    robot_dyn.omega_max = 5.0
-    robot_dyn.v_max = 4.0
+    robot_dyn.a_max = 10.0
+    robot_dyn.omega_max = 10.0
+    robot_dyn.v_max = 10.0
 
     # Obstacles
     # Obs 1: Circular path around (5, 4)
     obs1_dyn = circular_obstacle_dynamics(center=(5.0, 4.0), omega=0.5)
-    obs1_init = jnp.array([5.0 + 2.0, 4.0])  # Start at radius 2.0
+    obs1_init = jnp.array([6.0 + 2.0, 4.0])  # Start at radius 2.0
 
     # Obs 2: Crossing linearly
     obs2_dyn = linear_obstacle_dynamics(velocity=(-0.5, 0.2))
