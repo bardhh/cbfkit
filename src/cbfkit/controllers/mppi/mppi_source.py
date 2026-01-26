@@ -1,3 +1,5 @@
+import inspect
+
 import jax
 import jax.numpy as jnp
 from jax import jit, lax
@@ -29,6 +31,16 @@ def setup_mppi(
         if terminal_cost_func is None:
             print("Neither Trajectory Cost nor Terminal Cost function is passed")
             exit()
+
+    # Detect terminal_cost_func signature to support both (state) and (state, action) patterns
+    terminal_cost_takes_action = False
+    if terminal_cost_func is not None:
+        try:
+            sig = inspect.signature(terminal_cost_func)
+            terminal_cost_takes_action = len(sig.parameters) >= 2
+        except (ValueError, TypeError):
+            # Fallback: assume 2 args (state, action) for compatibility with older code
+            terminal_cost_takes_action = True
 
     horizon = horizon
     samples = samples
@@ -132,11 +144,14 @@ def setup_mppi(
                 @ perturbation[:, [horizon]]
             )[0, 0]
         )
-        # if trajectory_cost_func == None:
-        #     cost_sample = cost_sample + terminal_cost_func(
-        #         robot_state[:, 0], perturbed_control[:, [horizon]][:, 0]
-        #     )
-        if trajectory_cost_func is not None:
+        if trajectory_cost_func is None:
+            final_state = robot_states[:, horizon - 1]
+            final_action = perturbed_control[:, horizon - 1]
+            if terminal_cost_takes_action:
+                cost_sample = cost_sample + terminal_cost_func(final_state, final_action)
+            else:
+                cost_sample = cost_sample + terminal_cost_func(final_state)
+        else:
             cost_sample = cost_sample + trajectory_cost_func(
                 time, robot_states, perturbed_control, prev_robustness
             )
