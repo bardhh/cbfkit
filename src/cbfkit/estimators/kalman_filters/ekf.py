@@ -6,19 +6,6 @@ from jax import Array
 from cbfkit.integration import forward_euler as integrate
 from cbfkit.utils.user_types import DynamicsCallable, EstimatorCallable, Time
 
-global K_EKF
-K_EKF = jnp.zeros((6, 6))
-
-
-def get_global_k_ekf():
-    global K_EKF
-    return K_EKF
-
-
-def set_global_k_ekf(k_mat):
-    global K_EKF
-    K_EKF = k_mat
-
 
 def ct_ekf_dtmeas(
     Q: Array,
@@ -51,7 +38,8 @@ def ct_ekf_dtmeas(
         z: Optional[Array] = None,
         u: Optional[Array] = None,
         P: Optional[Array] = None,
-    ) -> Tuple[Array, Array]:
+        K: Optional[Array] = None,
+    ) -> Tuple[Array, Array, Array]:
         """Continuous-time implementation of Extended Kalman Filter (EKF) with discrete-time
         measurements.
 
@@ -61,21 +49,26 @@ def ct_ekf_dtmeas(
             z (Array or None): observer state
             u (Array or None): control input
             P (Array or None): Kalman covariance matrix
+            K (Array or None): Kalman gain matrix (from previous step)
 
         Returns
         -------
             z_new (Array): updated observer state
             P_new (Array): updated Kalman covariance matrix
+            K_new (Array): updated Kalman gain matrix
         """
         if z is None or u is None or P is None:
-            return initialize(y, R)
+            z_init, P_init = initialize(y, R)
+            # Initialize K as zeros with appropriate shape
+            K_init = jnp.zeros((z_init.shape[0], y.shape[0]))
+            return z_init, P_init, K_init
 
         # The 't' passed to predict needs to be a JAX-compatible type.
         # Since 't' itself is already Time (Union[float, Array]), we pass it directly.
         z_predicted, P_predicted = predict(t, z, u, P)
-        z_new, P_new = update(z_predicted, y, P_predicted)
+        z_new, P_new, K_new = update(z_predicted, y, P_predicted)
 
-        return z_new, P_new
+        return z_new, P_new, K_new
 
     return step_ekf
 
@@ -148,7 +141,7 @@ def predict_ct_dtmeas(
 
 def update_dtmeas(
     R: Array, h: Callable[[Array], Array], dhdx: Callable[[Array], Array]
-) -> Callable[[Array, Array, Array], Tuple[Array, Array]]:
+) -> Callable[[Array, Array, Array], Tuple[Array, Array, Array]]:
     """Function defining the update step for (any) EKF with discrete-time measurements.
 
     Arguments:
@@ -159,10 +152,10 @@ def update_dtmeas(
 
     Returns
     -------
-        update (Callable): function handle to compute the updated EKF state and covariance matrix
+        update (Callable): function handle to compute the updated EKF state, covariance matrix, and gain
     """
 
-    def update(z: Array, y: Array, P: Array) -> Tuple[Array, Array]:
+    def update(z: Array, y: Array, P: Array) -> Tuple[Array, Array, Array]:
         """Update step for (any)) EKF with discrete-time measurements.
 
         Arguments:
@@ -172,15 +165,15 @@ def update_dtmeas(
 
         Returns
         -------
-            x_new (Array): updated observer state
+            z_new (Array): updated observer state
             P_new (Array): updated Kalman covariance matrix
+            K (Array): Kalman gain matrix
         """
         H = dhdx(z)
         K = jnp.matmul(jnp.matmul(P, H.T), jnp.linalg.inv(jnp.matmul(jnp.matmul(H, P), H.T) + R))
         z_new = z + jnp.matmul(K, y - h(z))
         P_new = jnp.matmul(jnp.eye(P.shape[0]) - jnp.matmul(K, H), P)
-        set_global_k_ekf(K)
 
-        return z_new, P_new
+        return z_new, P_new, K
 
     return update

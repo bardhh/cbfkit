@@ -64,8 +64,12 @@ def simulator_jit(
         # 1. Sensor
         y = sensor(t, x, sigma=sigma, key=key)
 
-        # 2. Estimator
-        z, c = estimator(t, y, z, u, c)
+        # 2. Estimator - handle both 2-tuple (z, c) and 3-tuple (z, c, K) returns
+        est_result = estimator(t, y, z, u, c)
+        if len(est_result) == 3:
+            z, c, _kalman_gain = est_result
+        else:
+            z, c = est_result
 
         # 3. Dynamics (True)
         f, g = dynamics(x)

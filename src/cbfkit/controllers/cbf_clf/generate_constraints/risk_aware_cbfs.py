@@ -8,7 +8,7 @@ import jax.numpy as jnp
 from jax import Array, jit, lax, scipy
 
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
-from cbfkit.estimators.kalman_filters.ekf import get_global_k_ekf
+
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
     CertificateCollection,
@@ -132,7 +132,8 @@ def generate_compute_estimate_feedback_ra_cbf_constraints(
         nonlocal a_clf, b_clf
         data: Dict[str, Any] = {}
         dyn_f, dyn_g = dyn_func(x)
-        k_mat = get_global_k_ekf()
+        # Get K matrix from kwargs (passed from estimator state)
+        k_mat = kwargs.get("kalman_gain", jnp.zeros((x.shape[0], x.shape[0])))
 
         if n_bfs > 0:
             lf_x, lj_x, lh_x, dlf_t, lc_x = compute_lyapunov_values(t, x)
