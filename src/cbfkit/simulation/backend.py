@@ -75,7 +75,12 @@ def stepper(
             z = x
 
         y = sensor(t, x, sigma=sigma, key=key)
-        z, c = estimator(t, y, z, u, c)
+        # Handle both 2-tuple (z, c) and 3-tuple (z, c, K) returns from estimator
+        est_result = estimator(t, y, z, u, c)
+        if len(est_result) == 3:
+            z, c, _kalman_gain = est_result  # K available for risk-aware controllers via kwargs
+        else:
+            z, c = est_result
         f, g = dynamics(x)
 
         if planner is None and nominal_controller is None and controller is None:

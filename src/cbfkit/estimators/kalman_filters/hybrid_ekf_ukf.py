@@ -50,7 +50,7 @@ def ct_hybrid_ekf_ukf_dtmeas(
         if z is None or u is None or P is None:
             return initialize(y, R)
 
-        ze, Pe = step_ekf(t, y, z, u, P[: len(z), :])
+        ze, Pe, _Ke = step_ekf(t, y, z, u, P[: len(z), :])
         zu, Pu = step_ukf(t, y, z, u, P[len(z) :, :])
 
         covariance_norm_ratio = jnp.linalg.norm(Pu, ord="fro") / jnp.linalg.norm(Pe, ord="fro")
