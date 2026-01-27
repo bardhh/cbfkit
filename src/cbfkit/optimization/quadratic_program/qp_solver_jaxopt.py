@@ -52,8 +52,8 @@ def solve_inequality_constrained_qp(
         params_ineq=params_ineq,
     )
     status = state.status
-    # 1: SOLVED, 2: MAX_ITER_REACHED
-    success = (status == 1) | (status == 2)
+    # Only SOLVED (1) is success. MAX_ITER_REACHED (2) may return non-converged solution.
+    success = status == 1
     return sol.primal, success
 
 
