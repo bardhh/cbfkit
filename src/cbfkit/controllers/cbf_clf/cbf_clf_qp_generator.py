@@ -207,15 +207,15 @@ def cbf_clf_qp_generator(
 
             # Solve QP
             sol, status = solve_qp(p_mat, q_vec, g_mat, h_vec)
+            # QP solution already respects control limits via input constraints.
+            # Only clip the fallback u_nom (which may exceed limits) to avoid
+            # inadvertently violating CBF constraints on the QP-solved path.
             u = lax.cond(
                 status,
                 lambda _fake: jnp.array(sol[:n_con]).reshape((n_con,)),
-                lambda _fake: u_nom[:n_con],
+                lambda _fake: jnp.clip(u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con]).reshape((n_con,)),
                 0,
             )
-
-            # Saturate the solution if necessary
-            u = jnp.clip(u, -control_limits[:n_con], control_limits[:n_con]).reshape((n_con,))
 
             if "ra_params" in kwargs:
                 #! To Do: integrate RA-PI states

@@ -10,7 +10,7 @@ This document outlines key assumptions made in the design of `cbfkit` and its us
 
 ## Control Limits & QP Feasibility
 *   **Actuation Limits:** The QP solvers respect the provided `control_limits`. If safety constraints (CBFs) conflict with actuation limits, the behavior depends on the controller configuration:
-    *   **Strict CBF (Default):** The QP may become infeasible. The current fallback behavior is to return a zero control input (`u=0`).
+    *   **Strict CBF (Default):** The QP may become infeasible. The fallback behavior is to return the nominal control input (clipped to control limits): `u = clip(u_nom)`. This maintains actuator safety but may violate the CBF constraint.
     *   **Relaxable CBF (`relaxable_cbf=True`):** The solver introduces a slack variable to relax the safety constraint, prioritizing the minimization of this violation while respecting actuation limits. This provides a "best effort" safety behavior.
 
 ## JIT Compilation (JAX)
