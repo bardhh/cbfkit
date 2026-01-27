@@ -94,7 +94,8 @@ def generate_compute_stochastic_cbf_constraints(
             elif relaxable:
                 a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-1.0)
 
-            violated = lax.cond(jnp.any(bf_x > 1), lambda _fake: True, lambda _fake: False, 0)
+            # For superlevel-set CBFs (h >= 0 means safe), violation occurs when h < 0
+            violated = lax.cond(jnp.any(bf_x < 0), lambda _fake: True, lambda _fake: False, 0)
 
             data["bfs"] = bf_x
             data["violated"] = violated
