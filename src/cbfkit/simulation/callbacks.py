@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol, Union
 
 from tqdm import tqdm
 
@@ -37,10 +37,14 @@ class ProgressCallback:
 class LoggingCallback:
     def __init__(self, filepath: str):
         self.filepath = filepath
-        self.log_data: List[Dict[str, Any]] = []
+        self.log_data: Union[List[Dict[str, Any]], Dict[str, Any]] = []
 
     def on_start(self, total_steps: int, dt: float) -> None:
         self.log_data = []
+
+    def log_bulk(self, data: Dict[str, Any]) -> None:
+        """Sets the log data directly from a bulk dictionary (e.g. from JIT arrays)."""
+        self.log_data = data
 
     def on_step(self, step_idx: int, time: float, data: SimulationStepData) -> None:
         step_log_entry = {
