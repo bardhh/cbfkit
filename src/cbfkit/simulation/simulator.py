@@ -22,6 +22,7 @@ from typing import Any, Callable, Iterator, List, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 import jax.tree_util
+import numpy as np
 from jax import Array, random
 
 from cbfkit.utils.user_types import (
@@ -440,30 +441,39 @@ def execute(
 
         # If logging was requested, we must simulate the callbacks behavior
         if logging_callback:
-            # We reconstruct the list of step data for logging purposes ONLY if needed
+            logging_callback.on_start(num_steps, dt)
+
+            # Optimization (Bolt): Use bulk logging instead of per-step loop
             c_keys = list(c_datas._fields)
             p_keys = list(p_datas._fields)
 
-            logging_callback.on_start(num_steps, dt)
-            for t in range(num_steps):
-                # Use tree_map to extract the t-th slice of the PyTree
-                c_data_t = jax.tree_util.tree_map(lambda x: x[t], c_datas)
-                p_data_t = jax.tree_util.tree_map(lambda x: x[t], p_datas)
+            log_dict = {
+                "state": list(np.array(xs)),
+                "control": list(np.array(us)),
+                "estimate": list(np.array(zs)),
+                "covariance": list(np.array(cs)),
+            }
 
-                c_val_t = [getattr(c_data_t, k) for k in c_keys]
-                p_val_t = [getattr(p_data_t, k) for k in p_keys]
+            def process_bulk_data(keys, data_obj, prefix):
+                for k in keys:
+                    val = getattr(data_obj, k)
+                    # val could be Array(T, ...), Dict[str, Array(T, ...)], or None
+                    if val is None:
+                        log_dict[f"{prefix}_{k}"] = [None] * num_steps
+                    elif isinstance(val, dict):
+                        # Unstack dict of arrays -> list of dicts
+                        # First convert to numpy to speed up iteration
+                        val_np = {sk: list(np.array(sv)) for sk, sv in val.items()}
+                        # zip now works on lists of values
+                        vals = [dict(zip(val_np.keys(), t)) for t in zip(*val_np.values())]
+                        log_dict[f"{prefix}_{k}"] = vals
+                    else:
+                        log_dict[f"{prefix}_{k}"] = list(np.array(val))
 
-                step_data = SimulationStepData(
-                    state=xs[t],
-                    control=us[t],
-                    estimate=zs[t],
-                    covariance=cs[t],
-                    controller_keys=c_keys,
-                    controller_values=c_val_t,
-                    planner_keys=p_keys,
-                    planner_values=p_val_t,
-                )
-                logging_callback.on_step(t, t * dt, step_data)
+            process_bulk_data(c_keys, c_datas, "controller")
+            process_bulk_data(p_keys, p_datas, "planner")
+
+            logging_callback.log_bulk(log_dict)
             logging_callback.on_end(success=True)
 
         # Fast return path for JIT: Extract data directly from stacked arrays

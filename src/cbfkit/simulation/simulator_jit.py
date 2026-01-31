@@ -6,6 +6,7 @@ import jax.debug as jdebug
 import jax.numpy as jnp
 from jax import lax, random
 
+from cbfkit.integration.forward_euler import forward_euler
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
@@ -154,6 +155,14 @@ def simulator_jit(
         def _integrate(_):
             p = perturbation(x, u, f, g)
             key_int, subkey = random.split(key)
+
+            # Optimization (Bolt): If integrator is forward_euler, avoid re-evaluating dynamics.
+            if integrator == forward_euler:
+                # Forward Euler: x_next = x + dt * (f + g*u + p)
+                # We have f, g from Step 3.
+                dx = f + jnp.matmul(g, u) + p(subkey)
+                x_next = x + dx * dt
+                return key_int, x_next
 
             def vector_field(s):
                 f_s, g_s = dynamics(s)
