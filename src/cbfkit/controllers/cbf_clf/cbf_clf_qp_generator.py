@@ -221,8 +221,9 @@ def cbf_clf_qp_generator(
             # inadvertently violating CBF constraints on the QP-solved path.
             u = lax.cond(
                 status,
-                lambda _fake: jnp.array(sol[:n_con]).reshape((n_con,)),
-                lambda _fake: jnp.clip(u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con]).reshape((n_con,)),
+                # Bolt: Avoid jnp.array copy and reshape (sol is already 1D)
+                lambda _fake: sol[:n_con],
+                lambda _fake: jnp.clip(u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con]),
                 0,
             )
 

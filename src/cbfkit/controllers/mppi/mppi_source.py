@@ -166,12 +166,9 @@ def setup_mppi(
     ):
         ##### Initialize
 
-        # Robot
-        robot_states = jnp.zeros((samples, robot_state_dim, horizon))
-        robot_states = robot_states.at[:, :, 0].set(jnp.tile(robot_init_state.T, (samples, 1)))
-
-        # Cost
-        cost_total = jnp.zeros(samples)
+        # Flatten initial state for broadcasting
+        # robot_init_state is (dim, 1), we need (dim,) for single_sample_rollout
+        x0 = robot_init_state.reshape(-1)
 
         # Single sample rollout
         @jit
@@ -186,11 +183,12 @@ def setup_mppi(
             )
             return cost_sample, robot_states_sample
 
-        batched_body_sample = jax.vmap(body_sample, in_axes=0)
+        # Broadcast x0 (robot_states_init) across all samples
+        batched_body_sample = jax.vmap(body_sample, in_axes=(None, 0, 0))
         (
             cost_total,
             robot_states,
-        ) = batched_body_sample(robot_states[:, :, 0], perturbed_control, perturbation)
+        ) = batched_body_sample(x0, perturbed_control, perturbation)
 
         return robot_states, cost_total
 
