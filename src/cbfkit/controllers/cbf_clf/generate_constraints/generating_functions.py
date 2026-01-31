@@ -114,18 +114,25 @@ def generate_compute_certificate_values_list_comprehension(certificate_package):
 
 def generate_compute_certificate_values_vmap(certificate_package):
     functions, jacobians, hessians, partials, conditions = certificate_package
-    vmap_bf = vmap(lambda i, t, x: lax.switch(i, functions, t, x))
-    vmap_bj = vmap(lambda i, t, x: lax.switch(i, jacobians, t, x))
-    vmap_bh = vmap(lambda i, t, x: lax.switch(i, hessians, t, x))
-    vmap_bt = vmap(lambda i, t, x: lax.switch(i, partials, t, x))
+    # Optimization (Bolt): Use in_axes=(0, None, None) to avoid tiling t and x
+    # This avoids O(N) memory allocation and copy for state/time broadcasting
+    vmap_bf = vmap(
+        lambda i, t, x: lax.switch(i, functions, t, x), in_axes=(0, None, None)
+    )
+    vmap_bj = vmap(
+        lambda i, t, x: lax.switch(i, jacobians, t, x), in_axes=(0, None, None)
+    )
+    vmap_bh = vmap(
+        lambda i, t, x: lax.switch(i, hessians, t, x), in_axes=(0, None, None)
+    )
+    vmap_bt = vmap(
+        lambda i, t, x: lax.switch(i, partials, t, x), in_axes=(0, None, None)
+    )
     vmap_bc = vmap(lambda i, bf: lax.switch(i, conditions, bf))
     index = jnp.arange(len(functions))
 
     @jit
     def compute_certificate_values_vmap(t, x):
-        n_tiles = len(index)
-        t = jnp.repeat(t, n_tiles)
-        x = jnp.tile(x, (n_tiles, 1))
         bf_x = vmap_bf(index, t, x)
         bj_x = vmap_bj(index, t, x)
         bh_x = vmap_bh(index, t, x)
