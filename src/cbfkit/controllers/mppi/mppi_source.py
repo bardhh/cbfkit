@@ -167,11 +167,7 @@ def setup_mppi(
         ##### Initialize
 
         # Robot
-        robot_states = jnp.zeros((samples, robot_state_dim, horizon))
-        robot_states = robot_states.at[:, :, 0].set(jnp.tile(robot_init_state.T, (samples, 1)))
-
-        # Cost
-        cost_total = jnp.zeros(samples)
+        robot_states_init_batch = jnp.tile(robot_init_state.T, (samples, 1))
 
         # Single sample rollout
         @jit
@@ -190,7 +186,7 @@ def setup_mppi(
         (
             cost_total,
             robot_states,
-        ) = batched_body_sample(robot_states[:, :, 0], perturbed_control, perturbation)
+        ) = batched_body_sample(robot_states_init_batch, perturbed_control, perturbation)
 
         return robot_states, cost_total
 

@@ -35,3 +35,7 @@
 ## 2025-10-26 - Unrolling vs. lax.switch for Closure Lists
 **Learning:** Using `lax.switch` inside `vmap` to iterate over a list of closures (e.g. barrier functions) introduces dispatch overhead and does not reduce compiled graph size because each closure is distinct.
 **Action:** Replaced `lax.switch` + `vmap` with direct list comprehension (unrolling). This reduced execution time by ~25% in heavy CBF scenarios by allowing XLA to optimize the concatenated graph without dispatch overhead.
+
+## 2026-02-23 - Redundant Allocation in MPPI Rollouts
+**Learning:** Initializing full trajectory arrays (e.g. `jnp.zeros((samples, dim, horizon))`) just to set the initial state (slice `[:,:,0]`) and then immediately overwriting the variable with `vmap` output is wasteful. Even if XLA optimizes dead code, avoiding the materialization of large arrays reduces memory pressure and overhead (~4.5% speedup in MPPI).
+**Action:** Construct only the necessary input batch for `vmap` (e.g. `jnp.tile(x0, (N, 1))`) instead of allocating the full output buffer.
