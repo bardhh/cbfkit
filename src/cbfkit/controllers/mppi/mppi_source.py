@@ -98,55 +98,60 @@ def setup_mppi(
     def single_sample_rollout(
         time, robot_states_init, perturbed_control, perturbation, x_prev, prev_robustness
     ):
-        # Initialize robot_state
-        robot_states = jnp.zeros((robot_state_dim, horizon))
-        robot_states = robot_states.at[:, 0].set(robot_states_init)
+        def step_fn(carry, inputs):
+            current_state, current_cost = carry
+            u_t, pert_t = inputs
+            u_t_col = u_t.reshape(-1, 1)
+            pert_t_col = pert_t.reshape(-1, 1)
 
-        # loop over horizon
-        cost_sample = 0
-
-        def body(i, inputs):
-            cost_sample, robot_states = inputs
-
-            # get robot state
-            robot_state = robot_states[:, [i]]
-
-            # Get cost
-            cost_sample = (
-                cost_sample
-                + cost_perturbation_coeff
-                * (
-                    (perturbed_control[:, [i]] - perturbation[:, [i]]).T
-                    @ control_cov_inv
-                    @ perturbation[:, [i]]
-                )[0, 0]
-            )
-            if trajectory_cost_func is None:
-                cost_sample = cost_sample + stage_cost_func(
-                    robot_state[:, 0], perturbed_control[:, [i]][:, 0]
-                )
-
-            # Update robot states
-            robot_states = robot_states.at[:, i + 1].set(
-                robot_dynamics_step(robot_states[:, [i]], perturbed_control[:, [i]])[:, 0]
-            )
-            return cost_sample, robot_states
-
-        cost_sample, robot_states = lax.fori_loop(0, horizon - 1, body, (cost_sample, robot_states))
-
-        robot_states[:, [horizon - 1]]
-        cost_sample = (
-            cost_sample
-            + cost_perturbation_coeff
-            * (
-                (perturbed_control[:, [horizon]] - perturbation[:, [horizon]]).T
-                @ control_cov_inv
-                @ perturbation[:, [horizon]]
+            delta_cost = cost_perturbation_coeff * (
+                (u_t_col - pert_t_col).T @ control_cov_inv @ pert_t_col
             )[0, 0]
+
+            if trajectory_cost_func is None:
+                delta_cost = delta_cost + stage_cost_func(current_state, u_t)
+
+            next_state = robot_dynamics_step(current_state.reshape(-1, 1), u_t_col)[:, 0]
+            new_cost = current_cost + delta_cost
+            return (next_state, new_cost), current_state
+
+        init_carry = (robot_states_init, 0.0)
+        # Scan over 0 to horizon-2
+        scan_inputs = (perturbed_control[:, :-1].T, perturbation[:, :-1].T)
+
+        (final_carry_state, accumulated_cost), intermediate_states = lax.scan(
+            step_fn, init_carry, scan_inputs
         )
+
+        # intermediate_states contains x0 ... x_{H-2}
+        # final_carry_state is x_{H-1}
+
+        # Add final step cost (u_{H-1})
+        u_final = perturbed_control[:, horizon - 1]
+        pert_final = perturbation[:, horizon - 1]
+        u_final_col = u_final.reshape(-1, 1)
+        pert_final_col = pert_final.reshape(-1, 1)
+
+        delta_cost_final = cost_perturbation_coeff * (
+            (u_final_col - pert_final_col).T @ control_cov_inv @ pert_final_col
+        )[0, 0]
+
+        cost_sample = accumulated_cost + delta_cost_final
+
+        # Note: We do NOT compute x_H.
+
+        # Reconstruct robot_states
+        # We need [x0, x1, ..., x_{H-1}]
+        # intermediate_states has shape (H-1, dim) -> x0 ... x_{H-2}
+        # final_carry_state has shape (dim,) -> x_{H-1}
+
+        # Concatenate
+        robot_states = jnp.vstack([intermediate_states, final_carry_state.reshape(1, -1)]).T
+        # Shape (dim, H)
+
         if trajectory_cost_func is None:
             final_state = robot_states[:, horizon - 1]
-            final_action = perturbed_control[:, horizon - 1]
+            final_action = u_final
             if terminal_cost_takes_action:
                 cost_sample = cost_sample + terminal_cost_func(final_state, final_action)
             else:
@@ -232,17 +237,15 @@ def setup_mppi(
     @staticmethod
     @jit
     def rollout_control(init_state, actions):
-        states = jnp.zeros((robot_state_dim, horizon + 1))
-        states = states.at[:, 0].set(init_state[:, 0])
+        def step_fn(current_state, action):
+            next_state = robot_dynamics_step(
+                current_state.reshape(-1, 1), action.reshape(-1, 1)
+            )[:, 0]
+            return next_state, current_state
 
-        def body(i, inputs):
-            states = inputs
-            states = states.at[:, i + 1].set(
-                robot_dynamics_step(states[:, [i]], actions[i, :].reshape(-1, 1))[:, 0]
-            )
-            return states
+        final_state, intermediate_states = lax.scan(step_fn, init_state[:, 0], actions)
 
-        states = lax.fori_loop(0, horizon, body, states)
+        states = jnp.vstack([intermediate_states, final_state.reshape(1, -1)]).T
         return states
 
     @jit
