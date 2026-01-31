@@ -22,19 +22,19 @@ Examples
 """
 
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 import pandas as pd
 
 LogEntry = Dict[str, Any]
 
 
-def write_log(filepath: str, data: List[LogEntry]) -> None:
+def write_log(filepath: str, data: Union[List[LogEntry], Dict[str, Any]]) -> None:
     """Writes logged data out to csv file specified at filepath.
 
     Args:
     filepath (str): path to save file
-    data (List[LogEntry]): list of log entries
+    data (Union[List[LogEntry], Dict[str, Any]]): list of log entries or dict of arrays
 
     Returns
     -------

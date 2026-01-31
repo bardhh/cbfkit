@@ -11,3 +11,7 @@
 ## 2025-02-19 - Repeated Graph Construction in JIT Simulator
 **Learning:** `simulator_jit` (which uses `lax.scan`) was not itself JIT-compiled. This meant that every call to `execute(use_jit=True)` re-executed the Python logic to build the `scan` graph. While `lax.scan` caches the compiled kernel, the graph construction overhead (Python side) was significant (~240ms per call).
 **Action:** Decorated `simulator_jit` with `@partial(jax.jit, static_argnames=[...])` to JIT-compile the graph construction itself, eliminating Python overhead on subsequent calls.
+
+## 2025-02-20 - JAX CSE Effectiveness and Logging Bottlenecks
+**Learning:** Manual Common Subexpression Elimination (CSE) of `dynamics(x)` calls inside `scan_step` yielded negligible speedup (<1%), confirming that JAX XLA is highly effective at optimizing pure function calls. However, the host-side logging loop in `simulator.py` (converting JAX arrays to Python dicts step-by-step) was a 2.7x performance drag.
+**Action:** Trust XLA for graph optimizations. Focus on eliminating Python loops in data transfer paths (logging, plotting) by using vectorized/bulk operations.
