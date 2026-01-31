@@ -197,7 +197,7 @@ def cbf_clf_qp_generator(
                 u_nom = jnp.hstack([u_nom, jnp.zeros((n_lfs,))])
 
             # Compute QP cost, constraint functions
-            # Bolt: Use 1D arrays to avoid broadcasting overhead in solver
+            # Bolt: Keep vectors 1D to avoid JAX broadcasting overhead in solver (prevents (N,1) vs (N,) mismatch)
             q_vec = jnp.matmul(-2 * p_mat, u_nom)
             g_mat_u, h_vec_u = compute_input_constraints(t, x)
             g_mat_c, h_vec_c, sub_data = compute_cbf_clf_constraints(t, x)
