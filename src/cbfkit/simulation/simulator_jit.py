@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Callable, Optional, Tuple
 
 import jax
@@ -21,6 +22,22 @@ from cbfkit.utils.user_types import (
 )
 
 
+@partial(
+    jax.jit,
+    static_argnames=[
+        "dynamics",
+        "integrator",
+        "planner",
+        "nominal_controller",
+        "controller",
+        "sensor",
+        "estimator",
+        "perturbation",
+        "progress_callback",
+        "num_steps",
+        "progress_interval",
+    ],
+)
 def simulator_jit(
     dt: float,
     num_steps: int,
