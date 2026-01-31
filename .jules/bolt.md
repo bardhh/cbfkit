@@ -7,3 +7,7 @@
 ## 2025-02-14 - Optimized Data Formatting in Simulation
 **Learning:** Formatting simulation results by iterating over a tuple of NamedTuples and rebuilding arrays (`jnp.array([step.field for step in data])`) is slow for large N.
 **Action:** Transpose the tuple of NamedTuples (`SimulationStepData(*zip(*data))`) and use `jnp.stack` on the resulting columns. This reduces iteration overhead and leverages JAX's stacking efficiency.
+
+## 2025-02-19 - Repeated Graph Construction in JIT Simulator
+**Learning:** `simulator_jit` (which uses `lax.scan`) was not itself JIT-compiled. This meant that every call to `execute(use_jit=True)` re-executed the Python logic to build the `scan` graph. While `lax.scan` caches the compiled kernel, the graph construction overhead (Python side) was significant (~240ms per call).
+**Action:** Decorated `simulator_jit` with `@partial(jax.jit, static_argnames=[...])` to JIT-compile the graph construction itself, eliminating Python overhead on subsequent calls.
