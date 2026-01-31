@@ -197,7 +197,8 @@ def cbf_clf_qp_generator(
                 u_nom = jnp.hstack([u_nom, jnp.zeros((n_lfs,))])
 
             # Compute QP cost, constraint functions
-            q_vec = jnp.expand_dims(jnp.matmul(-2 * p_mat, u_nom), axis=-1)
+            # Bolt: Use 1D arrays to avoid broadcasting overhead in solver
+            q_vec = jnp.matmul(-2 * p_mat, u_nom)
             g_mat_u, h_vec_u = compute_input_constraints(t, x)
             g_mat_c, h_vec_c, sub_data = compute_cbf_clf_constraints(t, x)
             if "complete" in sub_data:
@@ -205,7 +206,7 @@ def cbf_clf_qp_generator(
 
             # Stack input and certificate function constraints
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
-            h_vec = jnp.expand_dims(jnp.hstack([h_vec_u, h_vec_c]), axis=-1)
+            h_vec = jnp.hstack([h_vec_u, h_vec_c])
 
             # Solve QP
             solver_params = None
@@ -220,8 +221,9 @@ def cbf_clf_qp_generator(
             # inadvertently violating CBF constraints on the QP-solved path.
             u = lax.cond(
                 status,
-                lambda _fake: jnp.array(sol[:n_con]).reshape((n_con,)),
-                lambda _fake: jnp.clip(u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con]).reshape((n_con,)),
+                # Bolt: Avoid jnp.array copy and reshape (sol is already 1D)
+                lambda _fake: sol[:n_con],
+                lambda _fake: jnp.clip(u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con]),
                 0,
             )
 
