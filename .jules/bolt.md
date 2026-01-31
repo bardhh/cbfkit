@@ -24,6 +24,10 @@
 **Learning:** The Python-based `stepper` (used for non-JIT simulation) evaluated system dynamics twice per step when using `forward_euler`: once for logging/controller and once inside the integrator.
 **Action:** Special-cased `forward_euler` in the stepper to reuse the already computed dynamics, yielding a ~12% speedup in simulations with moderate dynamics complexity.
 
+## 2026-01-31 - Recompilation due to Dynamic Defaults
+**Learning:** Default arguments defined as lambdas inside `execute` (e.g., `_perturbation = lambda ...`) created new function objects on every call. Since these were passed as static arguments to `simulator_jit`, JAX triggered a full recompilation every time, causing massive overhead (~6s/run instead of ~1.4s/run).
+**Action:** Define default no-op functions (`_default_perturbation`, etc.) at the module level so they are constant objects. This ensures `simulator_jit` hits the compilation cache.
+
 ## 2025-10-27 - Vectorization vs lax.fori_loop in MPPI
 **Learning:** `lax.fori_loop` for computing weighted sums and batch rollouts in MPPI introduced overhead compared to fully vectorized operations (`jnp.sum` with broadcasting) and `jax.vmap`. Replacing the loop with vectorized ops yielded a 1.55x speedup (12ms -> 7.8ms) for 2000 samples.
 **Action:** Always prefer array vectorization (broadcasting, `vmap`) over `lax.fori_loop` for parallelizable batch operations, even inside JIT-compiled functions.
