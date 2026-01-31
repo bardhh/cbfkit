@@ -47,6 +47,28 @@ from .simulator_jit import simulator_jit
 from .utils import SimulationStepData
 
 
+def _default_sensor(
+    t: Time,
+    x: Array,
+    *,
+    sigma: Optional[Array] = None,
+    key: Optional[Array] = None,
+    **kwargs: Any,
+) -> Array:
+    return x
+
+
+def _default_estimator(t, y, z, u, c):
+    return y, c if c is not None else jnp.zeros((len(y), len(y)))
+
+
+def _default_perturbation(x, u, f, g):
+    def p(key):
+        return jnp.zeros_like(x)
+
+    return p
+
+
 def simulator(
     dt: float,
     num_steps: int,
@@ -71,45 +93,11 @@ def simulator(
     ...
     """
     # Handle defaults for Optional callables
-    sensor_func: SensorCallable
-    if sensor is None:
-
-        def _default_sensor(
-            t: Time,
-            x: Array,
-            *,
-            sigma: Optional[Array] = None,
-            key: Optional[Array] = None,
-            **kwargs: Any,
-        ) -> Array:
-            return x
-
-        sensor_func = _default_sensor
-    else:
-        sensor_func = sensor
-
-    estimator_func: EstimatorCallable
-    if estimator is None:
-
-        def _default_estimator(t, y, z, u, c):
-            return y, c
-
-        estimator_func = _default_estimator
-    else:
-        estimator_func = estimator
-
-    perturbation_func: PerturbationCallable
-    if perturbation is None:
-
-        def _default_perturbation(x, u, f, g):
-            def p(key):
-                return jnp.zeros(x.shape)
-
-            return p
-
-        perturbation_func = _default_perturbation
-    else:
-        perturbation_func = perturbation
+    sensor_func: SensorCallable = sensor if sensor is not None else _default_sensor
+    estimator_func: EstimatorCallable = estimator if estimator is not None else _default_estimator
+    perturbation_func: PerturbationCallable = (
+        perturbation if perturbation is not None else _default_perturbation
+    )
 
     sigma_val: Array
     if sigma is None:
@@ -362,15 +350,9 @@ def execute(
 
         # Handle defaults (locally, as simulator_jit expects non-None)
         # This logic matches simulator() but must be explicit for JIT call prep
-        _sensor = sensor if sensor else (lambda t, x, **k: x)
-        _estimator = (
-            estimator
-            if estimator
-            else (lambda t, y, z, u, c: (y, c if c is not None else jnp.zeros((len(y), len(y)))))
-        )
-        _perturbation = (
-            perturbation if perturbation else (lambda x, u, f, g: (lambda k: jnp.zeros(x.shape)))
-        )
+        _sensor = sensor if sensor is not None else _default_sensor
+        _estimator = estimator if estimator is not None else _default_estimator
+        _perturbation = perturbation if perturbation is not None else _default_perturbation
         sigma_val = sigma if sigma is not None else jnp.zeros(0)
 
         progress_cb: Optional[ProgressCallback] = None
@@ -487,26 +469,28 @@ def execute(
         # Fast return path for JIT: Extract data directly from stacked arrays
         # This bypasses the expensive object creation loop + format_return_data
 
-        controller_data_keys = []
-        controller_data_values = []
+        controller_data_keys: List[str] = []
+        controller_data_values: List[Array] = []
         for key in c_datas._fields:
-            val = getattr(c_datas, key)
+            key_str = str(key)
+            val = getattr(c_datas, key_str)
             if val is None or isinstance(val, (dict, list, tuple)):
                 continue
             # We assume JIT results are arrays.
             # If a field was None in input and stayed None, it's None.
             # If it was a list/dict (like sub_data), it's likely a container of arrays or ignored.
             # format_return_data ignores dicts/lists/tuples.
-            controller_data_keys.append(key)
+            controller_data_keys.append(key_str)
             controller_data_values.append(val)
 
-        planner_data_keys = []
-        planner_data_values = []
+        planner_data_keys: List[str] = []
+        planner_data_values: List[Array] = []
         for key in p_datas._fields:
-            val = getattr(p_datas, key)
+            key_str = str(key)
+            val = getattr(p_datas, key_str)
             if val is None or isinstance(val, (dict, list, tuple)):
                 continue
-            planner_data_keys.append(key)
+            planner_data_keys.append(key_str)
             planner_data_values.append(val)
 
         return (
