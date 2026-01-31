@@ -31,7 +31,9 @@ from typing import Any, Dict, Optional, Union
 import jax.numpy as jnp
 from jax import Array, jit, lax
 
-from cbfkit.optimization.quadratic_program import solve as solve_qp
+from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
+    solve_with_state as solve_qp,
+)
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
     CbfClfQpGenerator,
@@ -206,7 +208,13 @@ def cbf_clf_qp_generator(
             h_vec = jnp.expand_dims(jnp.hstack([h_vec_u, h_vec_c]), axis=-1)
 
             # Solve QP
-            sol, status = solve_qp(p_mat, q_vec, g_mat, h_vec)
+            solver_params = None
+            if data.sub_data is not None and "solver_params" in data.sub_data:
+                solver_params = data.sub_data["solver_params"]
+
+            sol, status, new_params = solve_qp(
+                p_mat, q_vec, g_mat, h_vec, init_params=solver_params
+            )
             # QP solution already respects control limits via input constraints.
             # Only clip the fallback u_nom (which may exceed limits) to avoid
             # inadvertently violating CBF constraints on the QP-solved path.
@@ -224,6 +232,9 @@ def cbf_clf_qp_generator(
             error = lax.cond(status, lambda _fake: False, lambda _fake: True, 0)
 
             # logging data
+            final_sub_data = sub_data or {}
+            final_sub_data["solver_params"] = new_params
+
             data = ControllerData(
                 error=error,
                 error_data=status,
@@ -231,7 +242,7 @@ def cbf_clf_qp_generator(
                 sol=jnp.array(sol),
                 u=u,
                 u_nom=u_nom,
-                sub_data=sub_data or {},
+                sub_data=final_sub_data,
             )
 
             return u, data

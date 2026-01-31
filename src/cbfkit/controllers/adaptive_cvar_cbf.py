@@ -364,7 +364,7 @@ def adaptive_cvar_cbf_controller(
         # For now, solver keeps its own state (prev_solu).
         # Ideally, we should load/save prev_solu from/to `data.sub_data`.
 
-        if "prev_solu" in data.sub_data:
+        if data.sub_data is not None and "prev_solu" in data.sub_data:
             solver.prev_solu = data.sub_data["prev_solu"]
 
         # Convert JAX arrays to numpy for CasADi
@@ -381,7 +381,7 @@ def adaptive_cvar_cbf_controller(
         u_jax = jnp.array(u_opt).flatten()
 
         # Update data
-        new_sub_data = data.sub_data.copy()
+        new_sub_data = data.sub_data.copy() if data.sub_data is not None else {}
         new_sub_data["prev_solu"] = solver.prev_solu
         new_sub_data.update(log_info)
 
