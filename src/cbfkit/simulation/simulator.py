@@ -536,22 +536,47 @@ def format_return_data(
     data: Tuple[SimulationStepData, ...],
 ) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
     """Extracts simulation data into JAX arrays."""
+    if not data:
+        return (
+            jnp.array([]),
+            jnp.array([]),
+            jnp.array([]),
+            jnp.array([]),
+            [],
+            [],
+            [],
+            [],
+        )
 
-    states = jnp.array([step.state for step in data])
-    controls = jnp.array([step.control for step in data])
-    estimates = jnp.array([step.estimate for step in data])
-    covariances = jnp.array([step.covariance for step in data])
+    # Optimization: Transpose tuple of NamedTuples to NamedTuple of tuples
+    # This avoids iterating over `data` multiple times and speeds up array stacking
+    transposed = SimulationStepData(*zip(*data))
+
+    states = jnp.stack(transposed.state)
+    controls = jnp.stack(transposed.control)
+    estimates = jnp.stack(transposed.estimate)
+    covariances = jnp.stack(transposed.covariance)
 
     controller_data_keys = []
     controller_data_values = []
     planner_data_keys = []
     planner_data_values = []
 
-    if len(data) > 0:
-        # Controller Keys
-        raw_c_keys = data[0].controller_keys
-        for i, key in enumerate(raw_c_keys):
-            vals = [step.controller_values[i] for step in data]
+    def process_keys_values(keys, values_tuple_of_lists):
+        processed_keys = []
+        processed_values = []
+
+        if not values_tuple_of_lists:
+            return processed_keys, processed_values
+
+        # zip(*tuple_of_lists) -> list of tuples (per key)
+        vals_by_key = list(zip(*values_tuple_of_lists))
+
+        if not vals_by_key:
+            return processed_keys, processed_values
+
+        for i, key in enumerate(keys):
+            vals = vals_by_key[i]
 
             # Check consistency and stackability
             first_valid = next((v for v in vals if v is not None), None)
@@ -561,31 +586,22 @@ def format_return_data(
                 continue
 
             try:
-                arr = jnp.array(vals)
-                controller_data_keys.append(key)
-                controller_data_values.append(arr)
-            except ValueError:
-                # Skip fields that cannot be stacked (e.g. variable shapes)
-                pass
-
-        # Planner Keys
-        raw_p_keys = data[0].planner_keys
-        for i, key in enumerate(raw_p_keys):
-            vals = [step.planner_values[i] for step in data]
-
-            first_valid = next((v for v in vals if v is not None), None)
-            if first_valid is None or isinstance(first_valid, (dict, str, list, tuple)):
-                continue
-            if any(v is None for v in vals):
-                continue
-
-            try:
-                arr = jnp.array(vals)
-                planner_data_keys.append(key)
-                planner_data_values.append(arr)
+                # jnp.stack is more efficient than jnp.array for stacking existing arrays
+                arr = jnp.stack(vals)
+                processed_keys.append(key)
+                processed_values.append(arr)
             except ValueError:
                 # Skip fields that cannot be stacked
                 pass
+        return processed_keys, processed_values
+
+    if len(data) > 0:
+        controller_data_keys, controller_data_values = process_keys_values(
+            data[0].controller_keys, transposed.controller_values
+        )
+        planner_data_keys, planner_data_values = process_keys_values(
+            data[0].planner_keys, transposed.planner_values
+        )
 
     return (
         states,
