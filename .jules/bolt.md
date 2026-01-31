@@ -23,3 +23,11 @@
 ## 2025-10-26 - Redundant Dynamics Evaluation in Python Loop
 **Learning:** The Python-based `stepper` (used for non-JIT simulation) evaluated system dynamics twice per step when using `forward_euler`: once for logging/controller and once inside the integrator.
 **Action:** Special-cased `forward_euler` in the stepper to reuse the already computed dynamics, yielding a ~12% speedup in simulations with moderate dynamics complexity.
+
+## 2025-10-27 - Vectorization vs lax.fori_loop in MPPI
+**Learning:** `lax.fori_loop` for computing weighted sums and batch rollouts in MPPI introduced overhead compared to fully vectorized operations (`jnp.sum` with broadcasting) and `jax.vmap`. Replacing the loop with vectorized ops yielded a 1.55x speedup (12ms -> 7.8ms) for 2000 samples.
+**Action:** Always prefer array vectorization (broadcasting, `vmap`) over `lax.fori_loop` for parallelizable batch operations, even inside JIT-compiled functions.
+
+## 2025-10-26 - Unrolling vs. lax.switch for Closure Lists
+**Learning:** Using `lax.switch` inside `vmap` to iterate over a list of closures (e.g. barrier functions) introduces dispatch overhead and does not reduce compiled graph size because each closure is distinct.
+**Action:** Replaced `lax.switch` + `vmap` with direct list comprehension (unrolling). This reduced execution time by ~25% in heavy CBF scenarios by allowing XLA to optimize the concatenated graph without dispatch overhead.
