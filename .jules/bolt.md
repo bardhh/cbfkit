@@ -15,3 +15,7 @@
 ## 2025-02-20 - JAX CSE Effectiveness and Logging Bottlenecks
 **Learning:** Manual Common Subexpression Elimination (CSE) of `dynamics(x)` calls inside `scan_step` yielded negligible speedup (<1%), confirming that JAX XLA is highly effective at optimizing pure function calls. However, the host-side logging loop in `simulator.py` (converting JAX arrays to Python dicts step-by-step) was a 2.7x performance drag.
 **Action:** Trust XLA for graph optimizations. Focus on eliminating Python loops in data transfer paths (logging, plotting) by using vectorized/bulk operations.
+
+## 2025-10-26 - Redundant Dynamics Evaluation in Python Loop
+**Learning:** The Python-based `stepper` (used for non-JIT simulation) evaluated system dynamics twice per step when using `forward_euler`: once for logging/controller and once inside the integrator.
+**Action:** Special-cased `forward_euler` in the stepper to reuse the already computed dynamics, yielding a ~12% speedup in simulations with moderate dynamics complexity.

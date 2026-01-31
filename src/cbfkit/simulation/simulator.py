@@ -463,7 +463,15 @@ def execute(
                     elif isinstance(val, dict):
                         # Unstack dict of arrays -> list of dicts
                         # First convert to numpy to speed up iteration
-                        val_np = {sk: list(np.array(sv)) for sk, sv in val.items()}
+                        val_np = {}
+                        for sk, sv in val.items():
+                            try:
+                                if isinstance(sv, tuple):
+                                    val_np[sk] = list(zip(*sv))
+                                else:
+                                    val_np[sk] = list(np.array(sv))
+                            except Exception:
+                                val_np[sk] = [None] * num_steps
                         # zip now works on lists of values
                         vals = [dict(zip(val_np.keys(), t)) for t in zip(*val_np.values())]
                         log_dict[f"{prefix}_{k}"] = vals

@@ -33,7 +33,9 @@ def generate_compute_zeroing_cbf_constraints(
     """
     #! To Do: docstring
     """
-    compute_barrier_values = generate_compute_certificate_values(barriers)
+    compute_barrier_values = generate_compute_certificate_values(
+        barriers, compute_hessians=False
+    )
 
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
