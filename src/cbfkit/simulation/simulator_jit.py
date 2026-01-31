@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from jax import lax, random
 
 from cbfkit.integration.forward_euler import forward_euler
+from cbfkit.integration.runge_kutta import runge_kutta_4
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
@@ -167,6 +168,16 @@ def simulator_jit(
             def vector_field(s):
                 f_s, g_s = dynamics(s)
                 return f_s + jnp.matmul(g_s, u) + p(subkey)
+
+            # Optimization (Bolt): If integrator is runge_kutta_4, reuse f and g for k1
+            # to avoid one dynamics evaluation (25% reduction in integration cost).
+            if integrator == runge_kutta_4:
+                k1 = f + jnp.matmul(g, u) + p(subkey)
+                k2 = vector_field(x + 0.5 * dt * k1)
+                k3 = vector_field(x + 0.5 * dt * k2)
+                k4 = vector_field(x + dt * k3)
+                x_next = x + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+                return key_int, x_next
 
             return key_int, integrator(x, vector_field, dt)
 
