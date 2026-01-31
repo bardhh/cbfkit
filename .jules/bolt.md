@@ -35,3 +35,7 @@
 ## 2025-10-26 - Unrolling vs. lax.switch for Closure Lists
 **Learning:** Using `lax.switch` inside `vmap` to iterate over a list of closures (e.g. barrier functions) introduces dispatch overhead and does not reduce compiled graph size because each closure is distinct.
 **Action:** Replaced `lax.switch` + `vmap` with direct list comprehension (unrolling). This reduced execution time by ~25% in heavy CBF scenarios by allowing XLA to optimize the concatenated graph without dispatch overhead.
+
+## 2025-05-22 - JAX/OSQP Diagonal P Pitfall
+**Learning:** When using `jaxopt.OSQP`, passing a 1D vector for the `P` matrix (to represent a diagonal matrix) triggers a fallback to a slow iterative solver (CG/GMRES) instead of using the efficient dense Cholesky factorization path used when `P` is a 2D dense array. This caused an 8x slowdown in simulations.
+**Action:** Always pass `p_mat` as a dense 2D array (e.g., `jnp.diag(vec)`) to `jaxopt.OSQP` for small/dense problems, even if the math allows diagonal structure. Optimize `q_vec` calculation separately if needed.

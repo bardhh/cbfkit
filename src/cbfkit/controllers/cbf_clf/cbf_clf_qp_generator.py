@@ -132,15 +132,20 @@ def cbf_clf_qp_generator(
         if p_mat is None:
             penalty_cbf = kwargs.get("slack_penalty_cbf", 2e3)
             penalty_clf = kwargs.get("slack_penalty_clf", 2e3)
-            p_mat = jnp.diag(
-                jnp.hstack(
-                    [
-                        jnp.ones((n_con,)),
-                        penalty_cbf * jnp.ones((n_bfs,)),
-                        penalty_clf * jnp.ones((n_lfs,)),
-                    ]
-                )
+            # Optimization (Bolt): Construct diagonal vector first to optimize q_vec calculation
+            p_diag_vec = jnp.hstack(
+                [
+                    jnp.ones((n_con,)),
+                    penalty_cbf * jnp.ones((n_bfs,)),
+                    penalty_clf * jnp.ones((n_lfs,)),
+                ]
             )
+            # Note: We must pass a dense matrix to jaxopt.OSQP to trigger the efficient
+            # dense Cholesky path. Passing a 1D vector (diagonal) causes fallback to
+            # slow iterative solvers (CG/GMRES).
+            p_mat = jnp.diag(p_diag_vec)
+        else:
+            p_diag_vec = None
 
         compute_input_constraints = generate_compute_input_constraints(control_limits)
         compute_cbf_clf_constraints = generate_compute_cbf_clf_constraints(
@@ -197,7 +202,13 @@ def cbf_clf_qp_generator(
                 u_nom = jnp.hstack([u_nom, jnp.zeros((n_lfs,))])
 
             # Compute QP cost, constraint functions
-            q_vec = jnp.expand_dims(jnp.matmul(-2 * p_mat, u_nom), axis=-1)
+            if p_diag_vec is not None:
+                # Optimization (Bolt): Use element-wise multiplication if we know P is diagonal.
+                # Avoids O(N^2) matmul.
+                q_vec = jnp.expand_dims(-2 * p_diag_vec * u_nom, axis=-1)
+            else:
+                q_vec = jnp.expand_dims(jnp.matmul(-2 * p_mat, u_nom), axis=-1)
+
             g_mat_u, h_vec_u = compute_input_constraints(t, x)
             g_mat_c, h_vec_c, sub_data = compute_cbf_clf_constraints(t, x)
             if "complete" in sub_data:
