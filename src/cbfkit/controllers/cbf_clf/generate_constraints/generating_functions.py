@@ -120,36 +120,14 @@ def generate_compute_certificate_values_list_comprehension(
 def generate_compute_certificate_values_vmap(
     certificate_package, compute_hessians: bool = True
 ):
-    functions, jacobians, hessians, partials, conditions = certificate_package
-    # Optimization (Bolt): Use in_axes=(0, None, None) to avoid tiling t and x
-    # This avoids O(N) memory allocation and copy for state/time broadcasting
-    vmap_bf = vmap(
-        lambda i, t, x: lax.switch(i, functions, t, x), in_axes=(0, None, None)
-    )
-    vmap_bj = vmap(
-        lambda i, t, x: lax.switch(i, jacobians, t, x), in_axes=(0, None, None)
-    )
-    if compute_hessians:
-        vmap_bh = vmap(
-            lambda i, t, x: lax.switch(i, hessians, t, x), in_axes=(0, None, None)
-        )
-    vmap_bt = vmap(
-        lambda i, t, x: lax.switch(i, partials, t, x), in_axes=(0, None, None)
-    )
-    vmap_bc = vmap(lambda i, bf: lax.switch(i, conditions, bf))
-    index = jnp.arange(len(functions))
+    """
+    Computes certificate values using list comprehension (unrolling).
 
-    @jit
-    def compute_certificate_values_vmap(t, x):
-        bf_x = vmap_bf(index, t, x)
-        bj_x = vmap_bj(index, t, x)
-        if compute_hessians:
-            bh_x = vmap_bh(index, t, x)
-        else:
-            bh_x = None
-        dbf_t = vmap_bt(index, t, x)
-        bc_x = vmap_bc(index, bf_x)
-
-        return bf_x, bj_x, bh_x, dbf_t, bc_x
-
-    return compute_certificate_values_vmap
+    Note (Bolt): This function was optimized to use list comprehension instead of
+    lax.switch inside vmap. For lists of distinct closures (standard in cbfkit),
+    vmap+switch introduces overhead without reducing graph size. Unrolling avoids
+    dispatch overhead and allows XLA to optimize the concatenated graph effectively.
+    """
+    return generate_compute_certificate_values_list_comprehension(
+        certificate_package, compute_hessians
+    )

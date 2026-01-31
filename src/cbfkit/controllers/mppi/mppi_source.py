@@ -45,7 +45,6 @@ def setup_mppi(
     horizon = horizon
     samples = samples
     dt = dt
-    use_gpu = use_GPU
 
     robot_state_dim = robot_state_dim
     robot_control_dim = robot_control_dim
@@ -87,12 +86,10 @@ def setup_mppi(
         weights = jnp.exp(log_weights - max_logw)
         normalization_factor = jnp.maximum(jnp.sum(weights), 1e-8)
 
-        def body(i, inputs):
-            U = inputs
-            U = U + perturbation[i] * weights[i] / normalization_factor
-            return U
-
-        return lax.fori_loop(0, samples, body, (U))
+        # Vectorized weighted sum
+        weighted_perturbation = jnp.sum(perturbation * weights[:, None, None], axis=0)
+        U = U + weighted_perturbation / normalization_factor
+        return U
 
     @jit
     def single_sample_rollout(
@@ -177,47 +174,23 @@ def setup_mppi(
         cost_total = jnp.zeros(samples)
 
         # Single sample rollout
-        if use_gpu:
-
-            @jit
-            def body_sample(robot_states_init, perturbed_control_sample, perturbation_sample):
-                cost_sample, robot_states_sample = single_sample_rollout(
-                    time,
-                    robot_states_init,
-                    perturbed_control_sample.T,
-                    perturbation_sample.T,
-                    x_prev,
-                    prev_robustness,
-                )
-                return cost_sample, robot_states_sample
-
-            batched_body_sample = jax.vmap(body_sample, in_axes=0)
-            (
-                cost_total,
-                robot_states,
-            ) = batched_body_sample(robot_states[:, :, 0], perturbed_control, perturbation)
-        else:
-
-            @jit
-            def body_samples(i, inputs):
-                robot_states, cost_total = inputs
-
-                # Get cost
-                cost_sample, robot_states_sample = single_sample_rollout(
-                    time,
-                    robot_states[i, :, 0],
-                    perturbed_control[i, :, :].T,
-                    perturbation[i, :, :].T,
-                    x_prev,
-                    prev_robustness,
-                )
-                cost_total = cost_total.at[i].set(cost_sample)
-                robot_states = robot_states.at[i, :, :].set(robot_states_sample)
-                return robot_states, cost_total
-
-            robot_states, cost_total = lax.fori_loop(
-                0, samples, body_samples, (robot_states, cost_total)
+        @jit
+        def body_sample(robot_states_init, perturbed_control_sample, perturbation_sample):
+            cost_sample, robot_states_sample = single_sample_rollout(
+                time,
+                robot_states_init,
+                perturbed_control_sample.T,
+                perturbation_sample.T,
+                x_prev,
+                prev_robustness,
             )
+            return cost_sample, robot_states_sample
+
+        batched_body_sample = jax.vmap(body_sample, in_axes=0)
+        (
+            cost_total,
+            robot_states,
+        ) = batched_body_sample(robot_states[:, :, 0], perturbed_control, perturbation)
 
         return robot_states, cost_total
 

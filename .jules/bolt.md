@@ -27,3 +27,11 @@
 ## 2026-01-31 - Recompilation due to Dynamic Defaults
 **Learning:** Default arguments defined as lambdas inside `execute` (e.g., `_perturbation = lambda ...`) created new function objects on every call. Since these were passed as static arguments to `simulator_jit`, JAX triggered a full recompilation every time, causing massive overhead (~6s/run instead of ~1.4s/run).
 **Action:** Define default no-op functions (`_default_perturbation`, etc.) at the module level so they are constant objects. This ensures `simulator_jit` hits the compilation cache.
+
+## 2025-10-27 - Vectorization vs lax.fori_loop in MPPI
+**Learning:** `lax.fori_loop` for computing weighted sums and batch rollouts in MPPI introduced overhead compared to fully vectorized operations (`jnp.sum` with broadcasting) and `jax.vmap`. Replacing the loop with vectorized ops yielded a 1.55x speedup (12ms -> 7.8ms) for 2000 samples.
+**Action:** Always prefer array vectorization (broadcasting, `vmap`) over `lax.fori_loop` for parallelizable batch operations, even inside JIT-compiled functions.
+
+## 2025-10-26 - Unrolling vs. lax.switch for Closure Lists
+**Learning:** Using `lax.switch` inside `vmap` to iterate over a list of closures (e.g. barrier functions) introduces dispatch overhead and does not reduce compiled graph size because each closure is distinct.
+**Action:** Replaced `lax.switch` + `vmap` with direct list comprehension (unrolling). This reduced execution time by ~25% in heavy CBF scenarios by allowing XLA to optimize the concatenated graph without dispatch overhead.
