@@ -438,24 +438,22 @@ def execute(
         if progress_cb:
             progress_cb.on_end(success=True)
 
-        # Unpack JIT results into SimulationStepData list
-        c_keys = list(c_datas._fields)
-        p_keys = list(p_datas._fields)
+        # If logging was requested, we must simulate the callbacks behavior
+        if logging_callback:
+            # We reconstruct the list of step data for logging purposes ONLY if needed
+            c_keys = list(c_datas._fields)
+            p_keys = list(p_datas._fields)
 
-        # We reconstruct the list of step data to support the return format and logging
-        simulation_data_list: List[SimulationStepData] = []
+            logging_callback.on_start(num_steps, dt)
+            for t in range(num_steps):
+                # Use tree_map to extract the t-th slice of the PyTree
+                c_data_t = jax.tree_util.tree_map(lambda x: x[t], c_datas)
+                p_data_t = jax.tree_util.tree_map(lambda x: x[t], p_datas)
 
-        for t in range(num_steps):
-            # Use tree_map to extract the t-th slice of the PyTree
-            # This correctly handles nested structures (like dicts in sub_data)
-            c_data_t = jax.tree_util.tree_map(lambda x: x[t], c_datas)
-            p_data_t = jax.tree_util.tree_map(lambda x: x[t], p_datas)
+                c_val_t = [getattr(c_data_t, k) for k in c_keys]
+                p_val_t = [getattr(p_data_t, k) for k in p_keys]
 
-            c_val_t = [getattr(c_data_t, k) for k in c_keys]
-            p_val_t = [getattr(p_data_t, k) for k in p_keys]
-
-            simulation_data_list.append(
-                SimulationStepData(
+                step_data = SimulationStepData(
                     state=xs[t],
                     control=us[t],
                     estimate=zs[t],
@@ -465,20 +463,44 @@ def execute(
                     planner_keys=p_keys,
                     planner_values=p_val_t,
                 )
-            )
+                logging_callback.on_step(t, t * dt, step_data)
+            logging_callback.on_end(success=True)
 
-        simulation_data = tuple(simulation_data_list)
+        # Fast return path for JIT: Extract data directly from stacked arrays
+        # This bypasses the expensive object creation loop + format_return_data
 
-        # If logging was requested, we must simulate the callbacks behavior or use the data directly
-        if logging_callback:
-            # Populate the logging callback with the JIT data
-            # This effectively "logs" the JIT run after the fact
-            logging_callback.on_start(num_steps, dt)
-            for idx, step_data in enumerate(simulation_data):
-                logging_callback.on_step(idx, idx * dt, step_data)
-            logging_callback.on_end(success=True)  # JIT runs don't fail mid-stream in the same way
+        controller_data_keys = []
+        controller_data_values = []
+        for key in c_datas._fields:
+            val = getattr(c_datas, key)
+            if val is None or isinstance(val, (dict, list, tuple)):
+                continue
+            # We assume JIT results are arrays.
+            # If a field was None in input and stayed None, it's None.
+            # If it was a list/dict (like sub_data), it's likely a container of arrays or ignored.
+            # format_return_data ignores dicts/lists/tuples.
+            controller_data_keys.append(key)
+            controller_data_values.append(val)
 
-        return format_return_data(simulation_data)
+        planner_data_keys = []
+        planner_data_values = []
+        for key in p_datas._fields:
+            val = getattr(p_datas, key)
+            if val is None or isinstance(val, (dict, list, tuple)):
+                continue
+            planner_data_keys.append(key)
+            planner_data_values.append(val)
+
+        return (
+            xs,
+            us,
+            zs,
+            cs,
+            controller_data_keys,
+            controller_data_values,
+            planner_data_keys,
+            planner_data_values,
+        )
 
     # Python Execution Path
     simulate_iter = simulator(
