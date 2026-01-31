@@ -29,7 +29,9 @@ def generate_compute_vanilla_clf_constraints(
     """
     #! To Do: docstring
     """
-    compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
+    compute_lyapunov_values = generate_compute_certificate_values(
+        lyapunovs, compute_hessians=False
+    )
     n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs
     )
