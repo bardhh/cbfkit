@@ -3,6 +3,7 @@ from typing import Any, Callable, List, Optional, Tuple
 import jax.numpy as jnp
 from jax import Array, random
 
+from cbfkit.integration import forward_euler
 from cbfkit.simulation.utils import SimulationStepData
 from cbfkit.utils.user_types import (
     Control,
@@ -147,11 +148,18 @@ def stepper(
         p = perturbation(x, u, f, g)
         key, subkey = random.split(key)  # type: ignore
 
-        def vector_field(s: State) -> Array:
-            f_s, g_s = dynamics(s)
-            return f_s + jnp.matmul(g_s, u) + p(subkey)
+        if integrator == forward_euler:
+            # Optimization (Bolt): Avoid re-evaluating dynamics for Forward Euler
+            # We already computed f, g = dynamics(x) earlier
+            dx = f + jnp.matmul(g, u) + p(subkey)
+            x = x + dx * dt
+        else:
 
-        x = integrator(x, vector_field, dt)
+            def vector_field(s: State) -> Array:
+                f_s, g_s = dynamics(s)
+                return f_s + jnp.matmul(g_s, u) + p(subkey)
+
+            x = integrator(x, vector_field, dt)
 
         u_ret = u
         c_ret = c if c is not None else jnp.zeros((len(z), len(z)))
