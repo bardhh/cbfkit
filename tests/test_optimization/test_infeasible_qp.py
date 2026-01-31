@@ -3,6 +3,7 @@ from jax import random
 
 from cbfkit.certificates import certificate_package
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+from cbfkit.utils.user_types import ControllerData
 
 
 def test_infeasible_qp_behavior():
@@ -66,7 +67,7 @@ def test_infeasible_qp_behavior():
     x = jnp.array([-2.0])
     t = 0.0
     key = random.PRNGKey(0)
-    data = {}
+    data = ControllerData()
     u_nom = jnp.array([0.0])
 
     # Execute

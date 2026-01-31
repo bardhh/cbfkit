@@ -105,6 +105,11 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
         inequality/equality constrained problem is infeasible."""
         self._test_qp_infeasible(qp_jaxopt.solve)
 
+    def test_qp_jaxopt_feasible_with_state(self):
+        """Tests that the JAXOPT-based quadratic program solver computes the correct solution
+        and returns state when using solve_with_state."""
+        self._test_qp_feasible_with_state(qp_jaxopt.solve_with_state)
+
     # def test_qp_casadi_infeasible(self):
     #     """Tests that the Casadi-based quadratic program solver correctly identifies that
     #     the posed inequality/equality constrained problem is infeasible."""
@@ -276,6 +281,39 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
             self.assertFalse(status, f"Failed to report Infeasible! Sol = {x}")
 
         print(f"test_qp_infeasible: {time.time() - start}")
+
+    def _test_qp_feasible_with_state(self, solver: QpSolverCallable):
+        """Tests that the quadratic program solver computes the correct solution for a sequence of
+        problems with both inequality and equality constraints, returning state."""
+        n_tests = 5
+        import time
+
+        start = time.time()
+
+        for tt in range(n_tests):
+            n_vars = tt + 2
+            h_mat = jnp.eye(n_vars)
+            f_vec = -2 * h_mat @ jnp.array([ii for ii in range(n_vars)])
+            g_mat = jnp.vstack([jnp.eye(n_vars), -jnp.eye(n_vars)])
+            h_vec = 100 * jnp.ones((2 * n_vars,))
+            b_vec = jnp.array([ii for ii in range(n_vars)], dtype=jnp.float32)
+            u_mat, _ = jnp.linalg.qr(random.normal(KEY, (n_vars, n_vars)))
+            v_mat, _ = jnp.linalg.qr(u_mat)
+            a_mat = u_mat @ jnp.diag(b_vec + 1) @ v_mat.T
+
+            x, status, params = solver(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
+
+            self.assertTrue(status)
+            self.assertIsNotNone(params)
+            # Verify we can use params as warm start (simple check: no error)
+            x2, status2, params2 = solver(
+                h_mat, f_vec, g_mat, h_vec, a_mat, b_vec, init_params=params
+            )
+            self.assertTrue(status2)
+            # Solution should be same (within tolerance)
+            self.assertTrue(jnp.allclose(x, x2, atol=1e-3, rtol=1e-3))
+
+        print(f"test_qp_feasible_with_state: {time.time() - start}")
 
 
 if __name__ == "__main__":
