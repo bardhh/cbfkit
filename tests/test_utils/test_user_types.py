@@ -39,3 +39,43 @@ def test_addition_invalid_type():
     c1 = CertificateCollection([], [], [], [], [])
     with pytest.raises(TypeError):
         _ = c1 + "invalid"
+
+def test_simulation_results():
+    import jax.numpy as jnp
+    from cbfkit.utils.user_types import SimulationResults
+
+    # Mock data
+    states = jnp.zeros((10, 2))
+    controls = jnp.zeros((10, 1))
+    estimates = jnp.zeros((10, 2))
+    covariances = jnp.zeros((10, 2, 2))
+    c_keys = ["error"]
+    c_vals = [jnp.zeros((10,))]
+    p_keys = ["cost"]
+    p_vals = [jnp.zeros((10,))]
+
+    res = SimulationResults(
+        states, controls, estimates, covariances,
+        c_keys, c_vals, p_keys, p_vals
+    )
+
+    # Test unpacking (8 elements)
+    x, u, z, p, ck, cv, pk, pv = res
+    assert x is states
+    assert u is controls
+    assert ck is c_keys
+
+    # Test property access
+    assert res.states is states
+    assert res.controls is controls
+
+    # Test dictionary properties
+    c_data = res.controller_data
+    assert isinstance(c_data, dict)
+    assert "error" in c_data
+    assert c_data["error"] is c_vals[0]
+
+    p_data = res.planner_data
+    assert isinstance(p_data, dict)
+    assert "cost" in p_data
+    assert p_data["cost"] is p_vals[0]

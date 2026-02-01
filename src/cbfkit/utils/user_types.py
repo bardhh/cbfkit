@@ -81,6 +81,29 @@ class PlannerData(NamedTuple):
     sampled_x_traj: Optional[Array] = None
 
 
+class SimulationResults(NamedTuple):
+    """Results from a simulation execution."""
+
+    states: State
+    controls: Control
+    estimates: Estimate
+    covariances: Covariance
+    controller_keys: List[str]
+    controller_values: List[Array]
+    planner_keys: List[str]
+    planner_values: List[Array]
+
+    @property
+    def controller_data(self) -> Dict[str, Array]:
+        """Returns controller data as a dictionary."""
+        return dict(zip(self.controller_keys, self.controller_values))
+
+    @property
+    def planner_data(self) -> Dict[str, Array]:
+        """Returns planner data as a dictionary."""
+        return dict(zip(self.planner_keys, self.planner_values))
+
+
 # Certificate (Barrier, Lyapunov, Barrier-Lyapunov, etc.) Function Callables
 class CertificateInputStyle(str, Enum):
     """Enumeration for certificate function input styles."""
