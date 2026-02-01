@@ -538,12 +538,21 @@ def execute(
         for key in c_datas._fields:
             key_str = str(key)
             val = getattr(c_datas, key_str)
-            if val is None or isinstance(val, (dict, list, tuple)):
+            if val is None:
                 continue
+            if isinstance(val, dict):
+                # Flatten dictionary fields (e.g., sub_data)
+                for sub_k, sub_v in val.items():
+                    if isinstance(sub_v, (dict, list, tuple)):
+                        continue
+                    controller_data_keys.append(f"{key_str}_{sub_k}")
+                    controller_data_values.append(sub_v)
+                continue
+            if isinstance(val, (list, tuple)):
+                continue
+
             # We assume JIT results are arrays.
             # If a field was None in input and stayed None, it's None.
-            # If it was a list/dict (like sub_data), it's likely a container of arrays or ignored.
-            # format_return_data ignores dicts/lists/tuples.
             controller_data_keys.append(key_str)
             controller_data_values.append(val)
 
