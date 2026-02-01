@@ -245,10 +245,10 @@ def cbf_clf_qp_generator(
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
 
             # Bolt: Normalize constraint rows to improve numerical stability
-            # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
+            # Janus: smooth normalization clamping (max(norm, eps)) prevents discontinuities.
             if auto_p_mat:
                 row_norms = jnp.linalg.norm(g_mat, axis=1)
-                safe_norms = jnp.where(row_norms > 1e-8, row_norms, 1.0)
+                safe_norms = jnp.maximum(row_norms, 1e-8)
                 g_mat = g_mat / safe_norms[:, None]
                 h_vec = h_vec / safe_norms
 
