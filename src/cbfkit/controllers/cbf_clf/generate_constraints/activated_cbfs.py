@@ -25,7 +25,7 @@ def generate_compute_activated_cbf_constraints(
     dyn_func: DynamicsCallable,
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-    **kwargs: Dict[str, Any],
+    **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
     """
     Generates compute function for Activated CBF constraints.

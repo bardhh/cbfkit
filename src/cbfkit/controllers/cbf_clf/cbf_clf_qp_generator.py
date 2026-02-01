@@ -74,7 +74,7 @@ def cbf_clf_qp_generator(
         barriers: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
         lyapunovs: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Union[Array, None]] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> ControllerCallable:
         """Produces the function to deploy a CBF-CLF-QP control law.
 
