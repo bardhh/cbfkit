@@ -556,13 +556,12 @@ def execute(
             planner_data_keys.append(key_str)
             planner_data_values.append(val)
 
-        if verbose:
-            _check_simulation_status(
-                controller_data_keys,
-                controller_data_values,
-                planner_data_keys,
-                planner_data_values,
-            )
+        _check_simulation_status(
+            controller_data_keys,
+            controller_data_values,
+            planner_data_keys,
+            planner_data_values,
+        )
 
         return (
             xs,
@@ -604,23 +603,23 @@ def execute(
 
     formatted_data = format_return_data(simulation_data)
 
-    if verbose:
-        (
-            _,
-            _,
-            _,
-            _,
-            controller_data_keys,
-            controller_data_values,
-            planner_data_keys,
-            planner_data_values,
-        ) = formatted_data
-        _check_simulation_status(
-            controller_data_keys,
-            controller_data_values,
-            planner_data_keys,
-            planner_data_values,
-        )
+    (
+        _,
+        _,
+        _,
+        _,
+        controller_data_keys,
+        controller_data_values,
+        planner_data_keys,
+        planner_data_values,
+    ) = formatted_data
+
+    _check_simulation_status(
+        controller_data_keys,
+        controller_data_values,
+        planner_data_keys,
+        planner_data_values,
+    )
 
     return formatted_data
 
