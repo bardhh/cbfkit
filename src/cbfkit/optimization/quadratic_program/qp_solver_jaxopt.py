@@ -7,7 +7,7 @@ from jax import Array, jit
 from jaxopt import OSQP, EqualityConstrainedQP
 
 # Instantiate QP solver objects
-QP = OSQP()
+QP = OSQP(maxiter=1000000, tol=1e-3)
 EC_QP = EqualityConstrainedQP()
 
 
