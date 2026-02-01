@@ -21,6 +21,7 @@ one with respect to the system dynamics, then the constraint function is not mod
 Example
 -------
 >>> from cbfkit.certificates import rectify_relative_degree
+>>> from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 >>>
 >>> def f(x):
 >>>     return jnp.array([x[2], x[3], x[4], x[5], 0, 0])
@@ -29,7 +30,7 @@ Example
 >>>     return jnp.array([[0, 0], [0, 0], [0, 0], [0, 0], [1, 0], [0, 1]])
 >>>
 >>> def dynamics(x):
->>>     return f(x), g(x), 1
+>>>     return f(x), g(x)
 >>>
 >>> def constraint(r1, r2):
 >>>     def h(x):
@@ -38,18 +39,27 @@ Example
 >>>
 >>> r1, r2 = 0.1, 0.05
 >>>
->>> cbf = rectify_relative_degree(constraint(r1, r2), dynamics, 6)
->>> print(cbf(jnp.array([0.5, 0.5, -0.1, 0, 0.2, 0])))
+>>> # New simpler usage
+>>> cbf = rectify_relative_degree(
+>>>     constraint(r1, r2),
+>>>     dynamics,
+>>>     6,
+>>>     certificate_conditions=zeroing_barriers.linear_class_k(1.0)
+>>> )
 """
 
-from typing import Callable, List, Union
+from typing import Callable, List, Optional, Union
 
 import jax.numpy as jnp
 import numpy as np
 from jax import Array, jacfwd, jacrev, jit, random
 
 from cbfkit.certificates import certificate_package
-from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable
+from cbfkit.utils.user_types import (
+    CertificateCollection,
+    CertificateConditionsCallable,
+    DynamicsCallable,
+)
 
 # For random sample generation
 KEY = random.PRNGKey(0)
@@ -69,7 +79,8 @@ def rectify_relative_degree(
     state_dim: int,
     roots: Union[Array, None] = None,
     form: str = "exponential",
-) -> Callable[..., CertificateCollection]:
+    certificate_conditions: Optional[CertificateConditionsCallable] = None,
+) -> Union[Callable[..., CertificateCollection], CertificateCollection]:
     """Rectifies the relative degree of the provided constraint function with respect to the system
     dynamics deriving a new exponential- or high-order-CBF.
 
@@ -78,10 +89,13 @@ def rectify_relative_degree(
         system_dynamics (DynamicsCallable): dynamics function
         state_dim (int): dimension of the state
         form (str, optional): type of cascading procedure. Defaults to "exponential".
+        certificate_conditions (Optional[CertificateConditionsCallable]): certificate conditions.
+            If provided, returns a CertificateCollection directly. Defaults to None.
 
     Returns
     -------
-        Callable[[Dict[str, Any]], CertificateTuple]: Function to create the CertificateCollection
+        Union[Callable[..., CertificateCollection], CertificateCollection]: Function to create the CertificateCollection,
+            or the CertificateCollection itself if certificate_conditions is provided.
     """
     function_list = compute_function_list(function, system_dynamics, state_dim + 1, form)
 
@@ -143,7 +157,12 @@ def rectify_relative_degree(
 
             return func
 
-    return certificate_package(cbf, cbf_grad, cbf_hess, state_dim)
+    factory = certificate_package(cbf, cbf_grad, cbf_hess, state_dim)
+
+    if certificate_conditions is not None:
+        return factory(certificate_conditions)
+
+    return factory
 
 
 def compute_function_list(
