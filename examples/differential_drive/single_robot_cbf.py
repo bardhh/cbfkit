@@ -144,8 +144,6 @@ def create_robot_with_obstacles():
             form="exponential",
         )(
             certificate_conditions=zeroing_barriers.linear_class_k(10.0),
-            obstacle=jnp.array(obs),
-            ellipsoid=(d_min_obstacle, d_min_obstacle),
         )
         barriers.append(barrier)
 

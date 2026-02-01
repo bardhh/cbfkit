@@ -61,8 +61,6 @@ barriers = [
         form="exponential",
     )(
         certificate_conditions=zeroing_barriers.linear_class_k(10.0),
-        obstacle=obs,
-        ellipsoid=ell,
     )
     for obs, ell in zip(obstacles, ellipsoids)
 ]

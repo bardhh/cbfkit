@@ -99,8 +99,6 @@ def create_scenario():
             form="exponential",
         )(
             certificate_conditions=zeroing_barriers.linear_class_k(5.0),
-            obstacle=jnp.array(obs),
-            ellipsoid=(d_min, d_min),
         )
         barriers.append(barrier)
 

@@ -67,8 +67,6 @@ barriers = [
         form="exponential",
     )(
         certificate_conditions=zeroing_barriers.linear_class_k(5.0),
-        obstacle=jnp.array(obs),
-        ellipsoid=jnp.array(ell),
     )
     for obs, ell in zip(obstacles, ellipsoids)
 ]
