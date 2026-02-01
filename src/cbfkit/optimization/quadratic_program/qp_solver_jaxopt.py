@@ -1,6 +1,6 @@
 """Quadratic program solver using the Jaxopt library."""
 
-from typing import Any, Optional, Tuple, Union
+from typing import Any, NamedTuple, Optional, Tuple, Union
 
 # import jax.numpy as jnp
 from jax import Array, jit
@@ -11,10 +11,25 @@ QP = OSQP(maxiter=1000000, tol=1e-3)
 EC_QP = EqualityConstrainedQP()
 
 
+class QpSolution(NamedTuple):
+    """Return type for QP solvers."""
+
+    primal: Array
+    status: int
+    params: Tuple[Any, Any]
+
+
+class EqualityQpSolution(NamedTuple):
+    """Return type for equality-constrained QP solvers."""
+
+    primal: Array
+    success: bool
+
+
 def solve_equality_constrained_qp(
     params_obj: Tuple[Array, Array],
     params_eq: Tuple[Array, Array],
-) -> Tuple[Array, int]:
+) -> EqualityQpSolution:
     """Solves an equality constrained quadratic program.
 
     Args:
@@ -22,13 +37,16 @@ def solve_equality_constrained_qp(
         params_eq (Tuple[Array, Array]): Equality constraint parameters (A, b).
 
     Returns:
-        Tuple[Array, int]: The solution to the QP and a status code.
+        EqualityQpSolution: The solution to the QP and a status code.
     """
     solution = EC_QP.run(
         params_obj=params_obj,
         params_eq=params_eq,
     )
-    return solution.params.primal, solution.state is None
+    return EqualityQpSolution(
+        primal=solution.params.primal,
+        success=solution.state is None,
+    )
 
 
 def solve_inequality_constrained_qp(
@@ -36,7 +54,7 @@ def solve_inequality_constrained_qp(
     params_eq: Optional[Tuple[Array, Array]],
     params_ineq: Optional[Tuple[Array, Array]],
     init_params: Optional[Any] = None,
-) -> Tuple[Array, int, Any]:
+) -> QpSolution:
     """Solves an inequality constrained quadratic program.
 
     Args:
@@ -46,7 +64,7 @@ def solve_inequality_constrained_qp(
         init_params (Optional[Any]): Optional initial parameters for warm-starting.
 
     Returns:
-        Tuple[Array, int, Any]: The solution to the QP, a status code, and the solver parameters.
+        QpSolution: The solution to the QP, a status code, and the solver parameters.
     """
     # Handle unpacked init_params if it comes from a previous run of this function
     real_init_params = init_params
@@ -61,7 +79,7 @@ def solve_inequality_constrained_qp(
     )
     status = state.status
     # We return the raw status code to allow callers to inspect failure reason.
-    return sol.primal, status, (sol, state)
+    return QpSolution(primal=sol.primal, status=status, params=(sol, state))
 
 
 @jit
@@ -73,7 +91,7 @@ def solve_with_details(
     a_mat: Union[Array, None] = None,
     b_vec: Union[Array, None] = None,
     init_params: Optional[Any] = None,
-) -> Tuple[Array, int, Any]:
+) -> QpSolution:
     """Solve a quadratic program using the jaxopt solver, returning full details.
 
     Args:
@@ -87,17 +105,13 @@ def solve_with_details(
 
     Returns
     -------
-        (sol, status, params): Solution, raw status (int), and solver parameters.
+        QpSolution: Solution, raw status (int), and solver parameters.
     """
     params_obj = (h_mat, 0.5 * f_vec)
     params_eq = None if (a_mat is None or b_vec is None) else (a_mat, b_vec)
     params_ineq = None if (g_mat is None or h_vec is None) else (g_mat, h_vec)
 
-    sol, status, params = solve_inequality_constrained_qp(
-        params_obj, params_eq, params_ineq, init_params
-    )
-
-    return sol, status, params
+    return solve_inequality_constrained_qp(params_obj, params_eq, params_ineq, init_params)
 
 
 @jit
@@ -109,7 +123,7 @@ def solve_with_state(
     a_mat: Union[Array, None] = None,
     b_vec: Union[Array, None] = None,
     init_params: Optional[Any] = None,
-) -> Tuple[Array, int, Any]:
+) -> Tuple[Array, bool, Any]:
     """Solve a quadratic program using the jaxopt solver, returning solver state.
 
     Note: Returns status as a boolean success flag (True if status == 1).
@@ -143,7 +157,7 @@ def solve(
     h_vec: Union[Array, None] = None,
     a_mat: Union[Array, None] = None,
     b_vec: Union[Array, None] = None,
-) -> Tuple[Array, int]:
+) -> Tuple[Array, bool]:
     """Solve a quadratic program using the jaxopt solver.
 
     Args:
