@@ -205,7 +205,9 @@ def simulator_jit(
         t_next = t + dt
 
         # Pack carry
-        new_carry = (key, t_next, x_next, u, z, c, controller_data, planner_data)
+        # Bolt: Strip sampled_x_traj from carry to save bandwidth/memory
+        planner_data_carry = planner_data._replace(sampled_x_traj=None)
+        new_carry = (key, t_next, x_next, u, z, c, controller_data, planner_data_carry)
 
         # Bolt: Filter solver_params from output to save memory/bandwidth
         controller_data_log = controller_data
