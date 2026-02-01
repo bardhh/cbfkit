@@ -202,6 +202,12 @@ def cbf_clf_qp_generator(
             """
             nonlocal complete
 
+            if u_nom.shape[0] != n_con:
+                raise ValueError(
+                    f"Nominal control input 'u_nom' has shape {u_nom.shape}, "
+                    f"but expected ({n_con},) based on 'control_limits'."
+                )
+
             if n_bfs > 0:
                 if "tunable_class_k" in kwargs and kwargs["tunable_class_k"]:
                     u_nom = jnp.hstack([u_nom, jnp.ones((n_bfs,))])
