@@ -185,6 +185,9 @@ def cbf_clf_qp_generator(
         scale_clf = 1.0
         auto_p_mat = p_mat is None
 
+        # Precompute scaling vector for solution recovery
+        sol_scaling_vector = jnp.ones((n_con + n_bfs + n_lfs,))
+
         if auto_p_mat:
             penalty_cbf = slack_penalty_cbf
             penalty_clf = slack_penalty_clf
@@ -205,6 +208,12 @@ def cbf_clf_qp_generator(
             limit_cbf = control_limits[n_con : n_con + n_bfs] / scale_cbf
             limit_clf = control_limits[n_con + n_bfs :] / scale_clf
             control_limits = jnp.hstack([limit_u, limit_cbf, limit_clf])
+
+            # Populate scaling vector
+            if n_bfs > 0:
+                sol_scaling_vector = sol_scaling_vector.at[n_con : n_con + n_bfs].set(scale_cbf)
+            if n_lfs > 0:
+                sol_scaling_vector = sol_scaling_vector.at[n_con + n_bfs :].set(scale_clf)
 
         # Bolt: Pass scales to constraint generators to avoid post-hoc scaling in loop
         if auto_p_mat:
@@ -332,10 +341,7 @@ def cbf_clf_qp_generator(
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
-                if n_bfs > 0:
-                    sol = sol.at[n_con : n_con + n_bfs].multiply(scale_cbf)
-                if n_lfs > 0:
-                    sol = sol.at[n_con + n_bfs : n_con + n_bfs + n_lfs].multiply(scale_clf)
+                sol = sol * sol_scaling_vector
             # QP solution already respects control limits via input constraints.
             # Only clip the fallback u_nom (which may exceed limits) to avoid
             # inadvertently violating CBF constraints on the QP-solved path.
