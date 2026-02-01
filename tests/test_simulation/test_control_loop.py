@@ -137,6 +137,7 @@ def initial_state():
 
 
 @pytest.mark.benchmark
+@pytest.mark.slow
 def test_execution_performance_jit(initial_state):
     """Tests that JIT-compiled execution is fast (average step < 1ms)."""
     planner_data = PlannerData(
