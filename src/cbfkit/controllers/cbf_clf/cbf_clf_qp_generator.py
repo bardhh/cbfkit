@@ -232,9 +232,13 @@ def cbf_clf_qp_generator(
             """
             nonlocal complete
 
+            # Janus: Ensure u_nom is 1D to prevent broadcasting errors (e.g., (N,) + (N,1) -> (N,N))
+            # and to handle scalar inputs for 1D systems.
+            u_nom = u_nom.ravel()
+
             if u_nom.shape[0] != n_con:
                 raise ValueError(
-                    f"Nominal control input 'u_nom' has shape {u_nom.shape}, "
+                    f"Nominal control input 'u_nom' has shape {u_nom.shape} (after ravel), "
                     f"but expected ({n_con},) based on 'control_limits'."
                 )
 
@@ -286,6 +290,9 @@ def cbf_clf_qp_generator(
             sol, status, new_params = solve_qp(
                 p_mat, q_vec, g_mat, h_vec, init_params=solver_params
             )
+
+            # Sentinel: Explicitly catch NaN solutions even if solver claims success
+            status = jnp.where(jnp.any(jnp.isnan(sol)), 0, status)
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:

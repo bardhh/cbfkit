@@ -144,45 +144,40 @@ The **data** *(python dictionary)* in planners and controllers is designed to ca
 ## Examples
 Several additional examples of how to use CBFkit to conduct full simulations of arbitrary dynamical systems are provided, including a unicycle robot, fixed-wing aerial vehicle, and more, all of which may be found in the `examples` folder. Any file contained within `examples` or any of its subdirectories whose name takes the form of `*main.py` is an executable example that may be referenced when a user is building their own application.
 
-See below for the script used to simulate a unicycle robot navigating toward a goal set amidst three ellipsoidal obstacles using Model Predictive Path Integral (MPPI) control as a planner and a Control Barrier Function (CBF) as a safety filter. This file can be found at `examples/unicycle/start_to_goal/mppi_cbf_start_to_goal_main.py`:
+See below for a simplified script to simulate a unicycle robot navigating toward a goal set amidst obstacles using Model Predictive Path Integral (MPPI) control as a planner and a Control Barrier Function (CBF) as a safety filter. A full version of this example with visualization can be found at `examples/unicycle/reach_goal/mppi_cbf_control.py`:
 
 ```python
 import jax.numpy as jnp
 from jax import Array, jit
-
 import cbfkit.controllers.mppi as mppi_planner
 import cbfkit.simulation.simulator as sim
-import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
+from cbfkit.systems.unicycle.models.accel_unicycle import plant
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
+from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
+from cbfkit.integration import runge_kutta_4 as integrator
+from cbfkit.sensors import perfect as sensor
+from cbfkit.estimators import naive as estimator
 
 # Simulation parameters
-tf = 10.0
-dt = 0.05
-file_path = "examples/unicycle/start_to_goal/results/"
-
+tf, dt = 10.0, 0.05
 init_state = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
 desired_state = jnp.array([2.0, 4.0, 0.0, 0.0])
-actuation_constraints = jnp.array([100.0, 100.0])  # Effectively, no control limits
+actuation_constraints = jnp.array([100.0, 100.0])
 
-unicycle_dynamics = unicycle.plant(l=1.0)
-# ... (dynamics configuration) ...
+unicycle_dynamics = plant(lam=1.0)
 
 # MPPI Cost Functions
 @jit
 def stage_cost(state_and_time: Array, action: Array) -> Array:
-    x, y = state_and_time[0], state_and_time[1]
-    xd, yd = desired_state[0], desired_state[1]
-    dist_sq = (x - xd) ** 2 + (y - yd) ** 2
-    return 10.0 * dist_sq
+    x, y, xd, yd = state_and_time[0], state_and_time[1], desired_state[0], desired_state[1]
+    return 10.0 * ((x - xd) ** 2 + (y - yd) ** 2)
 
 @jit
 def terminal_cost(state_and_time: Array, action: Array) -> Array:
-    x, y = state_and_time[0], state_and_time[1]
-    xd, yd = desired_state[0], desired_state[1]
-    dist_sq = (x - xd) ** 2 + (y - yd) ** 2
-    return 100.0 * dist_sq
+    x, y, xd, yd = state_and_time[0], state_and_time[1], desired_state[0], desired_state[1]
+    return 100.0 * ((x - xd) ** 2 + (y - yd) ** 2)
 
 # MPPI Configuration
 mppi_args = {
@@ -192,7 +187,7 @@ mppi_args = {
     "num_samples": 500,
     "plot_samples": 30,
     "time_step": dt,
-    "use_GPU": True,
+    "use_GPU": False,
     "costs_lambda": 0.1,
     "cost_perturbation": 0.5,
 }
@@ -207,15 +202,29 @@ mppi_local_planner = mppi_planner.vanilla_mppi(
     mppi_args=mppi_args,
 )
 
-# ... (Barrier function setup) ...
+# Define Obstacles and Generate Barriers
+obstacles, ellipsoids = [(1.0, 2.0, 0.0)], [(0.5, 1.5)]
+cbf_factory, _, _ = ellipsoidal_barrier_factory(
+    system_position_indices=(0, 1), obstacle_position_indices=(0, 1), ellipsoid_axis_indices=(0, 1)
+)
+
+barriers = [
+    rectify_relative_degree(
+        function=cbf_factory(obs, ell),
+        system_dynamics=unicycle_dynamics,
+        state_dim=len(init_state),
+        form="exponential",
+    )(certificate_conditions=zeroing_barriers.linear_class_k(5.0))
+    for obs, ell in zip(obstacles, ellipsoids)
+]
 
 controller = cbf_controller(
     control_limits=actuation_constraints,
     dynamics_func=unicycle_dynamics,
-    barriers=barrier_packages,
+    barriers=concatenate_certificates(*barriers),
 )
 
-# Simulation Execution (with JIT)
+# Simulation Execution
 x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     x0=init_state,
     dt=dt,
@@ -227,7 +236,7 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     controller=controller,
     sensor=sensor,
     estimator=estimator,
-    filepath=file_path + "mppi_cbf_results",
+    filepath="mppi_cbf_results",
     verbose=True,
     planner_data={
         "u_traj": jnp.zeros((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"])),

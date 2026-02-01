@@ -207,8 +207,30 @@ def simulator_jit(
         # Pack carry
         new_carry = (key, t_next, x_next, u, z, c, controller_data, planner_data)
 
+        # Bolt: Filter solver_params from output to save memory/bandwidth
+        controller_data_log = controller_data
+        if (
+            controller_data.sub_data is not None
+            and "solver_params" in controller_data.sub_data
+        ):
+            new_sub_data = {
+                k: v for k, v in controller_data.sub_data.items() if k != "solver_params"
+            }
+            controller_data_log = controller_data._replace(sub_data=new_sub_data)
+
         # Output (trajectory)
-        output = (x, u, z, c, controller_data, planner_data)
+        # Bolt: Strip solver_params from logged data to save memory
+        log_controller_data = controller_data
+        if (
+            controller_data.sub_data is not None
+            and "solver_params" in controller_data.sub_data
+        ):
+            # Create a shallow copy and remove the key to avoid affecting carry
+            log_sub_data = controller_data.sub_data.copy()
+            del log_sub_data["solver_params"]
+            log_controller_data = controller_data._replace(sub_data=log_sub_data)
+
+        output = (x, u, z, c, log_controller_data, planner_data)
 
         return new_carry, output
 

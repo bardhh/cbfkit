@@ -181,8 +181,8 @@ x, u, z, p, dkeys, dvals, planner_data_keys, planner_data_values = sim.execute(
 )
 
 # Visualization
-plot = 1
-animate = 1
+plot = 0
+animate = 0
 save = 1
 
 if plot:
