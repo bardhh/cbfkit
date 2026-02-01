@@ -68,19 +68,19 @@ generate_model.generate_model(
     params=params,
 )
 
-import cbfkit.controllers_and_planners.model_based.cbf_clf_controllers as cbf_clf_controllers
-import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
-import cbfkit.controllers_and_planners.waypoint as single_waypoint_planner
+import cbfkit.controllers.cbf_clf as cbf_clf_controllers
+import cbfkit.controllers.mppi as mppi_planner
+import cbfkit.planners.vanilla_waypoint_law as single_waypoint_planner
 
 # Import controllers and planners
 import cbfkit.simulation.simulator as sim
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
-    zeroing_barriers,
-)
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.certificates import (
     concatenate_certificates,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.lyapunov_conditions.exponential_stability import (
+from cbfkit.certificates.conditions.barrier_conditions import (
+    zeroing_barriers,
+)
+from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import (
     e_s,
 )
 from cbfkit.estimators import naive as estimator
@@ -173,7 +173,7 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
 
 plot = True
 if plot:
-    from tutorials.plot_helper.plot_mppi_ffmpeg import animate
+    from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
 
     animate(
         states=x_,
