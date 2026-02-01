@@ -80,6 +80,7 @@ def rectify_relative_degree(
     roots: Union[Array, None] = None,
     form: str = "exponential",
     certificate_conditions: Optional[CertificateConditionsCallable] = None,
+    rng: Optional[Union[int, Array]] = None,
 ) -> Union[Callable[..., CertificateCollection], CertificateCollection]:
     """Rectifies the relative degree of the provided constraint function with respect to the system
     dynamics deriving a new exponential- or high-order-CBF.
@@ -91,13 +92,25 @@ def rectify_relative_degree(
         form (str, optional): type of cascading procedure. Defaults to "exponential".
         certificate_conditions (Optional[CertificateConditionsCallable]): certificate conditions.
             If provided, returns a CertificateCollection directly. Defaults to None.
+        rng (Optional[Union[int, Array]]): random seed or key for relative degree sampling.
+            Defaults to None (using global default).
 
     Returns
     -------
         Union[Callable[..., CertificateCollection], CertificateCollection]: Function to create the CertificateCollection,
             or the CertificateCollection itself if certificate_conditions is provided.
     """
-    function_list = compute_function_list(function, system_dynamics, state_dim + 1, form)
+    subkey: Array
+    if rng is None:
+        subkey = SUBKEY  # type: ignore[assignment]
+    elif isinstance(rng, int):
+        subkey = random.PRNGKey(rng)  # type: ignore[assignment]
+    else:
+        subkey = rng  # type: ignore[assignment]
+
+    function_list = compute_function_list(
+        function, system_dynamics, state_dim + 1, form, subkey=subkey
+    )
 
     if form == "exponential":
         n_fl = len(function_list)
@@ -197,11 +210,12 @@ def compute_function_list(
 
     if subkey is None:
         subkey = SUBKEY  # type: ignore[assignment]
-    else:
-        _, subkey = random.split(KEY)  # type: ignore[assignment]
+
+    # Split the key to ensure different samples are used at each recursion level
+    sample_key, next_subkey = random.split(subkey)  # type: ignore[arg-type]
 
     # Do this at every level
-    samples = random.normal(subkey, (n_samples, state_dim))  # type: ignore[arg-type]
+    samples = random.normal(sample_key, (n_samples, state_dim))  # type: ignore[arg-type]
     jacobian = jacfwd(function)
 
     total = jnp.array(0.0)
@@ -237,7 +251,7 @@ def compute_function_list(
             state_dim,
             form,
             func_list,
-            subkey,
+            next_subkey,
         )
 
     return func_list
