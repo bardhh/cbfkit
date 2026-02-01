@@ -32,7 +32,7 @@ import jax.numpy as jnp
 from jax import Array, jit, lax
 
 from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
-    solve_with_state as solve_qp,
+    solve_with_details as solve_qp,
 )
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
@@ -263,7 +263,7 @@ def cbf_clf_qp_generator(
             # Only clip the fallback u_nom (which may exceed limits) to avoid
             # inadvertently violating CBF constraints on the QP-solved path.
             u = lax.cond(
-                status,
+                status == 1,
                 # Bolt: Avoid jnp.array copy and reshape (sol is already 1D)
                 lambda _fake: sol[:n_con],
                 # Aegis: Return NaN if QP fails to make failure mode explicit.
@@ -276,7 +276,7 @@ def cbf_clf_qp_generator(
                 #! To Do: integrate RA-PI states
                 pass
 
-            error = lax.cond(status, lambda _fake: False, lambda _fake: True, 0)
+            error = lax.cond(status == 1, lambda _fake: False, lambda _fake: True, 0)
 
             # logging data
             final_sub_data = sub_data or {}
