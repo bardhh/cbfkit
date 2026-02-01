@@ -37,7 +37,7 @@ Examples
 
 """
 
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Literal, Optional, Union
 
 import jax.numpy as jnp
 from jax import Array, grad, hessian, jit
@@ -54,12 +54,17 @@ from cbfkit.utils.user_types import (
 )
 
 
+CertificateInputStyleName = Literal["concatenated", "separated", "state"]
+
+
 def certificate_package(
     func: Callable[..., Callable[[Array], Array]],
     func_grad: Optional[Callable[..., Callable[[Array], Array]]] = None,
     func_hess: Optional[Callable[..., Callable[[Array], Array]]] = None,
     n: int = 0,
-    input_style: Union[str, CertificateInputStyle] = CertificateInputStyle.CONCATENATED,
+    input_style: Union[
+        CertificateInputStyleName, CertificateInputStyle
+    ] = CertificateInputStyle.CONCATENATED,
 ) -> Callable[..., CertificateCollection]:
     """Function for packaging and later creating CBF executables.
 
