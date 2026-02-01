@@ -12,7 +12,7 @@ def unpack_for_cbf(
     control_limits: Array,
     barriers: CertificateCollection,
     lyapunovs: CertificateCollection,
-    **kwargs: Dict[str, Any],
+    **kwargs: Any,
 ):
     """Unpacks information required to generate CLF constraints of arbitrary type.
 
@@ -58,7 +58,7 @@ def unpack_for_clf(
     control_limits: Array,
     lyapunovs: CertificateCollection,
     barriers: CertificateCollection,
-    **kwargs: Dict[str, Any],
+    **kwargs: Any,
 ):
     """Unpacks information required to generate CLF constraints of arbitrary type.
 

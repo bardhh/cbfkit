@@ -162,12 +162,16 @@ def mppi_generator() -> MppiGenerator:
                 (n_con,)
             )
 
+            # Sentinel: Explicitly catch NaN solutions
+            is_nan = jnp.isnan(u).any()
+
             # logging data
             data = data._replace(
                 sampled_x_traj=robot_sampled_states,
                 x_traj=robot_selected_states,
                 u_traj=action_trajectory,
                 prev_robustness=prev_robustness,
+                error=is_nan,
             )
 
             return u, data

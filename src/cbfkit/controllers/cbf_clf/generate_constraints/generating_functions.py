@@ -96,6 +96,24 @@ def generate_compute_cbf_clf_constraints(
     return compute_cbf_clf_constraints
 
 
+def _stack_and_validate(values: list, name: str):
+    """Stacks a list of arrays and validates that they all have the same shape."""
+    if not values:
+        return jnp.stack(values)
+
+    first_shape = jnp.shape(values[0])
+    for i, val in enumerate(values):
+        val_shape = jnp.shape(val)
+        if val_shape != first_shape:
+            raise ValueError(
+                f"Shape mismatch in {name} at index {i}: "
+                f"Expected {first_shape} (consistent with index 0), but got {val_shape}. "
+                f"Ensure all {name} return arrays of the same shape."
+            )
+
+    return jnp.stack(values)
+
+
 def generate_compute_certificate_values_list_comprehension(
     certificate_package, compute_hessians: bool = True
 ):
@@ -103,14 +121,23 @@ def generate_compute_certificate_values_list_comprehension(
 
     @jit
     def compute_certificate_values_list_comprehension(t, x):
-        bf_x = jnp.stack([lf(t, x) for lf in functions])
-        bj_x = jnp.stack([lj(t, x) for lj in jacobians])
+        bf_values = [lf(t, x) for lf in functions]
+        bf_x = _stack_and_validate(bf_values, "certificate functions")
+
+        bj_values = [lj(t, x) for lj in jacobians]
+        bj_x = _stack_and_validate(bj_values, "certificate jacobians")
+
         if compute_hessians:
-            bh_x = jnp.stack([lj(t, x) for lj in hessians])
+            bh_values = [lh(t, x) for lh in hessians]
+            bh_x = _stack_and_validate(bh_values, "certificate hessians")
         else:
             bh_x = None
-        dbf_t = jnp.stack([lt(t, x) for lt in partials])
-        bc_x = jnp.stack([lc(lf) for lc, lf in zip(conditions, bf_x)])
+
+        dbf_t_values = [lt(t, x) for lt in partials]
+        dbf_t = _stack_and_validate(dbf_t_values, "certificate partials")
+
+        bc_values = [lc(lf) for lc, lf in zip(conditions, bf_x)]
+        bc_x = _stack_and_validate(bc_values, "certificate conditions")
 
         return bf_x, bj_x, bh_x, dbf_t, bc_x
 
