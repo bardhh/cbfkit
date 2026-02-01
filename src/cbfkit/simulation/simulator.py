@@ -37,6 +37,7 @@ from cbfkit.utils.user_types import (
     PlannerCallable,
     PlannerData,
     SensorCallable,
+    SimulationResults,
     State,
     Time,
 )
@@ -326,7 +327,7 @@ def execute(
     use_jit: bool = False,
     jit_progress: bool = False,
     jit_progress_interval: int = 50,
-) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
+) -> SimulationResults:
     """Executes a complete simulation of the dynamical system.
 
     This function runs the simulation for `num_steps` starting from `x0`.
@@ -366,7 +367,7 @@ def execute(
 
     Returns
     -------
-        Tuple containing:
+        SimulationResults object containing:
             - states (Array): Trajectory of states (num_steps x state_dim).
             - controls (Array): Trajectory of control inputs.
             - estimates (Array): Trajectory of state estimates.
@@ -564,7 +565,7 @@ def execute(
                 planner_data_values,
             )
 
-        return (
+        return SimulationResults(
             xs,
             us,
             zs,
@@ -627,10 +628,10 @@ def execute(
 
 def format_return_data(
     data: Tuple[SimulationStepData, ...],
-) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
+) -> SimulationResults:
     """Extracts simulation data into JAX arrays."""
     if not data:
-        return (
+        return SimulationResults(
             jnp.array([]),
             jnp.array([]),
             jnp.array([]),
@@ -696,7 +697,7 @@ def format_return_data(
             data[0].planner_keys, transposed.planner_values
         )
 
-    return (
+    return SimulationResults(
         states,
         controls,
         estimates,
