@@ -129,18 +129,32 @@ def cbf_clf_qp_generator(
         else:
             n_lfs = 0
 
-        if p_mat is None:
+        # Bolt: Normalize slack variables to improve QP conditioning (Condition number ~ 1)
+        # delta_phys = delta_raw / sqrt(penalty). Cost: delta_raw^2. Constraint: ... + delta_raw/sqrt(penalty)
+        scale_cbf = 1.0
+        scale_clf = 1.0
+        auto_p_mat = p_mat is None
+
+        if auto_p_mat:
             penalty_cbf = kwargs.get("slack_penalty_cbf", 2e3)
             penalty_clf = kwargs.get("slack_penalty_clf", 2e3)
+            scale_cbf = 1.0 / jnp.sqrt(penalty_cbf + 1e-8)
+            scale_clf = 1.0 / jnp.sqrt(penalty_clf + 1e-8)
             p_mat = jnp.diag(
                 jnp.hstack(
                     [
                         jnp.ones((n_con,)),
-                        penalty_cbf * jnp.ones((n_bfs,)),
-                        penalty_clf * jnp.ones((n_lfs,)),
+                        jnp.ones((n_bfs,)),  # Normalized weight
+                        jnp.ones((n_lfs,)),  # Normalized weight
                     ]
                 )
             )
+            # Scale slack bounds (delta_raw = delta_phys * sqrt(penalty) = delta_phys / scale)
+            # control_limits is already [u_lim, slack_cbf_lim, slack_clf_lim]
+            limit_u = control_limits[:n_con]
+            limit_cbf = control_limits[n_con : n_con + n_bfs] / scale_cbf
+            limit_clf = control_limits[n_con + n_bfs :] / scale_clf
+            control_limits = jnp.hstack([limit_u, limit_cbf, limit_clf])
 
         compute_input_constraints = generate_compute_input_constraints(control_limits)
         compute_cbf_clf_constraints = generate_compute_cbf_clf_constraints(
@@ -205,8 +219,22 @@ def cbf_clf_qp_generator(
                 complete = sub_data["complete"]
 
             # Stack input and certificate function constraints
+            # Bolt: Apply scaling to slack columns in constraint matrix
+            if auto_p_mat:
+                if n_bfs > 0:
+                    g_mat_c = g_mat_c.at[:, n_con : n_con + n_bfs].multiply(scale_cbf)
+                if n_lfs > 0:
+                    g_mat_c = g_mat_c.at[:, n_con + n_bfs : n_con + n_bfs + n_lfs].multiply(scale_clf)
+
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
+
+            # Bolt: Normalize constraint rows to improve numerical stability
+            if auto_p_mat:
+                row_norms = jnp.linalg.norm(g_mat, axis=1)
+                row_norms = jnp.maximum(row_norms, 1e-8)
+                g_mat = g_mat / row_norms[:, None]
+                h_vec = h_vec / row_norms
 
             # Solve QP
             solver_params = None
@@ -216,6 +244,13 @@ def cbf_clf_qp_generator(
             sol, status, new_params = solve_qp(
                 p_mat, q_vec, g_mat, h_vec, init_params=solver_params
             )
+
+            # Bolt: Rescale solution back to physical units
+            if auto_p_mat:
+                if n_bfs > 0:
+                    sol = sol.at[n_con : n_con + n_bfs].multiply(scale_cbf)
+                if n_lfs > 0:
+                    sol = sol.at[n_con + n_bfs : n_con + n_bfs + n_lfs].multiply(scale_clf)
             # QP solution already respects control limits via input constraints.
             # Only clip the fallback u_nom (which may exceed limits) to avoid
             # inadvertently violating CBF constraints on the QP-solved path.
