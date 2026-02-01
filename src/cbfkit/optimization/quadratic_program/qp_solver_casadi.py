@@ -1,13 +1,42 @@
-"""Quadratic program solver using the Casadi library."""
+"""
+qp_solver_casadi
+================
 
-import contextlib
-import os
-from typing import Tuple, Union
+This module implements a solver for quadratic programs using the Casadi library.
 
+Functions
+---------
+-solve(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec): calculates solution to quadratic program specified by args
+
+Notes
+-----
+Quadratic Program takes the following form:
+min 1/2 x.T @ h_mat @ x + f_vec @ x
+subject to
+g_mat @ x <= h_vec
+a_mat @ x = b_vec
+
+Examples
+--------
+>>> import qp_solver_jax
+>>> sol, status = qp_solver_jax.solve(
+        h_mat=jnp.eye(2),
+        f_vec=jnp.ones((2,))
+        g_mat=jnp.ones((2, 1))
+        h_vec=jnp.array([1.0])
+        a_mat=None,
+        b_vec=None
+    )
+
+"""
+
+from typing import Union, Tuple
 import casadi as ca
-import jax.numpy as jnp
 import numpy as np
 from jax import Array
+import jax.numpy as jnp
+import contextlib
+import os
 
 
 def solve(
@@ -18,7 +47,8 @@ def solve(
     a_mat: Union[Array, None] = None,
     b_vec: Union[Array, None] = None,
 ) -> Tuple[Array, int]:
-    """Solve a quadratic program using the Casadi solver.
+    """
+    Solve a quadratic program using the Casadi solver.
 
     Args:
         h_mat: quadratic cost matrix
@@ -28,10 +58,10 @@ def solve(
         g_mat: linear equality constraint matrix
         h_vec: linear equality constraint vector
 
-    Returns
-    -------
+    Returns:
         solution: Solution to the QP
         status: True if optimal solution found
+
     """
     # Define decision variables
     n = len(f_vec)

@@ -1,10 +1,11 @@
-from typing import List
+import matplotlib
 
 # matplotlib.use("macosx")
 import matplotlib.pyplot as plt
-from jax import Array
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Ellipse
+from typing import List
+from jax import Array
 
 
 #! PLOTTING
@@ -100,7 +101,7 @@ def animate(
     for obstacle, r_ob in zip(obstacles, r_obs):
         ax.add_patch(
             Ellipse(
-                (float(obstacle[0]), float(obstacle[1])),
+                obstacle[:2],
                 width=r_ob[0],
                 height=r_ob[1],
                 angle=0,

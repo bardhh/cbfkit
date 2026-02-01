@@ -1,10 +1,9 @@
-from typing import Callable, Optional, Tuple, Union, cast
-
 import jax.numpy as jnp
 from jax import Array
+from typing import Tuple, Callable, Union, Optional
 
+from cbfkit.utils.user_types import DynamicsCallable
 from cbfkit.integration import forward_euler as integrate
-from cbfkit.utils.user_types import DynamicsCallable, EstimatorCallable, Time
 
 from .ekf import ct_ekf_dtmeas
 from .ukf import ct_ukf_dtmeas
@@ -18,9 +17,9 @@ def ct_hybrid_ekf_ukf_dtmeas(
     h: Callable,
     dhdx: Callable,
     dt: float,
-) -> EstimatorCallable:
-    """Function defining the continuous-time hybrid EKF/UKF estimator with discrete-time
-    measurements.
+) -> Callable[[float, Array, Array, Array], Tuple[Array, Array]]:
+    """Function defining the continuous-time hybrid EKF/UKF estimator with
+    discrete-time measurements.
 
     Args:
         Q (Array): process noise covariance matrix
@@ -31,26 +30,26 @@ def ct_hybrid_ekf_ukf_dtmeas(
         dhdx (Callable): gradient of measurement model
         dt (float): timestep length (sec)
 
-    Returns
-    -------
+    Returns:
         step_hybrid_ekf_ukf (Callable): function handle to compute the next observer state
+
     """
     step_ekf = ct_ekf_dtmeas(Q, R, dynamics, dfdx, h, dhdx, dt)
     step_ukf = ct_ukf_dtmeas(Q, R, dynamics, h, dt)
 
     def step_hybrid_ekf_ukf(
-        t: Time,
+        t: float,
         y: Array,
-        z: Optional[Array] = None,
-        u: Optional[Array] = None,
-        P: Optional[Array] = None,
-    ) -> Tuple[Array, Array]:
+        z: Optional[Union[Array, None]] = None,
+        u: Optional[Union[Array, None]] = None,
+        P: Optional[Union[Array, None]] = None,
+    ):
         """"""
 
-        if z is None or u is None or P is None:
+        if z is None and u is None and P is None:
             return initialize(y, R)
 
-        ze, Pe, _Ke = step_ekf(t, y, z, u, P[: len(z), :])
+        ze, Pe = step_ekf(t, y, z, u, P[: len(z), :])
         zu, Pu = step_ukf(t, y, z, u, P[len(z) :, :])
 
         covariance_norm_ratio = jnp.linalg.norm(Pu, ord="fro") / jnp.linalg.norm(Pe, ord="fro")
@@ -65,7 +64,7 @@ def ct_hybrid_ekf_ukf_dtmeas(
 
 
 #! Possibly implement this in a better fashion in the future
-def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
+def initialize(y: Array, R: Array) -> Array:
     """Initialization for the continuous-time EKF with discrete-time measurements.
 
     Arguments:
@@ -73,10 +72,10 @@ def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
         R (Array): measurement noise covariance matrix (proxy for initial covariance)
 
 
-    Returns
-    -------
+    Returns:
         z0 (Array): initial estimate of state
         P0 (Array): initial covariance of state estimate
+
     """
     return y, jnp.vstack([R, R])
 
@@ -84,8 +83,7 @@ def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
 def predict_ct_dtmeas(
     Q: Array, dynamics: DynamicsCallable, dfdx: Callable, dt: float
 ) -> Callable[[float, Array, Array, Array], Tuple[Array, Array]]:
-    """Function defining the prediction step for the continuous-time EKF with discrete-time
-    measurements.
+    """Function defining the prediction step for the continuous-time EKF with discrete-time measurements.
 
     Arguments:
         Q (Array): positive definite process noise covariance
@@ -93,14 +91,13 @@ def predict_ct_dtmeas(
         dfdx (Callable): linearized dynamics model
         dt (float): timestep (sec)
 
-    Returns
-    -------
+    Returns:
         predict (Callable): function handle to compute EKF state and covariance matrix based on system model
+
     """
 
     def predict(t: float, z: Array, u: Array, P: Array) -> Tuple[Array, Array]:
-        """Implementation of prediction step for the continuous-time EKF with discrete-time
-        measurements.
+        """Implementation of prediction step for the continuous-time EKF with discrete-time measurements.
 
         Arguments:
             t (float): time (sec)
@@ -108,22 +105,22 @@ def predict_ct_dtmeas(
             u (Array): control input
             P (Array): Kalman covariance matrix
 
-        Returns
-        -------
+        Returns:
             xk: predicted observer state
             Pk: predicted covariance matrix
+
         """
         # Compute xdot from system dynamics
-        f, g = dynamics(z)
+        f, g, _ = dynamics(z)
         zdot = f + jnp.matmul(g, u)
-        zk = integrate(z, lambda _: zdot, dt)
+        zk = integrate(z, zdot, dt)
 
         # Compute Pdot from covariance dynamics
-        Ff, Fg = dfdx(z)
+        Ff, Fg, _ = dfdx(z)
         F = Ff + jnp.einsum("ijk,j->ik", Fg, u)
         # F = Ff + jnp.einsum('ijk,j->ki', Fg, u)
         Pdot = jnp.matmul(F, P) + jnp.matmul(P, F.T) + Q
-        Pk = integrate(P, lambda _: Pdot, dt)
+        Pk = integrate(P, Pdot, dt)
 
         return zk, Pk
 
@@ -132,7 +129,7 @@ def predict_ct_dtmeas(
 
 def update_dtmeas(
     R: Array, h: Callable[[Array], Array], dhdx: Callable[[Array], Array]
-) -> Callable[[Array, Array, Array], Tuple[Array, Array]]:
+) -> Callable[[float, Array, Array], Tuple[Array, Array]]:
     """Function defining the update step for (any) EKF with discrete-time measurements.
 
     Arguments:
@@ -141,9 +138,9 @@ def update_dtmeas(
         dhdx (Callable): linearized measurement model
 
 
-    Returns
-    -------
+    Returns:
         update (Callable): function handle to compute the updated EKF state and covariance matrix
+
     """
 
     def update(z: Array, y: Array, P: Array) -> Tuple[Array, Array]:
@@ -154,10 +151,10 @@ def update_dtmeas(
             y (Array): measurement
             P (Array): predicted Kalman covariance matrix
 
-        Returns
-        -------
+        Returns:
             x_new (Array): updated observer state
             P_new (Array): updated Kalman covariance matrix
+
         """
         H = dhdx(z)
         K = jnp.matmul(jnp.matmul(P, H.T), jnp.linalg.inv(jnp.matmul(jnp.matmul(H, P), H.T) + R))

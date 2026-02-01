@@ -2,8 +2,7 @@
 #! docstring
 """
 
-from typing import Callable, Tuple, Union
-
+from typing import Callable, Union, Tuple
 import jax.numpy as jnp
 from jax import Array, jit
 
@@ -28,8 +27,7 @@ def generate_mpc_solver_quadratic_cost_linear_dynamics(
         QN (Array): _description_
         N (int): _description_
 
-    Returns
-    -------
+    Returns:
         Callable: _description_
     """
     n = Qn.shape[0]
@@ -38,13 +36,13 @@ def generate_mpc_solver_quadratic_cost_linear_dynamics(
 
     @jit
     def solve(concatenated_x_xr: Array) -> Tuple[Array, Array]:
-        """Solves Discrete-Time, LTI MPC problem.
+        """
+        Solves Discrete-Time, LTI MPC problem.
 
         Args:
             concatenated_x_xr (Array): concatenation of current state vector (x) and reference path (xr)
 
-        Returns
-        -------
+        Returns:
             Tuple(Array, Array): (x_opt, u_opt) optimal state and input sequence
         """
         # Convert Discrete-Time, LTI MPC problem into QP and solve
@@ -82,8 +80,7 @@ def generate_mpc_to_qp(
         QN (Array): _description_
         horizon (int): _description_
 
-    Returns
-    -------
+    Returns:
         Callable: _description_
     """
     n_states, n_inputs = B.shape
@@ -134,8 +131,7 @@ def generate_mpc_to_qp(
         Args:
             concatenated_x_xr (Array): concatenation of current state vector (x) and reference path (xr)
 
-        Returns
-        -------
+        Returns:
             Q_bar: quadratic cost matrix.
             p_bar: linear cost vector.
             A_ineq: linear constraint matrix.
@@ -192,8 +188,7 @@ def mpc_to_qp(
         QN: terminal state cost matrix
         n_steps: length of finite horizon
 
-    Returns
-    -------
+    Returns:
         H: quadratic cost matrix.
         f: linear cost vector.
         A: linear constraint matrix.

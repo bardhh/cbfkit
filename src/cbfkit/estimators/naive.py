@@ -1,17 +1,8 @@
-from typing import Optional, Tuple, Union
-
 import jax.numpy as jnp
+from jax import Array
 
-from cbfkit.utils.user_types import Array, Covariance, State, Time
 
-
-def naive(
-    _t: Time,
-    y: Array,
-    _z: State,
-    _u: Optional[Union[Array, None]] = None,
-    _c: Optional[Union[Covariance, None]] = None,
-) -> Tuple[State, Covariance]:
+def naive(_t: float, y: Array, _z: Array, _u: Array, _p: Array) -> Array:
     """Naive estimator -- returns the exact measurement value as the estimated state.
 
     Args:
@@ -21,8 +12,8 @@ def naive(
         u (Array): control input vector -- unused but required for generic sensor
         p (Array): state estimate covariance vector -- unused but required for generic sensor
 
-    Returns
-    -------
+    Returns:
         y (Array): naively returns the (full) state measurement
+
     """
     return y, jnp.zeros((len(y), len(y)))

@@ -128,6 +128,20 @@ actuation_limits = jnp.array([1.0, 1.0])
 dynamics = unicycle.plant()
 nominal_controller = unicycle.controllers.controller_1(kp=1.0, xg=-2.0, yg=-2.0)
 
+#####################################################################
+#####################################################################
+from cbfkit.controllers.model_based.cbf_clf_controllers import vanilla_cbf_clf_qp_controller
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+    cubic_class_k,
+    linear_class_k,
+)
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    concatenate_certificates,
+)
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.rectify_relative_degree import (
+    rectify_relative_degree,
+)
+
 # After model generation, import the generated barrier functions
 from models.single_integrator.certificate_functions.barrier_functions.barrier_1 import (
     cbf as barrier_1,
@@ -145,19 +159,6 @@ from models.single_integrator.certificate_functions.barrier_functions.barrier_5 
     cbf as barrier_5,
 )
 
-#####################################################################
-#####################################################################
-from cbfkit.controllers.model_based.cbf_clf_controllers import vanilla_cbf_clf_qp_controller
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
-    cubic_class_k,
-    linear_class_k,
-)
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
-    concatenate_certificates,
-)
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.rectify_relative_degree import (
-    rectify_relative_degree,
-)
 
 # Update the barrier certificates
 cbf_packages = [
@@ -188,9 +189,9 @@ controller = vanilla_cbf_clf_qp_controller(
 #####################################################################
 
 from cbfkit.estimators import naive
-from cbfkit.integration import runge_kutta_4
-from cbfkit.sensors import perfect as sensor
+from cbfkit.integration import forward_euler
 
+from cbfkit.sensors import perfect as sensor
 # change the sensors for noisy data
 # from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.simulation import simulator
@@ -201,7 +202,7 @@ x, u, z, p, dkeys, dvals = simulator.execute(
     dt=1e-2,
     num_steps=1000,
     dynamics=dynamics,
-    integrator=runge_kutta_4,
+    integrator=forward_euler,
     controller=controller,
     sensor=sensor,
     estimator=naive,

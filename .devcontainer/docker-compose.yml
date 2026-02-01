@@ -2,7 +2,6 @@ version: '3.8'
 
 services:
   cbfkit:
-    platform: linux/arm64
     build:
       context: ../
       dockerfile: .devcontainer/Dockerfile

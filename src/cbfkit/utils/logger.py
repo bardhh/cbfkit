@@ -1,11 +1,14 @@
-"""Logger module.
+"""
+logger
+================
 
 This module provides functions required for logging simulation data.
 
 Functions
 ---------
-write_log(filepath, data): writes the data contained in the log to a .csv file
-extract_log(key, data): retrieves data corresponding to key from log
+log(new_data): adds the latest data to the log
+write_log(filepath): writes the data contained in the log to a .csv file
+extract_log(key): retrieves data corresponding to key from log
 
 Notes
 -----
@@ -15,84 +18,65 @@ for any type of simulation with arbitrary data.
 Examples
 --------
 >>> import logger
->>> data = [{'x': 1, 'y':2}]
+>>> data = {'x': 1, 'y':2}
+>>> logger.log(data)
 >>> fpath = "point.csv"
->>> logger.write_log(fpath, data)
->>> x = logger.extract_log("x", data)
+>>> logger.write_log(fpath)
+>>> x = logger.extract_log("x")
+
 """
 
 import os
-from typing import Any, Dict, List, Union
-
+from typing import Dict, Any, List
 import pandas as pd
 
-LogEntry = Dict[str, Any]
+# Main logger variable
+LOG = []
 
 
-def write_log(filepath: str, data: Union[List[LogEntry], Dict[str, Any]]) -> None:
+def log(new_data: Dict[str, Any]) -> None:
+    """Adds new_data to the log.
+
+    Args:
+    new_data (Dict): dictionary containing all data to be written with pertinent keys
+
+    Returns:
+    None
+
+    """
+    LOG.append(new_data)
+
+
+def write_log(filepath: str) -> None:
     """Writes logged data out to csv file specified at filepath.
 
     Args:
     filepath (str): path to save file
-    data (Union[List[LogEntry], Dict[str, Any]]): list of log entries or dict of arrays
 
-    Returns
-    -------
+    Returns:
     None
-    """
-    folder_path = os.path.dirname(filepath)
-    if folder_path and not os.path.exists(folder_path):
-        os.makedirs(folder_path)
 
+    """
+    folder_path = "/".join(filepath.split("/")[:-1])
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
     if filepath[-4:] != ".csv":
         if filepath[-4] == ".":
             raise ValueError("filepath must have no extension, or have extension `.csv`")
         filepath += ".csv"
 
-    df = pd.DataFrame.from_dict(data)
+    df = pd.DataFrame.from_dict(LOG)
     df.to_csv(filepath)
 
 
-def extract_log(key: str, data: List[LogEntry]) -> List[Any]:
+def extract_log(key: str) -> List[Any]:
     """Extracts the key data from the log.
 
     Args:
     key (str): key to the log
-    data (List[LogEntry]): list of log entries
 
-    Returns
-    -------
+    Returns:
     key_data (list): data from log corresponding to key
+
     """
-    return [entry[key] for entry in data]
-
-
-def print_progress(
-    iteration: int,
-    total: int,
-    prefix: str = "",
-    suffix: str = "",
-    decimals: int = 1,
-    length: int = 50,
-    fill: str = "█",
-    printEnd: str = "\r",
-) -> None:
-    r"""Call in a loop to create terminal progress bar.
-
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + "-" * (length - filledLength)
-    print(f"\r{prefix} |{bar}| {percent}% {suffix}", end=printEnd)
-    # Print New Line on Complete
-    if iteration == total:
-        print()
+    return [entry[key] for entry in LOG]

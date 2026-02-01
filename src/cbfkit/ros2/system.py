@@ -1,18 +1,16 @@
-"""Module docstring here."""
+"""module docstring here"""
 
 from typing import Callable
-
 import rclpy
-from std_msgs.msg import Float64
-
 from cbfkit.utils.user_types import ControllerCallable, SensorCallable
+from std_msgs.msg import Float64
 
 NODE_NAME = "ros2_node"  # Replace with an appropriate node name
 execution_time_publisher = None  # Global publisher variable
 
 
 def spin(node_name: str, callback: Callable, frequency: float = 0.01):
-    """_summary_.
+    """_summary_
 
     Args:
         callback (Callable): _description_
@@ -27,7 +25,7 @@ def spin(node_name: str, callback: Callable, frequency: float = 0.01):
         # Set up callback
         node = rclpy.create_node(node_name)
         timer_period = 1.0 / frequency
-        node.create_timer(timer_period, callback)
+        timer = node.create_timer(timer_period, callback)
 
         rclpy.spin(node)
 
@@ -38,15 +36,15 @@ def stepper(
     sensor: SensorCallable,
     controller: ControllerCallable,
 ) -> Callable[[None], None]:
-    """Step function to take the simulation forward one timestep. Designed to work generically with
-    broad classes of dynamics, controllers, and estimators.
+    """Step function to take the simulation forward one timestep. Designed
+    to work generically with broad classes of dynamics, controllers, and
+    estimators.
 
     Args:
         sensor (Callable): function handle to generate new state sensor
         controller (Callable): function handle to compute control input
 
-    Returns
-    -------
+    Returns:
         step (Callable): function handle for computing one step in ROS2 sim/experiment
     """
 

@@ -1,6 +1,7 @@
 import numpy as np
-from tensorflow.keras.layers import LSTM, Dense
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 
 
 # Generate some sample data
@@ -45,7 +46,7 @@ def main():
     # Reshape the input data to fit the Keras LSTM input shape
     X = X.reshape((X.shape[0], X.shape[1], 1))
 
-    train_lstm_model(X, Y)
+    model = train_lstm_model(X, Y)
 
     # You can use the trained model for prediction on new data
     # new_data = ...  # Replace with your new data

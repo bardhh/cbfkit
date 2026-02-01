@@ -1,30 +1,27 @@
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
-
 import jax.numpy as jnp
-from jax import Array
-
-from cbfkit.utils.logger import write_log
+from jax import random, Array
+from typing import Any, Dict, Iterator, Optional, Tuple, List, Callable
+from cbfkit.utils.logger import log, write_log
 from cbfkit.utils.user_types import (
-    Control,
     ControllerCallable,
-    Covariance,
-    Estimate,
     EstimatorCallable,
     SensorCallable,
-    State,
     Time,
+    State,
+    Control,
+    Estimate,
+    Covariance,
 )
 
 
 def stepper(
-    sensor: Callable[[], Array],
-    controller: Callable[[float, Array], Tuple[Array, Dict[str, Any]]],
+    sensor: SensorCallable,
+    controller: ControllerCallable,
     estimator: EstimatorCallable,
-) -> Callable[
-    [float, Optional[Array], Array, Optional[Array]], Tuple[Array, Array, Array, Dict[str, Any]]
-]:
-    """Step function to take the simulation forward one timestep. Designed to work generically with
-    broad classes of dynamics, controllers, and estimators.
+) -> Tuple[State, Dict[str, Any]]:
+    """Step function to take the simulation forward one timestep. Designed
+    to work generically with broad classes of dynamics, controllers, and
+    estimators.
 
     Args:
         dynamics (Callable): function handle to compute true system dynamics
@@ -33,18 +30,19 @@ def stepper(
         estimator (Callable): function handle to compute new state estimate
         dt (float) timestep (sec)
 
-    Returns
-    -------
+    Returns:
         step (Callable): function handle for stepping forward in simulation time
+
+
     """
 
     def step(
         t: Time,
-        u: Optional[Control],
+        u: Control,
         z: Estimate,
-        p: Optional[Covariance],
-    ) -> Tuple[Array, Array, Array, Dict[str, Any]]:
-        """_summary_.
+        p: Covariance,
+    ) -> Tuple[Array, Array, Array, Array, Dict[str, Any]]:
+        """_summary_
 
         Args:
             t (float): time (sec)
@@ -52,8 +50,7 @@ def stepper(
             z (Array): state estimate vector
             p (Array): covariance matrix of state estimate
 
-        Returns
-        -------
+        Returns:
             u (Array): control input vector
             z (Array): state estimate vector
             p (Array): covariance matrix of state estimate
@@ -68,7 +65,7 @@ def stepper(
         # Compute control input using controller
         # this is wrapped in a function to publish
         # the input to the correct ROS node
-        u, data = controller(float(t), z)
+        u, data = controller(t, z)
 
         return u, z, p, data
 
@@ -76,14 +73,14 @@ def stepper(
 
 
 def experimenter(
-    sensor: Callable[[], Array],
-    controller: Callable[[float, Array], Tuple[Array, Dict[str, Any]]],
+    sensor: SensorCallable,
+    controller: ControllerCallable,
     estimator: EstimatorCallable,
-    dt: float,
+    dt: Time,
     num_steps: int,
-) -> Callable[[Array], Iterator[tuple[Array, Array, Array, List[str], List[Array]]]]:
-    """Generates function handle for the iterator that carries out the simulation of the dynamical
-    system.
+) -> Callable[[Array], Iterator[tuple[Array, Array, Array, Array, List[str], List[Array]]]]:
+    """Generates function handle for the iterator that carries out the simulation of the
+    dynamical system.
 
     Args:
         sensor (Callable): function handle to generate new state sensor
@@ -92,14 +89,14 @@ def experimenter(
         dt (float) timestep (sec)
         num_steps (int): number of timesteps to simulate
 
-    Returns
-    -------
+    Returns:
         iterator eventually returning the following:
             u (Array): control input vector
             z (Array): state estimate vector
             p (Array): state estimate covariance matrix
             keys (list): list of keys in data dict
             vals (list): lists of values contained in data
+
     """
     # Define step function
     step = stepper(
@@ -108,16 +105,16 @@ def experimenter(
         estimator=estimator,
     )
 
-    def simulate_iter(z0: Array) -> Iterator[tuple[Array, Array, Array, List[str], List[Array]]]:
+    def simulate_iter() -> Iterator[tuple[Array, Array, Array, Array, List[str], List[Array]]]:
         # No info on control/estimation
         u = None
-        z = z0
+        z = None
         p = None
 
         # Simulate remaining timesteps
         for s in range(0, num_steps):
             u, z, p, data = step(dt * s, u, z, p)
-            # log(data)
+            log(data)
 
             yield u, z, p, list(data.keys()), list(data.values())
 
@@ -128,17 +125,18 @@ def experimenter(
 # returning a tuple of all states. Optionally, it can also write the logged data to a file.
 def experiment(
     z0: Array,
-    sensor: Callable[[], Array],
-    controller: Callable[[float, Array], Tuple[Array, Dict[str, Any]]],
+    sensor: SensorCallable,
+    controller: ControllerCallable,
     estimator: EstimatorCallable,
-    dt: float,
+    dt: Time,
     num_steps: int,
     filepath: Optional[str] = None,
 ) -> Tuple[Array, List[str], List[Array]]:
-    """Simulates the dynamical system for a given number of steps, and returns a tuple
-    consisting of 1) an array containing the state, control, estimate, and covariance trajectories,
-    2) a list containing keys to a dict object containing additional data, and 3) a list of objects
-    corresponding to the data accessed by those keys.
+    """This function simulates the dynamical system for a given number of steps,
+    and returns a tuple consisting of 1) an array containing the state, control,
+    estimate, and covariance trajectories, 2) a list containing keys to a dict
+    object containing additional data, and 3) a list of objects corresponding to
+    the data accessed by those keys.
 
     Args:
         z0 (State): initial (estimated) state of the system
@@ -149,8 +147,7 @@ def experiment(
         num_steps (int): _description_
         filepath (Optional[str], optional): _description_. Defaults to None.
 
-    Returns
-    -------
+    Returns:
         Tuple[Array, List[str], List[Array]]: _description_
     """
     # Define simulator
@@ -163,23 +160,17 @@ def experiment(
     return extract_and_log_data(filepath, experiment_data)
 
 
-def extract_and_log_data(filepath: Optional[str], data):
-    """_summary_."""
-    if filepath is not None and len(data) > 0:
-        keys = data[0][3]
-        values_list = [step[4] for step in data]
-        log_data = [dict(zip(keys, vals)) for vals in values_list]
-        write_log(filepath, log_data)
+#! Finish this function
+def extract_and_log_data(filepath: str, data):
+    """_summary_"""
+    if filepath is not None:
+        write_log(filepath)
 
     #! Somehow make these more modular?
     controls = jnp.array([sim_data[0] for sim_data in data])
     estimates = jnp.array([sim_data[1] for sim_data in data])
     covariances = jnp.array([sim_data[2] for sim_data in data])
-    if len(data) > 0:
-        data_keys = data[0][3]
-        data_values = [sim_data[4] for sim_data in data]
-    else:
-        data_keys = []
-        data_values = []
+    data_keys = data[0][1]
+    data_values = [sim_data[2] for sim_data in data]
 
     return controls, estimates, covariances, data_keys, data_values  # type: ignore[return-value]

@@ -3,7 +3,8 @@ from jax import jit
 
 
 def zero_controller():
-    """Create a zero controller for the given unicycle dynamics.
+    """
+    Create a zero controller for the given unicycle dynamics.
 
     :param dynamics: approximate unicycle dynamics ode
     :return: A function that computes control inputs based on the current state and desired state.

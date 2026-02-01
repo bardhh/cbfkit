@@ -3,10 +3,8 @@
 """
 
 from typing import Callable
-
 import jax.numpy as jnp
-from jax import Array, jacfwd, jacrev, jit
-
+from jax import jit, Array, jacfwd, jacrev
 from cbfkit.utils.user_types import DynamicsCallable
 
 
@@ -22,8 +20,7 @@ def generate_predictor_corrector_dynamical_solution(
         pd_matrix (Array): _description_
         dynamics (DynamicsCallable): _description_
 
-    Returns
-    -------
+    Returns:
         Callable[[Array], Array]: _description_
     """
     n_con = pd_matrix.shape[0]
@@ -37,16 +34,15 @@ def generate_predictor_corrector_dynamical_solution(
         Args:
             z (Array): _description_
 
-        Returns
-        -------
+        Returns:
             Array: _description_
         """
-        f, _ = dynamics(z)
+        dyn = dynamics(z)
         jaco = jacobian(z)
         hess = hessian(z)
 
         matrix_term = -jnp.linalg.inv(hess[-n_con:-n_con:])
-        vector_term = jnp.matmul(pd_matrix, jaco[-n_con]) + jnp.matmul(hess[-n_con:, :n_con], f)
+        vector_term = jnp.matmul(pd_matrix, jaco[-n_con]) + jnp.matmul(hess[-n_con:, :n_con], dyn)
 
         return jnp.matmul(matrix_term, vector_term)
 

@@ -7,7 +7,5 @@
   "cmake.configureOnOpen": false,
   "editor.codeActionsOnSave": {
     "source.organizeImports": "explicit"
-  },
-  "python.terminal.executeInFileDir": false,
-  "jupyter.notebookFileRoot": "${workspaceFolder}"
+  }
 }

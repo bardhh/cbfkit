@@ -1,4 +1,6 @@
-"""User types module.
+"""
+user_types
+================
 
 This module contains a collection of user-defined Python types, for
 the purpose of type-hinting other modules in this repository.
@@ -40,68 +42,31 @@ Examples
 >>> from cbfkit.utils.user_types import *
 >>> import jax.numpy as jnp
 >>> x: State = jnp.array([1, 2, 2.4])
+
 """
 
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Protocol, Tuple, Union
-
+from typing import Callable, Tuple, Dict, Any, List, Union, Optional
 from jax import Array, random
 
 # Define types for readability
-Time = Union[float, Array]
 State = Array
 Control = Array
 Estimate = Array
 Covariance = Array
-Key = Array
-NumSteps = int
-
-
-# Data Schemas
-class ControllerData(NamedTuple):
-    """Data structure for controller output."""
-
-    error: bool = False
-    error_data: Any = None
-    complete: bool = False
-    sol: Optional[Array] = None
-    u: Optional[Array] = None
-    u_nom: Optional[Array] = None
-    sub_data: Optional[Dict[str, Any]] = None
-
-
-class PlannerData(NamedTuple):
-    """Data structure for planner output."""
-
-    u_traj: Optional[Array] = None
-    x_traj: Optional[Array] = None
-    prev_robustness: Optional[Union[float, Array]] = None
-    error: bool = False
-    xs: Optional[Array] = None
-    sampled_x_traj: Optional[Array] = None
-
 
 # Certificate (Barrier, Lyapunov, Barrier-Lyapunov, etc.) Function Callables
-CertificateCallable = Callable[[Time, State], Array]
-CertificateJacobianCallable = Callable[[Time, State], Array]
-CertificateHessianCallable = Callable[[Time, State], Array]
-CertificatePartialCallable = Callable[[Time, State], Array]
+CertificateCallable = Callable[[float, State], Array]
+CertificateJacobianCallable = Callable[[float, State], Array]
+CertificateHessianCallable = Callable[[float, State], Array]
+CertificatePartialCallable = Callable[[float, State], Array]
 CertificateConditionsCallable = Callable[[Array], Array]
-
-
-class CertificateCollection(NamedTuple):
-    """Collection of certificate functions and their derivatives."""
-
-    functions: List[CertificateCallable]
-    jacobians: List[CertificateJacobianCallable]
-    hessians: List[CertificateHessianCallable]
-    partials: List[CertificatePartialCallable]
-    conditions: List[CertificateConditionsCallable]
-
-
-# Default empty collection
-EMPTY_CERTIFICATE_COLLECTION = CertificateCollection([], [], [], [], [])
-
-
+CertificateCollection = Tuple[
+    List[CertificateCallable],
+    List[CertificateJacobianCallable],
+    List[CertificateHessianCallable],
+    List[CertificatePartialCallable],
+    List[CertificateConditionsCallable],
+]
 CertificateTuple = Tuple[
     CertificateCallable,
     CertificateJacobianCallable,
@@ -109,9 +74,6 @@ CertificateTuple = Tuple[
     CertificatePartialCallable,
     CertificateConditionsCallable,
 ]
-BarrierTuple = CertificateTuple
-LyapunovTuple = CertificateTuple
-
 
 # Predictive Barrier Function Callable
 PredictiveBarrierCollectionCallable = Callable[
@@ -130,54 +92,24 @@ DynamicsCallableReturns = Tuple[Array, Array]
 DynamicsCallable = Callable[[State], DynamicsCallableReturns]
 
 # Perturbation Callables
-PerturbationCallableReturns = Callable[[Key], Array]
+PerturbationCallableReturns = Callable[[random.PRNGKey], Array]
 PerturbationCallable = Callable[[State, Control, Array, Array], PerturbationCallableReturns]
 
 # Controller Callables
-
-ControllerCallableReturns = Tuple[Array, ControllerData]
-
-ControllerCallable = Callable[
-    [Time, State, Optional[Control], Key, ControllerData], ControllerCallableReturns
-]
-
-NominalControllerCallable = Callable[[Time, State, Key, Optional[State]], ControllerCallableReturns]
-
-
-# Planner Callables
-PlannerCallableReturns = Tuple[Array, PlannerData]
-PlannerCallable = Callable[
-    [Time, State, Optional[Control], Key, PlannerData], PlannerCallableReturns
-]
+ControllerCallableReturns = Tuple[Array, Dict[str, Any]]
+ControllerCallable = Callable[[float, State], ControllerCallableReturns]
 
 # Estimator Callables
 EstimatorCallable = Callable[
-    [Time, Array, Array, Optional[Array], Optional[Array]],
-    Tuple[State, Covariance],
+    [float, Array, Array, Optional[Union[Array, None]], Optional[Union[Array, None]]],
+    Tuple[Array, Array],
 ]
 
-
 # Sensor Callables
-class SensorCallable(Protocol):
-    """Protocol for sensor callables."""
-
-    def __call__(
-        self,
-        t: Time,
-        x: Array,
-        *,
-        sigma: Optional[Array] = None,
-        key: Optional[Array] = None,
-        **kwargs: Any,
-    ) -> Array:
-        """Call method."""
-        ...
-
+SensorCallable = Callable[[float, Array], Array]
 
 # Integrator Callable
-VectorFieldCallable = Callable[[State], Array]
-IntegratorCallable = Callable[[State, VectorFieldCallable, float], State]
-
+IntegratorCallable = Callable[[State, Array, float], State]
 
 # QP Solver Callables
 QpSolverCallable = Callable[
@@ -185,88 +117,30 @@ QpSolverCallable = Callable[
     Tuple[Array, Dict[str, Any]],
 ]
 
-
 # CBF-CLF-QP-Generators
-class GenerateComputeCertificateConstraintCallable(Protocol):
-    """Protocol for generating compute certificate constraint function."""
-
-    def __call__(
-        self,
-        control_limits: Array,
-        dyn_func: DynamicsCallable,
-        barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-        **kwargs: Any,
-    ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
-        """Call method."""
-        ...
-
-
-class CbfClfQpGenerator(Protocol):
-    """Protocol for CBF-CLF-QP generator."""
-
-    def __call__(
-        self,
-        control_limits: Array,
-        dynamics_func: DynamicsCallable,
-        barriers: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
-        p_mat: Optional[Array] = None,
-        **kwargs: Any,
-    ) -> ControllerCallable:
-        """Call method."""
-        ...
-
+GenerateComputeCertificateConstraintCallable = Callable[
+    [Array, DynamicsCallable, CertificateCollection, CertificateCollection, Dict[str, Any]],
+    Callable[[float, State], Tuple[Array, Array]],
+]
+CbfClfQpGenerator = Callable[
+    [
+        Array,
+        ControllerCallable,
+        DynamicsCallable,
+        CertificateCollection,
+        CertificateCollection,
+        Union[Array, None],
+        Dict[str, Any],
+    ],
+    ControllerCallable,
+]
 
 # ComputeCertificateConstraintFunctionGenerator
-class ComputeCertificateConstraintFunctionGenerator(Protocol):
-    """Protocol for computing certificate constraint function generator."""
-
-    def __call__(
-        self,
-        control_limits: Array,
-        dyn_func: DynamicsCallable,
-        barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-        **kwargs: Any,
-    ) -> Callable[[Time, Array], Tuple[Array, Array, Dict[str, Any]]]:
-        """Call method."""
-        ...
-
+ComputeCertificateConstraintFunctionGenerator = Callable[
+    [DynamicsCallable, CertificateCollection, Array, Dict[str, Any]],
+    Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]],
+]
 
 # Miscellaneous
-
-# Cost function Callables
-TrajectoryCostCallableReturns = Tuple[Array]
-TrajectoryCostCallable = Callable[[State, Control], TrajectoryCostCallableReturns]
-StageCostCallableReturns = Tuple[Array]
-StageCostCallable = Callable[[State, Control], StageCostCallableReturns]
-TerminalCostCallableReturns = Tuple[Array]
-TerminalCostCallable = Callable[[State, Control], TerminalCostCallableReturns]
-
-# CBF-CLF-QP-Generators
-GenerateComputeStageCostCallable = Callable[
-    [Array, DynamicsCallable, StageCostCallable, TerminalCostCallable, Dict[str, Any]],
-    Callable[[Time, State], Tuple[Array, Array]],
-]
-GenerateComputeTerminalCostCallable = Callable[
-    [Array, DynamicsCallable, StageCostCallable, TerminalCostCallable, Dict[str, Any]],
-    Callable[[Time, State], Tuple[Array, Array]],
-]
-
-
-class MppiGenerator(Protocol):
-    """Protocol for MPPI generator."""
-
-    def __call__(
-        self,
-        control_limits: Array,
-        dynamics_func: DynamicsCallable,
-        stage_cost: Optional[StageCostCallable] = None,
-        terminal_cost: Optional[TerminalCostCallable] = None,
-        trajectory_cost: Optional[TrajectoryCostCallable] = None,
-        mppi_args: Any = None,
-        **kwargs: Any,
-    ) -> PlannerCallable:
-        """Call method."""
-        ...
+Time = float
+NumSteps = int

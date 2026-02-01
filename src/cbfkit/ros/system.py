@@ -1,18 +1,17 @@
-"""Module docstring here."""
+"""module docstring here"""
+
 
 from typing import Callable
-
 import rospy
-from std_msgs.msg import Float64
-
 from cbfkit.utils.user_types import ControllerCallable, SensorCallable
+from std_msgs.msg import Float64
 
 NODE_NAME = rospy.get_name()
 execution_time_publisher = rospy.Publisher(f"/{NODE_NAME}/execution_time", Float64, queue_size=1)
 
 
 def spin(node_name: str, callback: Callable, frequency: float = 0.01):
-    """_summary_.
+    """_summary_
 
     Args:
         callback (Callable): _description_
@@ -37,27 +36,28 @@ def stepper(
     sensor: SensorCallable,
     controller: ControllerCallable,
 ) -> Callable[[None], None]:
-    """Step function to take the simulation forward one timestep. Designed to work generically with
-    broad classes of dynamics, controllers, and estimators.
+    """Step function to take the simulation forward one timestep. Designed
+    to work generically with broad classes of dynamics, controllers, and
+    estimators.
 
     Args:
         sensor (Callable): function handle to generate new state sensor
         controller (Callable): function handle to compute control input
 
-    Returns
-    -------
+    Returns:
         step (Callable): function handle for computing one step in ROS sim/experiment
+
+
     """
 
     def step(_something):
-        """Callback for ROS spin. Essentially, grabs a sensor measurement and computes a control
-        measurement.
+        """Callback for ROS spin. Essentially, grabs a sensor measurement
+        and computes a control measurement
 
         Args:
             None
 
-        Returns
-        -------
+        Returns:
             None
         """
         start_time = rospy.Time.now().to_sec()

@@ -1,6 +1,11 @@
 import jax.numpy as jnp
 
-from cbfkit.utils.matrix_vector_operations import block_diag_matrix, hat, normalize, vee
+from cbfkit.utils.matrix_vector_operations import (
+    block_diag_matrix,
+    hat,
+    normalize,
+    vee,
+)
 
 __all__ = ["normalize", "hat", "vee", "block_diag_matrix", "tanh_sigmoid_func"]
 
@@ -12,8 +17,7 @@ def tanh_sigmoid_func(x: float, xbar: float):
         x (float): argument to sigmoid.
         xbar (float): maximum value of argument.
 
-    Returns
-    -------
+    Returns:
         float: Result of the smooth saturation function.
     """
     k = 100

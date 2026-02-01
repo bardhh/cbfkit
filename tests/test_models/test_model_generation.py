@@ -1,6 +1,5 @@
 """
 Test Module for generating arbitrary dynamics models with barrier and lyapunov functions.
-
 =========================
 
 This module contains tests for verifying functionality of the arbitrary model generation
@@ -25,8 +24,7 @@ To run all tests in this module (from the root of the repository):
 """
 
 import unittest
-from typing import Any, Dict, List, Optional, Tuple, Union
-
+from typing import Optional, List, Union, Dict, Any
 from cbfkit.codegen.create_new_system.generate_model import generate_model
 
 
@@ -100,7 +98,7 @@ class TestModelGeneration(unittest.TestCase):
         self,
         target_directory: str,
         model_name: str,
-        dims: Tuple[int, int],
+        dims: int,
         drift_dynamics: str,
         control_matrix: str,
         barrier_funcs: Optional[Union[str, List, None]] = None,
@@ -132,10 +130,10 @@ class TestModelGeneration(unittest.TestCase):
             model_name,
             drift_dynamics,
             control_matrix,
-            barrier_funcs=barrier_funcs,
-            lyapunov_funcs=lyapunov_funcs,
-            nominal_controller=nominal_controller,
-            params=params,
+            barrier_funcs,
+            lyapunov_funcs,
+            nominal_controller,
+            params,
         )
 
         self.assertTrue(

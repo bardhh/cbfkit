@@ -1,26 +1,26 @@
-"""Docstring for test_model_accuracy."""
+"""
+#! docstring
 
+"""
 import unittest
-
 import jax.numpy as jnp
 from jax import random
-
 import cbfkit.systems as systems
 
 KEY = random.PRNGKey(0)
 
 
 class TestCbfkitModels(unittest.TestCase):
-    """Test suite for checking model accuracy.
+    """_summary_
 
     Args:
-        unittest (unittest.TestCase): TestCase class
+        unittest (_type_): _description_
     """
 
     def test_unicycle_model(self):
-        """Tests that the unicycle dynamics model is correct according to a selection of
-        benchmarks."""
-        dynamics = systems.unicycle.models.olfatisaber2002approximate.plant(lam=1.0)
+        """Tests that the unicycle dynamics model is correct according to a
+        selection of benchmarks."""
+        dynamics = systems.unicycle.models.olfatisaber2002approximate.plant(l=1.0)
 
         state_1 = jnp.array([0.0, 0.0, 0.0])
         f, g = dynamics(state_1)
@@ -44,8 +44,8 @@ class TestCbfkitModels(unittest.TestCase):
         )
 
     def test_quadrotor_model(self):
-        """Tests that the quadrotor dynamics model is correct according to a selection of
-        benchmarks."""
+        """Tests that the quadrotor dynamics model is correct according to a
+        selection of benchmarks."""
         m, jx, jy, jz = 1.0, 1.0, 1.0, 1.0
         dynamics = systems.quadrotor_6dof.models.quadrotor_6dof_dynamics(m=m, jx=jx, jy=jy, jz=jz)
 

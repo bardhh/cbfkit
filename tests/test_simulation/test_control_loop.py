@@ -1,5 +1,5 @@
-"""Test Module for conducting a Monte Carlo simulation of the unicycle system.
-
+"""
+Test Module for conducting a Monte Carlo simulation of the unicycle system
 =========================
 
 This module contains tests that simulate the unicycle system under various
@@ -16,27 +16,33 @@ Setup
 Examples
 --------
 To run all tests in this module (from the root of the repository):
-    $ pytest tests/test_simulation/test_control_loop.py
+    $ python -m unittest tests.test_simulation.test_fixedwing_simulation.py
 """
 
 import time
-
+import unittest
 import jax.numpy as jnp
-import pytest
 from jax import jacfwd, random
 from numpy.random import uniform
 
-# Simulation-specific
-import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
-from cbfkit.certificates import concatenate_certificates
-from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
-from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import vanilla_cbf_clf_qp_controller
+from cbfkit.simulation.simulator import stepper
+from cbfkit.controllers.model_based.cbf_clf_controllers.vanilla_cbf_clf_qp_control_laws import (
+    vanilla_cbf_clf_qp_controller,
+)
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+    concatenate_certificates,
+)
+from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+    linear_class_k,
+)
+from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.estimators import ct_ekf_dtmeas
 from cbfkit.integration import forward_euler as integrator
 from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
-from cbfkit.sensors import unbiased_gaussian_noise as sensor
-from cbfkit.simulation import simulator as sim
-from cbfkit.utils.user_types import PlannerData
+
+
+# Simulation-specific
+import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
 
 # Simulation setup
 N = 3  # n_states
@@ -72,7 +78,7 @@ ELLIPSOIDS = [
 
 # Lyapunov function
 bars = [
-    unicycle.certificates.barrier_functions.obstacle_ca(
+    unicycle.certificate_functions.barrier_functions.obstacle_ca(
         certificate_conditions=linear_class_k(ALPHA),
         obstacle=jnp.array([obs[0], obs[1], 0.0]),
         ellipsoid=jnp.array([ell[0], ell[1]]),
@@ -81,25 +87,16 @@ bars = [
 ]
 BARRIERS = concatenate_certificates(*bars)
 
-DYNAMICS = unicycle.plant(lam=1.0)
+DYNAMICS = unicycle.plant(l=1.0)
 NOMINAL_CONTROLLER = unicycle.controllers.proportional_controller(
     dynamics=DYNAMICS,
     Kp_pos=1.0,
     Kp_theta=0.01,
+    desired_state=GOAL,
 )
 DFDX = jacfwd(DYNAMICS)
-
-
-def H(x):
-    """Identity measurement function."""
-    return x
-
-
-def DHDX(_x):
-    """Jacobian of identity measurement function."""
-    return jnp.eye(N)
-
-
+H = lambda x: x
+DHDX = lambda _x: jnp.eye(N)
 ESTIMATOR = ct_ekf_dtmeas(
     Q=Q,
     R=R,
@@ -111,86 +108,64 @@ ESTIMATOR = ct_ekf_dtmeas(
 )
 CONTROLLER = vanilla_cbf_clf_qp_controller(
     control_limits=ACTUATION_LIMITS,
+    nominal_input=NOMINAL_CONTROLLER,
     dynamics_func=DYNAMICS,
     barriers=BARRIERS,
 )
 
-
-@pytest.fixture
-def initial_state():
-    """Fixture to generate a valid initial state."""
-    invalid_initial_condition = True
-    state = None
-
-    # Generate random initial condition
-    while invalid_initial_condition:
-        x_rand = uniform(low=-x_max, high=x_max)
-        y_rand = uniform(low=-y_max, high=y_max)
-        a_rand = uniform(low=-jnp.pi, high=jnp.pi)
-        state = jnp.array([x_rand, y_rand, a_rand])
-
-        invalid_initial_condition = any(
-            (x_rand - xo[0]) ** 2 + (y_rand - xo[1]) ** 2 - ro[0] ** 2 < 0
-            for xo, ro in zip(OBSTACLES, ELLIPSOIDS)
-        )
-    return state
+step = stepper(
+    dt=DT,
+    dynamics=DYNAMICS,
+    perturbation=generate_stochastic_perturbation(sigma=lambda _x: Q, dt=DT),
+    integrator=integrator,
+    controller=CONTROLLER,
+    sensor=sensor,
+    estimator=ESTIMATOR,
+    sigma=R,
+    key=random.PRNGKey(0),
+)
 
 
-@pytest.mark.benchmark
-def test_execution_performance_jit(initial_state):
-    """Tests that JIT-compiled execution is fast (average step < 1ms)."""
-    planner_data = PlannerData(
-        u_traj=None,
-        x_traj=jnp.tile(GOAL.reshape(-1, 1), (1, N_STEPS + 1)),
-        prev_robustness=None,
-    )
+class TestControlLoop(unittest.TestCase):
+    """Takes care of unit tests intended to examine the performance of a control loop."""
 
-    # Warmup
-    sim.execute(
-        x0=initial_state,
-        dt=DT,
-        num_steps=10,
-        dynamics=DYNAMICS,
-        integrator=integrator,
-        planner=None,
-        nominal_controller=NOMINAL_CONTROLLER,
-        controller=CONTROLLER,
-        sensor=sensor,
-        estimator=ESTIMATOR,
-        perturbation=generate_stochastic_perturbation(sigma=lambda _x: Q, dt=DT),
-        sigma=R,
-        key=random.PRNGKey(0),
-        planner_data=planner_data,
-        use_jit=True,
-        verbose=False,
-    )
+    def test_loop_less_than_10ms(self):
+        """Tests to make sure that the average loop time is less than 10ms."""
+        invalid_initial_condition = True
+        # Generate random initial condition
+        while invalid_initial_condition:
+            x_rand = uniform(low=-x_max, high=x_max)
+            y_rand = uniform(low=-y_max, high=y_max)
+            a_rand = uniform(low=-jnp.pi, high=jnp.pi)
+            initial_state = jnp.array([x_rand, y_rand, a_rand])
 
-    start_time = time.time()
+            invalid_initial_condition = any(
+                (x_rand - xo[0]) ** 2 + (y_rand - xo[1]) ** 2 - ro[0] ** 2 < 0
+                for xo, ro in zip(OBSTACLES, ELLIPSOIDS)
+            )
 
-    sim.execute(
-        x0=initial_state,
-        dt=DT,
-        num_steps=N_STEPS,
-        dynamics=DYNAMICS,
-        integrator=integrator,
-        planner=None,
-        nominal_controller=NOMINAL_CONTROLLER,
-        controller=CONTROLLER,
-        sensor=sensor,
-        estimator=ESTIMATOR,
-        perturbation=generate_stochastic_perturbation(sigma=lambda _x: Q, dt=DT),
-        sigma=R,
-        key=random.PRNGKey(0),
-        planner_data=planner_data,
-        use_jit=True,
-        verbose=False,
-    )
+        # Set up initial conditions
+        x = initial_state
+        u = jnp.zeros((DYNAMICS(x)[1].shape[1],))
+        z = 0 * initial_state
+        p = jnp.zeros((z.shape[0], z.shape[0]))
 
-    total_time = time.time() - start_time
-    avg_step_ms = (total_time / N_STEPS) * 1000
+        elapsed_times = jnp.zeros((N_STEPS,))
+        for ii in range(N_STEPS):
+            start_time = time.time()
 
-    print(f"Total Time (s): {total_time:.4f}")
-    print(f"Avg Step (ms): {avg_step_ms:.4f}")
+            # Take one step
+            x, u, z, p, _ = step(DT * ii, x, u, z, p)
 
-    # JIT execution should be fast, satisfying the < 20ms requirement
-    assert avg_step_ms < 20.0
+            elapsed_times = elapsed_times.at[ii].set(time.time() - start_time)
+
+        mean_elapsed_ms = 1000 * jnp.mean(jnp.array(elapsed_times))
+        mean_elapsed_ms_no_first = 1000 * jnp.mean(jnp.array(elapsed_times[1:]))
+        print(f"Mean Elapsed (ms): {mean_elapsed_ms:.2f}")
+        print(f"Mean Elapsed - No First (ms): {mean_elapsed_ms_no_first:.2f}")
+
+        self.assertTrue(mean_elapsed_ms_no_first < 10.0)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -28,22 +28,22 @@ Examples
 
 """
 
-from typing import Callable
-
-from jax import Array
+from jax import Array, jit
 
 
-def forward_euler(x: Array, vector_field: Callable[[Array], Array], dt: float) -> Array:
-    """Performs numerical integration on current state (x) using the vector field
-    over time interval of length dt according to Forward-Euler discretization.
+@jit
+def forward_euler(x: Array, x_dot: Array, dt: float) -> Array:
+    """Performs numerical integration on current state (x) and current state
+    derivative (x_dot) over time interval of length dt according to Forward-Euler
+    discretization.
 
     Arguments:
         x: current state
-        vector_field: function f(x) -> x_dot
+        x_dot: current state derivative
         dt: timestep length (in sec)
 
-    Returns
-    -------
+    Returns:
         new_state
+
     """
-    return x + vector_field(x) * dt
+    return x + x_dot * dt

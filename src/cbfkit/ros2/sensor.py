@@ -1,14 +1,12 @@
-from typing import Callable, Tuple
-
 import rclpy
+from typing import Callable, Tuple
 from jax import Array
 
 
 def sensor(compile_state: Callable[[], Array]) -> Callable[[], Tuple[float, Array]]:
     """Generates 'sense' function for ROS2 sensor object.
 
-    Returns
-    -------
+    Returns:
         Callable[[], Tuple[float, Array]]: _description_
     """
     rclpy.init()

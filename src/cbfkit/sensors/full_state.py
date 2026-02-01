@@ -1,88 +1,65 @@
-from typing import Any, Optional
-
 import jax.numpy as jnp
-from jax import Array, lax, random
+from jax import Array, random
+from typing import Optional, Union
 
-from cbfkit.utils.user_types import Key, Time
 
-
-def perfect(
-    t: Time,
-    x: Array,
-    *,
-    sigma: Optional[Array] = None,
-    key: Optional[Key] = None,
-    **_kwargs: Any,
-) -> Array:
+def perfect(_t: float, x: Array, **_kwargs) -> Array:
     """Perfect sensor -- returns exactly the state.
 
     Args:
         t (float): time (sec)
         x (Array): state vector (ground truth)
 
-    Returns
-    -------
+    Returns:
         x (Array): state vector
+
     """
     return x
 
 
 def unbiased_gaussian_noise(
-    t: Time,
+    t: float,
     x: Array,
-    sigma: Optional[Array] = None,
-    key: Optional[Key] = None,
-    **kwargs: Any,
+    sigma: Optional[Union[Array, None]] = None,
+    key: Optional[Union[random.PRNGKey, None]] = None,
 ) -> Array:
-    """Senses the state subject to additive, unbiased (zero-mean), Gaussian noise.
+    """Senses the state subject to additive, unbiased (zero-mean), Gaussian
+    noise.
 
     Args:
         t (float): time (sec)
         x (Array): state vector (ground truth)
         sigma (Array): measurement model covariance matrix
 
-    Returns
-    -------
+    Returns:
         y (Array): measurement of full state vector
+
     """
     if sigma is None:
         sigma = 0.1 * jnp.eye((len(x)))
 
     if key is None:
-        key = random.PRNGKey(0)  # type: ignore[assignment]
+        key = random.PRNGKey(0)
 
     # Calculate the dimension of the random vector
     dim = sigma.shape[0]
 
-    # Apply Cholesky decomposition
-    # Use lax.cond for JIT compatibility
-    chol = lax.cond(
-        jnp.trace(jnp.abs(sigma)) > 0,
-        lambda s: jnp.linalg.cholesky(s),
-        lambda s: jnp.zeros(s.shape),
-        sigma,
-    )
-
-    def sample_mean(num_samples, rng_key):
-        # Generate samples: (num_samples, dim)
-        # random.normal creates (num_samples, dim) directly
-        samples = random.normal(rng_key, shape=(num_samples, dim))
-
-        # Transform: (chol @ samples.T).T -> samples @ chol.T
-        transformed = jnp.dot(samples, chol.T)
-
-        # Mean across samples
-        vec = jnp.mean(transformed, axis=0)
-        return vec
-
-    # Logic: if t == 0, take 10 samples, else 1 sample
-    # We rely on lax.cond for JIT compatibility
+    # Generate a zero-mean Gaussian random vector with unit variance
+    # (take n_initial_meas measurements at t = 0)
     n_initial_meas = 10
+    max_iter = n_initial_meas if t == 0 else 1
+    normal_samples = jnp.zeros((max_iter, dim))
+    for ii in range(max_iter):
+        key, subkey = random.split(key)
+        normal_samples = normal_samples.at[ii, :].set(random.normal(subkey, shape=(dim,)))
 
-    sampled_random_vector = lax.cond(
-        t == 0.0, lambda k: sample_mean(n_initial_meas, k), lambda k: sample_mean(1, k), key
-    )
+    # Apply Cholesky decomposition to convert the unit variance vector to the desired covariance matrix
+    if jnp.trace(abs(sigma)) > 0:
+        chol = jnp.linalg.cholesky(sigma)
+    else:
+        chol = jnp.zeros(sigma.shape)
 
+    sampled_random_vector = jnp.mean(jnp.dot(chol, normal_samples.T), axis=1)
     sampled_random_vector = sampled_random_vector.reshape(x.shape)
 
     return x + sampled_random_vector

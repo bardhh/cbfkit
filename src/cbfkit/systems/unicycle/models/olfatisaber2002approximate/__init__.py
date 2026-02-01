@@ -1,4 +1,3 @@
-from . import certificates, controllers
-from .dynamics import approx_unicycle_dynamics as plant
-
-__all__ = ["certificates", "controllers", "plant"]
+from .plant import approx_unicycle_dynamics as plant
+from . import controllers
+from . import certificate_functions
