@@ -40,6 +40,8 @@ def unpack_for_cbf(
     elif kwargs["relaxable_clf"]:
         n_lfs = len(lyapunovs[0])
         n_con -= n_lfs
+    else:
+        n_lfs = 0
 
     # Check whether Barrier functions are tunable or relaxable
     if "tunable_class_k" in kwargs and kwargs["tunable_class_k"]:
