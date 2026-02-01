@@ -51,5 +51,64 @@ class TestVanillaCBFCLF(unittest.TestCase):
         # Tolerance relaxed due to QP solver precision
         self.assertTrue(jnp.allclose(u, control_limits, atol=1e-3))
 
+    def test_infeasible_qp_fallback(self):
+        """Test that the controller falls back to u_nom (clipped) when QP is infeasible."""
+        from cbfkit.certificates import certificate_package, concatenate_certificates
+        from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
+
+        # 1. Simple Scalar Dynamics: x_dot = u
+        def simple_dynamics(x):
+            return jnp.zeros((1,)), jnp.ones((1, 1))
+
+        # 2. CBF: h(x) = x >= 0
+        def cbf_factory(**kwargs):
+            def func(xt):
+                return xt[0]
+            return func
+
+        package = certificate_package(cbf_factory, n=1)
+        barriers = concatenate_certificates(
+            package(certificate_conditions=linear_class_k(1.0))  # alpha = 1.0
+        )
+
+        # 3. Setup Controller with conflicting limits
+        # u in [-1, 1]
+        control_limits = jnp.array([1.0])
+
+        controller = vanilla_cbf_clf_qp_controller(
+            control_limits=control_limits,
+            dynamics_func=simple_dynamics,
+            barriers=barriers,
+            lyapunovs=EMPTY_CERTIFICATE_COLLECTION,
+        )
+
+        t = 0.0
+        # x = -10. h(x) = -10.
+        # dot_h = u.
+        # Condition: dot_h + alpha * h >= 0 => u - 10 >= 0 => u >= 10.
+        x = jnp.array([-10.0])
+
+        # Nominal control u_nom = 0.
+        u_nom = jnp.array([0.0])
+        key = jnp.array([0, 0], dtype=jnp.uint32)
+        data = ControllerData()
+
+        # 4. Run Controller
+        u, new_data = controller(t, x, u_nom, key, data)
+
+        # 5. Assertions
+        # Expect QP failure (error=True means failure)
+        self.assertTrue(new_data.error)
+
+        # Expect u to be u_nom clipped to limits.
+        # u_nom = 0, limits = [-1, 1]. Result 0.
+        self.assertTrue(jnp.allclose(u, u_nom, atol=1e-5))
+
+        # Try with u_nom outside limits to verify clipping
+        u_nom_out = jnp.array([5.0])  # Expect 1.0
+        u_out, new_data_out = controller(t, x, u_nom_out, key, data)
+        self.assertTrue(new_data_out.error)
+        self.assertTrue(jnp.allclose(u_out, jnp.array([1.0]), atol=1e-5))
+
 if __name__ == '__main__':
     unittest.main()
