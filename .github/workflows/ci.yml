@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      JAX_PLATFORM_NAME: cpu
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -19,23 +21,28 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-        cache: 'pip'
     - name: Install dependencies
+      env:
+        UV_SYSTEM_PYTHON: 1
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[test]"
+        pip install uv
+        uv pip install -e ".[test]"
     - name: Lint with ruff
       if: matrix.python-version == '3.10'
+      env:
+        UV_SYSTEM_PYTHON: 1
       run: |
-        pip install ruff
+        uv pip install ruff
         # Stop the build if there are Python syntax errors or undefined names
         ruff check src --select=E9,F63,F7,F82 --target-version=py310
         # Exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         ruff check src --exit-zero
     - name: Type check with mypy
       if: matrix.python-version == '3.10'
+      env:
+        UV_SYSTEM_PYTHON: 1
       run: |
-        pip install mypy
+        uv pip install mypy
         mypy src/cbfkit || true
     - name: Test with pytest
       run: |
