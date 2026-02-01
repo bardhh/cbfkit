@@ -223,7 +223,9 @@ def cbf_clf_qp_generator(
                 status,
                 # Bolt: Avoid jnp.array copy and reshape (sol is already 1D)
                 lambda _fake: sol[:n_con],
-                lambda _fake: jnp.clip(u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con]),
+                # Aegis: Return NaN if QP fails to make failure mode explicit.
+                # Returning u_nom is unsafe as it likely violates constraints.
+                lambda _fake: jnp.full_like(u_nom[:n_con], jnp.nan),
                 0,
             )
 
