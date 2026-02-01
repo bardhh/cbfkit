@@ -271,15 +271,16 @@ def cbf_clf_qp_generator(
                 row_norms_c = jnp.sqrt(row_sq_sums + 1e-20)
                 # Janus: Smooth transition for noise scaling
                 high, low = 1e-8, 1e-9
-                slope = (high - 1.0) / (high - low)
-                transition = lambda n: 1.0 + (n - low) * slope
-                safe_norms_c = jnp.where(
+                scale_high = 1.0 / high
+                slope = (scale_high - 1.0) / (high - low)
+                scale_factor = lambda n: 1.0 + (n - low) * slope
+                safe_scales_c = jnp.where(
                     row_norms_c > high,
-                    row_norms_c,
-                    jnp.where(row_norms_c < low, 1.0, transition(row_norms_c)),
+                    1.0 / row_norms_c,
+                    jnp.where(row_norms_c < low, 1.0, scale_factor(row_norms_c)),
                 )
-                g_mat_c = g_mat_c / safe_norms_c[:, None]
-                h_vec_c = h_vec_c / safe_norms_c
+                g_mat_c = g_mat_c * safe_scales_c[:, None]
+                h_vec_c = h_vec_c * safe_scales_c
 
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
