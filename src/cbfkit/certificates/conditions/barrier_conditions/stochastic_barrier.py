@@ -7,7 +7,7 @@ e.g., -alpha*h + beta for hdot >= -alpha*h + beta.
 
 Functions
 ---------
--right_hand_side(alpha, beta):  -alpha*h + beta
+-right_hand_side(alpha, beta):  alpha*h - beta
 
 Notes
 -----
@@ -55,6 +55,9 @@ def right_hand_side(alpha: float, beta: float) -> Callable[[Array], Array]:
     """Generates function for computing RHS of barrier conditions for stochastic CBF:
 
     hdot >= -alpha*h + beta
+
+    Returns the term `alpha*h - beta` to be added to the inequality:
+    hdot + (alpha*h - beta) >= 0
 
     Args:
         None
