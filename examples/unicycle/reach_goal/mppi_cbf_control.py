@@ -35,7 +35,7 @@ class MPPIConfig(TypedDict):
 
 
 # Simulation parameters
-tf: float = 10.0
+tf: float = 10.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
 dt: float = 0.05
 file_path: str = "examples/unicycle/reach_goal/results/"
 

@@ -196,7 +196,7 @@ def compute_function_list(
     state_dim: int,  # state_dim is now combined state+time dimension
     form: str = "exponential",
     func_list: Union[List[Callable[[Array], Array]], None] = None,
-    _subkey: Union[jaxlib.xla_extension.ArrayImpl, None] = None,
+    _subkey: Union[Array, None] = None,
     n_samples: int = 10,
 ):
     """Computes the cascading list of derivatives/functions for rectifying the relative degree of

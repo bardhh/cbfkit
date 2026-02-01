@@ -24,7 +24,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[test]"
-        pip install pytest pytest-cov python-dotenv
     - name: Lint with ruff
       if: matrix.python-version == '3.10'
       run: |
@@ -43,5 +42,7 @@ jobs:
         pytest -m "not slow" tests
     - name: Test slow tests
       if: matrix.python-version == '3.10'
+      env:
+        CBFKIT_TEST_MODE: "1"
       run: |
         pytest -m "slow" tests

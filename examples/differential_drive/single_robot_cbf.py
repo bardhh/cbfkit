@@ -5,6 +5,8 @@ This example follows the structure of past_proj files but uses CBFKit's built-in
 simulation capabilities for a single robot with obstacle avoidance.
 """
 
+import os
+
 import jax.numpy as jnp
 import matplotlib
 import numpy as np
@@ -194,7 +196,7 @@ def run_simulation():
     print()
 
     # Simulation parameters
-    tf = 12.0
+    tf = 12.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
     dt = 0.1
 
     print("Running CBFKit simulation...")
