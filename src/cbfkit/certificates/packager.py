@@ -65,20 +65,23 @@ def certificate_package(
     input_style: Union[
         CertificateInputStyleName, CertificateInputStyle
     ] = CertificateInputStyle.CONCATENATED,
+    use_factory: bool = True,
 ) -> Callable[..., CertificateCollection]:
     """Function for packaging and later creating CBF executables.
 
     Args:
-        func (Callable): certificate function factory
-        func_grad (Callable, optional): certificate gradient vector function factory.
+        func (Callable): certificate function factory (or function if use_factory=False)
+        func_grad (Callable, optional): certificate gradient vector function factory (or function).
             If None, computed automatically using jax.grad.
-        func_hess (Callable, optional): certificate hessian matrix function factory.
+        func_hess (Callable, optional): certificate hessian matrix function factory (or function).
             If None, computed automatically using jax.hessian.
         n (int): state dimension
         input_style (str | CertificateInputStyle): expected signature of the certificate function.
             - "concatenated" (default): func returns f(xt) where xt is [x, t].
             - "separated": func returns f(t, x).
             - "state": func returns f(x).
+        use_factory (bool): whether func, func_grad, and func_hess are factories (returning the function)
+            or the functions themselves. Defaults to True (factories).
 
     Returns
     -------
@@ -109,7 +112,10 @@ def certificate_package(
         -------
             BarrierTuple: _description_
         """
-        v_func = func(**kwargs)
+        if use_factory:
+            v_func = func(**kwargs)
+        else:
+            v_func = func  # type: ignore[assignment]
 
         if input_style == CertificateInputStyle.SEPARATED:
             _orig_v_sep = v_func
@@ -128,14 +134,21 @@ def certificate_package(
             j_func = grad(v_func)
             t_func = j_func
         else:
-            j_func = func_grad(**kwargs)
-            t_func = func_grad(**kwargs)
+            if use_factory:
+                j_func = func_grad(**kwargs)
+                t_func = func_grad(**kwargs)
+            else:
+                j_func = func_grad  # type: ignore[assignment]
+                t_func = func_grad  # type: ignore[assignment]
 
         if func_hess is None:
             # Auto-differentiate
             h_func = hessian(v_func)
         else:
-            h_func = func_hess(**kwargs)
+            if use_factory:
+                h_func = func_hess(**kwargs)
+            else:
+                h_func = func_hess  # type: ignore[assignment]
 
         c_func = certificate_conditions
 
