@@ -47,6 +47,32 @@ from .simulator_jit import simulator_jit
 from .utils import SimulationStepData
 
 
+def _report_controller_errors(c_keys: List[str], c_vals: List[Array]) -> None:
+    """Checks for controller errors and prints a warning if detected."""
+    if "error" in c_keys:
+        try:
+            idx = c_keys.index("error")
+            errors = c_vals[idx]
+            # Check if any error occurred (errors is array of booleans)
+            if jnp.any(errors):
+                # Print visible warning
+                print("\n" + "=" * 60)
+                print("HERMES WARNING: Controller error detected during simulation.")
+
+                if "error_data" in c_keys:
+                    e_idx = c_keys.index("error_data")
+                    # Use numpy for printing to avoid JAX array formatting issues
+                    codes = np.unique(np.array(c_vals[e_idx]))
+                    print(f"Solver Status Codes: {codes}")
+                    print("(Note: 1=Solved, 2=Max Iter, others=Failure)")
+
+                print("The controller may have fallen back to nominal control or held state.")
+                print("Suggest checking: Constraints, control limits, or initial state.")
+                print("=" * 60 + "\n")
+        except Exception:
+            pass  # Prevent logging from crashing the simulation return
+
+
 def _default_sensor(
     t: Time,
     x: Array,
@@ -493,6 +519,9 @@ def execute(
             planner_data_keys.append(key_str)
             planner_data_values.append(val)
 
+        if verbose:
+            _report_controller_errors(controller_data_keys, controller_data_values)
+
         return (
             xs,
             us,
@@ -531,7 +560,12 @@ def execute(
         )
     )
 
-    return format_return_data(simulation_data)
+    ret_val = format_return_data(simulation_data)
+    if verbose:
+        # Unpack result to check for errors
+        _, _, _, _, c_keys, c_vals, _, _ = ret_val
+        _report_controller_errors(c_keys, c_vals)
+    return ret_val
 
 
 def format_return_data(

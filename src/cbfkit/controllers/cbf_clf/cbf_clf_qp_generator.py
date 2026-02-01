@@ -32,6 +32,7 @@ import jax.numpy as jnp
 from jax import Array, jit, lax
 
 from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
+    solve_with_details,
     solve_with_state as solve_qp,
 )
 from cbfkit.utils.user_types import (
@@ -213,7 +214,7 @@ def cbf_clf_qp_generator(
             if data.sub_data is not None and "solver_params" in data.sub_data:
                 solver_params = data.sub_data["solver_params"]
 
-            sol, status, new_params = solve_qp(
+            sol, status, status_code, new_params = solve_with_details(
                 p_mat, q_vec, g_mat, h_vec, init_params=solver_params
             )
             # QP solution already respects control limits via input constraints.
@@ -239,7 +240,7 @@ def cbf_clf_qp_generator(
 
             data = ControllerData(
                 error=error,
-                error_data=status,
+                error_data=status_code,
                 complete=complete,
                 sol=jnp.array(sol),
                 u=u,
