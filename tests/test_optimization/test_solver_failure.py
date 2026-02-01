@@ -52,7 +52,7 @@ def test_max_iter_failure_returns_nan():
             params_eq=params_eq,
             params_ineq=params_ineq,
         )
-        return sol.primal, state.status, sol
+        return sol.primal, state.status, (sol, state)
 
     # 3. Patch the module's solve_qp
     original_solve_qp = cbf_clf_qp_generator.solve_qp

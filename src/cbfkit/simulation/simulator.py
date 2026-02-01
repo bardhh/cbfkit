@@ -441,6 +441,8 @@ def execute(
 
         if planner is not None:
             _, p_data = planner(0.0, x0, None, prime_key1, p_data)  # type: ignore
+            # Bolt: Strip sampled_x_traj from p_data to avoid carrying it in JIT loop
+            p_data = p_data._replace(sampled_x_traj=None)
 
         if controller is not None:
             f_dummy, g_dummy = dynamics(x0)
