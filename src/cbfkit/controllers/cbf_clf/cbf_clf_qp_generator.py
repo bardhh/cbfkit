@@ -32,7 +32,7 @@ import jax.numpy as jnp
 from jax import Array, jit, lax
 
 from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
-    solve_with_state as solve_qp,
+    solve_with_details as solve_qp,
 )
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
@@ -156,6 +156,11 @@ def cbf_clf_qp_generator(
             limit_clf = control_limits[n_con + n_bfs :] / scale_clf
             control_limits = jnp.hstack([limit_u, limit_cbf, limit_clf])
 
+        # Bolt: Pass scales to constraint generators to avoid post-hoc scaling in loop
+        if auto_p_mat:
+            kwargs["scale_cbf"] = scale_cbf
+            kwargs["scale_clf"] = scale_clf
+
         compute_input_constraints = generate_compute_input_constraints(control_limits)
         compute_cbf_clf_constraints = generate_compute_cbf_clf_constraints(
             generate_compute_cbf_constraints,
@@ -202,6 +207,12 @@ def cbf_clf_qp_generator(
             """
             nonlocal complete
 
+            if u_nom.shape[0] != n_con:
+                raise ValueError(
+                    f"Nominal control input 'u_nom' has shape {u_nom.shape}, "
+                    f"but expected ({n_con},) based on 'control_limits'."
+                )
+
             if n_bfs > 0:
                 if "tunable_class_k" in kwargs and kwargs["tunable_class_k"]:
                     u_nom = jnp.hstack([u_nom, jnp.ones((n_bfs,))])
@@ -219,12 +230,16 @@ def cbf_clf_qp_generator(
                 complete = sub_data["complete"]
 
             # Stack input and certificate function constraints
-            # Bolt: Apply scaling to slack columns in constraint matrix
+            # Bolt: Scaling of slack columns is now handled within compute_cbf_clf_constraints (via kwargs)
+            # This avoids large array copies and multiply operations inside the JIT loop.
+
+            # Bolt: Optimize normalization. Input constraints (box limits) are already normalized (row norm = 1).
+            # Only normalize CBF/CLF constraints, then stack.
             if auto_p_mat:
-                if n_bfs > 0:
-                    g_mat_c = g_mat_c.at[:, n_con : n_con + n_bfs].multiply(scale_cbf)
-                if n_lfs > 0:
-                    g_mat_c = g_mat_c.at[:, n_con + n_bfs : n_con + n_bfs + n_lfs].multiply(scale_clf)
+                row_norms_c = jnp.linalg.norm(g_mat_c, axis=1)
+                row_norms_c = jnp.maximum(row_norms_c, 1e-8)
+                g_mat_c = g_mat_c / row_norms_c[:, None]
+                h_vec_c = h_vec_c / row_norms_c
 
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
@@ -256,7 +271,7 @@ def cbf_clf_qp_generator(
             # Only clip the fallback u_nom (which may exceed limits) to avoid
             # inadvertently violating CBF constraints on the QP-solved path.
             u = lax.cond(
-                status,
+                status == 1,
                 # Bolt: Avoid jnp.array copy and reshape (sol is already 1D)
                 lambda _fake: sol[:n_con],
                 # Aegis: Return NaN if QP fails to make failure mode explicit.
@@ -269,7 +284,7 @@ def cbf_clf_qp_generator(
                 #! To Do: integrate RA-PI states
                 pass
 
-            error = lax.cond(status, lambda _fake: False, lambda _fake: True, 0)
+            error = lax.cond(status == 1, lambda _fake: False, lambda _fake: True, 0)
 
             # logging data
             final_sub_data = sub_data or {}
