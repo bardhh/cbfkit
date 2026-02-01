@@ -4,6 +4,7 @@ import jax.numpy as jnp
 from jax import Array, random
 
 from cbfkit.integration import forward_euler
+from cbfkit.integration.runge_kutta import runge_kutta_4
 from cbfkit.simulation.utils import SimulationStepData
 from cbfkit.utils.user_types import (
     Control,
@@ -153,6 +154,20 @@ def stepper(
             # We already computed f, g = dynamics(x) earlier
             dx = f + jnp.matmul(g, u) + p(subkey)
             x = x + dx * dt
+        elif integrator == runge_kutta_4:
+            # Optimization (Bolt): Reuse dynamics for RK4
+            # k1 = f(x, u) which we already have components for
+            k1 = f + jnp.matmul(g, u) + p(subkey)
+
+            def vector_field(s: State) -> Array:
+                f_s, g_s = dynamics(s)
+                return f_s + jnp.matmul(g_s, u) + p(subkey)
+
+            k2 = vector_field(x + 0.5 * dt * k1)
+            k3 = vector_field(x + 0.5 * dt * k2)
+            k4 = vector_field(x + dt * k3)
+
+            x = x + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
         else:
 
             def vector_field(s: State) -> Array:

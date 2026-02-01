@@ -3,7 +3,6 @@ import inspect
 import jax
 import jax.numpy as jnp
 from jax import jit, lax
-from jax.random import multivariate_normal
 
 
 def setup_mppi(
@@ -51,6 +50,7 @@ def setup_mppi(
     control_mu = jnp.zeros(robot_control_dim)  # .reshape(-1,1)
     control_cov = 4.0 * jnp.eye(robot_control_dim)
     control_cov_inv = jnp.linalg.inv(control_cov)
+    control_cov_inv_diag = jnp.diag(control_cov_inv)
     control_bound = control_bound
     # TODO: implement separate lower and upper bounds
     # control_bound_lb = -jnp.array([1, 1]).reshape(-1, 1)
@@ -103,7 +103,7 @@ def setup_mppi(
 
             # Bolt: Use 1D arrays for cost calc. u_t and pert_t are already (m,)
             diff = u_t - pert_t
-            delta_cost = cost_perturbation_coeff * (diff @ control_cov_inv @ pert_t)
+            delta_cost = cost_perturbation_coeff * jnp.sum(diff * control_cov_inv_diag * pert_t)
 
             if trajectory_cost_func is None:
                 delta_cost = delta_cost + stage_cost_func(current_state, u_t)
@@ -131,7 +131,7 @@ def setup_mppi(
         # pert_final_col = pert_final.reshape(-1, 1)
 
         diff_final = u_final - pert_final
-        delta_cost_final = cost_perturbation_coeff * (diff_final @ control_cov_inv @ pert_final)
+        delta_cost_final = cost_perturbation_coeff * jnp.sum(diff_final * control_cov_inv_diag * pert_final)
 
         cost_sample = accumulated_cost + delta_cost_final
 
@@ -194,9 +194,12 @@ def setup_mppi(
 
     @jit
     def compute_perturbed_control(subkey, control_mu, control_cov, control_bound, U):
-        perturbation = multivariate_normal(
-            subkey, control_mu, control_cov, shape=(samples, horizon)
-        )  # K x T x nu
+        # Bolt: Optimized sampling for diagonal covariance
+        # Avoids Cholesky decomposition and matrix multiplication
+        std = jnp.sqrt(jnp.diag(control_cov))
+        perturbation = control_mu + jax.random.normal(
+            subkey, shape=(samples, horizon, robot_control_dim)
+        ) * std
 
         perturbation = jnp.clip(perturbation, -3.0, 3.0)  # 0.3
         perturbed_control = U + perturbation
