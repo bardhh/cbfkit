@@ -216,6 +216,11 @@ def compute_function_list(
     def highorder_new_func(x: Array):
         return jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0]) + function(x)
 
+    if jnp.isnan(total):
+        raise ValueError(
+            "Encountered NaN during relative degree verification. Check your dynamics function and constraint function for numerical stability."
+        )
+
     if total == 0:
         if form == "exponential":
             new_func = exponential_new_func
