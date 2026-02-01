@@ -22,6 +22,7 @@ To run all tests in this module (from the root of the repository):
 import unittest
 from typing import List
 
+import pytest
 import jax.numpy as jnp
 from jax import Array, jacfwd, random
 
@@ -203,6 +204,7 @@ def run_monte_carlo(n_trials: int, use_jit: bool = False) -> bool:
     return True
 
 
+@pytest.mark.slow
 class TestUnicycleMonteCarlo(unittest.TestCase):
     """
     Takes care of unit tests for the unicycle Monte Carlo start-to-goal case study.
