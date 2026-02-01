@@ -130,8 +130,6 @@ def run_simulation():
             form="exponential",
         )(
             certificate_conditions=zeroing_barriers.linear_class_k(2.0),
-            obstacle=jnp.array([0.0]),  # Dummy arg, function handles position
-            ellipsoid=(1.0, 1.0),  # Dummy arg
         )
 
         barriers.append(barrier_rectified)

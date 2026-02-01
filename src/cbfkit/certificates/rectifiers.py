@@ -117,7 +117,7 @@ def rectify_relative_degree(
         # Calculate the polynomial coefficients using JAX and SciPy
         polynomial_coefficients = polynomial_coefficients_from_roots(roots)
 
-        def cbf(**kwargs):
+        def cbf():
             @jit
             def func(x: Array) -> Array:
                 return jnp.sum(
@@ -131,8 +131,8 @@ def rectify_relative_degree(
 
             return func
 
-        def cbf_grad(**kwargs) -> Callable[[Array], Array]:
-            jacobian = jacfwd(cbf(**kwargs))
+        def cbf_grad() -> Callable[[Array], Array]:
+            jacobian = jacfwd(cbf())
 
             @jit
             def func(x: Array) -> Array:
@@ -140,8 +140,8 @@ def rectify_relative_degree(
 
             return func
 
-        def cbf_hess(**kwargs) -> Callable[[Array], Array]:
-            hessian = jacfwd(jacrev(cbf(**kwargs)))
+        def cbf_hess() -> Callable[[Array], Array]:
+            hessian = jacfwd(jacrev(cbf()))
 
             @jit
             def func(x: Array) -> Array:
@@ -151,7 +151,7 @@ def rectify_relative_degree(
 
     elif form == "high-order":
 
-        def cbf(**kwargs):
+        def cbf():
             def func(x: Array) -> Array:
                 return function_list[0](x)
 

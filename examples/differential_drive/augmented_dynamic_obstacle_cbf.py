@@ -190,8 +190,6 @@ def run_simulation():
         form="exponential",
     )(
         certificate_conditions=zeroing_barriers.linear_class_k(1.0),
-        obstacle=jnp.array([]),  # Unused
-        ellipsoid=(1.0, 1.0),  # Unused
     )
     barriers.append(b1)
 
@@ -203,8 +201,6 @@ def run_simulation():
         function=h2, system_dynamics=aug_dynamics, state_dim=8, form="exponential"
     )(
         certificate_conditions=zeroing_barriers.linear_class_k(1.0),
-        obstacle=jnp.array([]),
-        ellipsoid=(1.0, 1.0),
     )
     barriers.append(b2)
 

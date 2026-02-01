@@ -67,8 +67,6 @@ barriers = [
         form="exponential",
     )(
         certificate_conditions=stochastic_barrier.right_hand_side(alpha=1.0, beta=1.0),
-        obstacle=jnp.array(obs),
-        ellipsoid=jnp.array(ell),
     )
     for obs, ell in zip(obstacles, ellipsoids)
 ]
