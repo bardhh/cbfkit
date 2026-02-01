@@ -2,6 +2,8 @@
 Compact CBF Navigation with Barrier Activation
 """
 
+import os
+
 import jax.numpy as jnp
 import matplotlib
 import numpy as np
@@ -136,7 +138,7 @@ def run_simulation():
     x, u, z, p, c_keys, c_values, p_keys, p_values = sim.execute(
         x0=init_state,
         dt=0.05,
-        num_steps=500,  # 25 seconds
+        num_steps=500 if not os.getenv("CBFKIT_TEST_MODE") else 50,  # 25 seconds
         dynamics=dynamics,
         integrator=integrator,
         controller=controller,

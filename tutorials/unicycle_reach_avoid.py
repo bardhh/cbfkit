@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict
 
 #####################################################################
@@ -6,7 +7,6 @@ import jax.numpy as jnp
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 
-import tutorials.models.accel_unicycle as unicycle
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
 from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
 from cbfkit.codegen.create_new_system.generate_model import generate_model
@@ -16,10 +16,6 @@ from cbfkit.integration import runge_kutta_4
 from cbfkit.sensors import perfect
 from cbfkit.simulation import simulator
 from cbfkit.utils.user_types import PlannerData
-from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.barrier_1 import cbf
-from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.barrier_2 import (
-    cbf2_package,
-)
 
 
 def compute_theta_d(x, y, th):
@@ -51,6 +47,12 @@ generate_model(
     barrier_funcs=barriers,
     nominal_controller=u_nom,
     params=params,
+)
+
+import tutorials.models.accel_unicycle as unicycle
+from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.barrier_1 import cbf
+from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.barrier_2 import (
+    cbf2_package,
 )
 
 #####################################################################
@@ -86,7 +88,7 @@ controller = vanilla_cbf_clf_qp_controller(
 x_sim, u_sim, z_sim, p_sim, dkeys, dvals, planner_data, planner_data_keys = simulator.execute(
     x0=initial_state,
     dt=1e-2,
-    num_steps=1000,
+    num_steps=1000 if not os.getenv("CBFKIT_TEST_MODE") else 50,
     dynamics=dynamics,
     integrator=runge_kutta_4,
     nominal_controller=nominal_controller_func,

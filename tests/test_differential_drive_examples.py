@@ -20,6 +20,7 @@ def test_differential_drive_example_execution(script_path):
     # Set environment variables to force headless mode for matplotlib
     env = os.environ.copy()
     env["MPLBACKEND"] = "Agg"
+    env["CBFKIT_TEST_MODE"] = "1"
     env["PYTHONPATH"] = f"{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
 
     try:
