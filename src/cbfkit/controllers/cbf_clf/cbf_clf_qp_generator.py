@@ -26,7 +26,7 @@ Examples
 >>> )
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import jax.numpy as jnp
 from jax import Array, jit, lax
@@ -97,6 +97,31 @@ def cbf_clf_qp_generator(
         complete = False
         n_con = len(control_limits)
 
+        def verified_dynamics_func(x: State) -> Tuple[Array, Array]:
+            f, g = dynamics_func(x)
+            if f.ndim != 1:
+                raise ValueError(
+                    f"Dynamics drift term 'f' must be a 1D array of shape (n_states,), "
+                    f"but got shape {f.shape}. Ensure your dynamics function returns a flat array, "
+                    f"not a column vector."
+                )
+            if g.ndim != 2:
+                raise ValueError(
+                    f"Dynamics control term 'g' must be a 2D array of shape (n_states, n_controls), "
+                    f"but got shape {g.shape}. If you have 1 control input, ensure 'g' is (n, 1)."
+                )
+            if f.shape[0] != g.shape[0]:
+                raise ValueError(
+                    f"State dimension mismatch: drift 'f' has {f.shape[0]} states, "
+                    f"but control matrix 'g' has {g.shape[0]} states."
+                )
+            if g.shape[1] != n_con:
+                raise ValueError(
+                    f"Control dimension mismatch: 'control_limits' implies {n_con} inputs, "
+                    f"but 'g' has {g.shape[1]} columns."
+                )
+            return f, g
+
         # Ensure barriers and lyapunovs are not None
         if barriers is None:
             barriers = EMPTY_CERTIFICATE_COLLECTION
@@ -166,7 +191,7 @@ def cbf_clf_qp_generator(
             generate_compute_cbf_constraints,
             generate_compute_clf_constraints,
             control_limits,
-            dynamics_func,
+            verified_dynamics_func,
             barriers,
             lyapunovs,
             **kwargs,
@@ -233,21 +258,17 @@ def cbf_clf_qp_generator(
             # Bolt: Scaling of slack columns is now handled within compute_cbf_clf_constraints (via kwargs)
             # This avoids large array copies and multiply operations inside the JIT loop.
 
-            # Bolt: Optimize normalization. Input constraints (box limits) are already normalized (row norm = 1).
-            # Only normalize CBF/CLF constraints, then stack.
-            # Aegis: Removed aggressive pre-normalization of CBF/CLF constraints that amplified noise vectors.
-            # Normalization is now handled uniformly by the "Janus" block below which respects a noise floor.
+            # Bolt: Normalize CBF/CLF constraint rows to improve numerical stability
+            # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
+            # Input constraints (box limits) are already normalized (row norm = 1).
+            if auto_p_mat:
+                row_norms_c = jnp.linalg.norm(g_mat_c, axis=1)
+                safe_norms_c = jnp.where(row_norms_c > 1e-8, row_norms_c, 1.0)
+                g_mat_c = g_mat_c / safe_norms_c[:, None]
+                h_vec_c = h_vec_c / safe_norms_c
 
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
-
-            # Bolt: Normalize constraint rows to improve numerical stability
-            # Janus: smooth normalization clamping (max(norm, eps)) prevents discontinuities.
-            if auto_p_mat:
-                row_norms = jnp.linalg.norm(g_mat, axis=1)
-                safe_norms = jnp.maximum(row_norms, 1e-8)
-                g_mat = g_mat / safe_norms[:, None]
-                h_vec = h_vec / safe_norms
 
             # Solve QP
             solver_params = None
