@@ -100,15 +100,18 @@ class TestVanillaCBFCLF(unittest.TestCase):
         # Expect QP failure (error=True means failure)
         self.assertTrue(new_data.error)
 
-        # Expect u to be u_nom clipped to limits.
-        # u_nom = 0, limits = [-1, 1]. Result 0.
-        self.assertTrue(jnp.allclose(u, u_nom, atol=1e-5))
+        # Expect u to be NaN (Aegis safety fallback)
+        self.assertTrue(jnp.isnan(u).all())
 
-        # Try with u_nom outside limits to verify clipping
-        u_nom_out = jnp.array([5.0])  # Expect 1.0
+        # Expect error_data to contain raw status code (0 for Infeasible/Unsolved)
+        # Note: jaxopt + OSQP returns 0 for infeasible in current version
+        self.assertEqual(new_data.error_data, 0)
+
+        # Try with u_nom outside limits
+        u_nom_out = jnp.array([5.0])
         u_out, new_data_out = controller(t, x, u_nom_out, key, data)
         self.assertTrue(new_data_out.error)
-        self.assertTrue(jnp.allclose(u_out, jnp.array([1.0]), atol=1e-5))
+        self.assertTrue(jnp.isnan(u_out).all())
 
 if __name__ == '__main__':
     unittest.main()
