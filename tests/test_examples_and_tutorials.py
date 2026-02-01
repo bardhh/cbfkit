@@ -31,7 +31,7 @@ def test_example_script_execution(script_path):
     # Set environment variables to force headless mode for matplotlib
     env = os.environ.copy()
     env["MPLBACKEND"] = "Agg"
-    env["PYTHONPATH"] = os.getcwd()  # Ensure root is in python path
+    env["PYTHONPATH"] = os.path.join(os.getcwd(), "src")  # Ensure src is in python path
 
     try:
         # Run the script
