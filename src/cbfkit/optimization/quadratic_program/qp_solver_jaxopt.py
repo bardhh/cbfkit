@@ -48,15 +48,20 @@ def solve_inequality_constrained_qp(
     Returns:
         Tuple[Array, int, Any]: The solution to the QP, a status code, and the solver parameters.
     """
+    # Handle unpacked init_params if it comes from a previous run of this function
+    real_init_params = init_params
+    if isinstance(init_params, tuple) and len(init_params) == 2:
+        real_init_params = init_params[0]
+
     sol, state = QP.run(
-        init_params=init_params,
+        init_params=real_init_params,
         params_obj=params_obj,
         params_eq=params_eq,
         params_ineq=params_ineq,
     )
     status = state.status
     # We return the raw status code to allow callers to inspect failure reason.
-    return sol.primal, status, sol
+    return sol.primal, status, (sol, state)
 
 
 @jit
