@@ -35,6 +35,7 @@ def generate_compute_vanilla_clf_constraints(
     n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs
     )
+    scale_clf = kwargs.get("scale_clf", 1.0)
 
     @jit
     def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
@@ -49,7 +50,7 @@ def generate_compute_vanilla_clf_constraints(
             a_clf = a_clf.at[:, :n_con].set(jnp.matmul(lj_x, dyn_g))
             b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) + lc_x)
             if relaxable:
-                a_clf = a_clf.at[:, -n_lfs:].set(-lc_x)
+                a_clf = a_clf.at[:, -n_lfs:].set(-lc_x * scale_clf)
                 b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f))
 
             # Treat goal reached when Lyapunov value is sufficiently small
