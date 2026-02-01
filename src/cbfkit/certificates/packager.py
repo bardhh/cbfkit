@@ -37,7 +37,7 @@ Examples
 
 """
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Literal, Optional, Union
 
 import jax.numpy as jnp
 from jax import Array, grad, hessian, jit
@@ -48,9 +48,13 @@ from cbfkit.utils.user_types import (
     CertificateCollection,
     CertificateConditionsCallable,
     CertificateHessianCallable,
+    CertificateInputStyle,
     CertificateJacobianCallable,
     CertificatePartialCallable,
 )
+
+
+CertificateInputStyleName = Literal["concatenated", "separated", "state"]
 
 
 def certificate_package(
@@ -58,7 +62,9 @@ def certificate_package(
     func_grad: Optional[Callable[..., Callable[[Array], Array]]] = None,
     func_hess: Optional[Callable[..., Callable[[Array], Array]]] = None,
     n: int = 0,
-    input_style: str = "concatenated",
+    input_style: Union[
+        CertificateInputStyleName, CertificateInputStyle
+    ] = CertificateInputStyle.CONCATENATED,
 ) -> Callable[..., CertificateCollection]:
     """Function for packaging and later creating CBF executables.
 
@@ -69,7 +75,7 @@ def certificate_package(
         func_hess (Callable, optional): certificate hessian matrix function factory.
             If None, computed automatically using jax.hessian.
         n (int): state dimension
-        input_style (str): expected signature of the certificate function.
+        input_style (str | CertificateInputStyle): expected signature of the certificate function.
             - "concatenated" (default): func returns f(xt) where xt is [x, t].
             - "separated": func returns f(t, x).
             - "state": func returns f(x).
@@ -78,6 +84,15 @@ def certificate_package(
     -------
         CertificateCollection: _description_
     """
+    # Validate input_style
+    if isinstance(input_style, str):
+        try:
+            input_style = CertificateInputStyle(input_style)
+        except ValueError:
+            valid_styles = [e.value for e in CertificateInputStyle]
+            raise ValueError(
+                f"Invalid input_style '{input_style}'. Must be one of {valid_styles}"
+            ) from None
 
     def package(
         certificate_conditions: CertificateConditionsCallable,
@@ -96,13 +111,13 @@ def certificate_package(
         """
         v_func = func(**kwargs)
 
-        if input_style == "separated":
+        if input_style == CertificateInputStyle.SEPARATED:
             _orig_v_sep = v_func
 
             def v_func(xt):
                 return _orig_v_sep(xt[-1], xt[:-1])
 
-        elif input_style == "state":
+        elif input_style == CertificateInputStyle.STATE:
             _orig_v_state = v_func
 
             def v_func(xt):

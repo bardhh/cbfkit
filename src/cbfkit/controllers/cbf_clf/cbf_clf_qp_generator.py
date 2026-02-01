@@ -232,9 +232,13 @@ def cbf_clf_qp_generator(
             """
             nonlocal complete
 
+            # Janus: Ensure u_nom is 1D to prevent broadcasting errors (e.g., (N,) + (N,1) -> (N,N))
+            # and to handle scalar inputs for 1D systems.
+            u_nom = u_nom.ravel()
+
             if u_nom.shape[0] != n_con:
                 raise ValueError(
-                    f"Nominal control input 'u_nom' has shape {u_nom.shape}, "
+                    f"Nominal control input 'u_nom' has shape {u_nom.shape} (after ravel), "
                     f"but expected ({n_con},) based on 'control_limits'."
                 )
 
@@ -263,7 +267,15 @@ def cbf_clf_qp_generator(
             # Input constraints (box limits) are already normalized (row norm = 1).
             if auto_p_mat:
                 row_norms_c = jnp.linalg.norm(g_mat_c, axis=1)
-                safe_norms_c = jnp.where(row_norms_c > 1e-8, row_norms_c, 1.0)
+                # Janus: Smooth transition for noise scaling
+                high, low = 1e-8, 1e-9
+                slope = (high - 1.0) / (high - low)
+                transition = lambda n: 1.0 + (n - low) * slope
+                safe_norms_c = jnp.where(
+                    row_norms_c > high,
+                    row_norms_c,
+                    jnp.where(row_norms_c < low, 1.0, transition(row_norms_c)),
+                )
                 g_mat_c = g_mat_c / safe_norms_c[:, None]
                 h_vec_c = h_vec_c / safe_norms_c
 
@@ -278,6 +290,9 @@ def cbf_clf_qp_generator(
             sol, status, new_params = solve_qp(
                 p_mat, q_vec, g_mat, h_vec, init_params=solver_params
             )
+
+            # Sentinel: Explicitly catch NaN solutions even if solver claims success
+            status = jnp.where(jnp.any(jnp.isnan(sol)), 0, status)
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
