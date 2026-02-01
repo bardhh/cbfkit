@@ -52,7 +52,7 @@ class TestVanillaCBFCLF(unittest.TestCase):
         self.assertTrue(jnp.allclose(u, control_limits, atol=1e-3))
 
     def test_infeasible_qp_fallback(self):
-        """Test that the controller falls back to u_nom (clipped) when QP is infeasible."""
+        """Test that the controller returns NaNs when QP is infeasible."""
         from cbfkit.certificates import certificate_package, concatenate_certificates
         from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
 
