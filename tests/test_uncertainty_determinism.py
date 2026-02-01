@@ -25,6 +25,25 @@ def test_uncertainty_determinism():
 
     assert np.allclose(wu3, wu4), "Explicit seeding should produce identical results"
 
+def test_integer_seed_api():
+    u_nom = np.array([1.0, 0.5])
+    x = np.array([0.0, 0.0, 1.0, 0.0])
+    noise_params = [[0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.1, 0.1]]
+    S = 10
+    seed = 12345
+
+    # Calls with same integer seed
+    _, wu1, _ = generate_uncertainty_pmf(u_nom, x, noise_params, S, rng=seed)
+    _, wu2, _ = generate_uncertainty_pmf(u_nom, x, noise_params, S, rng=seed)
+
+    assert np.allclose(wu1, wu2), "Integer seed should produce identical results"
+
+    # Calls with different integer seeds
+    _, wu3, _ = generate_uncertainty_pmf(u_nom, x, noise_params, S, rng=seed+1)
+
+    assert not np.allclose(wu1, wu3), "Different integer seeds should produce different results"
+
+
 def test_different_seeds():
     u_nom = np.array([1.0, 0.5])
     x = np.array([0.0, 0.0, 1.0, 0.0])
