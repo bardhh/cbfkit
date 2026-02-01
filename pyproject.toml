@@ -57,6 +57,9 @@ dev = [
 requires = ["setuptools>=69.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.package-data]
+"cbfkit" = ["codegen/templates/*.j2"]
+
 [tool.black]
 line-length = 100
 
