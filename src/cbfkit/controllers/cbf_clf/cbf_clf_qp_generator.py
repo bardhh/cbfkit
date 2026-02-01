@@ -244,6 +244,14 @@ def cbf_clf_qp_generator(
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
 
+            # Bolt: Normalize constraint rows to improve numerical stability
+            # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
+            if auto_p_mat:
+                row_norms = jnp.linalg.norm(g_mat, axis=1)
+                safe_norms = jnp.where(row_norms > 1e-8, row_norms, 1.0)
+                g_mat = g_mat / safe_norms[:, None]
+                h_vec = h_vec / safe_norms
+
             # Solve QP
             solver_params = None
             if data.sub_data is not None and "solver_params" in data.sub_data:
