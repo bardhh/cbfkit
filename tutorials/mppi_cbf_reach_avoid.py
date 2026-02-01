@@ -10,7 +10,7 @@ target_directory = file_path + "/generated"
 model_name = "mppi_cbf_si"
 SAVE_FILE = target_directory + f"/{model_name}/simulation_data"
 DT = 0.05  # 1e-2
-TF = 10  # 10.0
+TF = 10 if not os.getenv("CBFKIT_TEST_MODE") else 0.5  # 10.0
 N_STEPS = int(TF / DT) + 1
 INITIAL_STATE = jnp.array([0.0, 0.0])
 ACTUATION_LIMITS = jnp.array([5.0, 5.0])  # Box control input constraint, i.e., -100 <= u <= 100

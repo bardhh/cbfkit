@@ -30,6 +30,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = [
+    "pytest>=8.0.2",
+    "pytest-cov",
+    "python-dotenv>=1.2.1",
+]
 dev = [
     "black>=23.12.1,<24.0",
     "mypy>=1.8.0,<2.0",

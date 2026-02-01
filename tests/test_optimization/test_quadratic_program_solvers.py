@@ -33,6 +33,7 @@ To run all tests in this module (from the root of the repository):
     $ python -m unittest tests.test_optimization.test_quadratic_program_solvers
 """
 
+import os
 import unittest
 
 import pytest
@@ -120,7 +121,7 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
     def _test_qp_feasible_inequality_only(self, solver: QpSolverCallable):
         """Tests that the quadratic program solver computes the correct solution for a sequence of
         problems with inequality constraints only."""
-        n_tests = 30
+        n_tests = 30 if not os.getenv("CBFKIT_TEST_MODE") else 2
 
         import time
 
@@ -169,7 +170,7 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
     def _test_qp_feasible_equality_only(self, solver: QpSolverCallable):
         """Tests that the quadratic program solver computes the correct solution for a sequence of
         problems with equality constraints only."""
-        n_tests = 30
+        n_tests = 30 if not os.getenv("CBFKIT_TEST_MODE") else 2
 
         import time
 
@@ -209,7 +210,7 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
     def _test_qp_feasible(self, solver: QpSolverCallable):
         """Tests that the quadratic program solver computes the correct solution for a sequence of
         problems with both inequality and equality constraints."""
-        n_tests = 30
+        n_tests = 30 if not os.getenv("CBFKIT_TEST_MODE") else 2
 
         import time
 
@@ -254,7 +255,7 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
     def _test_qp_infeasible(self, solver: QpSolverCallable):
         """Tests that the quadratic program solver correctly identifies that the posed
         inequality/equality constrained problem is infeasible."""
-        n_tests = 30
+        n_tests = 30 if not os.getenv("CBFKIT_TEST_MODE") else 2
 
         import time
 

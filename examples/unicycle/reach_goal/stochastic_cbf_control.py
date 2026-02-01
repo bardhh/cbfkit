@@ -1,3 +1,5 @@
+import os
+
 import jax.numpy as jnp
 
 import cbfkit.simulation.simulator as sim
@@ -18,7 +20,7 @@ should_animate = 1  # Renamed from animate
 save = 0
 
 # Simulation parameters
-tf = 10.0
+tf = 10.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
 dt = 0.01
 file_path = "examples/unicycle/reach_goal/results/"
 

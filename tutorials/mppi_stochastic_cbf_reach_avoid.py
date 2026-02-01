@@ -25,11 +25,13 @@ from examples.unicycle.common.ellipsoidal_obstacle import stochastic_cbf as elli
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/generated"
+if not os.path.exists(target_directory):
+    os.makedirs(target_directory)
 model_name = "mppi_cbf_unicycle_ellipsoidal_obstacles"
 
 
 # Simulation parameters
-tf = 3.0
+tf = 3.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
 dt = 0.01
 
 # Robot initialization
@@ -211,7 +213,7 @@ from cbfkit.utils.user_types import ControllerData, PlannerData
     use_jit=True,
 )
 
-plot = 1
+plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 save = 1
 
 if plot:
