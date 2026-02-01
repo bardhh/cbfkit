@@ -58,6 +58,7 @@ def certificate_package(
     func_grad: Optional[Callable[..., Callable[[Array], Array]]] = None,
     func_hess: Optional[Callable[..., Callable[[Array], Array]]] = None,
     n: int = 0,
+    input_style: str = "concatenated",
 ) -> Callable[..., CertificateCollection]:
     """Function for packaging and later creating CBF executables.
 
@@ -68,6 +69,10 @@ def certificate_package(
         func_hess (Callable, optional): certificate hessian matrix function factory.
             If None, computed automatically using jax.hessian.
         n (int): state dimension
+        input_style (str): expected signature of the certificate function.
+            - "concatenated" (default): func returns f(xt) where xt is [x, t].
+            - "separated": func returns f(t, x).
+            - "state": func returns f(x).
 
     Returns
     -------
@@ -90,6 +95,18 @@ def certificate_package(
             BarrierTuple: _description_
         """
         v_func = func(**kwargs)
+
+        if input_style == "separated":
+            _orig_v_sep = v_func
+
+            def v_func(xt):
+                return _orig_v_sep(xt[-1], xt[:-1])
+
+        elif input_style == "state":
+            _orig_v_state = v_func
+
+            def v_func(xt):
+                return _orig_v_state(xt[:-1])
 
         if func_grad is None:
             # Auto-differentiate
