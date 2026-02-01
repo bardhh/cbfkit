@@ -233,24 +233,17 @@ def cbf_clf_qp_generator(
             # Bolt: Scaling of slack columns is now handled within compute_cbf_clf_constraints (via kwargs)
             # This avoids large array copies and multiply operations inside the JIT loop.
 
-            # Bolt: Optimize normalization. Input constraints (box limits) are already normalized (row norm = 1).
-            # Only normalize CBF/CLF constraints, then stack.
+            # Bolt: Normalize CBF/CLF constraint rows to improve numerical stability
+            # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
+            # Input constraints (box limits) are already normalized (row norm = 1).
             if auto_p_mat:
                 row_norms_c = jnp.linalg.norm(g_mat_c, axis=1)
-                row_norms_c = jnp.maximum(row_norms_c, 1e-8)
-                g_mat_c = g_mat_c / row_norms_c[:, None]
-                h_vec_c = h_vec_c / row_norms_c
+                safe_norms_c = jnp.where(row_norms_c > 1e-8, row_norms_c, 1.0)
+                g_mat_c = g_mat_c / safe_norms_c[:, None]
+                h_vec_c = h_vec_c / safe_norms_c
 
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
-
-            # Bolt: Normalize constraint rows to improve numerical stability
-            # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
-            if auto_p_mat:
-                row_norms = jnp.linalg.norm(g_mat, axis=1)
-                safe_norms = jnp.where(row_norms > 1e-8, row_norms, 1.0)
-                g_mat = g_mat / safe_norms[:, None]
-                h_vec = h_vec / safe_norms
 
             # Solve QP
             solver_params = None
