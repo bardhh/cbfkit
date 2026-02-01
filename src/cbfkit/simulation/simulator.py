@@ -47,6 +47,45 @@ from .simulator_jit import simulator_jit
 from .utils import SimulationStepData
 
 
+def _check_simulation_status(
+    controller_data_keys: List[str],
+    controller_data_values: List[Array],
+    planner_data_keys: List[str],
+    planner_data_values: List[Array],
+) -> None:
+    """Checks for simulation errors and prints warnings if found."""
+    # Check controller errors
+    if "error" in controller_data_keys:
+        idx = controller_data_keys.index("error")
+        errors = controller_data_values[idx]
+        if jnp.any(errors):
+            # Find first error index
+            first_error_idx = int(jnp.argmax(errors).item())
+
+            # Try to get error data/status
+            status_msg = ""
+            if "error_data" in controller_data_keys:
+                idx_data = controller_data_keys.index("error_data")
+                error_data = controller_data_values[idx_data]
+                # Get status at the point of failure
+                status = error_data[first_error_idx].item()
+                status_msg = f" (Status: {status})"
+
+            print(
+                f"Warning: Simulation stopped early due to controller error at step {first_error_idx}{status_msg}."
+            )
+
+    # Check planner errors
+    if "error" in planner_data_keys:
+        idx = planner_data_keys.index("error")
+        errors = planner_data_values[idx]
+        if jnp.any(errors):
+            first_error_idx = int(jnp.argmax(errors).item())
+            print(
+                f"Warning: Simulation stopped early due to planner error at step {first_error_idx}."
+            )
+
+
 def _default_sensor(
     t: Time,
     x: Array,
@@ -493,6 +532,14 @@ def execute(
             planner_data_keys.append(key_str)
             planner_data_values.append(val)
 
+        if verbose:
+            _check_simulation_status(
+                controller_data_keys,
+                controller_data_values,
+                planner_data_keys,
+                planner_data_values,
+            )
+
         return (
             xs,
             us,
@@ -531,7 +578,27 @@ def execute(
         )
     )
 
-    return format_return_data(simulation_data)
+    formatted_data = format_return_data(simulation_data)
+
+    if verbose:
+        (
+            _,
+            _,
+            _,
+            _,
+            controller_data_keys,
+            controller_data_values,
+            planner_data_keys,
+            planner_data_values,
+        ) = formatted_data
+        _check_simulation_status(
+            controller_data_keys,
+            controller_data_values,
+            planner_data_keys,
+            planner_data_values,
+        )
+
+    return formatted_data
 
 
 def format_return_data(
