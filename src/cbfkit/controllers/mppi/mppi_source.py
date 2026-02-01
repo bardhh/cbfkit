@@ -65,8 +65,9 @@ def setup_mppi(
         Args: state and input vector
         Returns: next state
         """
-        f, g = dyn_func(state[:, 0])  # , input)
-        return state + (f.reshape(-1, 1) + g @ input) * dt
+        # Bolt: Avoid reshapes. state: (dim,), input: (m,)
+        f, g = dyn_func(state)  # , input)
+        return state + (f + g @ input) * dt
 
     @jit
     def weighted_sum(U, perturbation, costs):
@@ -98,17 +99,17 @@ def setup_mppi(
         def step_fn(carry, inputs):
             current_state, current_cost = carry
             u_t, pert_t = inputs
-            u_t_col = u_t.reshape(-1, 1)
-            pert_t_col = pert_t.reshape(-1, 1)
+            # u_t_col = u_t.reshape(-1, 1)
 
-            delta_cost = cost_perturbation_coeff * (
-                (u_t_col - pert_t_col).T @ control_cov_inv @ pert_t_col
-            )[0, 0]
+            # Bolt: Use 1D arrays for cost calc. u_t and pert_t are already (m,)
+            diff = u_t - pert_t
+            delta_cost = cost_perturbation_coeff * (diff @ control_cov_inv @ pert_t)
 
             if trajectory_cost_func is None:
                 delta_cost = delta_cost + stage_cost_func(current_state, u_t)
 
-            next_state = robot_dynamics_step(current_state.reshape(-1, 1), u_t_col)[:, 0]
+            # Bolt: Pass 1D arrays directly
+            next_state = robot_dynamics_step(current_state, u_t)
             new_cost = current_cost + delta_cost
             return (next_state, new_cost), current_state
 
@@ -126,12 +127,11 @@ def setup_mppi(
         # Add final step cost (u_{H-1})
         u_final = perturbed_control[:, horizon - 1]
         pert_final = perturbation[:, horizon - 1]
-        u_final_col = u_final.reshape(-1, 1)
-        pert_final_col = pert_final.reshape(-1, 1)
+        # u_final_col = u_final.reshape(-1, 1)
+        # pert_final_col = pert_final.reshape(-1, 1)
 
-        delta_cost_final = cost_perturbation_coeff * (
-            (u_final_col - pert_final_col).T @ control_cov_inv @ pert_final_col
-        )[0, 0]
+        diff_final = u_final - pert_final
+        delta_cost_final = cost_perturbation_coeff * (diff_final @ control_cov_inv @ pert_final)
 
         cost_sample = accumulated_cost + delta_cost_final
 
@@ -209,9 +209,7 @@ def setup_mppi(
     @jit
     def rollout_control(init_state, actions):
         def step_fn(current_state, action):
-            next_state = robot_dynamics_step(
-                current_state.reshape(-1, 1), action.reshape(-1, 1)
-            )[:, 0]
+            next_state = robot_dynamics_step(current_state, action)
             return next_state, current_state
 
         final_state, intermediate_states = lax.scan(step_fn, init_state[:, 0], actions)
