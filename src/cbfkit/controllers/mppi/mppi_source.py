@@ -77,12 +77,11 @@ def setup_mppi(
             perturbation: random perturbation trajectory of all samples
             costs: cost of each sampled trajectory
         """
-        # Normalize costs in a numerically stable way
+        # Bolt: Improved numerical stability using standard Log-Sum-Exp
+        # Removed range normalization to preserve optimization gradient in presence of outliers
         costs_shifted = costs - jnp.min(costs)
-        scale = jnp.maximum(jnp.max(costs_shifted), 1e-8)
-        costs_norm = costs_shifted / scale
-        lambd = costs_lambda
-        log_weights = -costs_norm / jnp.maximum(lambd, 1e-8)
+        lambd = jnp.maximum(costs_lambda, 1e-8)
+        log_weights = -costs_shifted / lambd
         max_logw = jnp.max(log_weights)
         weights = jnp.exp(log_weights - max_logw)
         normalization_factor = jnp.maximum(jnp.sum(weights), 1e-8)
