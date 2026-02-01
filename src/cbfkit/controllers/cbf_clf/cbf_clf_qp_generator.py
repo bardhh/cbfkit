@@ -54,6 +54,30 @@ from .generate_constraints import (
 )
 
 
+def _validate_certificate_collection(cert_collection: Any, name: str) -> None:
+    """Validates that the certificate collection has the expected structure."""
+    if cert_collection is None:
+        return
+
+    # Check if it's iterable
+    try:
+        iter(cert_collection)
+    except TypeError:
+        raise TypeError(
+            f"'{name}' must be a CertificateCollection (tuple/list of length 5), but got {type(cert_collection)}."
+        )
+
+    # Check length
+    if len(cert_collection) != 5:
+        raise ValueError(
+            f"Invalid structure for '{name}'. Expected a CertificateCollection with 5 elements "
+            "(functions, jacobians, hessians, partials, conditions), "
+            f"but got a collection of length {len(cert_collection)}. "
+            "Did you pass a list of barrier functions directly? You must provide the derivatives and conditions as well, "
+            "or use a helper like 'cbfkit.certificates.CertificateCollection'."
+        )
+
+
 def cbf_clf_qp_generator(
     generate_compute_cbf_constraints: GenerateComputeCertificateConstraintCallable,
     generate_compute_clf_constraints: GenerateComputeCertificateConstraintCallable,
@@ -154,6 +178,9 @@ def cbf_clf_qp_generator(
             barriers = EMPTY_CERTIFICATE_COLLECTION
         if lyapunovs is None:
             lyapunovs = EMPTY_CERTIFICATE_COLLECTION
+
+        _validate_certificate_collection(barriers, "barriers")
+        _validate_certificate_collection(lyapunovs, "lyapunovs")
 
         assert barriers is not None
         assert lyapunovs is not None
