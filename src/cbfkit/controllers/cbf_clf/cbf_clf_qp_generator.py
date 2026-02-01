@@ -26,7 +26,7 @@ Examples
 >>> )
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import jax.numpy as jnp
 from jax import Array, jit, lax
@@ -97,6 +97,31 @@ def cbf_clf_qp_generator(
         complete = False
         n_con = len(control_limits)
 
+        def verified_dynamics_func(x: State) -> Tuple[Array, Array]:
+            f, g = dynamics_func(x)
+            if f.ndim != 1:
+                raise ValueError(
+                    f"Dynamics drift term 'f' must be a 1D array of shape (n_states,), "
+                    f"but got shape {f.shape}. Ensure your dynamics function returns a flat array, "
+                    f"not a column vector."
+                )
+            if g.ndim != 2:
+                raise ValueError(
+                    f"Dynamics control term 'g' must be a 2D array of shape (n_states, n_controls), "
+                    f"but got shape {g.shape}. If you have 1 control input, ensure 'g' is (n, 1)."
+                )
+            if f.shape[0] != g.shape[0]:
+                raise ValueError(
+                    f"State dimension mismatch: drift 'f' has {f.shape[0]} states, "
+                    f"but control matrix 'g' has {g.shape[0]} states."
+                )
+            if g.shape[1] != n_con:
+                raise ValueError(
+                    f"Control dimension mismatch: 'control_limits' implies {n_con} inputs, "
+                    f"but 'g' has {g.shape[1]} columns."
+                )
+            return f, g
+
         # Ensure barriers and lyapunovs are not None
         if barriers is None:
             barriers = EMPTY_CERTIFICATE_COLLECTION
@@ -166,7 +191,7 @@ def cbf_clf_qp_generator(
             generate_compute_cbf_constraints,
             generate_compute_clf_constraints,
             control_limits,
-            dynamics_func,
+            verified_dynamics_func,
             barriers,
             lyapunovs,
             **kwargs,
