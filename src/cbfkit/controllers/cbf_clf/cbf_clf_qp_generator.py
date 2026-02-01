@@ -266,9 +266,18 @@ def cbf_clf_qp_generator(
             # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
             # Input constraints (box limits) are already normalized (row norm = 1).
             if auto_p_mat:
-                row_norms_c = jnp.linalg.norm(g_mat_c, axis=1)
-                # Janus: Limit normalization gain to 1e6 to avoid singularities
-                safe_norms_c = jnp.maximum(row_norms_c, 1e-6)
+                # Aegis: Use safe norm (sqrt(sum(sq) + eps)) to prevent NaN gradients at 0.
+                row_sq_sums = jnp.sum(g_mat_c**2, axis=1)
+                row_norms_c = jnp.sqrt(row_sq_sums + 1e-20)
+                # Janus: Smooth transition for noise scaling
+                high, low = 1e-8, 1e-9
+                slope = (high - 1.0) / (high - low)
+                transition = lambda n: 1.0 + (n - low) * slope
+                safe_norms_c = jnp.where(
+                    row_norms_c > high,
+                    row_norms_c,
+                    jnp.where(row_norms_c < low, 1.0, transition(row_norms_c)),
+                )
                 g_mat_c = g_mat_c / safe_norms_c[:, None]
                 h_vec_c = h_vec_c / safe_norms_c
 
