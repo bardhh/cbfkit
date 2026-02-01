@@ -25,6 +25,7 @@ To run all tests in this module (from the root of the repository):
 """
 
 import unittest
+import unittest.mock
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from cbfkit.codegen.create_new_system.generate_model import generate_model
@@ -127,16 +128,19 @@ class TestModelGeneration(unittest.TestCase):
         if params is None:
             params = {}
 
-        generated_states, generated_controls = generate_model(
-            target_directory,
-            model_name,
-            drift_dynamics,
-            control_matrix,
-            barrier_funcs=barrier_funcs,
-            lyapunov_funcs=lyapunov_funcs,
-            nominal_controller=nominal_controller,
-            params=params,
-        )
+        with unittest.mock.patch(
+            "cbfkit.codegen.create_new_system.generate_model.run_black"
+        ):
+            generated_states, generated_controls = generate_model(
+                target_directory,
+                model_name,
+                drift_dynamics,
+                control_matrix,
+                barrier_funcs=barrier_funcs,
+                lyapunov_funcs=lyapunov_funcs,
+                nominal_controller=nominal_controller,
+                params=params,
+            )
 
         self.assertTrue(
             (dims[0] == generated_states) and (dims[1] == generated_controls)
