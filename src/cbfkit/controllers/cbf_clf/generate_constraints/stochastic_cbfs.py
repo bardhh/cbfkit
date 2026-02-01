@@ -22,7 +22,7 @@ from .unpack import unpack_for_cbf
 
 
 ###################################################################################################
-### STOCHASTIC CBF: LfB + LgB*u + 0.5*Tr[sigma.T * d2B/dx2 * sigma] <= -alpha*B + beta ############
+### STOCHASTIC CBF: LfB + LgB*u + 0.5*Tr[sigma.T * d2B/dx2 * sigma] >= -alpha*B + beta ############
 def generate_compute_stochastic_cbf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
