@@ -55,9 +55,44 @@ def solve_inequality_constrained_qp(
         params_ineq=params_ineq,
     )
     status = state.status
-    # Only SOLVED (1) is success. MAX_ITER_REACHED (2) may return non-converged solution.
-    success = status == 1
-    return sol.primal, success, sol
+    # We return the raw status code to allow callers to inspect failure reason.
+    return sol.primal, status, sol
+
+
+@jit
+def solve_with_details(
+    h_mat: Array,
+    f_vec: Array,
+    g_mat: Union[Array, None] = None,
+    h_vec: Union[Array, None] = None,
+    a_mat: Union[Array, None] = None,
+    b_vec: Union[Array, None] = None,
+    init_params: Optional[Any] = None,
+) -> Tuple[Array, int, Any]:
+    """Solve a quadratic program using the jaxopt solver, returning full details.
+
+    Args:
+        h_mat: quadratic cost matrix
+        f_vec: linear cost vector
+        g_mat: linear inequality constraint matrix
+        b_vec: linear inequality constraint vector
+        g_mat: linear equality constraint matrix
+        h_vec: linear equality constraint vector
+        init_params: Optional initial parameters for warm-starting.
+
+    Returns
+    -------
+        (sol, status, params): Solution, raw status (int), and solver parameters.
+    """
+    params_obj = (h_mat, 0.5 * f_vec)
+    params_eq = None if (a_mat is None or b_vec is None) else (a_mat, b_vec)
+    params_ineq = None if (g_mat is None or h_vec is None) else (g_mat, h_vec)
+
+    sol, status, params = solve_inequality_constrained_qp(
+        params_obj, params_eq, params_ineq, init_params
+    )
+
+    return sol, status, params
 
 
 @jit
@@ -72,6 +107,8 @@ def solve_with_state(
 ) -> Tuple[Array, int, Any]:
     """Solve a quadratic program using the jaxopt solver, returning solver state.
 
+    Note: Returns status as a boolean success flag (True if status == 1).
+
     Args:
         h_mat: quadratic cost matrix
         f_vec: linear cost vector
@@ -83,17 +120,14 @@ def solve_with_state(
 
     Returns
     -------
-        (sol, status, params): Solution, status, and solver parameters.
+        (sol, success, params): Solution, success flag (bool), and solver parameters.
     """
-    params_obj = (h_mat, 0.5 * f_vec)
-    params_eq = None if (a_mat is None or b_vec is None) else (a_mat, b_vec)
-    params_ineq = None if (g_mat is None or h_vec is None) else (g_mat, h_vec)
-
-    sol, status, params = solve_inequality_constrained_qp(
-        params_obj, params_eq, params_ineq, init_params
+    sol, status, params = solve_with_details(
+        h_mat, f_vec, g_mat, h_vec, a_mat, b_vec, init_params
     )
-
-    return sol, status, params
+    # Only SOLVED (1) is success. MAX_ITER_REACHED (2) may return non-converged solution.
+    success = status == 1
+    return sol, success, params
 
 
 @jit
@@ -119,5 +153,5 @@ def solve(
     -------
         sol['x']: Solution to the QP
     """
-    sol, status, _ = solve_with_state(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
-    return sol, status
+    sol, success, _ = solve_with_state(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
+    return sol, success
