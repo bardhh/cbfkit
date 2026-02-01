@@ -142,6 +142,20 @@ ControllerCallable = Callable[
 ]
 
 NominalControllerCallable = Callable[[Time, State, Key, Optional[State]], ControllerCallableReturns]
+"""Callable for nominal controllers.
+
+Args:
+    t: Current time.
+    x: Current state.
+    key: PRNG key for randomization.
+    reference: Optional reference state (from planner).
+
+Returns:
+    A tuple containing the control input and controller data.
+
+See Also:
+    cbfkit.controllers.setup_nominal_controller: Helper to adapt simple functions.
+"""
 
 
 # Planner Callables
