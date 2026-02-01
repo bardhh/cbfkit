@@ -235,11 +235,8 @@ def cbf_clf_qp_generator(
 
             # Bolt: Optimize normalization. Input constraints (box limits) are already normalized (row norm = 1).
             # Only normalize CBF/CLF constraints, then stack.
-            if auto_p_mat:
-                row_norms_c = jnp.linalg.norm(g_mat_c, axis=1)
-                row_norms_c = jnp.maximum(row_norms_c, 1e-8)
-                g_mat_c = g_mat_c / row_norms_c[:, None]
-                h_vec_c = h_vec_c / row_norms_c
+            # Aegis: Removed aggressive pre-normalization of CBF/CLF constraints that amplified noise vectors.
+            # Normalization is now handled uniformly by the "Janus" block below which respects a noise floor.
 
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
