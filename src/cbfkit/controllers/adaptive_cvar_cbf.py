@@ -3,7 +3,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import casadi as ca
 import jax.numpy as jnp
 import numpy as np
-from jax import Array
+from jax import Array, random
+from numpy.random import Generator
 
 from cbfkit.utils.uncertainty import generate_uncertainty_pmf
 from cbfkit.utils.user_types import (
@@ -72,14 +73,20 @@ class AdaptiveCVaRBarrierSolver:
         return self.A @ x + self.B @ u
 
     def solve(
-        self, t: float, x: np.ndarray, u_nom: np.ndarray
+        self,
+        t: float,
+        x: np.ndarray,
+        u_nom: np.ndarray,
+        rng: Optional[Generator] = None,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
         Solves the optimization problem.
         """
         # 1. Update PMF based on current state and nominal input
         # For self (robot)
-        pmf, wu_samples, wx_samples = generate_uncertainty_pmf(u_nom, x, self.noise_params, self.S)
+        pmf, wu_samples, wx_samples = generate_uncertainty_pmf(
+            u_nom, x, self.noise_params, self.S, rng=rng
+        )
 
         # For obstacles (assuming they have their own noise params or similar)
         # Simplified: use same noise for obs for now, or extract from obs if available
@@ -91,7 +98,7 @@ class AdaptiveCVaRBarrierSolver:
             # Assuming obs has .noise attribute
             obs_noise = getattr(obs, "noise", [[0.01] * 4, [0.01] * 4])
             o_pmf, o_wu, o_wx = generate_uncertainty_pmf(
-                obs.velocity_xy, obs.x_curr, obs_noise, self.S
+                obs.velocity_xy, obs.x_curr, obs_noise, self.S, rng=rng
             )
             obs_pmfs.append(o_pmf)
             obs_wu_samples.append(o_wu)
@@ -371,11 +378,15 @@ def adaptive_cvar_cbf_controller(
         x_np = np.array(x)
         u_nom_np = np.array(u_nom) if u_nom is not None else np.zeros(solver.m)
 
+        # Seed random number generator
+        seed = int(random.randint(key, (), 0, 2**31 - 1))
+        rng = np.random.default_rng(seed)
+
         # Solve
         # CasADi expects float time
         t_float = float(t) if isinstance(t, (float, int)) else float(t[0]) if t.shape else 0.0
 
-        u_opt, log_info = solver.solve(t_float, x_np, u_nom_np)
+        u_opt, log_info = solver.solve(t_float, x_np, u_nom_np, rng=rng)
 
         # Return
         u_jax = jnp.array(u_opt).flatten()
