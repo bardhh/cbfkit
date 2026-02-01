@@ -8,30 +8,66 @@ conduct_monte_carlo(execute, n_trials, n_processes, **kwargs)
     Conducts a Monte Carlo simulation."""
 
 import multiprocessing as mp
-from typing import Callable
+from typing import Callable, Optional
+import numpy as np
+from jax import random
 
 
 def _map_function(args):
-    """_summary_.
+    """Helper function to execute a single trial.
 
     Args:
-        args (_type_): _description_
+        args (tuple): Tuple containing (func, trial_no, worker_seed, kwargs).
 
     Returns
     -------
-        _type_: _description_
+        Any: Result of the trial execution.
     """
-    func, trial_no, kwargs = args
+    func, trial_no, worker_seed, kwargs = args
+
+    # Inject JAX key if a seed was provided
+    if worker_seed is not None:
+        kwargs = kwargs.copy()
+        kwargs["key"] = random.PRNGKey(worker_seed)
+
     return func(trial_no, **kwargs)
 
 
-def conduct_monte_carlo(execute: Callable, n_trials: int, n_processes: int = 1, **kwargs):
-    """_summary_.
+def conduct_monte_carlo(
+    execute: Callable, n_trials: int, n_processes: int = 1, seed: Optional[int] = None, **kwargs
+):
+    """Conducts a Monte Carlo simulation.
 
     Args:
-        execute (_type_): _description_
+        execute (Callable): The function to execute for each trial.
+                            Must accept `trial_no` (int) as the first argument and `**kwargs`.
+        n_trials (int): Number of trials to run.
+        n_processes (int, optional): Number of parallel processes. Defaults to 1.
+        seed (Optional[int], optional): Base seed for random number generation.
+                                        If provided, each trial receives a unique JAX PRNGKey
+                                        passed as 'key' in kwargs.
+                                        Requires `execute` to accept `**kwargs` or `key`.
+        **kwargs: Additional keyword arguments passed to `execute`.
+
+    Returns
+    -------
+        list: A list of results from each trial.
     """
-    args_list = [(execute, trial_no, kwargs) for trial_no in range(n_trials)]
+    args_list = []
+
+    # Generate integer seeds for each trial if a base seed is provided
+    worker_seeds = [None] * n_trials
+    if seed is not None:
+        rng = np.random.default_rng(seed)
+        # Generate random integers safely within range for PRNGKey
+        worker_seeds = rng.integers(low=0, high=2**32 - 1, size=n_trials)
+
+    for trial_no in range(n_trials):
+        # We pass the worker_seed (int or None)
+        worker_seed = worker_seeds[trial_no] if seed is not None else None
+
+        # Note: We do NOT convert to JAX key here to avoid pickling issues with multiprocessing
+        args_list.append((execute, trial_no, worker_seed, kwargs))
 
     if n_processes > 1:
         # Create a multiprocessing Pool
