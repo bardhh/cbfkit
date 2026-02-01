@@ -172,8 +172,6 @@ def run_scenario(config):
             function=h, system_dynamics=aug_dynamics, state_dim=len(z0), form="exponential"
         )(
             certificate_conditions=zeroing_barriers.linear_class_k(1.0),
-            obstacle=jnp.array([]),
-            ellipsoid=(1.0, 1.0),
         )
         barriers.append(b)
 
