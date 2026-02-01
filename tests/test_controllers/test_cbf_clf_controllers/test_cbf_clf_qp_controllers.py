@@ -52,7 +52,7 @@ class TestVanillaCBFCLF(unittest.TestCase):
         self.assertTrue(jnp.allclose(u, control_limits, atol=1e-3))
 
     def test_infeasible_qp_fallback(self):
-        """Test that the controller falls back to u_nom (clipped) when QP is infeasible."""
+        """Test that the controller returns NaNs when QP is infeasible."""
         from cbfkit.certificates import certificate_package, concatenate_certificates
         from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
 
@@ -100,15 +100,14 @@ class TestVanillaCBFCLF(unittest.TestCase):
         # Expect QP failure (error=True means failure)
         self.assertTrue(new_data.error)
 
-        # Expect u to be u_nom clipped to limits.
-        # u_nom = 0, limits = [-1, 1]. Result 0.
-        self.assertTrue(jnp.allclose(u, u_nom, atol=1e-5))
+        # Expect u to be NaN (Aegis policy)
+        self.assertTrue(jnp.all(jnp.isnan(u)))
 
-        # Try with u_nom outside limits to verify clipping
-        u_nom_out = jnp.array([5.0])  # Expect 1.0
+        # Try with u_nom outside limits
+        u_nom_out = jnp.array([5.0])
         u_out, new_data_out = controller(t, x, u_nom_out, key, data)
         self.assertTrue(new_data_out.error)
-        self.assertTrue(jnp.allclose(u_out, jnp.array([1.0]), atol=1e-5))
+        self.assertTrue(jnp.all(jnp.isnan(u_out)))
 
 if __name__ == '__main__':
     unittest.main()
