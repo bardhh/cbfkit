@@ -97,6 +97,17 @@ class CertificateCollection(NamedTuple):
     partials: List[CertificatePartialCallable]
     conditions: List[CertificateConditionsCallable]
 
+    def __add__(self, other: "CertificateCollection") -> "CertificateCollection":
+        if not isinstance(other, CertificateCollection):
+            return NotImplemented
+        return CertificateCollection(
+            self.functions + other.functions,
+            self.jacobians + other.jacobians,
+            self.hessians + other.hessians,
+            self.partials + other.partials,
+            self.conditions + other.conditions,
+        )
+
 
 # Default empty collection
 EMPTY_CERTIFICATE_COLLECTION = CertificateCollection([], [], [], [], [])

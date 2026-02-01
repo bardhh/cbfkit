@@ -138,28 +138,18 @@ def certificate_package(
 
 
 def concatenate_certificates(*tuples: CertificateCollection) -> CertificateCollection:
-    """_summary_
+    """Concatenates multiple CertificateCollections into one.
 
-    Returns
-    -------
-        _type_: _description_
+    Note:
+        You can also use the `+` operator to concatenate CertificateCollections directly.
+
+    Args:
+        *tuples: Variable number of CertificateCollection objects.
+
+    Returns:
+        CertificateCollection: A single collection containing all certificate functions and derivatives.
     """
     if not tuples:
         return EMPTY_CERTIFICATE_COLLECTION
 
-    # Initialize empty lists for each component of CertificateCollection
-    v_list = []
-    j_list = []
-    h_list = []
-    t_list = []
-    c_list = []
-
-    # Iterate through the tuples and extend the lists
-    for tup in tuples:
-        v_list.extend(tup[0])
-        j_list.extend(tup[1])
-        h_list.extend(tup[2])
-        t_list.extend(tup[3])
-        c_list.extend(tup[4])
-
-    return CertificateCollection(v_list, j_list, h_list, t_list, c_list)
+    return sum(tuples, EMPTY_CERTIFICATE_COLLECTION)
