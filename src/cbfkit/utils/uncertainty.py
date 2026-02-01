@@ -17,7 +17,7 @@ def generate_uncertainty_pmf(
     state: np.ndarray,
     noise_params: List[List[float]],
     S: int,
-    rng: Optional[Union[Generator, Any]] = None,
+    rng: Optional[Union[Generator, int, Any]] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Generates Probability Mass Function (PMF) and samples for uncertainty.
@@ -29,7 +29,7 @@ def generate_uncertainty_pmf(
                       noise[0] = [std_px, std_py, std_vx, std_vy] (state noise stds)
                       noise[1] = [std_ux_ux, std_ux_uy, std_uy_ux, std_uy_uy] (control dependent noise)
         S: Number of samples
-        rng: Optional random number generator (numpy.random.Generator) or numpy.random module.
+        rng: Optional random number generator (numpy.random.Generator), int (seed), or numpy.random module.
              If None, uses global numpy.random state.
 
     Returns:
@@ -63,6 +63,8 @@ def generate_uncertainty_pmf(
 
     if rng is None:
         rng = np.random
+    elif isinstance(rng, int):
+        rng = np.random.default_rng(rng)
 
     # Sample Control Noise
     # samples_u shape: (S, 2, 1)
