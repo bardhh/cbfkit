@@ -4,7 +4,7 @@ import pytest
 
 def normalization_logic_fixed(norms):
     # This matches the new implementation in cbf_clf_qp_generator.py
-    return jnp.maximum(norms, 1e-6)
+    return jnp.maximum(norms, 1e-8)
 
 def test_normalization_stability():
     """
@@ -24,22 +24,22 @@ def test_normalization_stability():
     assert jnp.all(jnp.isfinite(scale_factors))
     assert jnp.all(jnp.isfinite(result_norms))
 
-    # 2. Divisor never zero (min divisor is 1e-6)
-    assert jnp.all(safe_norms >= 1e-6)
+    # 2. Divisor never zero (min divisor is 1e-8)
+    assert jnp.all(safe_norms >= 1e-8)
 
     # 3. Continuity check (simple diff)
     diffs = jnp.diff(result_norms)
     # The result norm should be monotonic?
-    # For n < 1e-6: result = n / 1e-6. Linear increase. Monotonic.
-    # For n > 1e-6: result = n / n = 1. Constant. Monotonic.
+    # For n < 1e-8: result = n / 1e-8. Linear increase. Monotonic.
+    # For n > 1e-8: result = n / n = 1. Constant. Monotonic.
     # So yes, non-decreasing.
     assert jnp.all(diffs >= -1e-7) # Tolerate float32 noise
 
     # 4. Check specific values
-    # Noise (1e-9) -> 1e-3
+    # Noise (1e-9) -> 0.1
     n_noise = jnp.array([1e-9])
     res_noise = n_noise / normalization_logic_fixed(n_noise)
-    assert jnp.allclose(res_noise, 1e-3)
+    assert jnp.allclose(res_noise, 0.1)
 
     # Signal (1e-1) -> 1.0
     n_signal = jnp.array([1e-1])
