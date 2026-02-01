@@ -297,16 +297,11 @@ def cbf_clf_qp_generator(
                 # Aegis: Use safe norm (sqrt(sum(sq) + eps)) to prevent NaN gradients at 0.
                 row_sq_sums = jnp.sum(g_mat_c**2, axis=1)
                 row_norms_c = jnp.sqrt(row_sq_sums + 1e-20)
-                # Janus: Smooth transition for noise scaling
-                high, low = 1e-8, 1e-9
-                scale_high = 1.0 / high
-                slope = (scale_high - 1.0) / (high - low)
-                scale_factor = lambda n: 1.0 + (n - low) * slope
-                safe_scales_c = jnp.where(
-                    row_norms_c > high,
-                    1.0 / row_norms_c,
-                    jnp.where(row_norms_c < low, 1.0, scale_factor(row_norms_c)),
-                )
+                # Janus: Normalize constraints robustly.
+                # Use a clamped scaling factor (max 1e8) to:
+                # 1. Enforce constraints with small gradients (e.g. 1e-10) to catch gross infeasibility (Safety).
+                # 2. Allow normalization of small signals (e.g. 2e-8) for solver convergence.
+                safe_scales_c = jnp.minimum(1.0 / row_norms_c, 1e8)
                 g_mat_c = g_mat_c * safe_scales_c[:, None]
                 h_vec_c = h_vec_c * safe_scales_c
 

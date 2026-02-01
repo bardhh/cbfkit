@@ -4,25 +4,18 @@ import pytest
 
 def normalization_logic_fixed(row_norm):
     # Matches the new implementation in cbf_clf_qp_generator.py
-    high, low = 1e-8, 1e-9
-    scale_high = 1.0 / high
-    slope = (scale_high - 1.0) / (high - low)
-    scale_factor = lambda n: 1.0 + (n - low) * slope
-
-    safe_scale = jnp.where(
-        row_norm > high,
-        1.0 / row_norm,
-        jnp.where(row_norm < low, 1.0, scale_factor(row_norm)),
-    )
+    # safe_scales_c = jnp.minimum(1.0 / row_norms_c, 1e8)
+    safe_scale = jnp.minimum(1.0 / row_norm, 1e8)
     return row_norm * safe_scale
 
 def test_normalization_stability():
     """
-    Verifies that the normalization logic handles small gradients robustly
-    without singularities or massive jumps.
+    Verifies that the normalization logic handles small gradients robustly.
+    Uses clamped scaling (max 1e8) to prevent noise amplification while ensuring
+    safety for gross violations.
     """
-    # Sweep across the critical region 1e-10 to 1e-7
-    norms = jnp.logspace(-10, -7, 1000)
+    # Sweep across the critical region 1e-10 to 1e-4
+    norms = jnp.logspace(-10, -4, 1000)
 
     result_norms = normalization_logic_fixed(norms)
 
@@ -33,28 +26,23 @@ def test_normalization_stability():
     # 2. Monotonicity check
     diffs = jnp.diff(result_norms)
     # The result norm should be monotonic non-decreasing
-    # Allow small negative diff due to float32 precision noise (eps ~ 1e-7)
     assert jnp.all(diffs >= -2e-7)
 
     # 3. Check specific values
-    # Noise (1e-10) -> 1e-10 (Unscaled)
+    # Noise (1e-10). Scale clamped at 1e8. Result 1e-2.
     n_low = jnp.array([1e-10])
     res_low = normalization_logic_fixed(n_low)
-    assert jnp.allclose(res_low, 1e-10)
+    assert jnp.allclose(res_low, 1e-2)
 
-    # Signal (1e-7) -> 1.0 (Normalized)
-    n_high = jnp.array([1e-7])
+    # Signal (1e-4). Scale 1e4 (unclamped). Result 1.0.
+    n_high = jnp.array([1e-4])
     res_high = normalization_logic_fixed(n_high)
     assert jnp.allclose(res_high, 1.0)
 
-    # Transition (5e-9)
-    # scale approx 0.5 * 1e8 = 5e7
-    # res approx 5e-9 * 5e7 = 0.25
-    n_mid = jnp.array([5.5e-9])
+    # Transition (1e-9). Scale 1e8 (clamped/boundary). Result 0.1.
+    n_mid = jnp.array([1e-9])
     res_mid = normalization_logic_fixed(n_mid)
-    # Based on stress test: 5.0e-9 -> 0.22, 5.5e-9 -> ~0.27
-    assert res_mid > 0.1
-    assert res_mid < 0.5
+    assert jnp.allclose(res_mid, 0.1)
 
 if __name__ == "__main__":
     try:
