@@ -291,6 +291,11 @@ def cbf_clf_qp_generator(
                 p_mat, q_vec, g_mat, h_vec, init_params=solver_params
             )
 
+            # Scout: Extract solver iterations for diagnostics
+            # new_params is (KKTSolution, OSQPState)
+            _, state = new_params
+            iter_num = state.iter_num
+
             # Sentinel: Explicitly catch NaN solutions even if solver claims success
             status = jnp.where(jnp.any(jnp.isnan(sol)), 0, status)
 
@@ -322,6 +327,7 @@ def cbf_clf_qp_generator(
             # logging data
             final_sub_data = sub_data or {}
             final_sub_data["solver_params"] = new_params
+            final_sub_data["solver_iter"] = iter_num
 
             data = ControllerData(
                 error=error,

@@ -24,12 +24,17 @@ class TestQPSolverSafety(unittest.TestCase):
         # It imports solve_qp from cbf_clf_qp_generator module.
 
         # 2. Define the mock solver
+        from collections import namedtuple
+        MockState = namedtuple("MockState", ["iter_num"])
+
         def mock_solve(p_mat, q_vec, g_mat, h_vec, init_params=None):
             # Return dummy solution (zeros), status 2 (MAX_ITER), and None params
             # Solution size must match q_vec (which is n_controls + slacks)
             n_vars = q_vec.shape[0]
             # status=2 means MAX_ITER_REACHED
-            return jnp.zeros((n_vars,)), jnp.array(2, dtype=jnp.int32), None
+            # Scout: Controller expects (sol, state) in params to extract iter_num
+            mock_state = MockState(iter_num=jnp.array(100))
+            return jnp.zeros((n_vars,)), jnp.array(2, dtype=jnp.int32), (None, mock_state)
 
         # 3. Patch solve_qp in the module where it is used
         with patch('cbfkit.controllers.cbf_clf.cbf_clf_qp_generator.solve_qp', side_effect=mock_solve):
