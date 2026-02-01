@@ -2,49 +2,59 @@
 import jax.numpy as jnp
 import pytest
 
-def normalization_logic_fixed(norms):
-    # This matches the new implementation in cbf_clf_qp_generator.py
-    return jnp.maximum(norms, 1e-6)
+def normalization_logic_fixed(row_norm):
+    # Matches the new implementation in cbf_clf_qp_generator.py
+    high, low = 1e-8, 1e-9
+    scale_high = 1.0 / high
+    slope = (scale_high - 1.0) / (high - low)
+    scale_factor = lambda n: 1.0 + (n - low) * slope
+
+    safe_scale = jnp.where(
+        row_norm > high,
+        1.0 / row_norm,
+        jnp.where(row_norm < low, 1.0, scale_factor(row_norm)),
+    )
+    return row_norm * safe_scale
 
 def test_normalization_stability():
     """
     Verifies that the normalization logic handles small gradients robustly
     without singularities or massive jumps.
     """
-    # Sweep across the critical region 1e-9 to 1e-6
-    norms = jnp.logspace(-9, -5, 100)
+    # Sweep across the critical region 1e-10 to 1e-7
+    norms = jnp.logspace(-10, -7, 1000)
 
-    safe_norms = normalization_logic_fixed(norms)
-    scale_factors = 1.0 / safe_norms
-    result_norms = norms * scale_factors
+    result_norms = normalization_logic_fixed(norms)
 
     # Assertions
     # 1. No NaNs or Infs
-    assert jnp.all(jnp.isfinite(safe_norms))
-    assert jnp.all(jnp.isfinite(scale_factors))
     assert jnp.all(jnp.isfinite(result_norms))
 
-    # 2. Divisor never zero (min divisor is 1e-6)
-    assert jnp.all(safe_norms >= 1e-6)
-
-    # 3. Continuity check (simple diff)
+    # 2. Monotonicity check
     diffs = jnp.diff(result_norms)
-    # The result norm should be monotonic?
-    # For n < 1e-6: result = n / 1e-6. Linear increase. Monotonic.
-    # For n > 1e-6: result = n / n = 1. Constant. Monotonic.
-    # So yes, non-decreasing.
-    assert jnp.all(diffs >= -1e-7) # Tolerate float32 noise
+    # The result norm should be monotonic non-decreasing
+    # Allow small negative diff due to float32 precision noise (eps ~ 1e-7)
+    assert jnp.all(diffs >= -2e-7)
 
-    # 4. Check specific values
-    # Noise (1e-9) -> 1e-3
-    n_noise = jnp.array([1e-9])
-    res_noise = n_noise / normalization_logic_fixed(n_noise)
-    assert jnp.allclose(res_noise, 1e-3)
+    # 3. Check specific values
+    # Noise (1e-10) -> 1e-10 (Unscaled)
+    n_low = jnp.array([1e-10])
+    res_low = normalization_logic_fixed(n_low)
+    assert jnp.allclose(res_low, 1e-10)
 
-    # Signal (1e-1) -> 1.0
-    n_signal = jnp.array([1e-1])
-    res_signal = n_signal / normalization_logic_fixed(n_signal)
-    assert jnp.allclose(res_signal, 1.0)
+    # Signal (1e-7) -> 1.0 (Normalized)
+    n_high = jnp.array([1e-7])
+    res_high = normalization_logic_fixed(n_high)
+    assert jnp.allclose(res_high, 1.0)
+
+    # Transition (5e-9)
+    # scale approx 0.5 * 1e8 = 5e7
+    # res approx 5e-9 * 5e7 = 0.25
+    n_mid = jnp.array([5.5e-9])
+    res_mid = normalization_logic_fixed(n_mid)
+    # Based on stress test: 5.0e-9 -> 0.22, 5.5e-9 -> ~0.27
+    assert res_mid > 0.1
+    assert res_mid < 0.5
 
 if __name__ == "__main__":
     try:
