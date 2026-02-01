@@ -263,7 +263,15 @@ def cbf_clf_qp_generator(
             # Input constraints (box limits) are already normalized (row norm = 1).
             if auto_p_mat:
                 row_norms_c = jnp.linalg.norm(g_mat_c, axis=1)
-                safe_norms_c = jnp.where(row_norms_c > 1e-8, row_norms_c, 1.0)
+                # Janus: Smooth transition for noise scaling
+                high, low = 1e-8, 1e-9
+                slope = (high - 1.0) / (high - low)
+                transition = lambda n: 1.0 + (n - low) * slope
+                safe_norms_c = jnp.where(
+                    row_norms_c > high,
+                    row_norms_c,
+                    jnp.where(row_norms_c < low, 1.0, transition(row_norms_c)),
+                )
                 g_mat_c = g_mat_c / safe_norms_c[:, None]
                 h_vec_c = h_vec_c / safe_norms_c
 
