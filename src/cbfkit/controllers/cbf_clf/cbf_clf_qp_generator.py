@@ -36,6 +36,7 @@ from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
 )
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpConfig,
     CbfClfQpGenerator,
     CertificateCollection,
     ControllerCallable,
@@ -74,26 +75,52 @@ def cbf_clf_qp_generator(
         barriers: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
         lyapunovs: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Union[Array, None]] = None,
+        *,
+        relaxable_clf: bool = True,
+        relaxable_cbf: bool = False,
+        tunable_class_k: bool = False,
+        slack_bound_cbf: Optional[float] = None,
+        slack_bound_clf: float = 1e9,
+        slack_penalty_cbf: float = 2e3,
+        slack_penalty_clf: float = 2e3,
         **kwargs: Any,
     ) -> ControllerCallable:
         """Produces the function to deploy a CBF-CLF-QP control law.
 
         Args:
             control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.]
-            nominal_input (ControllerCallable): function to compute the nominal input
             dynamics_func (DynamicsCallable): function to compute dynamics based on current state
             barriers (CertificateCollection = ([], [], [], [], [])): collection of barrier functions,
                 gradients, hessians, dh/dt, conditions
             lyapunovs (CertificateCollection = ([], [], [], [], [])): collection of lyapunov functions,
                 gradients, hessians, dV/dt,  conditions
             p_mat (Optional[Union[Array, None]] = None): objective function matrix (quadratic term)
-            **kwargs (Dict[str, Any]): keyword arguments, e.g., RiskAwareParams for RA-CBF-CLF-QP.
-                relaxable_clf (bool): whether to treat CLF as a soft constraint (default: True).
+            relaxable_clf (bool): whether to treat CLF as a soft constraint (default: True).
+            relaxable_cbf (bool): whether to treat CBF as a soft constraint (default: False).
+            tunable_class_k (bool): whether to tune the Class K function parameter (default: False).
+            slack_bound_cbf (float): Maximum slack for CBF constraints (default: 100.0 or 1e4).
+            slack_bound_clf (float): Maximum slack for CLF constraints (default: 1e9).
+            slack_penalty_cbf (float): Penalty weight for CBF slack variables (default: 2e3).
+            slack_penalty_clf (float): Penalty weight for CLF slack variables (default: 2e3).
+            **kwargs (CbfClfQpConfig): keyword arguments.
 
         Returns
         -------
             ControllerCallable: function for computing control input based on CBF-CLF-QP
         """
+        # Update kwargs to ensure downstream functions see the configuration
+        kwargs.update(
+            {
+                "relaxable_clf": relaxable_clf,
+                "relaxable_cbf": relaxable_cbf,
+                "tunable_class_k": tunable_class_k,
+                "slack_bound_cbf": slack_bound_cbf,
+                "slack_bound_clf": slack_bound_clf,
+                "slack_penalty_cbf": slack_penalty_cbf,
+                "slack_penalty_clf": slack_penalty_clf,
+            }
+        )
+
         complete = False
         n_con = len(control_limits)
 
@@ -131,26 +158,24 @@ def cbf_clf_qp_generator(
         assert barriers is not None
         assert lyapunovs is not None
 
-        if "tunable_class_k" in kwargs and kwargs["tunable_class_k"]:
+        if tunable_class_k:
             b_funcs, _, _, _, _ = barriers
             n_bfs = len(b_funcs)
-            slack_cbf = kwargs.get("slack_bound_cbf", 100.0)
-            control_limits = jnp.hstack([control_limits, slack_cbf * jnp.ones((n_bfs,))])
-        elif "relaxable_cbf" in kwargs and kwargs["relaxable_cbf"]:
+            slack_cbf_val = slack_bound_cbf if slack_bound_cbf is not None else 100.0
+            control_limits = jnp.hstack([control_limits, slack_cbf_val * jnp.ones((n_bfs,))])
+        elif relaxable_cbf:
             b_funcs, _, _, _, _ = barriers
             n_bfs = len(b_funcs)
-            slack_cbf = kwargs.get("slack_bound_cbf", 1e4)
-            control_limits = jnp.hstack([control_limits, slack_cbf * jnp.ones((n_bfs,))])
+            slack_cbf_val = slack_bound_cbf if slack_bound_cbf is not None else 1e4
+            control_limits = jnp.hstack([control_limits, slack_cbf_val * jnp.ones((n_bfs,))])
         else:
             n_bfs = 0
 
         # Default to relaxable CLF for robustness unless explicitly disabled
-        relaxable_clf = kwargs.get("relaxable_clf", True)
         if relaxable_clf:
             l_funcs, _, _, _, _ = lyapunovs
             n_lfs = len(l_funcs)
-            slack_clf = kwargs.get("slack_bound_clf", 1e9)
-            control_limits = jnp.hstack([control_limits, slack_clf * jnp.ones((n_lfs,))])
+            control_limits = jnp.hstack([control_limits, slack_bound_clf * jnp.ones((n_lfs,))])
         else:
             n_lfs = 0
 
@@ -161,8 +186,8 @@ def cbf_clf_qp_generator(
         auto_p_mat = p_mat is None
 
         if auto_p_mat:
-            penalty_cbf = kwargs.get("slack_penalty_cbf", 2e3)
-            penalty_clf = kwargs.get("slack_penalty_clf", 2e3)
+            penalty_cbf = slack_penalty_cbf
+            penalty_clf = slack_penalty_clf
             scale_cbf = 1.0 / jnp.sqrt(penalty_cbf + 1e-8)
             scale_clf = 1.0 / jnp.sqrt(penalty_clf + 1e-8)
             p_mat = jnp.diag(
@@ -185,6 +210,9 @@ def cbf_clf_qp_generator(
         if auto_p_mat:
             kwargs["scale_cbf"] = scale_cbf
             kwargs["scale_clf"] = scale_clf
+
+        # Ensure p_mat is defined for the controller closure
+        assert p_mat is not None
 
         compute_input_constraints = generate_compute_input_constraints(control_limits)
         compute_cbf_clf_constraints = generate_compute_cbf_clf_constraints(

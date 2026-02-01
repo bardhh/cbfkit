@@ -43,7 +43,7 @@ Examples
 """
 
 from enum import Enum
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Protocol, Tuple, Union
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Protocol, Tuple, TypedDict, Union
 
 from jax import Array, random
 
@@ -257,6 +257,34 @@ class GenerateComputeCertificateConstraintCallable(Protocol):
     ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
         """Call method."""
         ...
+
+
+class CbfClfQpConfig(TypedDict, total=False):
+    """Configuration for CBF-CLF-QP controllers.
+
+    Attributes:
+        relaxable_clf (bool): Whether to treat CLF as a soft constraint (default: True).
+        relaxable_cbf (bool): Whether to treat CBF as a soft constraint (default: False).
+        tunable_class_k (bool): Whether to tune the Class K function parameter (default: False).
+        slack_bound_cbf (float): Maximum slack for CBF constraints (default: 100.0 or 1e4).
+        slack_bound_clf (float): Maximum slack for CLF constraints (default: 1e9).
+        slack_penalty_cbf (float): Penalty weight for CBF slack variables (default: 2e3).
+        slack_penalty_clf (float): Penalty weight for CLF slack variables (default: 2e3).
+        scale_cbf (float): Scaling factor for CBF slack normalization (computed if not provided).
+        scale_clf (float): Scaling factor for CLF slack normalization (computed if not provided).
+        clf_complete_tol (float): Tolerance for considering CLF task complete (default: 1e-3).
+    """
+
+    relaxable_clf: bool
+    relaxable_cbf: bool
+    tunable_class_k: bool
+    slack_bound_cbf: float
+    slack_bound_clf: float
+    slack_penalty_cbf: float
+    slack_penalty_clf: float
+    scale_cbf: float
+    scale_clf: float
+    clf_complete_tol: float
 
 
 class CbfClfQpGenerator(Protocol):
