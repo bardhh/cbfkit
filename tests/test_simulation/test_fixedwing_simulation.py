@@ -1,6 +1,7 @@
 import unittest
 from typing import List, Tuple
 
+import pytest
 import jax.numpy as jnp
 from jax import Array, jacfwd
 
@@ -118,6 +119,7 @@ def execute(controller) -> Tuple[bool, int, Array]:
     return True, x.shape[0], x[-1]
 
 
+@pytest.mark.slow
 class TestFixedWingSimulation(unittest.TestCase):
     """Takes care of unit tests intended to simulate versions of the fixed-wing UAV reach drop point
     case study."""

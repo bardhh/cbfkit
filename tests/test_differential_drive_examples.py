@@ -10,6 +10,7 @@ SCRIPTS_TO_TEST = [
 ]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("script_path", SCRIPTS_TO_TEST)
 def test_differential_drive_example_execution(script_path):
     """Runs the specified example script as a subprocess and asserts it exits with code 0."""
@@ -19,7 +20,7 @@ def test_differential_drive_example_execution(script_path):
     # Set environment variables to force headless mode for matplotlib
     env = os.environ.copy()
     env["MPLBACKEND"] = "Agg"
-    env["PYTHONPATH"] = os.getcwd()
+    env["PYTHONPATH"] = f"{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
 
     try:
         subprocess.run(

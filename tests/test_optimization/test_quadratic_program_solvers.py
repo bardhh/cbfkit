@@ -35,6 +35,7 @@ To run all tests in this module (from the root of the repository):
 
 import unittest
 
+import pytest
 import jax.numpy as jnp
 from jax import random
 
@@ -44,6 +45,7 @@ from cbfkit.utils.user_types import QpSolverCallable
 KEY = random.PRNGKey(0)
 
 
+@pytest.mark.slow
 class TestQuadraticProgramSolvers(unittest.TestCase):
     """Takes care of unit tests intended to verify the intended performance of quadratic program
     solvers."""
