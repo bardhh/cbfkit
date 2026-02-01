@@ -73,7 +73,7 @@ def setup_mppi(
     def weighted_sum(U, perturbation, costs):
         """
         Args:
-            U: control input trajectory of all samples
+            U: Nominal control input trajectory
             perturbation: random perturbation trajectory of all samples
             costs: cost of each sampled trajectory
         """
@@ -200,7 +200,7 @@ def setup_mppi(
             subkey, shape=(samples, horizon, robot_control_dim)
         ) * std
 
-        perturbation = jnp.clip(perturbation, -3.0, 3.0)  # 0.3
+        perturbation = jnp.clip(perturbation, -3.0, 3.0)
         perturbed_control = U + perturbation
 
         perturbed_control = jnp.clip(perturbed_control, -control_bound, control_bound)
