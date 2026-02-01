@@ -42,6 +42,7 @@ Examples
 >>> x: State = jnp.array([1, 2, 2.4])
 """
 
+from enum import Enum
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Protocol, Tuple, Union
 
 from jax import Array, random
@@ -81,6 +82,14 @@ class PlannerData(NamedTuple):
 
 
 # Certificate (Barrier, Lyapunov, Barrier-Lyapunov, etc.) Function Callables
+class CertificateInputStyle(str, Enum):
+    """Enumeration for certificate function input styles."""
+
+    CONCATENATED = "concatenated"
+    SEPARATED = "separated"
+    STATE = "state"
+
+
 CertificateCallable = Callable[[Time, State], Array]
 CertificateJacobianCallable = Callable[[Time, State], Array]
 CertificateHessianCallable = Callable[[Time, State], Array]
