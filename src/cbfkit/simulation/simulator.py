@@ -49,6 +49,7 @@ from .utils import SimulationStepData
 
 
 SOLVER_STATUS_MAP = {
+    -1: "NAN_DETECTED",
     0: "UNSOLVED (Likely Infeasible)",
     1: "SOLVED",
     2: "MAX_ITER_REACHED",

@@ -313,6 +313,9 @@ def cbf_clf_qp_generator(
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
 
+            # Sentinel: Detect NaNs in QP inputs
+            nan_in_inputs = jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isnan(h_vec))
+
             # Solve QP
             solver_params = None
             if data.sub_data is not None and "solver_params" in data.sub_data:
@@ -328,7 +331,8 @@ def cbf_clf_qp_generator(
             iter_num = state.iter_num
 
             # Sentinel: Explicitly catch NaN solutions even if solver claims success
-            status = jnp.where(jnp.any(jnp.isnan(sol)), 0, status)
+            # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0)
+            status = jnp.where(jnp.any(jnp.isnan(sol)) | nan_in_inputs, -1, status)
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
