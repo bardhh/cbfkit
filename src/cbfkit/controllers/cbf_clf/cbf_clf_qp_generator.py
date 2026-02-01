@@ -291,6 +291,9 @@ def cbf_clf_qp_generator(
                 p_mat, q_vec, g_mat, h_vec, init_params=solver_params
             )
 
+            # Sentinel: Explicitly catch NaN solutions even if solver claims success
+            status = jnp.where(jnp.any(jnp.isnan(sol)), 0, status)
+
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
                 if n_bfs > 0:
