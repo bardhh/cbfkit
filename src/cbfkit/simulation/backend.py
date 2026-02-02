@@ -71,7 +71,7 @@ def stepper(
             planner_data = PlannerData()
 
         nonlocal key
-        key, subkey = random.split(key)  # type: ignore
+        key, _ = random.split(key)  # type: ignore
 
         if z is None:
             z = x
@@ -98,7 +98,8 @@ def stepper(
             planner_data = planner_data._replace(prev_robustness=None)
 
         if planner is not None:
-            u_planner, planner_data = planner(t, z, None, subkey, planner_data)  # type: ignore
+            key, planner_key = random.split(key)  # type: ignore
+            u_planner, planner_data = planner(t, z, None, planner_key, planner_data)
             if planner_data.error:
                 return (
                     x,
@@ -116,15 +117,18 @@ def stepper(
         elif planner_data.x_traj is not None:
             timestep_idx = jnp.round(t / dt).astype(int)
             timestep_idx = jnp.clip(timestep_idx, 0, planner_data.x_traj.shape[1] - 1)
-            u, _ = nominal_controller(t, z, subkey, planner_data.x_traj[:, timestep_idx])  # type: ignore
+            key, nom_key = random.split(key)  # type: ignore
+            u, _ = nominal_controller(t, z, nom_key, planner_data.x_traj[:, timestep_idx])
         else:
             if nominal_controller is None:
                 u = jnp.zeros((g.shape[1],))
             else:
-                u, _ = nominal_controller(t, z, subkey, None)  # type: ignore
+                key, nom_key = random.split(key)  # type: ignore
+                u, _ = nominal_controller(t, z, nom_key, None)
 
+        key, ctrl_key = random.split(key)  # type: ignore
         if controller is not None:
-            u, controller_data = controller(t, z, u, subkey, controller_data)  # type: ignore
+            u, controller_data = controller(t, z, u, ctrl_key, controller_data)
             if controller_data.error:
                 return (
                     x,
