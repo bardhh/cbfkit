@@ -3,22 +3,28 @@ This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks
 to reach a goal region while avoiding dynamic obstacles.
 
 """
+import matplotlib
+
+# Hack to prevent matplotlib.use("macosx") error in imported modules
+matplotlib.use = lambda *args, **kwargs: None
 
 from typing import List
 
 import numpy as np
 from jax import Array
+import jax.numpy as jnp
 
-import cbfkit.system as system
-from cbfkit.controllers.model_based.cbf_clf_controllers.risk_aware_cbf_clf_controllers import (
-    cbf_clf_controller,
+import cbfkit.simulation.simulator as system
+from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
+    risk_aware_cbf_clf_qp_controller as cbf_clf_controller,
 )
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import runge_kutta_4 as integrator
-from cbfkit.models import van_der_pol
+from cbfkit.systems import van_der_pol
 from cbfkit.sensors import perfect as sensor
-from examples.van_der_pol.ra_fxt_clbf.lyapunov_functions import fxts_lyapunov
-from examples.van_der_pol.ra_fxt_clbf.perfect_state_measurements import setup
+from examples.van_der_pol.common.lyapunov_functions import fxts_lyapunov
+from examples.van_der_pol.common.config import perfect_state_measurements as setup
 
 # Lyapunov Barrier Functions
 lyapunovs = fxts_lyapunov(
@@ -28,25 +34,24 @@ lyapunovs = fxts_lyapunov(
     setup.c2,
     setup.e1,
     setup.e2,
-)
+)()
 
 # number of simulation steps
 N_STEPS = int(setup.tf / setup.dt)
 
 # Define dynamics, controller, and estimator with specified parameters
 dynamics = van_der_pol.reverse_van_der_pol_oscillator(epsilon=setup.epsilon, sigma=setup.Q)
-# controller = van_der_pol.fxt_lyapunov_controller(epsilon=setup.epsilon)
-# controller = van_der_pol.fxt_stochastic_lyapunov_controller(
-#     epsilon=setup.epsilon,
-#     sigma_sum_squares=np.sum(setup.Q**2),
-# )
-# controller = van_der_pol.fxt_risk_aware_lyapunov_controller(
-#     epsilon=setup.epsilon,
-#     sigma_sum_squares=np.sum(setup.Q**2),
-#     pg=setup.pg,
-#     t_reach=setup.Tg,
-#     vartheta=2 * np.dot(np.array([2.0, 2.0]), np.diagonal(setup.Q)),
-# )
+
+risk_aware_clf_params = RiskAwareParams(
+    t_max=setup.Tg,
+    p_bound=setup.pg,
+    gamma=setup.gamma_v,
+    eta=setup.eta_v,
+    epsilon=setup.epsilon,
+    lambda_h=setup.lambda_h,
+    lambda_generator=setup.lambda_generator,
+    sigma=lambda x: setup.Q,
+)
 
 nominal_controller = van_der_pol.zero_controller()
 controller = cbf_clf_controller(
@@ -54,10 +59,7 @@ controller = cbf_clf_controller(
     dynamics_func=dynamics,
     lyapunovs=lyapunovs,
     control_limits=setup.actuation_limits,
-    t_max=setup.Tg,
-    p_bound_v=setup.pg,
-    gamma_v=setup.gamma_v,
-    eta_v=setup.eta_v,
+    ra_clf_params=risk_aware_clf_params,
 )
 
 
@@ -70,7 +72,16 @@ def execute(_ii: int = 1) -> List[Array]:
     Returns:
         List[Array]: _description_
     """
-    x, u, z, p, dkeys, dvalues = system.execute(
+    (
+        x,
+        u,
+        z,
+        p,
+        dkeys,
+        dvalues,
+        planner_keys,
+        planner_values,
+    ) = system.execute(
         x0=setup.initial_state,
         dynamics=dynamics,
         sensor=sensor,
@@ -78,7 +89,7 @@ def execute(_ii: int = 1) -> List[Array]:
         estimator=estimator,
         integrator=integrator,
         dt=setup.dt,
-        R=setup.R,
+        sigma=setup.R,
         num_steps=N_STEPS,
     )
 

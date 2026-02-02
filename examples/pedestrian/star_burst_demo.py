@@ -11,10 +11,10 @@ import sys
 import time
 
 import jax.numpy as jnp
+import matplotlib
 import numpy as np
 
-# Add project root
-sys.path.append(os.getcwd())
+matplotlib.use("Agg")
 
 from jax import jit
 
