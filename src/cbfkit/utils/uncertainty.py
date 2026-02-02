@@ -1,4 +1,5 @@
 from typing import Any, List, Optional, Tuple, Union
+import warnings
 
 import numpy as np
 from numpy.random import Generator
@@ -62,6 +63,11 @@ def generate_uncertainty_pmf(
     std_uy = np.sqrt(std_uy_ux * (u[0, 0] ** 2) + std_uy_uy * (u[1, 0] ** 2))
 
     if rng is None:
+        warnings.warn(
+            "Using global numpy random state. For reproducible results, pass an explicit rng or seed.",
+            UserWarning,
+            stacklevel=2,
+        )
         rng = np.random
     elif isinstance(rng, int):
         rng = np.random.default_rng(rng)

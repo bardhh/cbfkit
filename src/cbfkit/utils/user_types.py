@@ -62,7 +62,7 @@ class ControllerData(NamedTuple):
     """Data structure for controller output."""
 
     error: bool = False
-    error_data: Any = None
+    error_data: Optional[Union[int, Array]] = None
     complete: bool = False
     sol: Optional[Array] = None
     u: Optional[Array] = None
@@ -102,6 +102,39 @@ class SimulationResults(NamedTuple):
     def planner_data(self) -> Dict[str, Array]:
         """Returns planner data as a dictionary."""
         return dict(zip(self.planner_keys, self.planner_values))
+
+    def __getitem__(self, key: Union[int, str]) -> Any:
+        """Allows dictionary-like access to simulation results.
+
+        Args:
+            key (Union[int, str]): Integer index (tuple access) or string key.
+
+        Returns:
+            Any: The requested data.
+
+        Raises:
+            KeyError: If the key is not found in fields, controller_data, or planner_data.
+
+        Examples:
+            >>> results["states"]  # Access field
+            >>> results["sol"]     # Access controller data
+            >>> results[0]         # Access by index (legacy)
+        """
+        if isinstance(key, int):
+            return tuple.__getitem__(self, key)
+        if isinstance(key, str):
+            if key in self._fields:
+                return getattr(self, key)
+            if key in self.controller_keys:
+                idx = self.controller_keys.index(key)
+                return self.controller_values[idx]
+            if key in self.planner_keys:
+                idx = self.planner_keys.index(key)
+                return self.planner_values[idx]
+            raise KeyError(
+                f"Key '{key}' not found in SimulationResults fields, controller_data, or planner_data."
+            )
+        return tuple.__getitem__(self, key)
 
 
 # Certificate (Barrier, Lyapunov, Barrier-Lyapunov, etc.) Function Callables
@@ -287,6 +320,28 @@ class CbfClfQpConfig(TypedDict, total=False):
     clf_complete_tol: float
 
 
+class CbfClfQpData(TypedDict, total=False):
+    """Data returned by CBF-CLF-QP controllers in sub_data.
+
+    Attributes:
+        solver_params (Tuple[Any, Any]): Tuple of (KKTSolution, OSQPState) from jaxopt.
+        solver_iter (Union[int, Array]): Number of iterations taken by the solver.
+        solver_status (Union[int, Array]): Exit status of the solver.
+        complete (bool): Whether the CLF task is complete.
+        bfs (Array): Values of barrier functions.
+        lfs (Array): Values of lyapunov functions.
+        violated (Union[bool, Array]): Whether any barrier function is violated.
+    """
+
+    solver_params: Tuple[Any, Any]
+    solver_iter: Union[int, Array]
+    solver_status: Union[int, Array]
+    complete: bool
+    bfs: Array
+    lfs: Array
+    violated: Union[bool, Array]
+
+
 class CbfClfQpGenerator(Protocol):
     """Protocol for CBF-CLF-QP generator."""
 
@@ -294,9 +349,21 @@ class CbfClfQpGenerator(Protocol):
         self,
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        barriers: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
+        barriers: Optional[
+            Union[CertificateCollection, List[CertificateCollection]]
+        ] = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: Optional[
+            Union[CertificateCollection, List[CertificateCollection]]
+        ] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Array] = None,
+        *,
+        relaxable_clf: bool = True,
+        relaxable_cbf: bool = False,
+        tunable_class_k: bool = False,
+        slack_bound_cbf: Optional[float] = None,
+        slack_bound_clf: float = 1e9,
+        slack_penalty_cbf: float = 2e3,
+        slack_penalty_clf: float = 2e3,
         **kwargs: Any,
     ) -> ControllerCallable:
         """Call method."""

@@ -26,7 +26,7 @@ Examples
 >>> )
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import jax.numpy as jnp
 import jax.debug as jdebug
@@ -39,6 +39,7 @@ from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
     CbfClfQpConfig,
+    CbfClfQpData,
     CbfClfQpGenerator,
     CertificateCollection,
     Control,
@@ -57,9 +58,7 @@ from .generate_constraints import (
 )
 
 
-def _normalize_certificate_collection(
-    cert_collection: Any, name: str
-) -> CertificateCollection:
+def _normalize_certificate_collection(cert_collection: Any, name: str) -> CertificateCollection:
     """Validates and normalizes certificate collection structure.
 
     Accepts:
@@ -138,8 +137,12 @@ def cbf_clf_qp_generator(
     def generate_cbf_clf_controller(
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        barriers: Optional[Union[CertificateCollection, List[CertificateCollection]]] = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: Optional[Union[CertificateCollection, List[CertificateCollection]]] = EMPTY_CERTIFICATE_COLLECTION,
+        barriers: Optional[
+            Union[CertificateCollection, List[CertificateCollection]]
+        ] = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: Optional[
+            Union[CertificateCollection, List[CertificateCollection]]
+        ] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Union[Array, None]] = None,
         *,
         relaxable_clf: bool = True,
@@ -154,7 +157,8 @@ def cbf_clf_qp_generator(
         """Produces the function to deploy a CBF-CLF-QP control law.
 
         Args:
-            control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.]
+            control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.].
+                Can be a scalar for 1D systems.
             dynamics_func (DynamicsCallable): function to compute dynamics based on current state
             barriers (CertificateCollection | List[CertificateCollection]): collection of barrier functions,
                 gradients, hessians, dh/dt, conditions. Can be a single collection or a list of them.
@@ -186,6 +190,9 @@ def cbf_clf_qp_generator(
                 "slack_penalty_clf": slack_penalty_clf,
             }
         )
+
+        # Atlas: Support scalar inputs for 1D systems
+        control_limits = jnp.atleast_1d(jnp.asarray(control_limits))
 
         # Validate configuration to prevent silent failures (e.g., NaNs from negative penalties)
         if slack_penalty_cbf < 0:
@@ -269,6 +276,9 @@ def cbf_clf_qp_generator(
         scale_clf = 1.0
         auto_p_mat = p_mat is None
 
+        # Precompute scaling vector for solution recovery
+        sol_scaling_vector = jnp.ones((n_con + n_bfs + n_lfs,))
+
         if auto_p_mat:
             penalty_cbf = slack_penalty_cbf
             penalty_clf = slack_penalty_clf
@@ -302,6 +312,12 @@ def cbf_clf_qp_generator(
             limit_clf = control_limits[n_con + n_bfs :] / scale_clf
             control_limits = jnp.hstack([limit_u, limit_cbf, limit_clf])
 
+            # Populate scaling vector
+            if n_bfs > 0:
+                sol_scaling_vector = sol_scaling_vector.at[n_con : n_con + n_bfs].set(scale_cbf)
+            if n_lfs > 0:
+                sol_scaling_vector = sol_scaling_vector.at[n_con + n_bfs :].set(scale_clf)
+
         # Bolt: Pass scales to constraint generators to avoid post-hoc scaling in loop
         if auto_p_mat:
             kwargs["scale_cbf"] = scale_cbf
@@ -313,9 +329,9 @@ def cbf_clf_qp_generator(
             if n_bfs > 0:
                 sol_scaling_vector = sol_scaling_vector.at[n_con : n_con + n_bfs].set(scale_cbf)
             if n_lfs > 0:
-                sol_scaling_vector = sol_scaling_vector.at[n_con + n_bfs : n_con + n_bfs + n_lfs].set(
-                    scale_clf
-                )
+                sol_scaling_vector = sol_scaling_vector.at[
+                    n_con + n_bfs : n_con + n_bfs + n_lfs
+                ].set(scale_clf)
 
         # Ensure p_mat is defined for the controller closure
         assert p_mat is not None
@@ -414,13 +430,38 @@ def cbf_clf_qp_generator(
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
 
+            # Bolt: Enforce non-negativity for tunable Class K parameters to prevent safety inversion
+            if "tunable_class_k" in kwargs and kwargs["tunable_class_k"] and n_bfs > 0:
+                # Constraints: -delta <= 0  (delta >= 0)
+                # tunable parameters are located at indices [n_con : n_con + n_bfs]
+                n_total_vars = n_con + n_bfs + n_lfs
+                g_pos = jnp.zeros((n_bfs, n_total_vars))
+
+                # Set -1.0 for the tunable columns using vector indexing
+                row_indices = jnp.arange(n_bfs)
+                col_indices = n_con + jnp.arange(n_bfs)
+                g_pos = g_pos.at[row_indices, col_indices].set(-1.0)
+
+                h_pos = jnp.zeros((n_bfs,))
+
+                g_mat = jnp.vstack([g_mat, g_pos])
+                h_vec = jnp.hstack([h_vec, h_pos])
+
             # Sentinel: Detect NaNs in QP inputs
-            nan_in_inputs = jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isnan(h_vec))
+            nan_in_inputs = (
+                jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isnan(h_vec))
+            )
 
             # Solve QP
             solver_params = None
-            if data.sub_data is not None and "solver_params" in data.sub_data:
-                solver_params = data.sub_data["solver_params"]
+
+            # Cast sub_data to typed version for safe access
+            controller_sub_data = cast(
+                CbfClfQpData, data.sub_data if data.sub_data is not None else {}
+            )
+
+            if "solver_params" in controller_sub_data:
+                solver_params = controller_sub_data["solver_params"]
 
             sol, status, new_params = solve_qp(
                 p_mat, q_vec, g_mat, h_vec, init_params=solver_params
@@ -433,7 +474,8 @@ def cbf_clf_qp_generator(
 
             # Sentinel: Explicitly catch NaN solutions even if solver claims success
             # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0)
-            status = jnp.where(jnp.any(jnp.isnan(sol)) | nan_in_inputs, -1, status)
+            status = jnp.where(jnp.any(jnp.isnan(sol)), -1, status)
+            status = jnp.where(nan_in_inputs, -2, status)
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
@@ -445,20 +487,49 @@ def cbf_clf_qp_generator(
             # Status 2 (MAX_ITER) or 5 (MAX_ITER_UNSOLVED) means potentially unconverged/unsafe solution.
             success = status == 1
 
-            def _print_failure(status, iter_num):
-                jdebug.print(
-                    "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
-                    status=status,
-                    iter=iter_num,
+            def _print_failure(status, iter_num, sub_data):
+                # Sentinel: Map status codes to human-readable strings
+                def print_status_msg(msg):
+                    jdebug.print(
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} ({msg}) (Iter: {iter}). Output set to NaN.",
+                        status=status,
+                        msg=msg,
+                        iter=iter_num,
+                    )
+
+                lax.switch(
+                    status + 1,  # Map -1 to index 0
+                    [
+                        lambda: print_status_msg("NAN_DETECTED"),  # -1
+                        lambda: print_status_msg("UNSOLVED"),  # 0
+                        lambda: jdebug.print(
+                            "⚠️ CBF-CLF-QP Succeeded (Unexpected failure call). Status: {status}",
+                            status=status,
+                        ),  # 1 (Should not happen)
+                        lambda: print_status_msg("MAX_ITER_REACHED"),  # 2
+                        lambda: print_status_msg("PRIMAL_INFEASIBLE"),  # 3
+                        lambda: print_status_msg("DUAL_INFEASIBLE"),  # 4
+                        lambda: print_status_msg("MAX_ITER_UNSOLVED"),  # 5
+                    ],
                 )
 
-            # Debug hook: Print failure details if solver failed
+                if "bfs" in sub_data:
+                    jdebug.print("   -> Barrier Values (h): {h}", h=sub_data["bfs"])
+                if "lfs" in sub_data:
+                    jdebug.print("   -> Lyapunov Values (V): {V}", V=sub_data["lfs"])
+
+            # Sentinel: Only print failure if we weren't already in error state
+            prev_error = data.error if data.error is not None else jnp.array(False)
+            should_print = (success == False) & (prev_error == False)
+
+            # Debug hook: Print failure details if solver failed AND it's a new failure
             lax.cond(
-                success,
-                lambda *_: None,
+                should_print,
                 _print_failure,
+                lambda *_: None,
                 status,
                 iter_num,
+                sub_data,
             )
 
             u = lax.cond(
@@ -478,7 +549,7 @@ def cbf_clf_qp_generator(
             error = lax.cond(success, lambda _fake: False, lambda _fake: True, 0)
 
             # logging data
-            final_sub_data = sub_data or {}
+            final_sub_data = cast(CbfClfQpData, sub_data or {})
             final_sub_data["solver_params"] = new_params
             final_sub_data["solver_iter"] = iter_num
             # Sentinel: Explicitly log solver status for diagnostics/warnings
@@ -491,7 +562,7 @@ def cbf_clf_qp_generator(
                 sol=jnp.array(sol),
                 u=u,
                 u_nom=u_nom,
-                sub_data=final_sub_data,
+                sub_data=cast(Dict[str, Any], final_sub_data),
             )
 
             return u, data
