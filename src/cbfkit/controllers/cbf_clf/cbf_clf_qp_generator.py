@@ -491,10 +491,13 @@ def cbf_clf_qp_generator(
                 # Sentinel: Map status codes to human-readable strings
                 def print_status_msg(msg):
                     jdebug.print(
-                        "⚠️ CBF-CLF-QP Failed! Status: {status} ({msg}) (Iter: {iter}). Output set to NaN.",
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.\n"
+                        "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
                         status=status,
                         msg=msg,
                         iter=iter_num,
+                        relax_cbf=relaxable_cbf,
+                        relax_clf=relaxable_clf,
                     )
 
                 lax.switch(
@@ -514,7 +517,14 @@ def cbf_clf_qp_generator(
                 )
 
                 if "bfs" in sub_data:
-                    jdebug.print("   -> Barrier Values (h): {h}", h=sub_data["bfs"])
+                    h_val = sub_data["bfs"]
+                    jdebug.print("   -> Barrier Values (h): {h}", h=h_val)
+                    lax.cond(
+                        jnp.any(h_val < 0.0),
+                        lambda: jdebug.print("      (Warning: h < 0 detected. System is strictly unsafe.)"),
+                        lambda: None,
+                    )
+
                 if "lfs" in sub_data:
                     jdebug.print("   -> Lyapunov Values (V): {V}", V=sub_data["lfs"])
 
