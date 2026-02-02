@@ -10,8 +10,8 @@ class TestQPSolverSafety(unittest.TestCase):
     def test_max_iter_safety(self):
         """
         Regression test: Verify handling of MAX_ITER_REACHED (status 2).
-        The controller currently accepts status 2 as success to prevent crashes,
-        relying on warnings for sub-optimality.
+        The controller treats status 2 as failure (unsafe to use unconverged result),
+        returning NaNs.
         """
 
         # 1. Setup simple controller
@@ -72,14 +72,14 @@ class TestQPSolverSafety(unittest.TestCase):
             u, new_data = controller(t, x, u_nom, key, data)
 
             # 5. Assertions
-            # The controller currently accepts status 2 as success.
-            # u should be zeros (from mock solution)
-            self.assertFalse(jnp.isnan(u).any(), f"Controller returned NaNs {u} for MAX_ITER status (should be accepted)!")
+            # The controller treats status 2 as failure.
+            # u should be NaNs
+            self.assertTrue(jnp.isnan(u).any(), f"Controller returned valid output {u} for MAX_ITER status (should be NaNs)!")
 
-            # Error flag should be False (success)
-            self.assertFalse(new_data.error, "Controller reported error for status 2!")
+            # Error flag should be True (failure)
+            self.assertTrue(new_data.error, "Controller failed to report error for status 2!")
 
-            # Error data should capture the status code 2 (even if successful, it stores status)
+            # Error data should capture the status code 2
             self.assertEqual(new_data.error_data, 2, f"Controller reported wrong status: {new_data.error_data}")
 
 if __name__ == '__main__':
