@@ -1,3 +1,10 @@
+import sys
+import os
+
+# Add the project root to the path so we can import examples
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+sys.path.insert(0, root_path)
+
 import jax.numpy as jnp
 
 import cbfkit.simulation.simulator as sim
@@ -10,6 +17,7 @@ from cbfkit.certificates.conditions.barrier_conditions import (
     zeroing_barriers,
 )
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
+import examples.unicycle.common.ellipsoidal_obstacle as ellipsoidal_obstacle
 
 # Simulation parameters
 tf = 10.0
@@ -55,7 +63,7 @@ ellipsoids = [
 
 barriers = [
     rectify_relative_degree(
-        function=unicycle.certificates.barrier_functions.ellipsoidal_obstacle.cbf(obs, ell),
+        function=ellipsoidal_obstacle.cbf(obs, ell),
         system_dynamics=unicycle_dynamics,
         state_dim=len(init_state),
         form="exponential",
