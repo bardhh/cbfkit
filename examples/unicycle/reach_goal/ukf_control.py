@@ -76,6 +76,7 @@ if simulate:
         integrator=integrator,
         dt=dt,
         sigma=initial_conditions.R,
+        initial_covariance=initial_conditions.R * scale_factor,
         num_steps=n_steps,
         planner_data=PlannerData(
             u_traj=None,

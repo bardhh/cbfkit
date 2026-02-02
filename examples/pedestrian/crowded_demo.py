@@ -8,7 +8,6 @@ import os
 import sys
 
 import jax.numpy as jnp
-import numpy as np
 
 # Add project root
 sys.path.append(os.getcwd())

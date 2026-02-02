@@ -11,7 +11,7 @@ Future Relay runs will skip these files to avoid stalling on known issues.
 
 | File | Error Type | Reason | Date Added |
 |------|------------|--------|------------|
-| *(none yet)* | - | - | - |
+| tutorials/single_integrator_dynamic_obstacles.py | Empty File | File content is missing/empty. | 2026-02-02 |
 
 ---
 

@@ -27,18 +27,19 @@ def stage_cost(
     """
 
     @jit
-    def func(state_and_time: Array, action: Array) -> Array:
+    def func(state: Array, action: Array) -> Array:
         """Function to be evaluated.
 
         Args:
-            state_and_time (Array): concatenated state vector and time
+            state (Array): state vector
 
         Returns:
-            Array: cbf value
+            Array: cost value
         """
-        x = state_and_time
-        return 0.2 * ((x[0] - goal[0]) ** 2 + (x[1] - goal[1]) ** 2) + 10.0 / jnp.max(
-            jnp.array([(jnp.linalg.norm(x[0:2] - obstacle[0:2]) - obstacle_radius), 0.01])
+        x = state
+        dist = jnp.linalg.norm(x[0:2] - obstacle[0:2]) - obstacle_radius
+        return 0.2 * ((x[0] - goal[0]) ** 2 + (x[1] - goal[1]) ** 2) + 10.0 / jnp.maximum(
+            dist, 0.01
         )
 
     return func
