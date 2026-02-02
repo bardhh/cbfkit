@@ -154,7 +154,8 @@ def cbf_clf_qp_generator(
         """Produces the function to deploy a CBF-CLF-QP control law.
 
         Args:
-            control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.]
+            control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.].
+                Can be a scalar for 1D systems.
             dynamics_func (DynamicsCallable): function to compute dynamics based on current state
             barriers (CertificateCollection | List[CertificateCollection]): collection of barrier functions,
                 gradients, hessians, dh/dt, conditions. Can be a single collection or a list of them.
@@ -186,6 +187,9 @@ def cbf_clf_qp_generator(
                 "slack_penalty_clf": slack_penalty_clf,
             }
         )
+
+        # Atlas: Support scalar inputs for 1D systems
+        control_limits = jnp.atleast_1d(jnp.asarray(control_limits))
 
         # Validate configuration to prevent silent failures (e.g., NaNs from negative penalties)
         if slack_penalty_cbf < 0:
