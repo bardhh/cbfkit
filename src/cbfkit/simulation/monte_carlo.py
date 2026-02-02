@@ -8,6 +8,7 @@ conduct_monte_carlo(execute, n_trials, n_processes, **kwargs)
     Conducts a Monte Carlo simulation."""
 
 import inspect
+import logging
 import multiprocessing as mp
 from typing import Callable, Optional
 import numpy as np
@@ -74,6 +75,12 @@ def conduct_monte_carlo(
 
     # Generate integer seeds for each trial
     # If seed is None, we use entropy to ensure trials are different
+    if seed is None:
+        seed = np.random.SeedSequence().entropy
+        logging.getLogger(__name__).warning(
+            f"Monte Carlo simulation initialized with random seed: {seed}"
+        )
+
     rng = np.random.default_rng(seed)
     # Generate random integers safely within range for PRNGKey
     worker_seeds = rng.integers(low=0, high=2**32 - 1, size=n_trials)
