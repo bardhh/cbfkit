@@ -58,7 +58,7 @@ from jax import Array
 
 
 def a_s() -> Callable[[Array], Array]:
-    """Generates function for computing RHS of Lyapunov conditions for Exponential stability:
+    """Generates function for computing RHS of Lyapunov conditions for Asymptotic stability:
 
     Vdot <= 0
 
