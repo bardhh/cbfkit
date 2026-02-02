@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 
@@ -22,7 +23,7 @@ SCRIPTS_TO_TEST = [
 
 @pytest.mark.slow
 @pytest.mark.parametrize("script_path", SCRIPTS_TO_TEST)
-def test_example_script_execution(script_path):
+def test_example_script_execution(script_path, tmp_path):
     """Runs the specified example script as a subprocess and asserts it exits with code 0."""
     # Check if file exists
     if not os.path.exists(script_path):
@@ -32,14 +33,29 @@ def test_example_script_execution(script_path):
     env = os.environ.copy()
     env["MPLBACKEND"] = "Agg"
     env["CBFKIT_TEST_MODE"] = "1"
-    # Ensure src and root (for examples) are in python path
-    env["PYTHONPATH"] = f"{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
+    # Ensure tmp_path (for generated/copied modules), src and root (for examples) are in python path
+    # Prepend tmp_path to PYTHONPATH so that imported modules (like 'tutorials') are loaded
+    # from the temporary directory (where code generation happens) instead of the source tree.
+    env["PYTHONPATH"] = f"{tmp_path}{os.pathsep}{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
+
+    # Copy script parent directory to tmp_path to ensure relative assets/imports work
+    # and to isolate output files.
+    src_dir = os.path.dirname(script_path)
+    dst_dir = tmp_path / src_dir
+
+    # We use dirs_exist_ok=True just in case, though tmp_path should be empty
+    shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
 
     try:
         # Run the script
         # We use sys.executable to ensure we use the same python interpreter (venv)
         subprocess.run(
-            [sys.executable, script_path], env=env, capture_output=True, text=True, check=True
+            [sys.executable, script_path],
+            env=env,
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
         )
 
     except subprocess.CalledProcessError as e:

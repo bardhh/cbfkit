@@ -116,7 +116,7 @@ mppi_args = {
     "robot_state_dim": 2,
     "robot_control_dim": 2,
     "prediction_horizon": 80,
-    "num_samples": 20000,
+    "num_samples": 20000 if not os.getenv("CBFKIT_TEST_MODE") else 100,
     "plot_samples": 30,
     "time_step": DT,
     "use_GPU": False,
