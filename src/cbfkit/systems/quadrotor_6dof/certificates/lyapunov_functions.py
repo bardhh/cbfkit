@@ -1,7 +1,7 @@
 from typing import Callable, List, Tuple
 
 import jax.numpy as jnp
-from control import lqr
+from cbfkit.utils.lqr import lqr
 from jax import Array, jacfwd, jacrev, jit
 
 from cbfkit.utils.matrix_vector_operations import normalize, vee
