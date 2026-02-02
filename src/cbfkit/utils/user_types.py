@@ -62,7 +62,7 @@ class ControllerData(NamedTuple):
     """Data structure for controller output."""
 
     error: bool = False
-    error_data: Any = None
+    error_data: Optional[Union[int, Array]] = None
     complete: bool = False
     sol: Optional[Array] = None
     u: Optional[Array] = None
@@ -295,12 +295,18 @@ class CbfClfQpData(TypedDict, total=False):
         solver_iter (Union[int, Array]): Number of iterations taken by the solver.
         solver_status (Union[int, Array]): Exit status of the solver.
         complete (bool): Whether the CLF task is complete.
+        bfs (Array): Values of barrier functions.
+        lfs (Array): Values of lyapunov functions.
+        violated (Union[bool, Array]): Whether any barrier function is violated.
     """
 
     solver_params: Tuple[Any, Any]
     solver_iter: Union[int, Array]
     solver_status: Union[int, Array]
     complete: bool
+    bfs: Array
+    lfs: Array
+    violated: Union[bool, Array]
 
 
 class CbfClfQpGenerator(Protocol):
