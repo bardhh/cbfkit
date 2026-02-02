@@ -65,6 +65,11 @@ from cbfkit.utils.user_types import (
 KEY = random.PRNGKey(0)
 KEY, SUBKEY = random.split(KEY)
 
+# Tolerance for determining if relative degree is reached.
+# If total absolute control authority over random samples is below this threshold,
+# we treat it as zero (effective relative degree is higher).
+RELATIVE_DEGREE_TOLERANCE = 1e-6
+
 
 def kwargs_wrapper(func: Callable) -> Callable:
     def wrapper(**kwargs):
@@ -240,7 +245,7 @@ def compute_function_list(
             "Encountered NaN during relative degree verification. Check your dynamics function and constraint function for numerical stability."
         )
 
-    if total == 0:
+    if total < RELATIVE_DEGREE_TOLERANCE:
         if form == "exponential":
             new_func = exponential_new_func
 
