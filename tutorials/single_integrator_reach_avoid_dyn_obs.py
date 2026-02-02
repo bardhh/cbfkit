@@ -1,5 +1,9 @@
 #####################################################################
 #####################################################################
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import jax.numpy as jnp
 
 from cbfkit.codegen.create_new_system.generate_model import generate_model
@@ -147,15 +151,15 @@ from models.single_integrator.certificate_functions.barrier_functions.barrier_5 
 
 #####################################################################
 #####################################################################
-from cbfkit.controllers.model_based.cbf_clf_controllers import vanilla_cbf_clf_qp_controller
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.barrier_conditions.zeroing_barriers import (
+from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import (
     cubic_class_k,
     linear_class_k,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.certificates import (
     concatenate_certificates,
 )
-from cbfkit.controllers.model_based.cbf_clf_controllers.utils.rectify_relative_degree import (
+from cbfkit.certificates import (
     rectify_relative_degree,
 )
 
@@ -179,7 +183,6 @@ barriers = concatenate_certificates(
 # Update controller setup
 controller = vanilla_cbf_clf_qp_controller(
     actuation_limits,
-    nominal_controller,
     dynamics,
     barriers,
     p_mat=jnp.eye(2),  # Simplified p_mat
@@ -196,12 +199,13 @@ from cbfkit.sensors import perfect as sensor
 from cbfkit.simulation import simulator
 
 # Simulate the closed-loop system
-x, u, z, p, dkeys, dvals = simulator.execute(
+x, u, z, p, dkeys, dvals, _, _ = simulator.execute(
     x0=initial_state,
     dt=1e-2,
     num_steps=1000,
     dynamics=dynamics,
     integrator=runge_kutta_4,
+    nominal_controller=nominal_controller,
     controller=controller,
     sensor=sensor,
     estimator=naive,

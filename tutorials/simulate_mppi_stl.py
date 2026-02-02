@@ -1,5 +1,8 @@
 import os
+import sys
 import importlib
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import jax.numpy as jnp
 from jax import Array, jit
