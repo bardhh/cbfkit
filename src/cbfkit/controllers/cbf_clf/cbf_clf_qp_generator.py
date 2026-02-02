@@ -42,6 +42,7 @@ from cbfkit.utils.user_types import (
     CbfClfQpData,
     CbfClfQpGenerator,
     CertificateCollection,
+    CertificateInput,
     Control,
     ControllerCallable,
     ControllerCallableReturns,
@@ -58,7 +59,9 @@ from .generate_constraints import (
 )
 
 
-def _normalize_certificate_collection(cert_collection: Any, name: str) -> CertificateCollection:
+def _normalize_certificate_collection(
+    cert_collection: Optional[CertificateInput], name: str
+) -> CertificateCollection:
     """Validates and normalizes certificate collection structure.
 
     Accepts:
@@ -137,12 +140,8 @@ def cbf_clf_qp_generator(
     def generate_cbf_clf_controller(
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        barriers: Optional[
-            Union[CertificateCollection, List[CertificateCollection]]
-        ] = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: Optional[
-            Union[CertificateCollection, List[CertificateCollection]]
-        ] = EMPTY_CERTIFICATE_COLLECTION,
+        barriers: Optional[CertificateInput] = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: Optional[CertificateInput] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Union[Array, None]] = None,
         *,
         relaxable_clf: bool = True,
@@ -160,10 +159,10 @@ def cbf_clf_qp_generator(
             control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.].
                 Can be a scalar for 1D systems.
             dynamics_func (DynamicsCallable): function to compute dynamics based on current state
-            barriers (CertificateCollection | List[CertificateCollection]): collection of barrier functions,
-                gradients, hessians, dh/dt, conditions. Can be a single collection or a list of them.
-            lyapunovs (CertificateCollection | List[CertificateCollection]): collection of lyapunov functions,
-                gradients, hessians, dV/dt,  conditions. Can be a single collection or a list of them.
+            barriers (CertificateInput): collection of barrier functions,
+                gradients, hessians, dh/dt, conditions. Can be a single collection, a list of them, or a legacy tuple.
+            lyapunovs (CertificateInput): collection of lyapunov functions,
+                gradients, hessians, dV/dt,  conditions. Can be a single collection, a list of them, or a legacy tuple.
             p_mat (Optional[Union[Array, None]] = None): objective function matrix (quadratic term)
             relaxable_clf (bool): whether to treat CLF as a soft constraint (default: True).
             relaxable_cbf (bool): whether to treat CBF as a soft constraint (default: False).
