@@ -1,9 +1,9 @@
 """
-#! MANUALLY POPULATE (docstring)
+Lyapunov function 1
 """
 import jax.numpy as jnp
 from jax import jit, jacfwd, jacrev, Array, lax
-from typing import List, Callable
+from typing import Callable
 from cbfkit.certificates import certificate_package
 
 N = 2
@@ -14,14 +14,14 @@ N = 2
 ###############################################################################
 
 
-def clf(goal: float, **kwargs) -> Callable[[Array], Array]:
+def clf(goal: Array, **kwargs) -> Callable[[Array], Array]:
     """Super-level set convention.
 
     Args:
-        #! kwargs -- optional to manually populate
+        goal (Array): goal state
 
     Returns:
-        ret (float): value of goal function evaluated at time and state
+        ret (Array): value of goal function evaluated at time and state
 
     """
 
@@ -41,14 +41,14 @@ def clf(goal: float, **kwargs) -> Callable[[Array], Array]:
     return func
 
 
-def clf_grad(goal: float, **kwargs) -> Callable[[Array], Array]:
+def clf_grad(goal: Array, **kwargs) -> Callable[[Array], Array]:
     """Jacobian for the goal function defined by clf.
 
     Args:
-        #! kwargs -- manually populate
+        goal (Array): goal state
 
     Returns:
-        ret (float): value of goal function evaluated at time and state
+        ret (Array): value of goal function evaluated at time and state
 
     """
     jacobian = jacfwd(clf(goal, **kwargs))
@@ -69,14 +69,14 @@ def clf_grad(goal: float, **kwargs) -> Callable[[Array], Array]:
     return func
 
 
-def clf_hess(goal: float, **kwargs) -> Callable[[Array], Array]:
+def clf_hess(goal: Array, **kwargs) -> Callable[[Array], Array]:
     """Hessian for the goal function defined by clf.
 
     Args:
-        #! kwargs -- manually populate
+        goal (Array): goal state
 
     Returns:
-        ret (float): value of goal function evaluated at time and state
+        ret (Array): value of goal function evaluated at time and state
 
     """
     hessian = jacrev(jacfwd(clf(goal, **kwargs)))

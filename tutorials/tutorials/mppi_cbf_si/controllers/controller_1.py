@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from typing import *
+from typing import Optional
 from jax import jit, Array, lax
 from cbfkit.utils.user_types import (
     NominalControllerCallable,
@@ -16,7 +16,7 @@ def controller_1(
     Create a controller for the given dynamics.
 
     Args:
-        #! USER-POPULATE
+        k_p (float): proportional gain
 
     Returns:
         controller (Callable): handle to function computing control
@@ -39,7 +39,7 @@ def controller_1(
         """
         # logging data
         u_nom_val = -k_p * (x[0] - xd[0]), -k_p * (x[1] - xd[1])
-        data = ControllerData(u_nom=u_nom_val)
+        data = ControllerData(u_nom=jnp.array(u_nom_val))
 
         return jnp.array(u_nom_val), data
 
