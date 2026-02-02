@@ -5,7 +5,7 @@
 from typing import Any, Callable, Dict, Tuple
 
 import jax.numpy as jnp
-from jax import Array, jit, lax, scipy
+from jax import Array, jit, lax
 
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.utils.user_types import (
@@ -43,20 +43,12 @@ def generate_compute_ra_pi_cbf_constraints(
     # Check for Risk-Aware Params object
     if "ra_cbf_params" in kwargs:
         ra_params: RiskAwareParams = kwargs["ra_cbf_params"]  # type: ignore[assignment]
-        assert ra_params.eta is not None
-        assert ra_params.t_max is not None
-        assert ra_params.p_bound is not None
-        assert ra_params.gamma is not None
-        r_buffer = float(
-            ra_params.eta * jnp.sqrt(2 * ra_params.t_max) * scipy.special.erfinv(ra_params.p_bound)
-        )
     else:
         ra_params = RiskAwareParams(
             sigma=lambda x: jnp.zeros((x.shape[0], 1)),
             gamma=jnp.zeros(n_bfs),  # Initialize gamma
             integrator_states=jnp.zeros((n_bfs,)),  # Initialize integrator_states
         )
-        r_buffer = 0.0
 
     ra_params.integrator_states = jnp.zeros((n_bfs,))
 
@@ -74,9 +66,8 @@ def generate_compute_ra_pi_cbf_constraints(
 
         if n_bfs > 0:
             bf_x, bj_x, bh_x, dbf_t, _ = compute_barrier_values(t, x)
-            assert ra_params.gamma is not None
             # Ensure array types for addition
-            w_vals = ra_params.integrator_states + ra_params.gamma + r_buffer
+            w_vals = ra_params.integrator_states
             bc_x = jnp.stack([bc(w_vals[ii]) for ii, bc in enumerate(conditions)])
             traces = jnp.array(
                 [0.5 * jnp.trace(jnp.matmul(jnp.matmul(sigma.T, bh_ii), sigma)) for bh_ii in bh_x]
