@@ -1,4 +1,4 @@
-import multiprocessing as mp
+import os
 import pickle
 from typing import List, Tuple
 
@@ -56,11 +56,11 @@ controller = cbf_controller(
     alpha=jnp.array([1.0] * 3),
 )
 
-tf = 2.0
+tf = 2.0 if not os.environ.get("CBFKIT_TEST_MODE") else 0.1
 dt = 0.01
 X_MAX = 5.0
 Y_MAX = 5.0
-N_TRIALS = 10
+N_TRIALS = 10 if not os.environ.get("CBFKIT_TEST_MODE") else 2
 N_STEPS = int(tf / dt)
 N_STATES = len(desired_state)
 N_CONTROLS = approx_uniycle_nom_controller(0.0, desired_state, random.PRNGKey(0), None)[0].shape[0]
@@ -129,22 +129,13 @@ def execute_simulation(
 # Needed for multiprocessing
 if __name__ == "__main__":
     simulate = 1
-    plot = 1
+    plot = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
 
     if simulate:
-        import os
-
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
-        # Create a multiprocessing Pool
-        # Use n_processes=1 to avoid JAX pickling issues unless we handle it carefully
-        with mp.Pool(processes=1) as pool:
-            # Process the items in parallel
-            results = pool.map(execute_simulation, range(N_TRIALS))
-
-        # Close the pool and wait for the processes to finish
-        pool.close()
-        pool.join()
+        # Process the items sequentially to avoid JAX/multiprocessing issues
+        results = [execute_simulation(ii) for ii in range(N_TRIALS)]
 
         # Convert the results to a NumPy array
         state_record = [result[0] for result in results]
@@ -161,6 +152,11 @@ if __name__ == "__main__":
         # Save data in pickle format
         with open(filepath, "wb") as file:
             pickle.dump(save_data, file)
+
+        state_trajectories = state_record
+        control_trajectories = control_record
+        lyapunov_trajectories = lyapunov_record
+        w_trajectories = w_record
 
     else:
         # Load data from file

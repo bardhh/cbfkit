@@ -1,4 +1,8 @@
 import os
+import sys
+
+# Add the project root directory to the python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 import jax.numpy as jnp
 
@@ -79,6 +83,7 @@ controller = cbf_controller(
     dynamics_func=unicycle_dynamics,
     barriers=barrier_packages,
     sigma=sigma,
+    relaxable_cbf=True,
 )
 
 x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(

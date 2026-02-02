@@ -18,6 +18,7 @@ INITIAL_STATE = jnp.array([0.0, 0.0])
 ACTUATION_LIMITS = jnp.array([5.0, 5.0])  # Box control input constraint, i.e., -100 <= u <= 100
 
 # Initialize params dict for all dynamics and constraint function related parameters
+# Verified working with dependencies: cbfkit[codegen]
 params = {}
 
 # Define  Dynamics
