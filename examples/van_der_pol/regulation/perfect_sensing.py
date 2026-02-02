@@ -1,3 +1,8 @@
+import matplotlib
+
+# Hack to prevent matplotlib.use("macosx") error in imported modules
+matplotlib.use = lambda *args, **kwargs: None
+
 from typing import List, Tuple
 
 import jax.numpy as jnp
