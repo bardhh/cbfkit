@@ -42,6 +42,7 @@ from cbfkit.utils.user_types import (
     CbfClfQpData,
     CbfClfQpGenerator,
     CertificateCollection,
+    CertificateInput,
     Control,
     ControllerCallable,
     ControllerCallableReturns,
@@ -59,7 +60,7 @@ from .generate_constraints import (
 
 
 def _normalize_certificate_collection(
-    cert_collection: Any, name: str
+    cert_collection: Optional[CertificateInput], name: str
 ) -> CertificateCollection:
     """Validates and normalizes certificate collection structure.
 
@@ -139,8 +140,8 @@ def cbf_clf_qp_generator(
     def generate_cbf_clf_controller(
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        barriers: Optional[Union[CertificateCollection, List[CertificateCollection]]] = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: Optional[Union[CertificateCollection, List[CertificateCollection]]] = EMPTY_CERTIFICATE_COLLECTION,
+        barriers: Optional[CertificateInput] = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: Optional[CertificateInput] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Union[Array, None]] = None,
         *,
         relaxable_clf: bool = True,
@@ -158,10 +159,10 @@ def cbf_clf_qp_generator(
             control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.].
                 Can be a scalar for 1D systems.
             dynamics_func (DynamicsCallable): function to compute dynamics based on current state
-            barriers (CertificateCollection | List[CertificateCollection]): collection of barrier functions,
-                gradients, hessians, dh/dt, conditions. Can be a single collection or a list of them.
-            lyapunovs (CertificateCollection | List[CertificateCollection]): collection of lyapunov functions,
-                gradients, hessians, dV/dt,  conditions. Can be a single collection or a list of them.
+            barriers (CertificateInput): collection of barrier functions,
+                gradients, hessians, dh/dt, conditions. Can be a single collection, a list of them, or a legacy tuple.
+            lyapunovs (CertificateInput): collection of lyapunov functions,
+                gradients, hessians, dV/dt,  conditions. Can be a single collection, a list of them, or a legacy tuple.
             p_mat (Optional[Union[Array, None]] = None): objective function matrix (quadratic term)
             relaxable_clf (bool): whether to treat CLF as a soft constraint (default: True).
             relaxable_cbf (bool): whether to treat CBF as a soft constraint (default: False).
@@ -327,9 +328,9 @@ def cbf_clf_qp_generator(
             if n_bfs > 0:
                 sol_scaling_vector = sol_scaling_vector.at[n_con : n_con + n_bfs].set(scale_cbf)
             if n_lfs > 0:
-                sol_scaling_vector = sol_scaling_vector.at[n_con + n_bfs : n_con + n_bfs + n_lfs].set(
-                    scale_clf
-                )
+                sol_scaling_vector = sol_scaling_vector.at[
+                    n_con + n_bfs : n_con + n_bfs + n_lfs
+                ].set(scale_clf)
 
         # Ensure p_mat is defined for the controller closure
         assert p_mat is not None
@@ -428,14 +429,35 @@ def cbf_clf_qp_generator(
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
 
+            # Bolt: Enforce non-negativity for tunable Class K parameters to prevent safety inversion
+            if "tunable_class_k" in kwargs and kwargs["tunable_class_k"] and n_bfs > 0:
+                # Constraints: -delta <= 0  (delta >= 0)
+                # tunable parameters are located at indices [n_con : n_con + n_bfs]
+                n_total_vars = n_con + n_bfs + n_lfs
+                g_pos = jnp.zeros((n_bfs, n_total_vars))
+
+                # Set -1.0 for the tunable columns using vector indexing
+                row_indices = jnp.arange(n_bfs)
+                col_indices = n_con + jnp.arange(n_bfs)
+                g_pos = g_pos.at[row_indices, col_indices].set(-1.0)
+
+                h_pos = jnp.zeros((n_bfs,))
+
+                g_mat = jnp.vstack([g_mat, g_pos])
+                h_vec = jnp.hstack([h_vec, h_pos])
+
             # Sentinel: Detect NaNs in QP inputs
-            nan_in_inputs = jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isnan(h_vec))
+            nan_in_inputs = (
+                jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isnan(h_vec))
+            )
 
             # Solve QP
             solver_params = None
 
             # Cast sub_data to typed version for safe access
-            controller_sub_data = cast(CbfClfQpData, data.sub_data if data.sub_data is not None else {})
+            controller_sub_data = cast(
+                CbfClfQpData, data.sub_data if data.sub_data is not None else {}
+            )
 
             if "solver_params" in controller_sub_data:
                 solver_params = controller_sub_data["solver_params"]
@@ -465,31 +487,55 @@ def cbf_clf_qp_generator(
             success = status == 1
 
             def _print_failure(status, iter_num, sub_data):
-                def _print_generic():
+                # Sentinel: Map status codes to human-readable strings
+                def print_status_msg(msg):
                     jdebug.print(
-                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.\n"
+                        "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
                         status=status,
+                        msg=msg,
                         iter=iter_num,
+                        relax_cbf=relaxable_cbf,
+                        relax_clf=relaxable_clf,
                     )
 
-                def _print_nan_input():
-                    jdebug.print(
-                        "⚠️ CBF-CLF-QP Failed! NaN detected in QP inputs (dynamics or certificates). Status: {status}. Output set to NaN.",
-                        status=status,
-                    )
-
-                lax.cond(status == -2, _print_nan_input, _print_generic)
+                lax.switch(
+                    status + 1,  # Map -1 to index 0
+                    [
+                        lambda: print_status_msg("NAN_DETECTED"),  # -1
+                        lambda: print_status_msg("UNSOLVED"),  # 0
+                        lambda: jdebug.print(
+                            "⚠️ CBF-CLF-QP Succeeded (Unexpected failure call). Status: {status}",
+                            status=status,
+                        ),  # 1 (Should not happen)
+                        lambda: print_status_msg("MAX_ITER_REACHED"),  # 2
+                        lambda: print_status_msg("PRIMAL_INFEASIBLE"),  # 3
+                        lambda: print_status_msg("DUAL_INFEASIBLE"),  # 4
+                        lambda: print_status_msg("MAX_ITER_UNSOLVED"),  # 5
+                    ],
+                )
 
                 if "bfs" in sub_data:
-                    jdebug.print("   -> Barrier Values (h): {h}", h=sub_data["bfs"])
+                    h_val = sub_data["bfs"]
+                    jdebug.print("   -> Barrier Values (h): {h}", h=h_val)
+                    lax.cond(
+                        jnp.any(h_val < 0.0),
+                        lambda: jdebug.print("      (Warning: h < 0 detected. System is strictly unsafe.)"),
+                        lambda: None,
+                    )
+
                 if "lfs" in sub_data:
                     jdebug.print("   -> Lyapunov Values (V): {V}", V=sub_data["lfs"])
 
-            # Debug hook: Print failure details if solver failed
+            # Sentinel: Only print failure if we weren't already in error state
+            prev_error = data.error if data.error is not None else jnp.array(False)
+            should_print = (success == False) & (prev_error == False)
+
+            # Debug hook: Print failure details if solver failed AND it's a new failure
             lax.cond(
-                success,
-                lambda *_: None,
+                should_print,
                 _print_failure,
+                lambda *_: None,
                 status,
                 iter_num,
                 sub_data,

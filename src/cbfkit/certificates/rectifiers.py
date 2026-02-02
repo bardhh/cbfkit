@@ -228,6 +228,15 @@ def compute_function_list(
         )
 
     if total < RELATIVE_DEGREE_TOLERANCE:
+        # Aegis: Safety check to prevent infinite recursion for uncontrollable systems.
+        # If the function list length exceeds state dimension (n+1), it implies relative degree
+        # is greater than system dimension (impossible for controllable output) or undefined.
+        if len(func_list) >= state_dim:
+            raise ValueError(
+                f"Relative degree undefined or exceeds system dimension ({state_dim - 1}). "
+                "Check that your barrier function depends on the state variables affected by control input."
+            )
+
         if form == "exponential":
             new_func = exponential_new_func
 
