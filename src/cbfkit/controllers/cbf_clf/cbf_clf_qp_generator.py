@@ -389,8 +389,12 @@ def cbf_clf_qp_generator(
             # QP solution already respects control limits via input constraints.
             # Only clip the fallback u_nom (which may exceed limits) to avoid
             # inadvertently violating CBF constraints on the QP-solved path.
+            # Sentinel: Accept SOLVED (1) or MAX_ITER_REACHED (2) as success.
+            # Status 2 means we ran out of time but have a candidate solution.
+            success = (status == 1) | (status == 2)
+
             u = lax.cond(
-                status == 1,
+                success,
                 # Bolt: Avoid jnp.array copy and reshape (sol is already 1D)
                 lambda _fake: sol[:n_con],
                 # Aegis: Return NaN if QP fails to make failure mode explicit.
@@ -403,12 +407,14 @@ def cbf_clf_qp_generator(
                 #! To Do: integrate RA-PI states
                 pass
 
-            error = lax.cond(status == 1, lambda _fake: False, lambda _fake: True, 0)
+            error = lax.cond(success, lambda _fake: False, lambda _fake: True, 0)
 
             # logging data
             final_sub_data = sub_data or {}
             final_sub_data["solver_params"] = new_params
             final_sub_data["solver_iter"] = iter_num
+            # Sentinel: Explicitly log solver status for diagnostics/warnings
+            final_sub_data["solver_status"] = status
 
             data = ControllerData(
                 error=error,
