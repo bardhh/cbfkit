@@ -4,6 +4,12 @@ via ''python examples/template.py''.
 It does not define any new functions, and primarily loads modules from the src/cbfkit tree.
 """
 
+import os
+import sys
+
+# Add the project root directory to the python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+
 import jax.numpy as jnp
 import numpy as np
 from jax import jacfwd
@@ -17,7 +23,7 @@ from cbfkit.utils.user_types import PlannerData
 from examples.unicycle.common.config import ekf_ukf_hybrid_state_estimation as initial_conditions
 
 # Define time parameters
-tf = 5.0
+tf = 5.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
 dt = 0.01
 n_steps = int(tf / dt)
 
@@ -51,7 +57,7 @@ estimator = hybrid_ekf_ukf(
 
 # Whether or not to simulate, plot
 simulate = 1
-plot = 1
+plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 save = 1
 
 if simulate:
@@ -87,7 +93,7 @@ if simulate:
             prev_robustness=None,
         ),
         initial_covariance=initial_covariance,
-        use_jit=True,
+        use_jit=False,
     )
 
 else:

@@ -47,15 +47,8 @@ def ct_ukf_dtmeas(
         if z is None or u is None or P is None:
             return initialize(y, R)
 
-        # Cast t to float as predict expects float
-        t_float = (
-            float(t)
-            if isinstance(t, (float, int))
-            else float(cast(Array, t)[0]) if t.shape == (1,) else float(cast(Array, t))
-        )  # Best effort casting
-
-        x_predicted, P_predicted, s_predicted = predict(t_float, z, u, P)
-        x_new, P_new = update(x_predicted, y, P_predicted, s_predicted)
+        x_predicted, P_predicted, s_predicted = predict(t, z, u, P)
+        x_new, P_new = update(x_predicted, y, P_predicted)
 
         return x_new, P_new
 
@@ -81,7 +74,7 @@ def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
 
 def predict_ct_dtmeas(
     Q: Array, dynamics: DynamicsCallable, dt: float
-) -> Callable[[float, Array, Array, Array], Tuple[Array, Array, Array]]:
+) -> Callable[[Time, Array, Array, Array], Tuple[Array, Array, Array]]:
     """Function defining the prediction step for the continuous-time EKF with discrete-time
     measurements.
 
@@ -94,14 +87,14 @@ def predict_ct_dtmeas(
     -------
         predict (Callable): function handle to compute EKF state and covariance matrix based on system model
     """
-    sigma_points = generate_sigma_points(Q.shape[0])
+    sigma_points = generate_sigma_points(Q.shape[0], scheme=1)
 
-    def predict(_t: float, z: Array, u: Array, P: Array) -> Tuple[Array, Array, Array]:
+    def predict(_t: Time, z: Array, u: Array, P: Array) -> Tuple[Array, Array, Array]:
         """Implementation of prediction step for the continuous-time EKF with discrete-time
         measurements.
 
         Arguments:
-            t (float): time (sec)
+            t (Time): time (sec)
             z (Array): observer state
             u (Array): control input
             P (Array): Kalman covariance matrix
@@ -127,7 +120,7 @@ def predict_ct_dtmeas(
         zk = jnp.dot(wa, sk)
 
         # Compute predicted covariance
-        Pk = jnp.dot(wc, jnp.einsum("ij,ik->jik", z - sk, z - s)) + Q  #! Check for correctness
+        Pk = jnp.dot(wc, jnp.einsum("ij,ik->jik", sk - zk, sk - zk)) + Q
 
         return zk, Pk, sk
 
@@ -136,7 +129,7 @@ def predict_ct_dtmeas(
 
 def update_dtmeas(
     R: Array, h: Callable[[Array], Array]
-) -> Callable[[Array, Array, Array, Array], Tuple[Array, Array]]:
+) -> Callable[[Array, Array, Array], Tuple[Array, Array]]:
     """Function defining the update step for (any) EKF with discrete-time measurements.
 
     Arguments:
@@ -149,9 +142,9 @@ def update_dtmeas(
     -------
         update (Callable): function handle to compute the updated EKF state and covariance matrix
     """
-    sigma_points = generate_sigma_points(R.shape[0])
+    sigma_points = generate_sigma_points(R.shape[0], scheme=1)
 
-    def update(z: Array, y: Array, P: Array, z_sig: Array) -> Tuple[Array, Array]:
+    def update(z: Array, y: Array, P: Array) -> Tuple[Array, Array]:
         """Update step for (any)) EKF with discrete-time measurements.
 
         Arguments:
@@ -174,7 +167,7 @@ def update_dtmeas(
         S_pred = (
             jnp.dot(wc, jnp.einsum("ij,ik->jik", s_predicted - y_pred, s_predicted - y_pred)) + R
         )
-        C_pred = jnp.dot(wc, jnp.einsum("ij,ik->jik", z_sig - z, s_predicted - y_pred))
+        C_pred = jnp.dot(wc, jnp.einsum("ij,ik->jik", s - z, s_predicted - y_pred))
 
         # Compute UKF updated state and covariance estimates
         K = jnp.matmul(C_pred, jnp.linalg.inv(S_pred))
@@ -209,8 +202,8 @@ def generate_sigma_points(
 
     if scheme == 0:
         # Set sigma points and weights
-        Wa = Wa.at[0].set(jnp.clip((alpha**2 * kappa - L) / (alpha**2 * kappa), -1, 1))
-        Wc = Wc.at[0].set(jnp.clip(Wa[0] + 1 - alpha**2 + beta, -1, 1))
+        Wa = Wa.at[0].set((alpha**2 * kappa - L) / (alpha**2 * kappa))
+        Wc = Wc.at[0].set(Wa[0] + 1 - alpha**2 + beta)
 
         # Compute weights
         Wa = Wa.at[1:].set(1 / (2 * alpha**2 * kappa))

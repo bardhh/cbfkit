@@ -3,6 +3,8 @@ from typing import List, Tuple
 import jax.numpy as jnp
 import numpy as np
 from jax import Array, jacfwd, random
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 import cbfkit.simulation.simulator as sim
 
@@ -16,10 +18,108 @@ from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.simulation.monte_carlo import conduct_monte_carlo
 from cbfkit.systems import single_integrator
-from cbfkit.utils.user_types import PlannerData
+from cbfkit.systems.single_integrator.certificates.lyapunov_function_catalog import position
+from cbfkit.utils.user_types import PlannerData, CertificateCollection
 from examples.single_integrator.common.config import ekf_state_estimation as setup
-from examples.single_integrator.common.lyapunov_functions import fxts_lyapunov
-from examples.van_der_pol.visualizations.path import animate
+from examples.single_integrator.common.lyapunov_functions import fxts_lyapunov_conditions
+# from examples.van_der_pol.visualizations.path import animate
+
+# Local definition of fxts_lyapunov to return CertificateCollection
+def fxts_lyapunov(
+    goal: Array, r: float, c1: float, c2: float, e1: float, e2: float
+) -> CertificateCollection:
+    """Generates Lyapunov functions, jacobians, hessians for use in CLF control law.
+
+    Args:
+        goal (Array): goal location
+        r (float): goal set radius
+        c1 (float): convergence constant 1
+        c2 (float): convergence constant 2
+        e1 (float): exponential constant 1
+        e2 (float): exponential constant 2
+
+    Returns
+    -------
+        CertificateCollection: all inforrmation needed for CLF constraint in QP
+    """
+    pos_data = position(goal, r)
+    cond_data = fxts_lyapunov_conditions(c1, c2, e1, e2)
+
+    return CertificateCollection(
+        functions=pos_data[0],
+        jacobians=pos_data[1],
+        hessians=pos_data[2],
+        partials=pos_data[3],
+        conditions=cond_data[0]
+    )
+
+
+# Local definition of animate to avoid backend issues
+def animate(
+    states,
+    estimates,
+    desired_state,
+    desired_state_radius,
+    x_lim=(-4, 4),
+    y_lim=(-4, 4),
+    dt=0.1,
+    title="System Behavior",
+    save_animation=False,
+    animation_filename="system_behavior.gif",
+):
+    def init():
+        trajectory.set_data([], [])
+        etrajectory.set_data([], [])
+        return (trajectory,)
+
+    def update(frame):
+        trajectory.set_data(states[:frame, 0], states[:frame, 1])
+        etrajectory.set_data(estimates[:frame, 0], estimates[:frame, 1])
+        _ = states[frame]
+        _ = estimates[frame]
+        return (
+            trajectory,
+            etrajectory,
+        )
+
+    fig, ax = plt.subplots()
+
+    ax.set_xlim(x_lim)
+    ax.set_ylim(y_lim)
+
+    ax.plot(desired_state[0], desired_state[1], "ro", markersize=5, label="desired_state")
+
+    ax.add_patch(
+        plt.Circle(
+            desired_state,
+            desired_state_radius,
+            color="r",
+            fill=False,
+            linestyle="--",
+            linewidth=1,
+        )
+    )
+
+    (trajectory,) = ax.plot([], [], label="Trajectory")
+    (etrajectory,) = ax.plot([], [], label="Estimated Trajectory")
+
+    ax.set_xlim(x_lim[0], x_lim[1])
+    ax.set_ylim(y_lim[0], y_lim[1])
+    ax.set_xlabel("x [m]")
+    ax.set_ylabel("y [m]")
+    ax.set_title(title)
+    ax.legend(loc="best")
+    ax.grid()
+
+    ani = FuncAnimation(fig, update, frames=len(states), init_func=init, blit=True, interval=10)
+
+    if save_animation:
+        ani.save(animation_filename, writer="imagemagick", fps=15)
+
+    plt.show()
+
+    return fig, ax
+
 
 # Lyapunov Barrier Functions
 lyapunovs = fxts_lyapunov(
@@ -136,6 +236,7 @@ def execute(
         estimator=estimator,
         integrator=integrator,
         dt=setup.dt,
+        sigma=setup.R,
         # R=setup.R, # sim.execute doesn't take R directly? Check signature.
         num_steps=N_STEPS,
         # key=key, # sim.execute doesn't take key directly?
@@ -163,6 +264,7 @@ def execute(
 # Simulate total number of trials
 if __name__ == "__main__":
     import pickle
+    import os
 
     # Execute numerous trials sim
     results = conduct_monte_carlo(execute, n_trials=setup.n_trials)
@@ -202,13 +304,13 @@ if __name__ == "__main__":
     }
 
     # Save data to file
+    os.makedirs(os.path.dirname(setup.pkl_file), exist_ok=True)
     with open(setup.pkl_file, "wb") as file:
         pickle.dump(save_data, file)
 
     # Visualizations
     if setup.VISUALIZE:
-        from examples.van_der_pol.visualizations.path import animate
-
+        # Use local animate
         for trial_no in range(setup.n_trials):
             animate(
                 states=states[trial_no],

@@ -1,3 +1,5 @@
+import os
+
 import jax.numpy as jnp
 
 import cbfkit.simulation.simulator as sim
@@ -15,10 +17,10 @@ desired_state = jnp.array([4.0, 4.0, 0])
 # For start-to-goal without obstacles, use proportional controller
 controller = proportional_controller(dynamics=approx_unicycle_dynamics, Kp_pos=1, Kp_theta=0.01)
 
-tf = 10.0
+tf = 10.0 if not os.environ.get("CBFKIT_TEST_MODE") else 1.0
 dt = 0.01
 
-x, u, z, p, data_keys, data_values, planner_data, planner_data_keys = sim.execute(
+x, u, z, p, controller_keys, controller_values, planner_keys, planner_values = sim.execute(
     x0=init_state,
     dt=dt,
     num_steps=int(tf / dt),
@@ -37,7 +39,7 @@ x, u, z, p, data_keys, data_values, planner_data, planner_data_keys = sim.execut
 
 bicycle_states = jnp.asarray(x)
 
-plot = 1
+plot = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
 animate = 0  # Disabled - needs visualization refactoring
 save = 1
 
