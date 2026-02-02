@@ -481,8 +481,9 @@ def cbf_clf_qp_generator(
                     )
 
                 lax.switch(
-                    status + 1,  # Map -1 to index 0
+                    status + 2,  # Map -2 to index 0
                     [
+                        lambda: print_status_msg("NAN_INPUT_DETECTED"),  # -2
                         lambda: print_status_msg("NAN_DETECTED"),  # -1
                         lambda: print_status_msg("UNSOLVED"),  # 0
                         lambda: jdebug.print(
