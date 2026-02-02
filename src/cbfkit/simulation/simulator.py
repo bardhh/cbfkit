@@ -17,7 +17,7 @@ Examples
 >>> run code
 """
 
-from typing import Any, Callable, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -39,6 +39,7 @@ from cbfkit.utils.user_types import (
     SensorCallable,
     SimulationResults,
     State,
+    StlTrajectoryCostCallable,
     Time,
 )
 
@@ -169,7 +170,7 @@ def simulator(
     sigma: Optional[Array],
     key: Array,
     callbacks: List[SimulationCallback] = [],
-    stl_trajectory_cost=None,
+    stl_trajectory_cost: Optional[StlTrajectoryCostCallable] = None,
 ) -> Callable[
     [Array, Optional[ControllerData], Optional[PlannerData]],
     Iterator[SimulationStepData],
@@ -342,10 +343,10 @@ def execute(
     key: Optional[Union[Array, None]] = None,
     filepath: Optional[str] = None,
     verbose: Optional[bool] = True,
-    controller_data: Optional[ControllerData] = None,
-    planner_data: Optional[PlannerData] = None,
+    controller_data: Optional[Union[ControllerData, Dict[str, Any]]] = None,
+    planner_data: Optional[Union[PlannerData, Dict[str, Any]]] = None,
     initial_covariance: Optional[Covariance] = None,
-    stl_trajectory_cost=None,
+    stl_trajectory_cost: Optional[StlTrajectoryCostCallable] = None,
     use_jit: bool = False,
     jit_progress: bool = False,
     jit_progress_interval: int = 50,
