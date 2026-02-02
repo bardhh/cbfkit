@@ -1,6 +1,5 @@
 import jax.numpy as jnp
 from jax import Array, random
-from scipy.linalg import block_diag
 
 KEY = random.PRNGKey(758493)  # Random seed is explicit in JAX
 EPS = 1e-1
@@ -8,8 +7,22 @@ INFEASIBLE_AREA = -1e3
 
 
 def block_diag_matrix_from_vec(n_blocks: int) -> Array:
-    block = jnp.array([1, -1])
-    return jnp.array([block_diag(*([block] * n_blocks)).T])[0, :, :]
+    """Constructs a block diagonal matrix for box constraints.
+
+    Creates a matrix A of shape (2*N, N) where each column i corresponds to input u_i,
+    and has entries 1 at row 2i and -1 at row 2i+1.
+    This corresponds to constraints u_i <= b and -u_i <= b.
+
+    Args:
+        n_blocks (int): Number of inputs (N).
+
+    Returns:
+        Array: The constraint matrix A.
+    """
+    # Aegis: Use pure JAX implementation to avoid scipy dependency and implicit conversion issues.
+    # We want columns [1, -1]^T on the diagonal.
+    block = jnp.array([[1.0], [-1.0]])
+    return jnp.kron(jnp.eye(n_blocks), block)
 
 
 def interleave_arrays(a: Array, b: Array) -> Array:
