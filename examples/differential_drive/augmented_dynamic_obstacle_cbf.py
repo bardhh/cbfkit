@@ -12,9 +12,6 @@ import os
 import sys
 import time
 
-# Add project root to path
-sys.path.append(os.getcwd())
-
 import jax.numpy as jnp
 import matplotlib
 import numpy as np
