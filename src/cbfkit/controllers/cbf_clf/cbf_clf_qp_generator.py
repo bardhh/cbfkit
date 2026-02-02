@@ -255,14 +255,26 @@ def cbf_clf_qp_generator(
         if auto_p_mat:
             penalty_cbf = slack_penalty_cbf
             penalty_clf = slack_penalty_clf
-            scale_cbf = 1.0 / jnp.sqrt(penalty_cbf + 1e-8)
-            scale_clf = 1.0 / jnp.sqrt(penalty_clf + 1e-8)
+
+            # Janus: Robust scaling. Clamp penalty to avoid tiny scale factors (leading to ill-conditioned A).
+            # If penalty > 1e6, scale factor saturates at 1e-3.
+            # Transfer excess penalty to P matrix diagonal: weight = penalty * scale^2
+            max_penalty = 1e6
+            eff_penalty_cbf = jnp.minimum(penalty_cbf, max_penalty)
+            eff_penalty_clf = jnp.minimum(penalty_clf, max_penalty)
+
+            scale_cbf = 1.0 / jnp.sqrt(eff_penalty_cbf + 1e-8)
+            scale_clf = 1.0 / jnp.sqrt(eff_penalty_clf + 1e-8)
+
+            weight_cbf = penalty_cbf * (scale_cbf**2)
+            weight_clf = penalty_clf * (scale_clf**2)
+
             p_mat = jnp.diag(
                 jnp.hstack(
                     [
                         jnp.ones((n_con,)),
-                        jnp.ones((n_bfs,)),  # Normalized weight
-                        jnp.ones((n_lfs,)),  # Normalized weight
+                        weight_cbf * jnp.ones((n_bfs,)),  # Normalized weight
+                        weight_clf * jnp.ones((n_lfs,)),  # Normalized weight
                     ]
                 )
             )
