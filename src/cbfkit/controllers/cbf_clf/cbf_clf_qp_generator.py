@@ -50,6 +50,7 @@ from cbfkit.utils.user_types import (
     DynamicsCallable,
     GenerateComputeCertificateConstraintCallable,
     Key,
+    SolverStatus,
     State,
 )
 
@@ -473,8 +474,8 @@ def cbf_clf_qp_generator(
 
             # Sentinel: Explicitly catch NaN solutions even if solver claims success
             # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0)
-            status = jnp.where(jnp.any(jnp.isnan(sol)), -1, status)
-            status = jnp.where(nan_in_inputs, -2, status)
+            status = jnp.where(jnp.any(jnp.isnan(sol)), SolverStatus.NAN_DETECTED, status)
+            status = jnp.where(nan_in_inputs, SolverStatus.NAN_INPUT_DETECTED, status)
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
@@ -484,13 +485,13 @@ def cbf_clf_qp_generator(
             # inadvertently violating CBF constraints on the QP-solved path.
             # Sentinel: Only accept SOLVED (1) as success.
             # Status 2 (MAX_ITER) or 5 (MAX_ITER_UNSOLVED) means potentially unconverged/unsafe solution.
-            success = status == 1
+            success = status == SolverStatus.SOLVED
 
             def _print_failure(status, iter_num, sub_data):
                 # Sentinel: Map status codes to human-readable strings
                 def print_status_msg(msg):
                     jdebug.print(
-                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.\n"
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} ({msg}) (Iter: {iter}). Output set to NaN.\n"
                         "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
                         status=status,
                         msg=msg,
@@ -502,17 +503,17 @@ def cbf_clf_qp_generator(
                 lax.switch(
                     status + 2,  # Map -2 to index 0
                     [
-                        lambda: print_status_msg("NAN_INPUT_DETECTED"),  # -2
-                        lambda: print_status_msg("NAN_DETECTED"),  # -1
-                        lambda: print_status_msg("UNSOLVED"),  # 0
+                        lambda: print_status_msg("NAN_INPUT_DETECTED"),  # SolverStatus.NAN_INPUT_DETECTED
+                        lambda: print_status_msg("NAN_DETECTED"),  # SolverStatus.NAN_DETECTED
+                        lambda: print_status_msg("UNSOLVED"),  # SolverStatus.UNSOLVED
                         lambda: jdebug.print(
                             "⚠️ CBF-CLF-QP Succeeded (Unexpected failure call). Status: {status}",
                             status=status,
-                        ),  # 1 (Should not happen)
-                        lambda: print_status_msg("MAX_ITER_REACHED"),  # 2
-                        lambda: print_status_msg("PRIMAL_INFEASIBLE"),  # 3
-                        lambda: print_status_msg("DUAL_INFEASIBLE"),  # 4
-                        lambda: print_status_msg("MAX_ITER_UNSOLVED"),  # 5
+                        ),  # SolverStatus.SOLVED (Should not happen)
+                        lambda: print_status_msg("MAX_ITER_REACHED"),  # SolverStatus.MAX_ITER_REACHED
+                        lambda: print_status_msg("PRIMAL_INFEASIBLE"),  # SolverStatus.PRIMAL_INFEASIBLE
+                        lambda: print_status_msg("DUAL_INFEASIBLE"),  # SolverStatus.DUAL_INFEASIBLE
+                        lambda: print_status_msg("MAX_ITER_UNSOLVED"),  # SolverStatus.MAX_ITER_UNSOLVED
                     ],
                 )
 

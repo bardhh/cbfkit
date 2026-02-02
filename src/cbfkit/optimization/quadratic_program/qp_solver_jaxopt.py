@@ -6,6 +6,8 @@ import jax.numpy as jnp
 from jax import Array, jit
 from jaxopt import OSQP, EqualityConstrainedQP
 
+from cbfkit.utils.user_types import SolverStatus
+
 # Instantiate QP solver objects
 MAX_ITER = 1000000
 QP = OSQP(maxiter=MAX_ITER, tol=1e-3)
@@ -86,7 +88,7 @@ def solve_inequality_constrained_qp(
     # This allows downstream controllers to fail safely (since 5 != success) but report the specific cause.
     status = jnp.where(
         (status == 0) & (state.iter_num >= MAX_ITER),
-        5,
+        SolverStatus.MAX_ITER_UNSOLVED,
         status,
     )
 
@@ -157,7 +159,7 @@ def solve_with_state(
         h_mat, f_vec, g_mat, h_vec, a_mat, b_vec, init_params
     )
     # Only SOLVED (1) is success. MAX_ITER_REACHED (2) may return non-converged solution.
-    success = status == 1
+    success = status == SolverStatus.SOLVED
     return sol, success, params
 
 

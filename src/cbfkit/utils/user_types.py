@@ -42,7 +42,7 @@ Examples
 >>> x: State = jnp.array([1, 2, 2.4])
 """
 
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Protocol, Tuple, TypedDict, Union
 
 from jax import Array, random
@@ -135,6 +135,19 @@ class SimulationResults(NamedTuple):
                 f"Key '{key}' not found in SimulationResults fields, controller_data, or planner_data."
             )
         return tuple.__getitem__(self, key)
+
+
+class SolverStatus(IntEnum):
+    """Solver status codes."""
+
+    NAN_INPUT_DETECTED = -2
+    NAN_DETECTED = -1
+    UNSOLVED = 0
+    SOLVED = 1
+    MAX_ITER_REACHED = 2
+    PRIMAL_INFEASIBLE = 3
+    DUAL_INFEASIBLE = 4
+    MAX_ITER_UNSOLVED = 5
 
 
 # Certificate (Barrier, Lyapunov, Barrier-Lyapunov, etc.) Function Callables

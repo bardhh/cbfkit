@@ -38,6 +38,7 @@ from cbfkit.utils.user_types import (
     PlannerData,
     SensorCallable,
     SimulationResults,
+    SolverStatus,
     State,
     StlTrajectoryCostCallable,
     Time,
@@ -49,14 +50,15 @@ from .simulator_jit import simulator_jit
 from .utils import SimulationStepData
 
 
-SOLVER_STATUS_MAP = {
-    -1: "NAN_DETECTED",
-    0: "UNSOLVED (Likely Infeasible)",
-    1: "SOLVED",
-    2: "MAX_ITER_REACHED",
-    3: "PRIMAL_INFEASIBLE",
-    4: "DUAL_INFEASIBLE",
-    5: "MAX_ITER_REACHED (UNSOLVED)",
+SOLVER_STATUS_MAP: Dict[int, str] = {
+    SolverStatus.NAN_INPUT_DETECTED: "NAN_INPUT_DETECTED",
+    SolverStatus.NAN_DETECTED: "NAN_DETECTED",
+    SolverStatus.UNSOLVED: "UNSOLVED (Likely Infeasible)",
+    SolverStatus.SOLVED: "SOLVED",
+    SolverStatus.MAX_ITER_REACHED: "MAX_ITER_REACHED",
+    SolverStatus.PRIMAL_INFEASIBLE: "PRIMAL_INFEASIBLE",
+    SolverStatus.DUAL_INFEASIBLE: "DUAL_INFEASIBLE",
+    SolverStatus.MAX_ITER_UNSOLVED: "MAX_ITER_REACHED (UNSOLVED)",
 }
 
 
@@ -120,7 +122,7 @@ def _check_simulation_status(
         idx_data = controller_data_keys.index(status_key)
         status_codes = controller_data_values[idx_data]
         # Check for status 2 (MAX_ITER_REACHED)
-        max_iter_mask = status_codes == 2
+        max_iter_mask = status_codes == SolverStatus.MAX_ITER_REACHED
         if jnp.any(max_iter_mask):
             count = int(jnp.sum(max_iter_mask).item())
             print(
@@ -256,7 +258,7 @@ def simulator(
             # Sentinel: Check for NaNs
             if jnp.any(jnp.isnan(x_ret)):
                 controller_data = controller_data._replace(
-                    error=jnp.array(True), error_data=jnp.array(-1)
+                    error=jnp.array(True), error_data=jnp.array(SolverStatus.NAN_DETECTED)
                 )
 
             u = u_ret
