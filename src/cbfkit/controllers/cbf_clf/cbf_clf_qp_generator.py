@@ -454,20 +454,36 @@ def cbf_clf_qp_generator(
             # Status 2 (MAX_ITER) or 5 (MAX_ITER_UNSOLVED) means potentially unconverged/unsafe solution.
             success = status == 1
 
-            def _print_failure(status, iter_num):
-                jdebug.print(
-                    "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
-                    status=status,
-                    iter=iter_num,
+            def _print_failure(status, iter_num, sub_data):
+                msg = "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN."
+
+                # Check for CBF values in sub_data (static check on pytree structure)
+                if "bfs" in sub_data:
+                    min_h = jnp.min(sub_data["bfs"])
+                    jdebug.print(
+                        msg + " Min CBF: {min_h}",
+                        status=status,
+                        iter=iter_num,
+                        min_h=min_h,
+                    )
+                else:
+                    jdebug.print(msg, status=status, iter=iter_num)
+
+                # Hint for Status 5
+                lax.cond(
+                    status == 5,
+                    lambda: jdebug.print("  ↳ Hint: Status 5 (MAX_ITER_UNSOLVED) often means the QP is infeasible."),
+                    lambda: None,
                 )
 
             # Debug hook: Print failure details if solver failed
             lax.cond(
                 success,
-                lambda *_: None,
+                lambda _s, _i, _d: None,
                 _print_failure,
                 status,
                 iter_num,
+                sub_data,
             )
 
             u = lax.cond(
