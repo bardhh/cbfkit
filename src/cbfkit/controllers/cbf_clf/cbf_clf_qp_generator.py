@@ -463,12 +463,16 @@ def cbf_clf_qp_generator(
             # Status 2 (MAX_ITER) or 5 (MAX_ITER_UNSOLVED) means potentially unconverged/unsafe solution.
             success = status == 1
 
-            def _print_failure(status, iter_num):
+            def _print_failure(status, iter_num, sub_data):
                 jdebug.print(
                     "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
                     status=status,
                     iter=iter_num,
                 )
+                if "bfs" in sub_data:
+                    jdebug.print("   -> Barrier Values (h): {h}", h=sub_data["bfs"])
+                if "lfs" in sub_data:
+                    jdebug.print("   -> Lyapunov Values (V): {V}", V=sub_data["lfs"])
 
             # Debug hook: Print failure details if solver failed
             lax.cond(
@@ -477,6 +481,7 @@ def cbf_clf_qp_generator(
                 _print_failure,
                 status,
                 iter_num,
+                sub_data,
             )
 
             u = lax.cond(
