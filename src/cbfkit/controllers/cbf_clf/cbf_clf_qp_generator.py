@@ -290,6 +290,16 @@ def cbf_clf_qp_generator(
             kwargs["scale_cbf"] = scale_cbf
             kwargs["scale_clf"] = scale_clf
 
+        # Bolt: Pre-compute solution scaling vector to avoid repetitive slice updates in JIT loop
+        sol_scaling_vector = jnp.ones((n_con + n_bfs + n_lfs,))
+        if auto_p_mat:
+            if n_bfs > 0:
+                sol_scaling_vector = sol_scaling_vector.at[n_con : n_con + n_bfs].set(scale_cbf)
+            if n_lfs > 0:
+                sol_scaling_vector = sol_scaling_vector.at[n_con + n_bfs : n_con + n_bfs + n_lfs].set(
+                    scale_clf
+                )
+
         # Ensure p_mat is defined for the controller closure
         assert p_mat is not None
 
@@ -410,10 +420,7 @@ def cbf_clf_qp_generator(
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
-                if n_bfs > 0:
-                    sol = sol.at[n_con : n_con + n_bfs].multiply(scale_cbf)
-                if n_lfs > 0:
-                    sol = sol.at[n_con + n_bfs : n_con + n_bfs + n_lfs].multiply(scale_clf)
+                sol = sol * sol_scaling_vector
             # QP solution already respects control limits via input constraints.
             # Only clip the fallback u_nom (which may exceed limits) to avoid
             # inadvertently violating CBF constraints on the QP-solved path.

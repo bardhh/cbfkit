@@ -209,17 +209,6 @@ def simulator_jit(
         planner_data_carry = planner_data._replace(sampled_x_traj=None)
         new_carry = (key, t_next, x_next, u, z, c, controller_data, planner_data_carry)
 
-        # Bolt: Filter solver_params from output to save memory/bandwidth
-        controller_data_log = controller_data
-        if (
-            controller_data.sub_data is not None
-            and "solver_params" in controller_data.sub_data
-        ):
-            new_sub_data = {
-                k: v for k, v in controller_data.sub_data.items() if k != "solver_params"
-            }
-            controller_data_log = controller_data._replace(sub_data=new_sub_data)
-
         # Output (trajectory)
         # Bolt: Strip solver_params from logged data to save memory
         log_controller_data = controller_data
