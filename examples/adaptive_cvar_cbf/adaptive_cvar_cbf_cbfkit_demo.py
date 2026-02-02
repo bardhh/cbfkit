@@ -163,7 +163,9 @@ def main():
 
     obs_patches = []
     for obs in obstacles:
-        p = Circle((obs.x_curr[0], obs.x_curr[1]), obs.radius, color="r", alpha=0.6)
+        p = Circle(
+            (obs.x_curr[0].item(), obs.x_curr[1].item()), obs.radius, color="r", alpha=0.6
+        )
         ax.add_patch(p)
         obs_patches.append(p)
 
@@ -178,8 +180,8 @@ def main():
         return [robot_patch, robot_line]
 
     ani = animation.FuncAnimation(fig, update, frames=len(states), blit=True, interval=100)
-    ani.save(os.path.join(results_dir, "cbfkit_demo.mp4"), writer="ffmpeg", fps=10)
-    print(f"Animation saved to {results_dir}/cbfkit_demo.mp4")
+    ani.save(os.path.join(results_dir, "cbfkit_demo.gif"), writer="pillow", fps=10)
+    print(f"Animation saved to {results_dir}/cbfkit_demo.gif")
 
 
 if __name__ == "__main__":

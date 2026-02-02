@@ -16,7 +16,7 @@ from jax import jacfwd
 # Whether or not to simulate, plot
 plot = 1
 save = 1
-save_path = "examples/unicycle/start_to_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
+save_path = "examples/unicycle/reach_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
 file_name = os.path.basename(__file__)[:-8]
 
 # Load system module
@@ -30,7 +30,7 @@ from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbati
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 
 # Load initial conditions
-from examples.unicycle.start_to_goal.initial_conditions import (
+from examples.unicycle.common.config import (
     ukf_state_estimation as initial_conditions,
 )
 
@@ -90,7 +90,7 @@ x, u, z, p, data, data_keys, planner_data, planner_data_keys = sim.execute(
 )
 
 if plot:
-    from examples.unicycle.start_to_goal.visualizations import animate
+    from examples.unicycle.common.visualizations import animate
 
     animate(
         states=x,
