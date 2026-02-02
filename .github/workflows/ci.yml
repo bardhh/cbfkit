@@ -34,7 +34,7 @@ jobs:
         UV_SYSTEM_PYTHON: 1
       run: |
         pip install uv
-        uv pip install -e ".[test]"
+        uv pip install -e ".[test,codegen]"
     - name: Lint with ruff
       if: matrix.python-version == '3.10'
       env:

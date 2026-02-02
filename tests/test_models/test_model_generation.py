@@ -28,6 +28,11 @@ import unittest
 import unittest.mock
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import pytest
+
+# Skip if jinja2 is not available (part of optional codegen dependencies)
+pytest.importorskip("jinja2")
+
 from cbfkit.codegen.create_new_system.generate_model import generate_model
 
 
