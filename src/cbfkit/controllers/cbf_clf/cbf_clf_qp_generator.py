@@ -15,8 +15,8 @@ CBF-CLF-QP control laws.
 
 Examples
 --------
->>> from cbfkit.controllers.model_based.cbf_clf_controllers.cbf_clf_qp_generator import cbf_clf_qp_generator
->>> from cbfkit.controllers.model_based.cbf_clf_controllers.generate_constraints import (
+>>> from cbfkit.controllers.cbf_clf.cbf_clf_qp_generator import cbf_clf_qp_generator
+>>> from cbfkit.controllers.cbf_clf.generate_constraints import (
 >>>     generate_compute_zeroing_cbf_constraints,
 >>>     generate_compute_vanilla_clf_constraints,
 >>> )
