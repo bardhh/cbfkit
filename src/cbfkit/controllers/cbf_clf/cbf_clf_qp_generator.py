@@ -29,6 +29,7 @@ Examples
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
+import jax.debug as jdebug
 from jax import Array, jit, lax
 
 from cbfkit.certificates import concatenate_certificates
@@ -427,6 +428,22 @@ def cbf_clf_qp_generator(
             # Sentinel: Accept SOLVED (1) or MAX_ITER_REACHED (2) as success.
             # Status 2 means we ran out of time but have a candidate solution.
             success = (status == 1) | (status == 2)
+
+            def _print_failure(status, iter_num):
+                jdebug.print(
+                    "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
+                    status=status,
+                    iter=iter_num,
+                )
+
+            # Debug hook: Print failure details if solver failed
+            lax.cond(
+                success,
+                lambda *_: None,
+                _print_failure,
+                status,
+                iter_num,
+            )
 
             u = lax.cond(
                 success,
