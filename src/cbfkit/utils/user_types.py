@@ -156,6 +156,25 @@ BarrierTuple = CertificateTuple
 LyapunovTuple = CertificateTuple
 
 
+# Legacy Certificate Tuple (matching CertificateCollection components)
+CertificateLegacyTuple = Tuple[
+    List[CertificateCallable],
+    List[CertificateJacobianCallable],
+    List[CertificateHessianCallable],
+    List[CertificatePartialCallable],
+    List[CertificateConditionsCallable],
+]
+
+# Valid input types for certificate collection arguments (barriers, lyapunovs)
+# Supports single collection, list of collections, tuple of collections, or legacy component tuple
+CertificateInput = Union[
+    CertificateCollection,
+    List[CertificateCollection],
+    Tuple[CertificateCollection, ...],
+    CertificateLegacyTuple,
+]
+
+
 # Predictive Barrier Function Callable
 PredictiveBarrierCollectionCallable = Callable[
     [],
@@ -316,12 +335,8 @@ class CbfClfQpGenerator(Protocol):
         self,
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        barriers: Optional[
-            Union[CertificateCollection, List[CertificateCollection]]
-        ] = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: Optional[
-            Union[CertificateCollection, List[CertificateCollection]]
-        ] = EMPTY_CERTIFICATE_COLLECTION,
+        barriers: Optional[CertificateInput] = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: Optional[CertificateInput] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Array] = None,
         *,
         relaxable_clf: bool = True,
