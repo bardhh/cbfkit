@@ -90,7 +90,8 @@ if simulate:
             x_traj=jnp.tile(initial_conditions.desired_state.reshape(-1, 1), (1, n_steps + 1)),
             prev_robustness=None,
         ),
-        use_jit=True,
+        sigma=initial_conditions.R,
+        use_jit=False,
     )
 
 else:

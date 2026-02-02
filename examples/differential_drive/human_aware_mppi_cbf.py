@@ -27,9 +27,8 @@ from matplotlib.patches import Arrow, Circle
 
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
+from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import (
     vanilla_cbf_clf_qp_controller as cbf_controller,
 )
@@ -265,6 +264,9 @@ def analyze_safety(states, num_humans, d_safe):
     min_dists = []
     collisions = 0
 
+    # Convert to numpy
+    states = np.array(states)
+
     for i in range(len(states)):
         z = states[i]
         p_r = z[:2]
@@ -291,6 +293,11 @@ from matplotlib.collections import LineCollection
 
 def create_animation(states, goal_state, num_humans, d_safe, dt, p_keys, p_values):
     print("Generating Animation...")
+
+    # Convert to numpy
+    states = np.array(states)
+    goal_state = np.array(goal_state)
+    p_values = [np.array(val) for val in p_values]
 
     fig, ax = plt.subplots(figsize=(12, 10))
     ax.set_aspect("equal")

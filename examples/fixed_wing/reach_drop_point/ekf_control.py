@@ -1,12 +1,16 @@
 """This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks to reach a goal
 region while avoiding dynamic obstacles."""
 
+import os
 import pickle
+from typing import List, Callable
 
 import jax.numpy as jnp
 import numpy as np
+from jax import Array, jacfwd, jacrev, jit
 
 import cbfkit.simulation.simulator as sim
+from cbfkit.certificates import certificate_package
 from cbfkit.certificates.conditions.lyapunov_conditions.fixed_time_stability import fxt_s
 from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
     estimate_feedback_risk_aware_cbf_clf_qp_controller,
@@ -17,6 +21,12 @@ from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.systems.fixed_wing_uav.models import beard2014_kinematic as fixed_wing_uav
+from cbfkit.systems.fixed_wing_uav.models.beard2014_kinematic.certificates.barrier_functions.obstacle_avoidance.high_order import (
+    cbf,
+)
+from cbfkit.systems.fixed_wing_uav.models.beard2014_kinematic.certificates.lyapunov_functions.velocity import (
+    clf,
+)
 from cbfkit.utils.user_types import PlannerData
 from examples.fixed_wing.common.config import ekf_estimation as setup
 from examples.fixed_wing.reach_drop_point.visualizations.animate_2d_path import (
@@ -24,9 +34,71 @@ from examples.fixed_wing.reach_drop_point.visualizations.animate_2d_path import 
 )
 from examples.fixed_wing.reach_drop_point.visualizations.path_3d import animate as animate_3d
 
-lyapunov_barrier_package = (
-    fixed_wing_uav.certificates.barrier_lyapunov_functions.velocity_with_obstacles
-)
+# Local definition of velocity_with_obstacles to support ellipsoidal obstacles
+def cblf(
+    goal: Array,
+    rg: float,
+    obstacles: List[Array],
+    robs: List[float],
+    alpha: float,
+) -> Callable[[Array], Array]:
+    """Barrier Lyapunov function for driving the vehicle to goal velocities while avoiding
+    obstacles. Handles both spherical (scalar radius) and ellipsoidal (list of 3 radii) obstacles.
+    """
+    processed_robs = []
+    for r in robs:
+        if isinstance(r, (list, tuple)) or (hasattr(r, "shape") and r.shape != ()):
+            processed_robs.append(r)
+        else:
+            processed_robs.append([r, r, r])
+
+    barriers = [cbf(obs, ro, alpha) for (obs, ro) in zip(obstacles, processed_robs)]
+    control_lyap = clf(goal, rg)
+
+    @jit
+    def func(state: Array) -> Array:
+        v = control_lyap(state)
+        b = jnp.array([b(state) for b in barriers])
+
+        return v / (1 - jnp.sum(jnp.exp(-b)))
+
+    return func
+
+
+def cblf_grad(
+    goal: Array,
+    rg: float,
+    obstacles: List[Array],
+    robs: List[float],
+    alpha: float,
+) -> Callable[[Array], Array]:
+    jacobian = jacfwd(cblf(goal, rg, obstacles, robs, alpha))
+
+    @jit
+    def func(state):
+        return jacobian(state)
+
+    return func
+
+
+def cblf_hess(
+    goal: Array,
+    rg: float,
+    obstacles: List[Array],
+    robs: List[float],
+    alpha: float,
+) -> Callable[[Array], Array]:
+    hessian = jacfwd(jacrev(cblf(goal, rg, obstacles, robs, alpha)))
+
+    @jit
+    def func(state: Array) -> Array:
+        return hessian(state)
+
+    return func
+
+# Create local package
+lyapunov_barrier_package = certificate_package(cblf, cblf_grad, cblf_hess, 6)
+
 lyapunov_barriers = lyapunov_barrier_package(
     certificate_conditions=fxt_s(c1=setup.c1, c2=setup.c2, e1=setup.e1, e2=setup.e2),
     goal=setup.desired_velpos,
@@ -109,6 +181,7 @@ save_data = {
 }
 
 # Save data to file
+os.makedirs(os.path.dirname(setup.pkl_file), exist_ok=True)
 with open(setup.pkl_file, "wb") as file:
     pickle.dump(save_data, file)
 

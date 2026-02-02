@@ -6,12 +6,14 @@ Demonstrates the robot overtaking slower moving pedestrians.
 
 import os
 import sys
+from pathlib import Path
 
 import jax.numpy as jnp
 import numpy as np
 
 # Add project root
-sys.path.append(os.getcwd())
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
 
 from jax import jit
 
@@ -37,13 +39,13 @@ def run_demo():
 
     # Pedestrian 1: Ahead, moving right, slow
     manager.add_pedestrian(
-        init_state=[5.0, 5.0, 0.8, 0.0],
+        init_state=jnp.array([5.0, 5.0, 0.8, 0.0]),
         behavior=social_force_policy(goal=jnp.array([20.0, 5.0]), desired_speed=0.8),
         id="ped_slow_1",
     )
     # Pedestrian 2: Further ahead, slightly offset, moving right, slow
     manager.add_pedestrian(
-        init_state=[9.0, 4.5, 0.7, 0.0],
+        init_state=jnp.array([9.0, 4.5, 0.7, 0.0]),
         behavior=social_force_policy(goal=jnp.array([20.0, 4.5]), desired_speed=0.7),
         id="ped_slow_2",
     )
@@ -126,7 +128,8 @@ def run_demo():
         verbose=True,
     )
 
-    os.makedirs("examples/pedestrian/results", exist_ok=True)
+    results_dir = Path(__file__).parent / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
     visualize_crowd(
         states=x,
         num_pedestrians=num_peds,
@@ -137,7 +140,7 @@ def run_demo():
             p_values if len(p_keys) > 0 else None
         ),  # Extract from controller data if needed, usually p_values is returned if planner used directly or via wrapper if sim supports it.
         p_keys=p_keys,
-        save_path="examples/pedestrian/results/overtaking_demo.mp4",
+        save_path=str(results_dir / "overtaking_demo.mp4"),
     )
 
     print("Demo Complete!")

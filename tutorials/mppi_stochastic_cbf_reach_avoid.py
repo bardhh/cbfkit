@@ -6,8 +6,12 @@ function below.
 """
 
 import os
+import sys
+from pathlib import Path
 
 import jax.numpy as jnp
+
+sys.path.append(str(Path(__file__).parent.parent))
 from jax import Array, jit, lax
 
 import cbfkit.controllers.mppi as mppi_planner
@@ -205,7 +209,7 @@ from cbfkit.utils.user_types import ControllerData, PlannerData
     sensor=sensor,
     estimator=estimator,
     perturbation=generate_stochastic_perturbation(sigma=sigma, dt=dt),
-    filepath=file_path + "vanilla_cbf_results",
+    filepath=os.path.join(file_path, "vanilla_cbf_results"),
     planner_data=PlannerData(u_traj=u_guess, prev_robustness=None),
     controller_data=ControllerData(),
     use_jit=True,
