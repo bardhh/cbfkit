@@ -82,7 +82,7 @@ def rectify_relative_degree(
     function: Callable[[Array], Array],
     system_dynamics: DynamicsCallable,
     state_dim: int,
-    roots: Union[Array, None] = None,
+    roots: Union[float, Array, None] = None,
     form: str = "exponential",
     certificate_conditions: Optional[CertificateConditionsCallable] = None,
     rng: Optional[Union[int, Array]] = None,
@@ -94,6 +94,10 @@ def rectify_relative_degree(
         function (Callable[[float, Array], Array]): constraint function
         system_dynamics (DynamicsCallable): dynamics function
         state_dim (int): dimension of the state
+        roots (Union[float, Array, None], optional): roots of the polynomial.
+            If a scalar float is provided, it is broadcasted to all required roots.
+            If an array is provided, it is used as the roots (padded/truncated as needed).
+            Defaults to None (generating default roots).
         form (str, optional): type of cascading procedure. Defaults to "exponential".
         certificate_conditions (Optional[CertificateConditionsCallable]): certificate conditions.
             If provided, returns a CertificateCollection directly. Defaults to None.
@@ -120,6 +124,13 @@ def rectify_relative_degree(
     if form == "exponential":
         n_fl = len(function_list)
         n_roots = n_fl - 1
+
+        # Handle scalar roots (Python float/int or 0-d JAX array)
+        if isinstance(roots, (float, int)):
+            roots = jnp.array([float(roots)])
+        elif roots is not None and getattr(roots, "ndim", 0) == 0:
+            roots = jnp.atleast_1d(roots)
+
         if roots is None:
             # Root locations in the left half-plane
             roots = jnp.array([-0.1 * (ii + 1) for ii in range(n_roots)])
