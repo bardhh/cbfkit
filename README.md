@@ -74,7 +74,16 @@ docker compose -f .devcontainer/docker-compose.yml --profile gpu run --rm cbfkit
 macOS builds always target the CPU image because GPU passthrough is not supported.
 
 ## Start with Tutorials
-Explore the `tutorials` directory to help you get started with CBFKit. Open the Python notebook in the `tutorials` directory to get started. The script `code_generation_tutorial.ipynb` automatically generates the controller, plant, and certificate function for a Van der Pol oscillator. It also generates ROS2 nodes for the plant, controller, sensor, and estimator. These serve as a starting point for developing your own CBF-based controller.
+Explore the `tutorials` directory to help you get started with CBFKit.
+
+**Note:** Many tutorials utilize the code generation feature of CBFKit. Please ensure you have installed the necessary dependencies by running `pip install "cbfkit[codegen]"` before running them.
+
+For a quick start without additional dependencies, try `tutorials/unicycle_reach_avoid.py`:
+```bash
+python tutorials/unicycle_reach_avoid.py
+```
+
+Open the Python notebook in the `tutorials` directory to get started. The script `code_generation_tutorial.ipynb` automatically generates the controller, plant, and certificate function for a Van der Pol oscillator. It also generates ROS2 nodes for the plant, controller, sensor, and estimator. These serve as a starting point for developing your own CBF-based controller.
 
 Generated files/folders:
 ```
@@ -106,11 +115,11 @@ van_der_pol_oscillator
 ```
 
 We recommend going through the tutorials in the following order to get familiar with the architecture of our library.
-- `code_generation_tutorial.ipynb`
-- `multi_robot_coordination.ipynb`
-- `simulate_mppi_cbf.py`
-- `simulate_mppi_cbf_ellipsoidal_stochastic_cbf.py`
-- `simulate_mppi_stl.py`
+- `code_generation_tutorial.ipynb` (requires `cbfkit[codegen]`)
+- `multi_robot_coordination.ipynb` (requires `cbfkit[codegen]`)
+- `simulate_mppi_cbf.py` (requires `cbfkit[codegen]`)
+- `simulate_mppi_cbf_ellipsoidal_stochastic_cbf.py` (requires `cbfkit[codegen]`)
+- `simulate_mppi_stl.py` (requires `cbfkit[codegen]`)
 
 
 

@@ -80,8 +80,13 @@ def _check_simulation_status(
     controller_data_values: List[Array],
     planner_data_keys: List[str],
     planner_data_values: List[Array],
+    nan_detected: bool = False,
 ) -> None:
     """Checks for simulation errors and prints warnings if found."""
+    # Sentinel: Explicit check for NaNs
+    if nan_detected:
+        print("Sentinel: Simulation failed due to NaNs in state trajectory.")
+
     # Check controller errors
     if "error" in controller_data_keys:
         idx = controller_data_keys.index("error")
@@ -247,6 +252,13 @@ def simulator(
             x_ret, u_ret, z_ret, c_ret, controller_data, planner_data = step(
                 dt * s, x, u, z, c, controller_data, planner_data
             )
+
+            # Sentinel: Check for NaNs
+            if jnp.any(jnp.isnan(x_ret)):
+                controller_data = controller_data._replace(
+                    error=jnp.array(True), error_data=jnp.array(-1)
+                )
+
             u = u_ret
             z = z_ret
             c = c_ret
@@ -591,11 +603,13 @@ def execute(
             planner_data_keys.append(key_str)
             planner_data_values.append(val)
 
+        nan_detected = jnp.any(jnp.isnan(xs))
         _check_simulation_status(
             controller_data_keys,
             controller_data_values,
             planner_data_keys,
             planner_data_values,
+            nan_detected=bool(nan_detected),
         )
 
         return SimulationResults(
@@ -649,11 +663,17 @@ def execute(
         planner_data_values,
     ) = formatted_data
 
+    # Check states for NaNs
+    nan_detected = False
+    if len(formatted_data.states) > 0:
+        nan_detected = jnp.any(jnp.isnan(formatted_data.states))
+
     _check_simulation_status(
         controller_data_keys,
         controller_data_values,
         planner_data_keys,
         planner_data_values,
+        nan_detected=bool(nan_detected),
     )
 
     return formatted_data

@@ -62,7 +62,7 @@ class ControllerData(NamedTuple):
     """Data structure for controller output."""
 
     error: bool = False
-    error_data: Any = None
+    error_data: Optional[Union[int, Array]] = None
     complete: bool = False
     sol: Optional[Array] = None
     u: Optional[Array] = None

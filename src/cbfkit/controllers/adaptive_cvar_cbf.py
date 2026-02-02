@@ -1,8 +1,12 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import casadi as ca
 import jax.numpy as jnp
 import numpy as np
+
+try:
+    import casadi as ca
+except ImportError:
+    ca = None
 from jax import Array, random
 from numpy.random import Generator
 
@@ -30,6 +34,11 @@ class AdaptiveCVaRBarrierSolver:
         obstacles: List[Any],
         noise_params: List[List[float]],
     ):
+        if ca is None:
+            raise ImportError(
+                "CasADi is not installed. Please install it with `pip install cbfkit[casadi]`."
+            )
+
         self.dt = dynamics_model["dt"]
         self.A = dynamics_model["A"]
         self.B = dynamics_model["B"]
