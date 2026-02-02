@@ -221,7 +221,6 @@ dependencies = [
     { name = "jaxlib" },
     { name = "jaxopt" },
     { name = "kvxopt", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'" },
-    { name = "matplotlib" },
     { name = "tqdm" },
 ]
 
@@ -245,6 +244,9 @@ test = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "python-dotenv" },
+]
+vis = [
+    { name = "matplotlib" },
 ]
 
 [package.dev-dependencies]
@@ -271,7 +273,7 @@ requires-dist = [
     { name = "jinja2", marker = "extra == 'codegen'", specifier = ">=3.0.0" },
     { name = "jupyter", marker = "extra == 'dev'", specifier = ">=1.0.0,<2.0" },
     { name = "kvxopt", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'", specifier = ">=1.3.2.0,<2.0" },
-    { name = "matplotlib", specifier = ">=3.8.2,<4.0" },
+    { name = "matplotlib", marker = "extra == 'vis'", specifier = ">=3.8.2,<4.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0,<2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.2" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.2" },
@@ -282,7 +284,7 @@ requires-dist = [
     { name = "setuptools", marker = "extra == 'dev'", specifier = ">=69.0.3,<70.0" },
     { name = "tqdm", specifier = ">=4.66.2,<5.0" },
 ]
-provides-extras = ["codegen", "test", "dev"]
+provides-extras = ["vis", "codegen", "test", "dev"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -5,7 +5,7 @@ This module enables 64-bit float precision by default for numerical stability
 in QP solvers (OSQP/JAXopt) and MPPI exponential cost weighting.
 """
 
-__version__ = "0.1.1"
+from ._version import __version__
 
 from jax import config
 
