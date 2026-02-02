@@ -114,18 +114,19 @@ def rectify_relative_degree(
 
     if form == "exponential":
         n_fl = len(function_list)
+        n_roots = n_fl - 1
         if roots is None:
             # Root locations in the left half-plane
-            roots = jnp.array([-0.1 * (ii + 1) for ii in range(n_fl)])
+            roots = jnp.array([-0.1 * (ii + 1) for ii in range(n_roots)])
 
         n_r = len(roots)
-        if n_r > n_fl:
-            roots = roots[:n_fl]
-        elif n_r < n_fl:
-            roots = jnp.hstack([roots, roots[-1] * jnp.ones((n_fl - n_r))])
+        if n_r > n_roots:
+            roots = roots[:n_roots]
+        elif n_r < n_roots:
+            roots = jnp.hstack([roots, roots[-1] * jnp.ones((n_roots - n_r))])
 
         assert jnp.all(roots < 0), "All roots must be in open left-half plane!"
-        assert len(roots) == n_fl, "Length of roots must be relative-degree of system minus 1!"
+        assert len(roots) == n_roots, "Length of roots must be relative-degree of system minus 1!"
 
         # Calculate the polynomial coefficients using JAX and SciPy
         polynomial_coefficients = polynomial_coefficients_from_roots(roots)
@@ -137,7 +138,7 @@ def rectify_relative_degree(
                     jnp.array(
                         [
                             func(x) * coeff
-                            for func, coeff in zip(function_list, polynomial_coefficients)
+                            for func, coeff in zip(function_list, polynomial_coefficients[::-1])
                         ]
                     )
                 )
