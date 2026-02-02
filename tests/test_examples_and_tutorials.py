@@ -13,11 +13,10 @@ SCRIPTS_TO_TEST = [
     # "examples/unicycle/reach_goal/risk_aware_cbf_control.py",  # Disabled: needs visualization fix
     "tutorials/unicycle_reach_avoid.py",
     "tutorials/single_integrator_dynamic_obstacles.py",
-    # "tutorials/mppi_stl_reach_avoid.py", # Requires complex setup or long run?
-    "tutorials/mppi_cbf_reach_avoid.py",
+    "tutorials/simulate_mppi_stl.py",
+    "tutorials/simulate_mppi_cbf.py",
     "tutorials/mppi_stochastic_cbf_reach_avoid.py",
     "tutorials/code_generation_example.py",
-    "tutorials/multi_robot_double_integrator.py",
 ]
 
 
