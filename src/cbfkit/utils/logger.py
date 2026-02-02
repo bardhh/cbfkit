@@ -24,8 +24,6 @@ Examples
 import os
 from typing import Any, Dict, List, Union
 
-import pandas as pd
-
 LogEntry = Dict[str, Any]
 
 
@@ -48,6 +46,8 @@ def write_log(filepath: str, data: Union[List[LogEntry], Dict[str, Any]]) -> Non
         if filepath[-4] == ".":
             raise ValueError("filepath must have no extension, or have extension `.csv`")
         filepath += ".csv"
+
+    import pandas as pd
 
     df = pd.DataFrame.from_dict(data)
     df.to_csv(filepath)
