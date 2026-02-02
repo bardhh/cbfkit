@@ -21,15 +21,18 @@ def setup_mppi(
     cost_perturbation_coeff=0.1,
 ):
     if dyn_func is None:
-        print("Dynamics function not passed")
-        exit()
+        raise ValueError("Dynamics function must be provided")
     if trajectory_cost_func is None:
         if stage_cost_func is None:
-            print("Neither Trajectury Cost nor Stage Cost function is passed.")
-            exit()
+            raise ValueError(
+                "Either Trajectory Cost or Stage Cost function must be provided. "
+                "Both are currently None."
+            )
         if terminal_cost_func is None:
-            print("Neither Trajectory Cost nor Terminal Cost function is passed")
-            exit()
+            raise ValueError(
+                "Either Trajectory Cost or Terminal Cost function must be provided. "
+                "Both are currently None."
+            )
 
     # Detect terminal_cost_func signature to support both (state) and (state, action) patterns
     terminal_cost_takes_action = False
