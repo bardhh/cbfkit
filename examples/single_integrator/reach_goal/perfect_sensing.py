@@ -17,7 +17,6 @@ from cbfkit.simulation.monte_carlo import conduct_monte_carlo
 from cbfkit.systems import single_integrator
 from examples.single_integrator.common.config import perfect_state_measurements as setup
 from examples.single_integrator.common.lyapunov_functions import fxts_lyapunov
-from examples.van_der_pol.visualizations.path import animate
 
 # Lyapunov Barrier Functions
 lyapunovs = fxts_lyapunov(
@@ -121,6 +120,7 @@ def execute(
 
 # Simulate total number of trials
 if __name__ == "__main__":
+    import os
     import pickle
 
     # Execute numerous trials sim
@@ -138,7 +138,12 @@ if __name__ == "__main__":
     n_success = jnp.sum(jnp.array(successes))
     fraction_success = n_success / setup.n_trials
     print(f"Success Rate: {fraction_success:.2f}")
-    print(f"Avg. Completion Time: {jnp.mean(jnp.array(completion_times)):.2f}")
+
+    valid_completion_times = [t for t in completion_times if t is not None]
+    if valid_completion_times:
+        print(f"Avg. Completion Time: {jnp.mean(jnp.array(valid_completion_times)):.2f}")
+    else:
+        print("Avg. Completion Time: N/A")
 
     # states, controls, estimates, covariances, data_keys, data_values, successes = execute()
 
@@ -150,6 +155,9 @@ if __name__ == "__main__":
         "pg": setup.pg,
         "successes": successes,
     }
+
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(setup.pkl_file), exist_ok=True)
 
     # Save data to file
     with open(setup.pkl_file, "wb") as file:

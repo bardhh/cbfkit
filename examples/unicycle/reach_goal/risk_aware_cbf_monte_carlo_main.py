@@ -1,4 +1,3 @@
-import multiprocessing as mp
 import os
 import pickle
 from typing import Any, List, Optional, Tuple
@@ -32,7 +31,7 @@ from examples.unicycle.common.visualizations import plot_trajectory
 # Whether or not to simulate, plot
 plot = 1
 save = 1
-save_path = "examples/unicycle/start_to_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
+save_path = "examples/unicycle/reach_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
 file_name = os.path.basename(__file__)[:-8]
 
 # Define time parameters
@@ -42,7 +41,10 @@ n_steps = int(tf / dt)
 
 X_MAX = 5.0
 Y_MAX = 5.0
-N_TRIALS = 50
+if os.environ.get("CBFKIT_TEST_MODE") == "true":
+    N_TRIALS = 2
+else:
+    N_TRIALS = 50
 N_STEPS = int(tf / dt)
 N_STATES = len(initial_conditions.desired_state)
 N_CONTROLS = 2
@@ -172,7 +174,7 @@ from examples.unicycle.common.config import ekf_state_estimation as initial_cond
 # Whether or not to simulate, plot
 plot = 1
 save = 1
-save_path = "examples/unicycle/start_to_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
+save_path = "examples/unicycle/reach_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
 file_name = os.path.basename(__file__)[:-8]
 
 # Define time parameters
@@ -182,7 +184,10 @@ n_steps = int(tf / dt)
 
 X_MAX = 5.0
 Y_MAX = 5.0
-N_TRIALS = 50
+if os.environ.get("CBFKIT_TEST_MODE") == "true":
+    N_TRIALS = 2
+else:
+    N_TRIALS = 50
 N_STEPS = int(tf / dt)
 N_STATES = len(initial_conditions.desired_state)
 N_CONTROLS = 2
@@ -203,7 +208,7 @@ x0s = [initial_conditions.initial_state for _ in range(N_TRIALS)]
 # Optional arguments for sim.execute (if not defined elsewhere)
 planner = None
 perturbation = None
-sigma = None
+sigma = initial_conditions.R
 
 
 # Define simulation function, including post-processing of data
@@ -265,41 +270,36 @@ controller_instance = cbf_controller(
 
 # Needed for multiprocessing
 if __name__ == "__main__":
-    import multiprocessing as mp
     import pickle
 
     simulate = 1
     plot = 1
 
     if simulate:
-        # Create a partial function with all necessary arguments bound
-        execute_with_globals = functools.partial(
-            execute_trial,
-            n_sims=n_sims,
-            x0s=x0s,
-            dt=dt,
-            num_steps=num_steps,
-            dynamics=approx_unicycle_dynamics,
-            integrator=integrator,
-            planner=planner,
-            nominal_controller=nominal_controller,
-            controller=controller_instance,
-            sensor=sensor,
-            estimator=estimator,
-            perturbation=perturbation,
-            sigma=sigma,
-            N=N,
-            initial_conditions=initial_conditions,
-            tf=tf,
-        )
-        # Create a multiprocessing Pool
-        with mp.Pool(processes=8) as pool:
-            # Process the items in parallel
-            results = pool.map(execute_with_globals, range(N_TRIALS))
-
-        # Close the pool and wait for the processes to finish
-        pool.close()
-        pool.join()
+        # Execute trials sequentially
+        results = []
+        for ii in range(N_TRIALS):
+            results.append(
+                execute_trial(
+                    ii=ii,
+                    n_sims=n_sims,
+                    x0s=x0s,
+                    dt=dt,
+                    num_steps=num_steps,
+                    dynamics=approx_unicycle_dynamics,
+                    integrator=integrator,
+                    planner=planner,
+                    nominal_controller=nominal_controller,
+                    controller=controller_instance,
+                    sensor=sensor,
+                    estimator=estimator,
+                    perturbation=perturbation,
+                    sigma=sigma,
+                    N=N,
+                    initial_conditions=initial_conditions,
+                    tf=tf,
+                )
+            )
 
         # Convert the results to a NumPy array
         state_record = [result[0] for result in results]
