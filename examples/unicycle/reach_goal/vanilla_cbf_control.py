@@ -64,7 +64,7 @@ barriers = [
         function=ellipsoid_cbf(jnp.array(obs), jnp.array(ell)),
         system_dynamics=unicycle_dynamics,
         state_dim=len(init_state),
-        form="exponential",
+        form="high-order",
     )(
         certificate_conditions=zeroing_barriers.linear_class_k(5.0),
     )

@@ -167,7 +167,7 @@ def run_scenario(config):
     for i in range(num_humans):
         h = create_human_barrier(i, d_safe)
         b = rectify_relative_degree(
-            function=h, system_dynamics=aug_dynamics, state_dim=len(z0), form="exponential"
+            function=h, system_dynamics=aug_dynamics, state_dim=len(z0), form="high-order"
         )(
             certificate_conditions=zeroing_barriers.linear_class_k(1.0),
         )

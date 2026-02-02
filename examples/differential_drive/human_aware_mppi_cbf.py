@@ -97,6 +97,9 @@ def create_mppi_costs(goal_state, num_humans, d_safe):
     R_val = 0.01
     Q_goal = 2.0
     Q_obs = 100.0
+    Q_vel = 50.0  # Strong penalty for negative velocity (going backward)
+    Q_heading = 5.0  # Penalty for heading misalignment with goal
+    Q_accel = 20.0  # Penalty for negative acceleration when velocity is low
 
     @jit
     def stage_cost(z, u):
@@ -119,7 +122,30 @@ def create_mppi_costs(goal_state, num_humans, d_safe):
             # If dist < d_safe * 1.5, penalize
             c_obs += Q_obs * jnp.exp(-2.0 * (dist_h - d_safe))
 
-        return c_u + c_goal + c_obs
+        # 4. Velocity Direction Cost - penalize negative velocity (going backward)
+        # Robot state: [x, y, v, theta] at indices 0:4
+        v_robot = z[2]
+        # Penalize negative velocity strongly to prevent backward motion
+        c_vel = Q_vel * jnp.maximum(0.0, -v_robot)
+
+        # 5. Heading Alignment Cost - penalize heading that doesn't point toward goal
+        theta_robot = z[3]
+        # Compute desired heading to goal
+        delta = p_g - p_r
+        theta_goal = jnp.arctan2(delta[1], delta[0])
+        # Heading error (wrapped to [-pi, pi])
+        heading_error = theta_robot - theta_goal
+        heading_error = jnp.arctan2(jnp.sin(heading_error), jnp.cos(heading_error))
+        c_heading = Q_heading * heading_error**2
+
+        # 6. Forward Acceleration Bias - penalize negative acceleration when velocity is low
+        # This encourages the robot to accelerate forward initially
+        a_robot = u[0]  # Acceleration control
+        # Penalize negative acceleration more when velocity is near zero or negative
+        vel_factor = jnp.exp(-2.0 * v_robot)  # Higher weight when v is small/negative
+        c_accel = Q_accel * vel_factor * jnp.maximum(0.0, -a_robot)
+
+        return c_u + c_goal + c_obs + c_vel + c_heading + c_accel
 
     @jit
     def terminal_cost(z):
@@ -206,7 +232,12 @@ def run_simulation():
         mppi_args=mppi_params,
     )
 
-    init_planner_data = PlannerData(u_traj=jnp.zeros((mppi_params["prediction_horizon"], 2)))
+    # Initialize MPPI with a forward-biased trajectory (positive acceleration, zero angular velocity)
+    # This warm-starts the optimizer toward forward motion instead of exploring backward
+    init_u_traj = jnp.zeros((mppi_params["prediction_horizon"], 2))
+    # Set initial acceleration to a moderate positive value to bias toward forward motion
+    init_u_traj = init_u_traj.at[:, 0].set(2.0)  # Positive acceleration along entire horizon
+    init_planner_data = PlannerData(u_traj=init_u_traj)
 
     # --- CBF Controller ---
     print("Initializing CBF Safety Filter...")
@@ -217,9 +248,9 @@ def run_simulation():
         # Robot is acceleration controlled -> Rel Deg 2
         # Augmented dynamics handles human velocity naturally
         b = rectify_relative_degree(
-            function=h, system_dynamics=aug_dynamics, state_dim=len(z0), form="exponential"
+            function=h, system_dynamics=aug_dynamics, state_dim=len(z0), form="high-order"
         )(
-            certificate_conditions=zeroing_barriers.linear_class_k(1.0),
+            certificate_conditions=zeroing_barriers.linear_class_k(10.0),  # Very low gain for minimal interference when far from obstacles
         )
         barriers.append(b)
 
