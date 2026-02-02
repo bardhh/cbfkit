@@ -47,10 +47,34 @@ def write_log(filepath: str, data: Union[List[LogEntry], Dict[str, Any]]) -> Non
             raise ValueError("filepath must have no extension, or have extension `.csv`")
         filepath += ".csv"
 
-    import pandas as pd
+    import csv
 
-    df = pd.DataFrame.from_dict(data)
-    df.to_csv(filepath)
+    if isinstance(data, list):
+        if not data:
+            return
+        keys = data[0].keys()
+        with open(filepath, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=keys)
+            writer.writeheader()
+            writer.writerows(data)
+    elif isinstance(data, dict):
+        keys = list(data.keys())
+        if not keys:
+            return
+
+        # Check that all columns have the same length to prevent data loss with zip
+        length = len(data[keys[0]])
+        for k in keys[1:]:
+            if len(data[k]) != length:
+                raise ValueError("All arrays must be of the same length")
+
+        rows = zip(*[data[k] for k in keys])
+        with open(filepath, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(keys)
+            writer.writerows(rows)
+    else:
+        raise ValueError("data must be a list of dicts or a dict of lists")
 
 
 def extract_log(key: str, data: List[LogEntry]) -> List[Any]:
