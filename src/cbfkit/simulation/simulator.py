@@ -101,6 +101,26 @@ def _check_simulation_status(
                 f"Warning: Simulation stopped early due to controller error at step {first_error_idx}{status_msg}."
             )
 
+    # Sentinel: Warn if solver hit MAX_ITER_REACHED (status 2) but was accepted
+    # We check 'sub_data_solver_status' (explicit) or 'error_data' (legacy/implicit)
+    status_key = None
+    if "sub_data_solver_status" in controller_data_keys:
+        status_key = "sub_data_solver_status"
+    elif "error_data" in controller_data_keys:
+        status_key = "error_data"
+
+    if status_key:
+        idx_data = controller_data_keys.index(status_key)
+        status_codes = controller_data_values[idx_data]
+        # Check for status 2 (MAX_ITER_REACHED)
+        max_iter_mask = status_codes == 2
+        if jnp.any(max_iter_mask):
+            count = int(jnp.sum(max_iter_mask).item())
+            print(
+                f"Warning: Solver reached max iterations in {count} steps. "
+                "Solutions were accepted but may be suboptimal."
+            )
+
     # Check planner errors
     if "error" in planner_data_keys:
         idx = planner_data_keys.index("error")
