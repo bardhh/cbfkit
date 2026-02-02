@@ -8,6 +8,7 @@ Functions
 ---------
 -certificate_package: packages the certificate function and its gradients. Supports automated
  differentiation if gradients/Hessians are not provided.
+-generate_certificate: simpler interface to create a CertificateCollection from a function.
 -concatenate_certificates: combines multiple certificate packages into usable form
 
 Notes
@@ -180,6 +181,135 @@ def certificate_package(
         )
 
     return package
+
+
+def generate_certificate(
+    certificate: Callable[..., Array],
+    certificate_conditions: CertificateConditionsCallable,
+    input_style: Union[
+        Literal["state", "separated"], CertificateInputStyle
+    ] = CertificateInputStyle.STATE,
+    certificate_grad: Optional[Callable[..., Array]] = None,
+    certificate_hess: Optional[Callable[..., Array]] = None,
+) -> CertificateCollection:
+    """Creates a CertificateCollection from a single function, automatically computing derivatives.
+
+    Unlike `certificate_package`, this function does not use the factory pattern and does not
+    require specifying the state dimension.
+
+    Args:
+        certificate: The certificate function h(x) or h(t, x).
+        certificate_conditions: Function defining the conditions (e.g. Class K).
+        input_style: Signature of the certificate function.
+            - "state" (default): certificate(x)
+            - "separated": certificate(t, x)
+        certificate_grad: Optional manual gradient function. If provided, must match input_style.
+        certificate_hess: Optional manual hessian function. If provided, must match input_style.
+
+    Returns:
+        CertificateCollection: A collection containing the function and its derivatives.
+    """
+    # Normalize input_style to enum
+    if isinstance(input_style, str):
+        try:
+            input_style = CertificateInputStyle(input_style)
+        except ValueError:
+            valid_styles = ["state", "separated"]
+            raise ValueError(
+                f"Invalid input_style '{input_style}' for generate_certificate. Must be one of {valid_styles}"
+            ) from None
+
+    if input_style == CertificateInputStyle.CONCATENATED:
+        raise ValueError(
+            "generate_certificate does not support 'concatenated' input style. "
+            "Use 'state' or 'separated', or use `certificate_package` instead."
+        )
+
+    # Wrap the certificate function to always accept (t, x)
+    if input_style == CertificateInputStyle.STATE:
+        # User provided h(x)
+        def v_func_canonical(t: float, x: Array) -> Array:
+            return certificate(x)
+
+        # Gradient w.r.t x
+        if certificate_grad is None:
+            grad_x = grad(certificate)
+
+            def j_func_canonical(t: float, x: Array) -> Array:
+                return grad_x(x)
+        else:
+            # Manual grad h(x)
+            def j_func_canonical(t: float, x: Array) -> Array:
+                return certificate_grad(x)  # type: ignore
+
+        # Hessian w.r.t x
+        if certificate_hess is None:
+            hess_x = hessian(certificate)
+
+            def h_func_canonical(t: float, x: Array) -> Array:
+                return hess_x(x)
+        else:
+            # Manual hess h(x)
+            def h_func_canonical(t: float, x: Array) -> Array:
+                return certificate_hess(x)  # type: ignore
+
+        # Partial w.r.t t (always 0 for state-only function)
+        def t_func_canonical(t: float, x: Array) -> Array:
+            return jnp.array(0.0)
+
+    else:
+        # User provided h(t, x)
+        def v_func_canonical(t: float, x: Array) -> Array:
+            return certificate(t, x)
+
+        # Gradient w.r.t x (arg 1)
+        if certificate_grad is None:
+            grad_x = grad(certificate, argnums=1)
+
+            def j_func_canonical(t: float, x: Array) -> Array:
+                return grad_x(t, x)
+        else:
+            # Manual grad h(t, x) w.r.t x?
+            # Convention: if manual grad is provided for h(t, x), it should return grad_x h(t, x)
+            # Or should it return full gradient? Let's assume it matches the auto-diff output: dh/dx.
+            def j_func_canonical(t: float, x: Array) -> Array:
+                return certificate_grad(t, x)  # type: ignore
+
+        # Hessian w.r.t x (arg 1)
+        if certificate_hess is None:
+            hess_x = hessian(certificate, argnums=1)
+
+            def h_func_canonical(t: float, x: Array) -> Array:
+                return hess_x(t, x)
+        else:
+            def h_func_canonical(t: float, x: Array) -> Array:
+                return certificate_hess(t, x)  # type: ignore
+
+        # Partial w.r.t t (arg 0)
+        # Note: If user provides manual grad, we still need partial t.
+        # Currently, if manual grad is provided, we assume partial t is handled separately or user only cared about x?
+        # CertificateCollection needs partials.
+        # If manual grad is provided, we can't infer partial t unless user provides it?
+        # For now, let's auto-diff partial t unless we add a `certificate_partial` argument.
+        # Let's keep it simple: always auto-diff partial t for now, as it's rarely manually optimized.
+        grad_t = grad(certificate, argnums=0)
+
+        def t_func_canonical(t: float, x: Array) -> Array:
+            return grad_t(t, x)
+
+    # JIT compile the canonical functions
+    v_jit = jit(v_func_canonical)
+    j_jit = jit(j_func_canonical)
+    h_jit = jit(h_func_canonical)
+    t_jit = jit(t_func_canonical)
+
+    return CertificateCollection(
+        [v_jit],
+        [j_jit],
+        [h_jit],
+        [t_jit],
+        [certificate_conditions],
+    )
 
 
 def concatenate_certificates(*tuples: CertificateCollection) -> CertificateCollection:
