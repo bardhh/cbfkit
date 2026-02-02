@@ -225,10 +225,14 @@ def compute_function_list(
         total += jnp.sum(jnp.abs(jnp.matmul(grad, dyn_g)))
 
     def exponential_new_func(x: Array):
-        return jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0])
+        return jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0]) + jacobian(x)[-1]
 
     def highorder_new_func(x: Array):
-        return jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0]) + function(x)
+        return (
+            jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0])
+            + jacobian(x)[-1]
+            + function(x)
+        )
 
     if jnp.isnan(total):
         raise ValueError(
