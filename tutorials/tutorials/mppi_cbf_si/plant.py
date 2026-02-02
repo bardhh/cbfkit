@@ -1,7 +1,6 @@
 import jax.numpy as jnp
 from jax import jit, Array
 from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
-from .constants import *
 
 
 def plant(**kwargs) -> DynamicsCallable:
@@ -35,8 +34,8 @@ def plant(**kwargs) -> DynamicsCallable:
         Returns:
             dynamics (DynamicsCallable): takes state as input and returns dynamics components f, g
         """
-        f = jnp.array([0, 0])
-        g = jnp.array([[1, 0], [0, 1]])
+        f = jnp.array([0.0, 0.0])
+        g = jnp.array([[1.0, 0.0], [0.0, 1.0]])
 
         return f, g
 
