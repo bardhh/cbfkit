@@ -13,7 +13,6 @@ import os
 import sys
 
 import jax.numpy as jnp
-import numpy as np
 
 # Add project root
 sys.path.append(os.getcwd())
@@ -22,12 +21,6 @@ from jax import jit
 
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
-from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import (
-    vanilla_cbf_clf_qp_controller as cbf_controller,
-)
 from cbfkit.controllers.mppi.mppi_generator import mppi_generator
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import runge_kutta_4 as integrator
@@ -166,7 +159,7 @@ def run_demo():
     # This might be tricky if c_values flattens sub_data.
     # Let's see what we get.
 
-    os.makedirs("examples/differential_drive/results", exist_ok=True)
+    os.makedirs("examples/pedestrian/results", exist_ok=True)
     visualize_crowd(
         states=x,
         num_pedestrians=num_peds,
