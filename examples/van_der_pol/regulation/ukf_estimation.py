@@ -6,6 +6,10 @@ It does not define any new functions, and primarily loads modules from the
 src/cbfkit tree.
 
 """
+import matplotlib
+
+# Hack to prevent matplotlib.use("macosx") error in imported modules
+matplotlib.use = lambda *args, **kwargs: None
 
 import jax.numpy as jnp
 import numpy as np
@@ -17,16 +21,16 @@ plot = 1
 save = 1
 
 # Load system module
-import cbfkit.system as system
-from cbfkit.estimators import ct_ukf_dtmeas as ukf
+import cbfkit.simulation.simulator as system
+from cbfkit.estimators.kalman_filters.ukf import ct_ukf_dtmeas as ukf
 from cbfkit.integration import runge_kutta_4 as integrator
 
 # Load dynamics, sensors, controller, estimator, integrator
-from cbfkit.models import unicycle
+from cbfkit.systems import unicycle
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 
 # Load initial conditions
-from examples.unicycle.start_to_goal.ukf_state_estimation import initial_conditions
+from examples.van_der_pol.common.config import ukf_state_estimation as initial_conditions
 
 # Define time parameters
 tf = 5.0
@@ -34,7 +38,7 @@ dt = 0.01
 n_steps = int(tf / dt)
 
 # Define dynamics, controller, and estimator with specified parameters
-dynamics = unicycle.approx_unicycle_dynamics(l=1.0, sigma=initial_conditions.Q)
+dynamics = unicycle.approx_unicycle_dynamics(lam=1.0)
 
 
 def dfdx(x):
@@ -49,9 +53,14 @@ def dhdx(x):
     return jnp.eye((len(initial_conditions.initial_state)))
 
 
-controller = unicycle.proportional_controller(
-    dynamics=dynamics, Kp_pos=1, Kp_theta=0.01, desired_state=initial_conditions.desired_state
-)
+_controller = unicycle.proportional_controller(dynamics=dynamics, Kp_pos=1, Kp_theta=0.01)
+
+
+def controller(t, x, u_nom, key, data):
+    u, _ = _controller(t, x, key, initial_conditions.desired_state)
+    return u, data
+
+
 scale_factor = 1.25
 estimator = ukf(
     Q=initial_conditions.Q * scale_factor,
@@ -64,7 +73,16 @@ estimator = ukf(
 
 if simulate:
     # Execute simulation
-    states, controls, estimates, covariances, data_keys, data_values = system.simulate(
+    (
+        states,
+        controls,
+        estimates,
+        covariances,
+        data_keys,
+        data_values,
+        planner_keys,
+        planner_values,
+    ) = system.execute(
         x0=initial_conditions.initial_state,
         dynamics=dynamics,
         sensor=sensor,
@@ -72,7 +90,7 @@ if simulate:
         estimator=estimator,
         integrator=integrator,
         dt=dt,
-        R=initial_conditions.R,
+        sigma=initial_conditions.R,
         num_steps=n_steps,
     )
 
@@ -87,7 +105,11 @@ else:
     pass
 
 if plot:
-    from examples.unicycle.start_to_goal.visualizations import animate
+    import os
+    from examples.unicycle.common.visualizations import animate
+
+    if save:
+        os.makedirs("examples/van_der_pol/regulation/results", exist_ok=True)
 
     animate(
         states=states,
@@ -99,5 +121,5 @@ if plot:
         dt=dt,
         title="System Behavior",
         save_animation=save,
-        animation_filename="examples/unicycle/start_to_goal/ukf_state_estimation/results/test.gif",
+        animation_filename="examples/van_der_pol/regulation/results/ukf_estimation.gif",
     )

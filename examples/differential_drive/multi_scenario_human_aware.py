@@ -15,7 +15,8 @@ import os
 import sys
 import time
 
-sys.path.append(os.getcwd())
+# Add the project root directory to the python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import jax.numpy as jnp
 import matplotlib
@@ -30,13 +31,10 @@ from matplotlib.patches import Circle
 
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
-from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import (
-    vanilla_cbf_clf_qp_controller as cbf_controller,
-)
-from cbfkit.controllers.mppi.mppi_generator import mppi_generator
+from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
+from cbfkit.controllers.mppi import vanilla_mppi
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
@@ -155,7 +153,7 @@ def run_scenario(config):
         "cost_perturbation": 0.1,
     }
 
-    planner = mppi_generator()(
+    planner = vanilla_mppi(
         control_limits=jnp.array([robot_dyn.a_max, robot_dyn.omega_max]),
         dynamics_func=aug_dynamics,
         stage_cost=stage_cost,

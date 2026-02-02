@@ -8,11 +8,11 @@ from jax import Array, jit
 # Add the project root directory to the python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
-import cbfkit.controllers.mppi as mppi_planner
 import cbfkit.simulation.simulator as sim
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
+from cbfkit.controllers.mppi import vanilla_mppi
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
@@ -107,7 +107,7 @@ mppi_args: MPPIConfig = {
 }
 
 # Instantiate MPPI Planner (as nominal controller replacement)
-mppi_local_planner = mppi_planner.vanilla_mppi(
+mppi_local_planner = vanilla_mppi(
     control_limits=actuation_constraints,
     dynamics_func=unicycle_dynamics,
     trajectory_cost=None,
