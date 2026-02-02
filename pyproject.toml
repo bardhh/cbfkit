@@ -9,9 +9,8 @@ authors = [
     {name = "Georgios Fainekos"},
     {name = "Hideki Okamoto"}
 ]
-license = { file = "LICENSE" }
+license = "BSD-3-Clause"
 classifiers = [
-    "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -26,11 +25,13 @@ dependencies = [
     "kvxopt>=1.3.2.0,<2.0; platform_machine == 'aarch64' or platform_machine == 'arm64'",
     "jaxopt>=0.8.3,<0.9",
     "control>=0.9.4,<1.0",
-    "casadi>=3.6.4,<4.0",
     "tqdm>=4.66.2,<5.0"
 ]
 
 [project.optional-dependencies]
+casadi = [
+    "casadi>=3.6.4,<4.0",
+]
 vis = [
     "matplotlib>=3.8.2,<4.0",
 ]
