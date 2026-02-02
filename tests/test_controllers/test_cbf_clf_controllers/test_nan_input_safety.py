@@ -52,9 +52,9 @@ class TestNanInputSafety(unittest.TestCase):
         # 1. Output must be NaN (Fail-Loud)
         self.assertTrue(jnp.isnan(u).all(), f"Controller returned non-NaN value {u} for NaN input. Expected NaNs.")
 
-        # 2. Status code should be -1 (NAN_DETECTED)
+        # 2. Status code should be -2 (NAN_INPUT_DETECTED)
         # This confirms the specific "Sentinel" logic in cbf_clf_qp_generator is active
-        self.assertEqual(data.error_data, -1, f"Controller returned status {data.error_data} instead of -1 for NaN input.")
+        self.assertEqual(data.error_data, -2, f"Controller returned status {data.error_data} instead of -2 for NaN input.")
 
         # 3. Error flag should be True (since status != 1 and != 2)
         self.assertTrue(data.error, "Controller failed to report error for NaN input.")
