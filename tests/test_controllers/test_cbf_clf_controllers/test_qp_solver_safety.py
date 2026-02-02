@@ -9,8 +9,13 @@ from cbfkit.utils.user_types import ControllerData, EMPTY_CERTIFICATE_COLLECTION
 class TestQPSolverSafety(unittest.TestCase):
     def test_max_iter_safety(self):
         """
-        Regression test: Ensure that if the QP solver hits MAX_ITER_REACHED (status 2),
-        the controller returns NaN instead of a potentially unsafe non-converged solution.
+        Regression test: Verify controller behavior when QP solver hits MAX_ITER_REACHED (status 2).
+
+        Note: The controller logic was updated to treat status 2 as a success (best-effort),
+        returning the candidate solution instead of NaNs. This test ensures that:
+        1. The controller returns a valid control input (not NaN).
+        2. The error flag is False (since status 2 is now considered success).
+        3. The internal solver status is correctly reported as 2.
         """
 
         # 1. Setup simple controller
@@ -71,13 +76,13 @@ class TestQPSolverSafety(unittest.TestCase):
             u, new_data = controller(t, x, u_nom, key, data)
 
             # 5. Assertions
-            # The controller must return NaNs if status is not 1 (SOLVED)
-            self.assertTrue(jnp.isnan(u).all(), f"Controller returned values {u} despite MAX_ITER status!")
+            # The controller should return valid values (not NaN) for status 2
+            self.assertFalse(jnp.isnan(u).any(), f"Controller returned NaNs {u} despite valid status 2!")
 
-            # Error flag should be True
-            self.assertTrue(new_data.error, "Controller did not report error!")
+            # Error flag should be False (success includes status 2)
+            self.assertFalse(new_data.error, "Controller reported error for status 2 (should be success)!")
 
-            # Error data should capture the status code 2
+            # Error data (solver status) should capture the status code 2
             self.assertEqual(new_data.error_data, 2, f"Controller reported wrong status: {new_data.error_data}")
 
 if __name__ == '__main__':
