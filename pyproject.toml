@@ -1,6 +1,6 @@
 [project]
 name = "cbfkit"
-version = "0.1.1"
+dynamic = ["version"]
 description = "A Control Barrier Function Toolbox for Robotics Applications"
 authors = [
     {name = "Mitchell Black", email = "6lack.mitchell@gmail.com"},
@@ -56,6 +56,9 @@ dev = [
 [build-system]
 requires = ["setuptools>=69.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = {attr = "cbfkit.__version__"}
 
 [tool.setuptools.package-data]
 "cbfkit" = ["codegen/templates/*.j2"]

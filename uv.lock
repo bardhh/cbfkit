@@ -212,7 +212,6 @@ wheels = [
 
 [[package]]
 name = "cbfkit"
-version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "casadi" },
