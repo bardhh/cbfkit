@@ -322,6 +322,7 @@ class ComputeCertificateConstraintFunctionGenerator(Protocol):
 # Miscellaneous
 
 # Cost function Callables
+StlTrajectoryCostCallable = Callable[[float, Array], Union[float, Array]]
 TrajectoryCostCallableReturns = Tuple[Array]
 TrajectoryCostCallable = Callable[[State, Control], TrajectoryCostCallableReturns]
 StageCostCallableReturns = Tuple[Array]
