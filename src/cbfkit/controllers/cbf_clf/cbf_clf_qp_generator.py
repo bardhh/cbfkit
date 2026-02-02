@@ -448,7 +448,12 @@ def cbf_clf_qp_generator(
 
             # Sentinel: Detect NaNs in QP inputs
             nan_in_inputs = (
-                jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isnan(h_vec))
+                jnp.any(jnp.isnan(q_vec))
+                | jnp.any(jnp.isnan(g_mat))
+                | jnp.any(jnp.isnan(h_vec))
+                | jnp.any(jnp.isinf(q_vec))
+                | jnp.any(jnp.isinf(g_mat))
+                | jnp.any(jnp.isinf(h_vec))
             )
 
             # Solve QP
@@ -473,7 +478,9 @@ def cbf_clf_qp_generator(
 
             # Sentinel: Explicitly catch NaN solutions even if solver claims success
             # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0)
-            status = jnp.where(jnp.any(jnp.isnan(sol)), -1, status)
+            status = jnp.where(
+                jnp.any(jnp.isnan(sol)) | jnp.any(jnp.isinf(sol)), -1, status
+            )
             status = jnp.where(nan_in_inputs, -2, status)
 
             # Bolt: Rescale solution back to physical units
@@ -490,7 +497,7 @@ def cbf_clf_qp_generator(
                 # Sentinel: Map status codes to human-readable strings
                 def print_status_msg(msg):
                     jdebug.print(
-                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.\n"
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} ({msg}) (Iter: {iter}). Output set to NaN.\n"
                         "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
                         status=status,
                         msg=msg,
