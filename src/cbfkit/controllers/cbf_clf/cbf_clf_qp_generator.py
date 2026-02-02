@@ -491,7 +491,7 @@ def cbf_clf_qp_generator(
                 # Sentinel: Map status codes to human-readable strings
                 def print_status_msg(msg):
                     jdebug.print(
-                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.\n"
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} ({msg}) (Iter: {iter}). Output set to NaN.\n"
                         "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
                         status=status,
                         msg=msg,
