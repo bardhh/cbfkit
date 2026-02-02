@@ -2,7 +2,7 @@
 #! docstring
 """
 
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import jax.numpy as jnp
 from jax import Array, jit, lax, vmap
@@ -96,7 +96,9 @@ def generate_compute_cbf_clf_constraints(
     return compute_cbf_clf_constraints
 
 
-def _stack_and_validate(values: list, name: str, expected_ndim: Optional[int] = None):
+def _stack_and_validate(
+    values: List[Array], name: str, expected_ndim: Optional[int] = None
+) -> Array:
     """Stacks a list of arrays and validates that they all have the same shape."""
     if not values:
         return jnp.stack(values)
@@ -124,8 +126,8 @@ def _stack_and_validate(values: list, name: str, expected_ndim: Optional[int] = 
 
 
 def generate_compute_certificate_values_list_comprehension(
-    certificate_package, compute_hessians: bool = True
-):
+    certificate_package: CertificateCollection, compute_hessians: bool = True
+) -> Callable[[float, Array], Tuple[Array, Array, Optional[Array], Array, Array]]:
     functions, jacobians, hessians, partials, conditions = certificate_package
 
     @jit
@@ -154,8 +156,8 @@ def generate_compute_certificate_values_list_comprehension(
 
 
 def generate_compute_certificate_values_vmap(
-    certificate_package, compute_hessians: bool = True
-):
+    certificate_package: CertificateCollection, compute_hessians: bool = True
+) -> Callable[[float, Array], Tuple[Array, Array, Optional[Array], Array, Array]]:
     """
     Computes certificate values using list comprehension (unrolling).
 

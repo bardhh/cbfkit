@@ -12,6 +12,7 @@ jobs:
     env:
       JAX_PLATFORM_NAME: cpu
       UV_CACHE_DIR: /tmp/.uv-cache
+      JAX_COMPILATION_CACHE_DIR: /tmp/jax_cache
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -29,18 +30,28 @@ jobs:
         key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
         restore-keys: |
           ${{ runner.os }}-uv-
+    - name: Cache JAX compilation
+      uses: actions/cache@v4
+      with:
+        path: /tmp/jax_cache
+        key: ${{ runner.os }}-jax-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-jax-
     - name: Install dependencies
       env:
         UV_SYSTEM_PYTHON: 1
       run: |
         pip install uv
-        uv pip install -e ".[test,codegen]"
+        if [ "${{ matrix.python-version }}" == "3.10" ]; then
+          uv pip install -e ".[test,codegen]" ruff mypy
+        else
+          uv pip install -e ".[test,codegen]"
+        fi
     - name: Lint with ruff
       if: matrix.python-version == '3.10'
       env:
         UV_SYSTEM_PYTHON: 1
       run: |
-        uv pip install ruff
         # Stop the build if there are Python syntax errors or undefined names
         ruff check src --select=E9,F63,F7,F82 --target-version=py310
         # Exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
@@ -50,7 +61,6 @@ jobs:
       env:
         UV_SYSTEM_PYTHON: 1
       run: |
-        uv pip install mypy
         mypy src/cbfkit || true
     - name: Test with pytest
       run: |
