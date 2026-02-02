@@ -27,28 +27,37 @@ def _map_function(args):
     """
     func, trial_no, worker_seed, kwargs = args
 
-    # Seed global numpy random for legacy support and ensure diversity
-    if worker_seed is not None:
-        # np.random.seed requires uint32
-        np.random.seed(int(worker_seed % (2**32)))
+    # Save state to restore later, preventing side effects on global random state
+    # (especially important when running sequentially in the main process)
+    rng_state = np.random.get_state()
 
-    # Determine if we can inject JAX key
-    inject_key = False
-    if worker_seed is not None:
-        try:
-            sig = inspect.signature(func)
-            params = sig.parameters
-            if "key" in params or any(p.kind == p.VAR_KEYWORD for p in params.values()):
+    try:
+        # Seed global numpy random for legacy support and ensure diversity
+        if worker_seed is not None:
+            # np.random.seed requires uint32
+            np.random.seed(int(worker_seed % (2**32)))
+
+        # Determine if we can inject JAX key
+        inject_key = False
+        if worker_seed is not None:
+            try:
+                sig = inspect.signature(func)
+                params = sig.parameters
+                if "key" in params or any(p.kind == p.VAR_KEYWORD for p in params.values()):
+                    inject_key = True
+            except (ValueError, TypeError):
+                # Fallback: if we can't inspect, assume compliant with docstring (accepts kwargs)
                 inject_key = True
-        except (ValueError, TypeError):
-            # Fallback: if we can't inspect, assume compliant with docstring (accepts kwargs)
-            inject_key = True
 
-    if inject_key and worker_seed is not None:
-        kwargs = kwargs.copy()
-        kwargs["key"] = random.PRNGKey(worker_seed)
+        if inject_key and worker_seed is not None:
+            kwargs = kwargs.copy()
+            kwargs["key"] = random.PRNGKey(worker_seed)
 
-    return func(trial_no, **kwargs)
+        return func(trial_no, **kwargs)
+
+    finally:
+        # Restore global random state
+        np.random.set_state(rng_state)
 
 
 def conduct_monte_carlo(
