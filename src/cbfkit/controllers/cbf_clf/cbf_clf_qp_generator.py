@@ -145,6 +145,29 @@ def cbf_clf_qp_generator(
             }
         )
 
+        # Validate configuration to prevent silent failures (e.g., NaNs from negative penalties)
+        if slack_penalty_cbf < 0:
+            raise ValueError(
+                f"Invalid configuration: 'slack_penalty_cbf' must be non-negative, but got {slack_penalty_cbf}."
+            )
+        if slack_penalty_clf < 0:
+            raise ValueError(
+                f"Invalid configuration: 'slack_penalty_clf' must be non-negative, but got {slack_penalty_clf}."
+            )
+        if slack_bound_cbf is not None and slack_bound_cbf <= 0:
+            raise ValueError(
+                f"Invalid configuration: 'slack_bound_cbf' must be positive, but got {slack_bound_cbf}."
+            )
+        if slack_bound_clf <= 0:
+            raise ValueError(
+                f"Invalid configuration: 'slack_bound_clf' must be positive, but got {slack_bound_clf}."
+            )
+        if jnp.any(jnp.asarray(control_limits) < 0):
+            raise ValueError(
+                f"Invalid configuration: 'control_limits' elements must be non-negative (defining symmetric bounds |u|<=limit), "
+                f"but got {control_limits}."
+            )
+
         complete = False
         n_con = len(control_limits)
 
