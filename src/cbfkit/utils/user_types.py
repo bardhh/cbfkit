@@ -181,7 +181,7 @@ PerturbationCallable = Callable[[State, Control, Array, Array], PerturbationCall
 ControllerCallableReturns = Tuple[Array, ControllerData]
 
 ControllerCallable = Callable[
-    [Time, State, Optional[Control], Key, ControllerData], ControllerCallableReturns
+    [Time, State, Control, Key, ControllerData], ControllerCallableReturns
 ]
 
 NominalControllerCallable = Callable[[Time, State, Key, Optional[State]], ControllerCallableReturns]

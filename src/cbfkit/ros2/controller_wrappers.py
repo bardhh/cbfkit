@@ -40,7 +40,7 @@ def controller_wrapper(
     def wrapped_controller(
         t: Time,
         x: State,
-        u_nom: Optional[Control],
+        u_nom: Control,
         key: Key,
         data: ControllerData,
     ) -> ControllerCallableReturns:

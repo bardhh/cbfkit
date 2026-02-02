@@ -39,6 +39,7 @@ from cbfkit.utils.user_types import (
     CbfClfQpConfig,
     CbfClfQpGenerator,
     CertificateCollection,
+    Control,
     ControllerCallable,
     ControllerCallableReturns,
     ControllerData,
@@ -295,7 +296,7 @@ def cbf_clf_qp_generator(
         # ) -> ControllerCallableReturns:
         @jit
         def controller(
-            t: float, x: State, u_nom: Array, key: Key, data: ControllerData
+            t: float, x: State, u_nom: Control, key: Key, data: ControllerData
         ) -> ControllerCallableReturns:
             """JIT-compatible portion of the CBF-CLF-QP control law.
 
