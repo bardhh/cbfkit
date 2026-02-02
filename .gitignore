@@ -164,6 +164,8 @@ tests/test_models/generated
 
 # Folders generated when testing tutorials
 tutorials/generated/
+tutorials/mppi_cbf_si/
+tutorials/mppi_cbf_stl/
 
 # pyc files
 *.pyc

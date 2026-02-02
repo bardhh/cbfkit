@@ -1,4 +1,5 @@
 import os
+import importlib
 
 import jax.numpy as jnp
 from jax import Array, jit
@@ -7,7 +8,7 @@ from cbfkit.codegen.create_new_system import generate_model
 
 # Simulation Parameters
 file_path = os.path.dirname(os.path.abspath(__file__))
-target_directory = file_path + "/tutorials"
+target_directory = file_path
 model_name = "mppi_cbf_si"
 SAVE_FILE = target_directory + f"/{model_name}/simulation_data"
 DT = 0.05  # 1e-2
@@ -67,6 +68,8 @@ generate_model.generate_model(
     nominal_controller=nominal_control_law,
     params=params,
 )
+
+importlib.invalidate_caches()
 
 import cbfkit.controllers.cbf_clf as cbf_clf_controllers
 import cbfkit.controllers.mppi as mppi_planner
@@ -172,6 +175,9 @@ cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
 )
 
 plot = True
+if os.getenv("CBFKIT_TEST_MODE"):
+    plot = False
+
 if plot:
     from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
 
