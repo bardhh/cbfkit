@@ -59,14 +59,16 @@ from jax import Array, lax
 def ft_s(c: float, e: float) -> Callable[[Array], Array]:
     """Generates function for computing RHS of Lyapunov conditions for FTS:
 
-    Vdot <= -c1*V**e1
+    Vdot <= -c*V**e
 
     Args:
-        c1 (float): convergence constant
-        e1 (float): exponential constant
+        c (float): convergence constant
+        e (float): exponential constant
 
     Returns
     -------
         Callable[[Array], Array]: FTS Lyapunov conditions
     """
+    assert c > 0
+    assert 0 < e < 1
     return lambda V: lax.cond(V > 0, lambda _fake: -c * V**e, lambda _fake: 0.0, 0)
