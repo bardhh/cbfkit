@@ -255,14 +255,26 @@ def cbf_clf_qp_generator(
         if auto_p_mat:
             penalty_cbf = slack_penalty_cbf
             penalty_clf = slack_penalty_clf
-            scale_cbf = 1.0 / jnp.sqrt(penalty_cbf + 1e-8)
-            scale_clf = 1.0 / jnp.sqrt(penalty_clf + 1e-8)
+
+            # Janus: Robust scaling. Clamp penalty to avoid tiny scale factors (leading to ill-conditioned A).
+            # If penalty > 1e6, scale factor saturates at 1e-3.
+            # Transfer excess penalty to P matrix diagonal: weight = penalty * scale^2
+            max_penalty = 1e6
+            eff_penalty_cbf = jnp.minimum(penalty_cbf, max_penalty)
+            eff_penalty_clf = jnp.minimum(penalty_clf, max_penalty)
+
+            scale_cbf = 1.0 / jnp.sqrt(eff_penalty_cbf + 1e-8)
+            scale_clf = 1.0 / jnp.sqrt(eff_penalty_clf + 1e-8)
+
+            weight_cbf = penalty_cbf * (scale_cbf**2)
+            weight_clf = penalty_clf * (scale_clf**2)
+
             p_mat = jnp.diag(
                 jnp.hstack(
                     [
                         jnp.ones((n_con,)),
-                        jnp.ones((n_bfs,)),  # Normalized weight
-                        jnp.ones((n_lfs,)),  # Normalized weight
+                        weight_cbf * jnp.ones((n_bfs,)),  # Normalized weight
+                        weight_clf * jnp.ones((n_lfs,)),  # Normalized weight
                     ]
                 )
             )
@@ -277,6 +289,16 @@ def cbf_clf_qp_generator(
         if auto_p_mat:
             kwargs["scale_cbf"] = scale_cbf
             kwargs["scale_clf"] = scale_clf
+
+        # Bolt: Pre-compute solution scaling vector to avoid repetitive slice updates in JIT loop
+        sol_scaling_vector = jnp.ones((n_con + n_bfs + n_lfs,))
+        if auto_p_mat:
+            if n_bfs > 0:
+                sol_scaling_vector = sol_scaling_vector.at[n_con : n_con + n_bfs].set(scale_cbf)
+            if n_lfs > 0:
+                sol_scaling_vector = sol_scaling_vector.at[n_con + n_bfs : n_con + n_bfs + n_lfs].set(
+                    scale_clf
+                )
 
         # Ensure p_mat is defined for the controller closure
         assert p_mat is not None
@@ -398,10 +420,7 @@ def cbf_clf_qp_generator(
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
-                if n_bfs > 0:
-                    sol = sol.at[n_con : n_con + n_bfs].multiply(scale_cbf)
-                if n_lfs > 0:
-                    sol = sol.at[n_con + n_bfs : n_con + n_bfs + n_lfs].multiply(scale_clf)
+                sol = sol * sol_scaling_vector
             # QP solution already respects control limits via input constraints.
             # Only clip the fallback u_nom (which may exceed limits) to avoid
             # inadvertently violating CBF constraints on the QP-solved path.
