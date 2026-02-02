@@ -36,5 +36,30 @@ class TestMonteCarloUnit(unittest.TestCase):
          # Same seed -> Same key
          self.assertTrue(jnp.array_equal(results1[0][1], results2[0][1]))
 
+    def test_unseeded_behavior_randomness(self):
+        # When seed is None, we expect different keys/results across trials
+        results = monte_carlo.conduct_monte_carlo(simple_func, n_trials=5, seed=None)
+        # results: list of (trial_no, key)
+
+        # Check that keys are not None (if simple_func accepts key)
+        # simple_func returns kwargs.get('key')
+
+        keys = [res[1] for res in results]
+
+        # Keys should be present (not None) because simple_func accepts **kwargs
+        for k in keys:
+            self.assertIsNotNone(k)
+
+        # Keys should be different
+        # Compare first two
+        self.assertFalse(jnp.array_equal(keys[0], keys[1]))
+
+        # Check all unique
+        # Convert to bytes for set hashing
+        # Note: keys are JAX arrays
+        import numpy as np
+        key_bytes = [np.array(k).tobytes() for k in keys]
+        self.assertEqual(len(set(key_bytes)), 5)
+
 if __name__ == '__main__':
     unittest.main()
