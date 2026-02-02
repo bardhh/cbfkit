@@ -1,4 +1,5 @@
-# matplotlib.use("macosx")
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Ellipse
@@ -139,8 +140,10 @@ def animate(
     )
 
     if save_animation:
+        import os
+        os.makedirs(os.path.dirname(animation_filename), exist_ok=True)
         ani.save(animation_filename, writer="imagemagick", fps=15)
 
-    plt.show()
+    # plt.show()
 
     return fig, ax
