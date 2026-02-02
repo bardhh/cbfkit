@@ -287,6 +287,22 @@ class CbfClfQpConfig(TypedDict, total=False):
     clf_complete_tol: float
 
 
+class CbfClfQpData(TypedDict, total=False):
+    """Data returned by CBF-CLF-QP controllers in sub_data.
+
+    Attributes:
+        solver_params (Tuple[Any, Any]): Tuple of (KKTSolution, OSQPState) from jaxopt.
+        solver_iter (Union[int, Array]): Number of iterations taken by the solver.
+        solver_status (Union[int, Array]): Exit status of the solver.
+        complete (bool): Whether the CLF task is complete.
+    """
+
+    solver_params: Tuple[Any, Any]
+    solver_iter: Union[int, Array]
+    solver_status: Union[int, Array]
+    complete: bool
+
+
 class CbfClfQpGenerator(Protocol):
     """Protocol for CBF-CLF-QP generator."""
 

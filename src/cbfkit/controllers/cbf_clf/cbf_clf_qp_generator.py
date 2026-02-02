@@ -26,7 +26,7 @@ Examples
 >>> )
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import jax.numpy as jnp
 import jax.debug as jdebug
@@ -39,6 +39,7 @@ from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
     CbfClfQpConfig,
+    CbfClfQpData,
     CbfClfQpGenerator,
     CertificateCollection,
     Control,
@@ -428,8 +429,12 @@ def cbf_clf_qp_generator(
 
             # Solve QP
             solver_params = None
-            if data.sub_data is not None and "solver_params" in data.sub_data:
-                solver_params = data.sub_data["solver_params"]
+
+            # Cast sub_data to typed version for safe access
+            controller_sub_data = cast(CbfClfQpData, data.sub_data if data.sub_data is not None else {})
+
+            if "solver_params" in controller_sub_data:
+                solver_params = controller_sub_data["solver_params"]
 
             sol, status, new_params = solve_qp(
                 p_mat, q_vec, g_mat, h_vec, init_params=solver_params
@@ -487,7 +492,7 @@ def cbf_clf_qp_generator(
             error = lax.cond(success, lambda _fake: False, lambda _fake: True, 0)
 
             # logging data
-            final_sub_data = sub_data or {}
+            final_sub_data = cast(CbfClfQpData, sub_data or {})
             final_sub_data["solver_params"] = new_params
             final_sub_data["solver_iter"] = iter_num
             # Sentinel: Explicitly log solver status for diagnostics/warnings
@@ -500,7 +505,7 @@ def cbf_clf_qp_generator(
                 sol=jnp.array(sol),
                 u=u,
                 u_nom=u_nom,
-                sub_data=final_sub_data,
+                sub_data=cast(Dict[str, Any], final_sub_data),
             )
 
             return u, data
