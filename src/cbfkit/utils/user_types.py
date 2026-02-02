@@ -62,7 +62,7 @@ class ControllerData(NamedTuple):
     """Data structure for controller output."""
 
     error: bool = False
-    error_data: Any = None
+    error_data: Optional[Union[int, Array]] = None
     complete: bool = False
     sol: Optional[Array] = None
     u: Optional[Array] = None
@@ -310,9 +310,21 @@ class CbfClfQpGenerator(Protocol):
         self,
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        barriers: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
+        barriers: Optional[
+            Union[CertificateCollection, List[CertificateCollection]]
+        ] = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: Optional[
+            Union[CertificateCollection, List[CertificateCollection]]
+        ] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Array] = None,
+        *,
+        relaxable_clf: bool = True,
+        relaxable_cbf: bool = False,
+        tunable_class_k: bool = False,
+        slack_bound_cbf: Optional[float] = None,
+        slack_bound_clf: float = 1e9,
+        slack_penalty_cbf: float = 2e3,
+        slack_penalty_clf: float = 2e3,
         **kwargs: Any,
     ) -> ControllerCallable:
         """Call method."""

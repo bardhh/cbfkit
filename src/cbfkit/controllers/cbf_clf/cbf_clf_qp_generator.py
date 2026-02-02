@@ -155,7 +155,8 @@ def cbf_clf_qp_generator(
         """Produces the function to deploy a CBF-CLF-QP control law.
 
         Args:
-            control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.]
+            control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.].
+                Can be a scalar for 1D systems.
             dynamics_func (DynamicsCallable): function to compute dynamics based on current state
             barriers (CertificateCollection | List[CertificateCollection]): collection of barrier functions,
                 gradients, hessians, dh/dt, conditions. Can be a single collection or a list of them.
@@ -187,6 +188,9 @@ def cbf_clf_qp_generator(
                 "slack_penalty_clf": slack_penalty_clf,
             }
         )
+
+        # Atlas: Support scalar inputs for 1D systems
+        control_limits = jnp.atleast_1d(jnp.asarray(control_limits))
 
         # Validate configuration to prevent silent failures (e.g., NaNs from negative penalties)
         if slack_penalty_cbf < 0:
@@ -447,7 +451,8 @@ def cbf_clf_qp_generator(
 
             # Sentinel: Explicitly catch NaN solutions even if solver claims success
             # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0)
-            status = jnp.where(jnp.any(jnp.isnan(sol)) | nan_in_inputs, -1, status)
+            status = jnp.where(jnp.any(jnp.isnan(sol)), -1, status)
+            status = jnp.where(nan_in_inputs, -2, status)
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
@@ -459,12 +464,26 @@ def cbf_clf_qp_generator(
             # Status 2 (MAX_ITER) or 5 (MAX_ITER_UNSOLVED) means potentially unconverged/unsafe solution.
             success = status == 1
 
-            def _print_failure(status, iter_num):
-                jdebug.print(
-                    "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
-                    status=status,
-                    iter=iter_num,
-                )
+            def _print_failure(status, iter_num, sub_data):
+                def _print_generic():
+                    jdebug.print(
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
+                        status=status,
+                        iter=iter_num,
+                    )
+
+                def _print_nan_input():
+                    jdebug.print(
+                        "⚠️ CBF-CLF-QP Failed! NaN detected in QP inputs (dynamics or certificates). Status: {status}. Output set to NaN.",
+                        status=status,
+                    )
+
+                lax.cond(status == -2, _print_nan_input, _print_generic)
+
+                if "bfs" in sub_data:
+                    jdebug.print("   -> Barrier Values (h): {h}", h=sub_data["bfs"])
+                if "lfs" in sub_data:
+                    jdebug.print("   -> Lyapunov Values (V): {V}", V=sub_data["lfs"])
 
             # Debug hook: Print failure details if solver failed
             lax.cond(
@@ -473,6 +492,7 @@ def cbf_clf_qp_generator(
                 _print_failure,
                 status,
                 iter_num,
+                sub_data,
             )
 
             u = lax.cond(
