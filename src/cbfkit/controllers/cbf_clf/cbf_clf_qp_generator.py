@@ -26,11 +26,12 @@ Examples
 >>> )
 """
 
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
 from jax import Array, jit, lax
 
+from cbfkit.certificates import concatenate_certificates
 from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
     solve_with_details as solve_qp,
 )
@@ -54,17 +55,38 @@ from .generate_constraints import (
 )
 
 
-def _validate_certificate_collection(cert_collection: Any, name: str) -> None:
-    """Validates that the certificate collection has the expected structure."""
-    if cert_collection is None:
-        return
+def _normalize_certificate_collection(
+    cert_collection: Any, name: str
+) -> CertificateCollection:
+    """Validates and normalizes certificate collection structure.
 
+    Accepts:
+    - None (returns empty collection)
+    - CertificateCollection (returns as is)
+    - List[CertificateCollection] (concatenates and returns)
+    - Tuple/List of length 5 (wraps in CertificateCollection)
+    """
+    if cert_collection is None:
+        return EMPTY_CERTIFICATE_COLLECTION
+
+    # Case 1: Already a CertificateCollection
+    if isinstance(cert_collection, CertificateCollection):
+        return cert_collection
+
+    # Case 2: List/Tuple of CertificateCollections (user passed [c1, c2] or [])
+    if isinstance(cert_collection, (list, tuple)):
+        if len(cert_collection) == 0:
+            return EMPTY_CERTIFICATE_COLLECTION
+        if isinstance(cert_collection[0], CertificateCollection):
+            return concatenate_certificates(*cert_collection)
+
+    # Case 3: Raw tuple of length 5 (legacy structure: (funcs, jacs, hess, parts, conds))
     # Check if it's iterable
     try:
         iter(cert_collection)
     except TypeError:
         raise TypeError(
-            f"'{name}' must be a CertificateCollection (tuple/list of length 5), but got {type(cert_collection)}."
+            f"'{name}' must be a CertificateCollection (tuple/list of length 5) or a list of them, but got {type(cert_collection)}."
         )
 
     # Check length
@@ -76,6 +98,8 @@ def _validate_certificate_collection(cert_collection: Any, name: str) -> None:
             "Did you pass a list of barrier functions directly? You must provide the derivatives and conditions as well, "
             "or use a helper like 'cbfkit.certificates.CertificateCollection'."
         )
+
+    return CertificateCollection(*cert_collection)
 
 
 def cbf_clf_qp_generator(
@@ -96,8 +120,8 @@ def cbf_clf_qp_generator(
     def generate_cbf_clf_controller(
         control_limits: Array,
         dynamics_func: DynamicsCallable,
-        barriers: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: Optional[CertificateCollection] = EMPTY_CERTIFICATE_COLLECTION,
+        barriers: Optional[Union[CertificateCollection, List[CertificateCollection]]] = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: Optional[Union[CertificateCollection, List[CertificateCollection]]] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Union[Array, None]] = None,
         *,
         relaxable_clf: bool = True,
@@ -114,10 +138,10 @@ def cbf_clf_qp_generator(
         Args:
             control_limits (Array): symmetric actuation constraints [u1_bar, u2_bar, etc.]
             dynamics_func (DynamicsCallable): function to compute dynamics based on current state
-            barriers (CertificateCollection = ([], [], [], [], [])): collection of barrier functions,
-                gradients, hessians, dh/dt, conditions
-            lyapunovs (CertificateCollection = ([], [], [], [], [])): collection of lyapunov functions,
-                gradients, hessians, dV/dt,  conditions
+            barriers (CertificateCollection | List[CertificateCollection]): collection of barrier functions,
+                gradients, hessians, dh/dt, conditions. Can be a single collection or a list of them.
+            lyapunovs (CertificateCollection | List[CertificateCollection]): collection of lyapunov functions,
+                gradients, hessians, dV/dt,  conditions. Can be a single collection or a list of them.
             p_mat (Optional[Union[Array, None]] = None): objective function matrix (quadratic term)
             relaxable_clf (bool): whether to treat CLF as a soft constraint (default: True).
             relaxable_cbf (bool): whether to treat CBF as a soft constraint (default: False).
@@ -173,17 +197,9 @@ def cbf_clf_qp_generator(
                 )
             return f, g
 
-        # Ensure barriers and lyapunovs are not None
-        if barriers is None:
-            barriers = EMPTY_CERTIFICATE_COLLECTION
-        if lyapunovs is None:
-            lyapunovs = EMPTY_CERTIFICATE_COLLECTION
-
-        _validate_certificate_collection(barriers, "barriers")
-        _validate_certificate_collection(lyapunovs, "lyapunovs")
-
-        assert barriers is not None
-        assert lyapunovs is not None
+        # Normalize barriers and lyapunovs
+        barriers = _normalize_certificate_collection(barriers, "barriers")
+        lyapunovs = _normalize_certificate_collection(lyapunovs, "lyapunovs")
 
         if tunable_class_k:
             b_funcs, _, _, _, _ = barriers
