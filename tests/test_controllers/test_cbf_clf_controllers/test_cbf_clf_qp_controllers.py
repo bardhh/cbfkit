@@ -103,9 +103,9 @@ class TestVanillaCBFCLF(unittest.TestCase):
         # Expect u to be NaN (Aegis safety fallback)
         self.assertTrue(jnp.isnan(u).all())
 
-        # Expect error_data to contain raw status code (0 for Infeasible/Unsolved)
-        # Note: jaxopt + OSQP returns 0 for infeasible in current version
-        self.assertEqual(new_data.error_data, 0)
+        # Expect error_data to contain status 5 (MAX_ITER_REACHED (UNSOLVED))
+        # Note: jaxopt + OSQP returns 0 for infeasible (with max iter), which we map to 5
+        self.assertEqual(new_data.error_data, 5)
 
         # Try with u_nom outside limits
         u_nom_out = jnp.array([5.0])

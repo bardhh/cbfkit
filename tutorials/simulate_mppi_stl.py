@@ -1,4 +1,5 @@
 import os
+import importlib
 
 import jax.numpy as jnp
 from jax import Array, jit
@@ -7,7 +8,7 @@ from cbfkit.codegen.create_new_system import generate_model
 from cbfkit.utils.jax_stl import *
 
 file_path = os.path.dirname(os.path.abspath(__file__))
-target_directory = file_path + "/tutorials"
+target_directory = file_path
 model_name = "mppi_cbf_stl"
 
 # Simulation Parameters
@@ -45,8 +46,10 @@ generate_model.generate_model(
     params=params,
 )
 
-import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
-import cbfkit.controllers_and_planners.waypoint as single_waypoint_planner
+importlib.invalidate_caches()
+
+import cbfkit.controllers.mppi as mppi_planner
+import cbfkit.planners.vanilla_waypoint_law as single_waypoint_planner
 import cbfkit.simulation.simulator as sim
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import runge_kutta_4 as integrator
@@ -236,14 +239,18 @@ target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
     planner_data={
         "u_traj": 1 * jnp.ones((mppi_args["prediction_horizon"], mppi_args["robot_control_dim"])),
         "prev_robustness": jnp.array([1, -1, -1]),
+        "xs": INITIAL_STATE.reshape(-1, 1),
     },
     controller_data={},
     stl_trajectory_cost=stl_complete_trajectory_cost,
 )
 
 plot = True
+if os.getenv("CBFKIT_TEST_MODE"):
+    plot = False
+
 if plot:
-    from tutorials.plot_helper.plot_mppi_ffmpeg import animate
+    from cbfkit.utils.visualizations.plot_mppi_ffmpeg import animate
 
     animate(
         states=x_,

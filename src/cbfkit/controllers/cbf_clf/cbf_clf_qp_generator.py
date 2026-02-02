@@ -424,9 +424,9 @@ def cbf_clf_qp_generator(
             # QP solution already respects control limits via input constraints.
             # Only clip the fallback u_nom (which may exceed limits) to avoid
             # inadvertently violating CBF constraints on the QP-solved path.
-            # Sentinel: Accept SOLVED (1) or MAX_ITER_REACHED (2) as success.
-            # Status 2 means we ran out of time but have a candidate solution.
-            success = (status == 1) | (status == 2)
+            # Sentinel: Only accept SOLVED (1) as success.
+            # Status 2 (MAX_ITER) or 5 (MAX_ITER_UNSOLVED) means potentially unconverged/unsafe solution.
+            success = status == 1
 
             u = lax.cond(
                 success,
