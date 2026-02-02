@@ -158,25 +158,7 @@ def rectify_relative_degree(
 
             return func
 
-    def cbf_grad() -> Callable[[Array], Array]:
-        jacobian = jacfwd(cbf())
-
-        @jit
-        def func(x: Array) -> Array:
-            return jacobian(x)
-
-        return func
-
-    def cbf_hess() -> Callable[[Array], Array]:
-        hessian = jacfwd(jacrev(cbf()))
-
-        @jit
-        def func(x: Array) -> Array:
-            return hessian(x)
-
-        return func
-
-    factory = certificate_package(cbf, cbf_grad, cbf_hess, state_dim)
+    factory = certificate_package(cbf, n=state_dim)
 
     if certificate_conditions is not None:
         return factory(certificate_conditions)
