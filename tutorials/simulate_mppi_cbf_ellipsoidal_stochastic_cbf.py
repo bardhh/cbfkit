@@ -8,21 +8,21 @@ import os
 import jax.numpy as jnp
 from jax import Array, jit, lax
 
-import cbfkit.controllers_and_planners.model_based.mppi as mppi_planner
-import cbfkit.controllers_and_planners.waypoint as single_waypoint_planner
+import cbfkit.controllers.mppi as mppi_planner
+import cbfkit.planners.vanilla_waypoint_law as single_waypoint_planner
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers import (
+from cbfkit.controllers.cbf_clf.stochastic_cbf_clf_qp_control_laws import (
     stochastic_cbf_clf_qp_controller as cbf_controller,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.barrier_conditions import (
+from cbfkit.certificates.conditions.barrier_conditions import (
     stochastic_barrier,
     zeroing_barriers,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.certificate_packager import (
+from cbfkit.certificates.packager import (
     concatenate_certificates,
 )
-from cbfkit.controllers_and_planners.model_based.cbf_clf_controllers.utils.rectify_relative_degree import (
+from cbfkit.certificates.rectifiers import (
     rectify_relative_degree,
 )
 from cbfkit.estimators import naive as estimator
@@ -48,6 +48,17 @@ actuation_constraints = jnp.array([100.0, 100.0])  # Effectively, no control lim
 # Dynamics Noise matris
 sigma_matrix = 0.28 * jnp.eye(len(init_state))
 sigma = lambda x: sigma_matrix
+
+
+def make_ellipsoidal_cbf(obstacle, ellipsoid):
+    x_o, y_o, _ = obstacle
+    a1, a2 = ellipsoid
+
+    def cbf(x):
+        return ((x[0] - x_o) / a1) ** 2 + ((x[1] - y_o) / a2) ** 2 - 1.0
+
+    return cbf
+
 
 # Obstacle setup
 obstacles = [
@@ -80,7 +91,7 @@ uniycle_nom_controller = unicycle.controllers.proportional_controller(
 # Barrier constraint functions
 barriers = [
     rectify_relative_degree(
-        function=unicycle.certificate_functions.barrier_functions.ellipsoidal_obstacle.stochastic_cbf(
+        function=make_ellipsoidal_cbf(
             obs,
             ell,
         ),
@@ -204,11 +215,11 @@ u_guess = jnp.append(
     controller_data={},
 )
 
-plot = 1
-save = 1
+plot = 0
+save = 0
 
 if plot:
-    from tutorials.plot_helper.plot_mppi_ellipsoid_environment import animate
+    from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate
 
     animate(
         states=x,
