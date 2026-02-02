@@ -430,6 +430,23 @@ def cbf_clf_qp_generator(
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
 
+            # Bolt: Enforce non-negativity for tunable Class K parameters to prevent safety inversion
+            if "tunable_class_k" in kwargs and kwargs["tunable_class_k"] and n_bfs > 0:
+                # Constraints: -delta <= 0  (delta >= 0)
+                # tunable parameters are located at indices [n_con : n_con + n_bfs]
+                n_total_vars = n_con + n_bfs + n_lfs
+                g_pos = jnp.zeros((n_bfs, n_total_vars))
+
+                # Set -1.0 for the tunable columns using vector indexing
+                row_indices = jnp.arange(n_bfs)
+                col_indices = n_con + jnp.arange(n_bfs)
+                g_pos = g_pos.at[row_indices, col_indices].set(-1.0)
+
+                h_pos = jnp.zeros((n_bfs,))
+
+                g_mat = jnp.vstack([g_mat, g_pos])
+                h_vec = jnp.hstack([h_vec, h_pos])
+
             # Sentinel: Detect NaNs in QP inputs
             nan_in_inputs = (
                 jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isnan(h_vec))
@@ -474,10 +491,13 @@ def cbf_clf_qp_generator(
                 # Sentinel: Map status codes to human-readable strings
                 def print_status_msg(msg):
                     jdebug.print(
-                        "⚠️ CBF-CLF-QP Failed! Status: {status} ({msg}) (Iter: {iter}). Output set to NaN.",
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.\n"
+                        "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
                         status=status,
                         msg=msg,
                         iter=iter_num,
+                        relax_cbf=relaxable_cbf,
+                        relax_clf=relaxable_clf,
                     )
 
                 lax.switch(
@@ -497,7 +517,14 @@ def cbf_clf_qp_generator(
                 )
 
                 if "bfs" in sub_data:
-                    jdebug.print("   -> Barrier Values (h): {h}", h=sub_data["bfs"])
+                    h_val = sub_data["bfs"]
+                    jdebug.print("   -> Barrier Values (h): {h}", h=h_val)
+                    lax.cond(
+                        jnp.any(h_val < 0.0),
+                        lambda: jdebug.print("      (Warning: h < 0 detected. System is strictly unsafe.)"),
+                        lambda: None,
+                    )
+
                 if "lfs" in sub_data:
                     jdebug.print("   -> Lyapunov Values (V): {V}", V=sub_data["lfs"])
 
