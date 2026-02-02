@@ -212,17 +212,14 @@ wheels = [
 
 [[package]]
 name = "cbfkit"
-version = "0.1.1"
 source = { editable = "." }
 dependencies = [
-    { name = "black" },
     { name = "casadi" },
     { name = "control" },
     { name = "cvxopt", marker = "platform_machine != 'aarch64' and platform_machine != 'arm64'" },
     { name = "jax" },
     { name = "jaxlib" },
     { name = "jaxopt" },
-    { name = "jinja2" },
     { name = "kvxopt", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'" },
     { name = "matplotlib" },
     { name = "pandas" },
@@ -230,6 +227,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+codegen = [
+    { name = "black" },
+    { name = "jinja2" },
+]
 dev = [
     { name = "black" },
     { name = "cmake" },
@@ -258,7 +259,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", specifier = ">=23.12.1,<24.0" },
+    { name = "black", marker = "extra == 'codegen'", specifier = ">=23.12.1,<24.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.12.1,<24.0" },
     { name = "casadi", specifier = ">=3.6.4,<4.0" },
     { name = "cmake", marker = "extra == 'dev'", specifier = ">=3.28.1,<4.0" },
@@ -268,7 +269,7 @@ requires-dist = [
     { name = "jax", specifier = ">=0.4.23" },
     { name = "jaxlib", specifier = ">=0.4.23" },
     { name = "jaxopt", specifier = ">=0.8.3,<0.9" },
-    { name = "jinja2", specifier = ">=3.0.0" },
+    { name = "jinja2", marker = "extra == 'codegen'", specifier = ">=3.0.0" },
     { name = "jupyter", marker = "extra == 'dev'", specifier = ">=1.0.0,<2.0" },
     { name = "kvxopt", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'", specifier = ">=1.3.2.0,<2.0" },
     { name = "matplotlib", specifier = ">=3.8.2,<4.0" },
@@ -283,7 +284,7 @@ requires-dist = [
     { name = "setuptools", marker = "extra == 'dev'", specifier = ">=69.0.3,<70.0" },
     { name = "tqdm", specifier = ">=4.66.2,<5.0" },
 ]
-provides-extras = ["test", "dev"]
+provides-extras = ["codegen", "test", "dev"]
 
 [package.metadata.requires-dev]
 dev = [
