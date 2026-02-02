@@ -158,25 +158,7 @@ def rectify_relative_degree(
 
             return func
 
-    def cbf_grad() -> Callable[[Array], Array]:
-        jacobian = jacfwd(cbf())
-
-        @jit
-        def func(x: Array) -> Array:
-            return jacobian(x)
-
-        return func
-
-    def cbf_hess() -> Callable[[Array], Array]:
-        hessian = jacfwd(jacrev(cbf()))
-
-        @jit
-        def func(x: Array) -> Array:
-            return hessian(x)
-
-        return func
-
-    factory = certificate_package(cbf, cbf_grad, cbf_hess, state_dim)
+    factory = certificate_package(cbf, n=state_dim)
 
     if certificate_conditions is not None:
         return factory(certificate_conditions)
@@ -246,6 +228,15 @@ def compute_function_list(
         )
 
     if total < RELATIVE_DEGREE_TOLERANCE:
+        # Aegis: Safety check to prevent infinite recursion for uncontrollable systems.
+        # If the function list length exceeds state dimension (n+1), it implies relative degree
+        # is greater than system dimension (impossible for controllable output) or undefined.
+        if len(func_list) >= state_dim:
+            raise ValueError(
+                f"Relative degree undefined or exceeds system dimension ({state_dim - 1}). "
+                "Check that your barrier function depends on the state variables affected by control input."
+            )
+
         if form == "exponential":
             new_func = exponential_new_func
 
