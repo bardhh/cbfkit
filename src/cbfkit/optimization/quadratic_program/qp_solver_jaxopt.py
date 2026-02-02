@@ -2,12 +2,13 @@
 
 from typing import Any, NamedTuple, Optional, Tuple, Union
 
-# import jax.numpy as jnp
+import jax.numpy as jnp
 from jax import Array, jit
 from jaxopt import OSQP, EqualityConstrainedQP
 
 # Instantiate QP solver objects
-QP = OSQP(maxiter=1000000, tol=1e-3)
+MAX_ITER = 1000000
+QP = OSQP(maxiter=MAX_ITER, tol=1e-3)
 EC_QP = EqualityConstrainedQP()
 
 
@@ -78,6 +79,17 @@ def solve_inequality_constrained_qp(
         params_ineq=params_ineq,
     )
     status = state.status
+
+    # Sentinel: Detect ambiguous MAX_ITER_REACHED (status=0 but iter_num >= maxiter)
+    # This happens when jaxopt gives up but hasn't flagged it as 2 explicitly.
+    # We map it to 5 (MAX_ITER_REACHED (UNSOLVED)) to distinguish it from a successful status (2).
+    # This allows downstream controllers to fail safely (since 5 != success) but report the specific cause.
+    status = jnp.where(
+        (status == 0) & (state.iter_num >= MAX_ITER),
+        5,
+        status,
+    )
+
     # We return the raw status code to allow callers to inspect failure reason.
     return QpSolution(primal=sol.primal, status=status, params=(sol, state))
 
