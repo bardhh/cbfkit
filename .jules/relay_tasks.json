@@ -1,0 +1,246 @@
+{
+  "generated": "2026-02-02T16:26:10.600253Z",
+  "total_files": 65,
+  "batches": [
+    {
+      "batch_id": 1,
+      "files": [
+        "examples/pedestrian/pedestrian_manager_demo.py",
+        "examples/pedestrian/crowded_demo.py"
+      ],
+      "complexity": "high",
+      "reason": "pedestrian_manager_demo.py: 100-300 LOC, Solver/Controller, Basic JAX; crowded_demo.py: 100-300 LOC, Solver/Controller, Basic JAX"
+    },
+    {
+      "batch_id": 2,
+      "files": [
+        "examples/pedestrian/overtaking_demo.py",
+        "examples/pedestrian/head_on_demo.py"
+      ],
+      "complexity": "high",
+      "reason": "overtaking_demo.py: 100-300 LOC, Solver/Controller, Basic JAX; head_on_demo.py: 100-300 LOC, Solver/Controller, Basic JAX"
+    },
+    {
+      "batch_id": 3,
+      "files": [
+        "examples/pedestrian/star_burst_demo.py",
+        "examples/differential_drive/augmented_dynamic_obstacle_cbf.py"
+      ],
+      "complexity": "high",
+      "reason": "star_burst_demo.py: 100-300 LOC, Solver/Controller, Basic JAX; augmented_dynamic_obstacle_cbf.py: >300 LOC, Solver/Controller, Viz"
+    },
+    {
+      "batch_id": 4,
+      "files": [
+        "examples/differential_drive/single_robot_cbf.py",
+        "examples/differential_drive/barrier_activated_cbf.py"
+      ],
+      "complexity": "high",
+      "reason": "single_robot_cbf.py: >300 LOC, Solver/Controller, Basic JAX, Viz; barrier_activated_cbf.py: >300 LOC, Solver/Controller, Viz"
+    },
+    {
+      "batch_id": 5,
+      "files": [
+        "examples/differential_drive/dynamic_obstacle_cbf.py",
+        "examples/differential_drive/human_aware_mppi_cbf.py"
+      ],
+      "complexity": "high",
+      "reason": "dynamic_obstacle_cbf.py: >300 LOC, Solver/Controller, Viz; human_aware_mppi_cbf.py: >300 LOC, Solver/Controller, Basic JAX, Viz"
+    },
+    {
+      "batch_id": 6,
+      "files": [
+        "examples/differential_drive/multi_scenario_human_aware.py",
+        "examples/unicycle/reach_goal/mppi_cbf_control.py"
+      ],
+      "complexity": "high",
+      "reason": "multi_scenario_human_aware.py: >300 LOC, Basic JAX, Viz; mppi_cbf_control.py: 100-300 LOC, Solver/Controller, Basic JAX, Viz"
+    },
+    {
+      "batch_id": 7,
+      "files": [
+        "examples/unicycle/reach_goal/risk_aware_cbf_monte_carlo_main.py",
+        "examples/adaptive_cvar_cbf/adaptive_cvar_cbf_cbfkit_demo.py"
+      ],
+      "complexity": "high",
+      "reason": "risk_aware_cbf_monte_carlo_main.py: >300 LOC, Solver/Controller, Viz; adaptive_cvar_cbf_cbfkit_demo.py: 100-300 LOC, Solver/Controller, Viz"
+    },
+    {
+      "batch_id": 8,
+      "files": [
+        "tutorials/mppi_stochastic_cbf_reach_avoid.py",
+        "tutorials/unicycle_reach_avoid.py"
+      ],
+      "complexity": "high",
+      "reason": "mppi_stochastic_cbf_reach_avoid.py: 100-300 LOC, Solver/Controller, Basic JAX; unicycle_reach_avoid.py: 100-300 LOC, Solver/Controller, Basic JAX, Viz"
+    },
+    {
+      "batch_id": 9,
+      "files": [
+        "tutorials/simulate_mppi_stl.py",
+        "tutorials/single_integrator_reach_avoid_dyn_obs.py"
+      ],
+      "complexity": "high",
+      "reason": "simulate_mppi_stl.py: 100-300 LOC, Basic JAX; single_integrator_reach_avoid_dyn_obs.py: >300 LOC, Viz"
+    },
+    {
+      "batch_id": 10,
+      "files": [
+        "tutorials/simulate_mppi_cbf_ellipsoidal_stochastic_cbf.py",
+        "tutorials/tutorials/mppi_cbf_si/certificate_functions/barrier_functions/barrier_1.py"
+      ],
+      "complexity": "high",
+      "reason": "simulate_mppi_cbf_ellipsoidal_stochastic_cbf.py: 100-300 LOC, Basic JAX; barrier_1.py: 100-300 LOC, Basic JAX"
+    },
+    {
+      "batch_id": 11,
+      "files": [
+        "tutorials/tutorials/mppi_cbf_si/certificate_functions/lyapunov_functions/lyapunov_1.py",
+        "tutorials/tutorials/mppi_cbf_si/controllers/controller_1.py"
+      ],
+      "complexity": "high",
+      "reason": "lyapunov_1.py: 100-300 LOC, Basic JAX; controller_1.py: <100 LOC, Solver/Controller, Basic JAX"
+    },
+    {
+      "batch_id": 12,
+      "files": [
+        "tutorials/tutorials/mppi_cbf_si/ros2/controller.py"
+      ],
+      "complexity": "high",
+      "reason": "controller.py: <100 LOC, ROS integration, Solver/Controller"
+    },
+    {
+      "batch_id": 13,
+      "files": [
+        "examples/van_der_pol/common/visualizations.py",
+        "examples/van_der_pol/common/lyapunov_barrier_functions.py",
+        "examples/van_der_pol/regulation/ukf_control.py"
+      ],
+      "complexity": "medium",
+      "reason": "visualizations.py: 100-300 LOC, Viz; lyapunov_barrier_functions.py: 100-300 LOC; ukf_control.py: 100-300 LOC"
+    },
+    {
+      "batch_id": 14,
+      "files": [
+        "examples/van_der_pol/regulation/perfect_sensing.py",
+        "examples/van_der_pol/regulation/ukf_estimation.py",
+        "examples/van_der_pol/regulation/perfect_state_measurements/main.py"
+      ],
+      "complexity": "medium",
+      "reason": "perfect_sensing.py: 100-300 LOC; ukf_estimation.py: 100-300 LOC; main.py: 100-300 LOC"
+    },
+    {
+      "batch_id": 15,
+      "files": [
+        "examples/fixed_wing/reach_drop_point/ekf_control.py",
+        "examples/single_integrator/reach_goal/ukf_control.py",
+        "examples/single_integrator/reach_goal/ekf_control.py"
+      ],
+      "complexity": "medium",
+      "reason": "ekf_control.py: 100-300 LOC; ukf_control.py: 100-300 LOC; ekf_control.py: 100-300 LOC"
+    },
+    {
+      "batch_id": 16,
+      "files": [
+        "examples/single_integrator/reach_goal/perfect_sensing.py",
+        "examples/unicycle/common/ellipsoidal_obstacle.py",
+        "examples/unicycle/common/visualizations.py"
+      ],
+      "complexity": "medium",
+      "reason": "perfect_sensing.py: 100-300 LOC; ellipsoidal_obstacle.py: <100 LOC, Basic JAX; visualizations.py: 100-300 LOC, Viz"
+    },
+    {
+      "batch_id": 17,
+      "files": [
+        "examples/unicycle/reach_goal/ukf_control.py",
+        "examples/unicycle/reach_goal/ekf_control.py",
+        "examples/unicycle/reach_goal/vanilla_cbf_start_to_goal_main.py"
+      ],
+      "complexity": "medium",
+      "reason": "ukf_control.py: 100-300 LOC; ekf_control.py: 100-300 LOC; vanilla_cbf_start_to_goal_main.py: 100-300 LOC"
+    },
+    {
+      "batch_id": 18,
+      "files": [
+        "examples/unicycle/reach_goal/nominal_control_ukf_estimation_main.py",
+        "examples/unicycle/reach_goal/risk_aware_cbf_monte_carlo.py",
+        "examples/unicycle/reach_goal/risk_aware_cbf_control.py"
+      ],
+      "complexity": "medium",
+      "reason": "nominal_control_ukf_estimation_main.py: 100-300 LOC; risk_aware_cbf_monte_carlo.py: 100-300 LOC, Viz; risk_aware_cbf_control.py: <100 LOC, Viz"
+    },
+    {
+      "batch_id": 19,
+      "files": [
+        "examples/unicycle/reach_goal/vanilla_cbf_control.py",
+        "examples/unicycle/reach_goal/hybrid_estimation_control.py",
+        "examples/unicycle/reach_goal/stochastic_cbf_control.py"
+      ],
+      "complexity": "medium",
+      "reason": "vanilla_cbf_control.py: 100-300 LOC, Viz; hybrid_estimation_control.py: 100-300 LOC; stochastic_cbf_control.py: 100-300 LOC"
+    },
+    {
+      "batch_id": 20,
+      "files": [
+        "tutorials/simulate_mppi_cbf.py",
+        "tutorials/code_generation_tutorial.ipynb",
+        "tutorials/multi_robot_coordination.ipynb"
+      ],
+      "complexity": "medium",
+      "reason": "simulate_mppi_cbf.py: 100-300 LOC; code_generation_tutorial.ipynb: 100-300 LOC; multi_robot_coordination.ipynb: 100-300 LOC"
+    },
+    {
+      "batch_id": 21,
+      "files": [
+        "tutorials/code_generation_example.py",
+        "tutorials/tutorials/mppi_cbf_si/plant.py",
+        "tutorials/tutorials/mppi_cbf_si/cost_functions/stage_cost_function/stage_cost.py"
+      ],
+      "complexity": "medium",
+      "reason": "code_generation_example.py: 100-300 LOC; plant.py: <100 LOC, Basic JAX; stage_cost.py: <100 LOC, Basic JAX"
+    },
+    {
+      "batch_id": 22,
+      "files": [
+        "tutorials/tutorials/mppi_cbf_si/cost_functions/terminal_cost_function/terminal_cost.py"
+      ],
+      "complexity": "medium",
+      "reason": "terminal_cost.py: <100 LOC, Basic JAX"
+    },
+    {
+      "batch_id": 23,
+      "files": [
+        "examples/van_der_pol/common/barrier_functions.py",
+        "examples/van_der_pol/common/config.py",
+        "examples/van_der_pol/common/lyapunov_functions.py",
+        "examples/van_der_pol/regulation/barrier_functions.py",
+        "examples/van_der_pol/regulation/lyapunov_functions.py",
+        "examples/fixed_wing/common/config.py"
+      ],
+      "complexity": "low",
+      "reason": "barrier_functions.py: <100 LOC; config.py: <100 LOC; lyapunov_functions.py: <100 LOC; barrier_functions.py: <100 LOC; lyapunov_functions.py: <100 LOC; config.py: <100 LOC"
+    },
+    {
+      "batch_id": 24,
+      "files": [
+        "examples/fixed_wing/reach_drop_point/setup/initial_conditions.py",
+        "examples/single_integrator/common/config.py",
+        "examples/single_integrator/common/lyapunov_functions.py",
+        "examples/unicycle/common/config.py",
+        "examples/unicycle/reach_goal/perfect_sensing.py",
+        "tutorials/single_integrator_dynamic_obstacles.py"
+      ],
+      "complexity": "low",
+      "reason": "initial_conditions.py: <100 LOC; config.py: <100 LOC; lyapunov_functions.py: <100 LOC; config.py: <100 LOC; perfect_sensing.py: <100 LOC; single_integrator_dynamic_obstacles.py: <100 LOC"
+    },
+    {
+      "batch_id": 25,
+      "files": [
+        "tutorials/multi_robot_test.py",
+        "tutorials/tutorials/mppi_cbf_si/constants.py"
+      ],
+      "complexity": "low",
+      "reason": "multi_robot_test.py: <100 LOC; constants.py: <100 LOC"
+    }
+  ]
+}
