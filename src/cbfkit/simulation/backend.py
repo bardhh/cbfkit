@@ -22,6 +22,7 @@ from cbfkit.utils.user_types import (
     PlannerData,
     SensorCallable,
     State,
+    StlTrajectoryCostCallable,
     Time,
 )
 
@@ -38,7 +39,7 @@ def stepper(
     perturbation: PerturbationCallable,
     sigma: Array,
     key: Key,
-    stl_trajectory_cost,
+    stl_trajectory_cost: Optional[StlTrajectoryCostCallable],
 ) -> Callable[
     [
         Time,
