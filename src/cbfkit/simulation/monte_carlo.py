@@ -7,6 +7,7 @@ _map_function(args)
 conduct_monte_carlo(execute, n_trials, n_processes, **kwargs)
     Conducts a Monte Carlo simulation."""
 
+import inspect
 import multiprocessing as mp
 from typing import Callable, Optional
 import numpy as np
@@ -25,8 +26,24 @@ def _map_function(args):
     """
     func, trial_no, worker_seed, kwargs = args
 
-    # Inject JAX key if a seed was provided
+    # Seed global numpy random for legacy support and ensure diversity
     if worker_seed is not None:
+        # np.random.seed requires uint32
+        np.random.seed(int(worker_seed % (2**32)))
+
+    # Determine if we can inject JAX key
+    inject_key = False
+    if worker_seed is not None:
+        try:
+            sig = inspect.signature(func)
+            params = sig.parameters
+            if "key" in params or any(p.kind == p.VAR_KEYWORD for p in params.values()):
+                inject_key = True
+        except (ValueError, TypeError):
+            # Fallback: if we can't inspect, assume compliant with docstring (accepts kwargs)
+            inject_key = True
+
+    if inject_key and worker_seed is not None:
         kwargs = kwargs.copy()
         kwargs["key"] = random.PRNGKey(worker_seed)
 
@@ -55,16 +72,14 @@ def conduct_monte_carlo(
     """
     args_list = []
 
-    # Generate integer seeds for each trial if a base seed is provided
-    worker_seeds = [None] * n_trials
-    if seed is not None:
-        rng = np.random.default_rng(seed)
-        # Generate random integers safely within range for PRNGKey
-        worker_seeds = rng.integers(low=0, high=2**32 - 1, size=n_trials)
+    # Generate integer seeds for each trial
+    # If seed is None, we use entropy to ensure trials are different
+    rng = np.random.default_rng(seed)
+    # Generate random integers safely within range for PRNGKey
+    worker_seeds = rng.integers(low=0, high=2**32 - 1, size=n_trials)
 
     for trial_no in range(n_trials):
-        # We pass the worker_seed (int or None)
-        worker_seed = worker_seeds[trial_no] if seed is not None else None
+        worker_seed = worker_seeds[trial_no]
 
         # Note: We do NOT convert to JAX key here to avoid pickling issues with multiprocessing
         args_list.append((execute, trial_no, worker_seed, kwargs))
