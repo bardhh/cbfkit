@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import jax.numpy as jnp
 from jax import Array, jit, lax
@@ -38,11 +38,20 @@ def generate_compute_vanilla_clf_constraints(
     scale_clf = kwargs.get("scale_clf", 1.0)
 
     @jit
-    def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_clf_constraints(
+        t: Time,
+        x: State,
+        f: Optional[Array] = None,
+        g: Optional[Array] = None,
+    ) -> Tuple[Array, Array, Dict[str, Any]]:
         """Computes CBF and CLF constraints."""
         nonlocal a_clf, b_clf
         data: Dict[str, Any] = {}
-        dyn_f, dyn_g = dyn_func(x)
+
+        dyn_f = f
+        dyn_g = g
+        if dyn_f is None or dyn_g is None:
+            dyn_f, dyn_g = dyn_func(x)
 
         if n_lfs > 0:
             lf_x, lj_x, _, dlf_t, lc_x = compute_lyapunov_values(t, x)

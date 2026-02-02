@@ -3,6 +3,7 @@
 """
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
+import inspect
 
 import jax.numpy as jnp
 from jax import Array, jit, lax, vmap
@@ -76,6 +77,13 @@ def generate_compute_cbf_clf_constraints(
         control_limits, dyn_func, barriers, lyapunovs, **kwargs
     )
 
+    # Bolt: Check if sub-functions accept pre-computed dynamics (f, g)
+    sig_cbf = inspect.signature(compute_cbf_constraints)
+    pass_fg_cbf = "f" in sig_cbf.parameters and "g" in sig_cbf.parameters
+
+    sig_clf = inspect.signature(compute_clf_constraints)
+    pass_fg_clf = "f" in sig_clf.parameters and "g" in sig_clf.parameters
+
     @jit
     def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, Dict[str, Any]]:
         """_summary_
@@ -84,8 +92,18 @@ def generate_compute_cbf_clf_constraints(
         -------
             _type_: _description_
         """
-        amat_cbf, bvec_cbf, cbf_data = compute_cbf_constraints(t, x)
-        amat_clf, bvec_clf, clf_data = compute_clf_constraints(t, x)
+        # Bolt: Evaluate dynamics once to avoid double evaluation in sub-functions
+        f, g = dyn_func(x)
+
+        if pass_fg_cbf:
+            amat_cbf, bvec_cbf, cbf_data = compute_cbf_constraints(t, x, f=f, g=g)
+        else:
+            amat_cbf, bvec_cbf, cbf_data = compute_cbf_constraints(t, x)
+
+        if pass_fg_clf:
+            amat_clf, bvec_clf, clf_data = compute_clf_constraints(t, x, f=f, g=g)
+        else:
+            amat_clf, bvec_clf, clf_data = compute_clf_constraints(t, x)
 
         return (
             jnp.vstack([amat_cbf, amat_clf]),
