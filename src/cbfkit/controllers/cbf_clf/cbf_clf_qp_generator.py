@@ -467,9 +467,12 @@ def cbf_clf_qp_generator(
             def _print_failure(status, iter_num, sub_data):
                 def _print_generic():
                     jdebug.print(
-                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.\n"
+                        "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
                         status=status,
                         iter=iter_num,
+                        relax_cbf=relaxable_cbf,
+                        relax_clf=relaxable_clf,
                     )
 
                 def _print_nan_input():
@@ -481,7 +484,14 @@ def cbf_clf_qp_generator(
                 lax.cond(status == -2, _print_nan_input, _print_generic)
 
                 if "bfs" in sub_data:
-                    jdebug.print("   -> Barrier Values (h): {h}", h=sub_data["bfs"])
+                    h_val = sub_data["bfs"]
+                    jdebug.print("   -> Barrier Values (h): {h}", h=h_val)
+                    lax.cond(
+                        jnp.any(h_val < 0.0),
+                        lambda: jdebug.print("      (Warning: h < 0 detected. System is strictly unsafe.)"),
+                        lambda: None,
+                    )
+
                 if "lfs" in sub_data:
                     jdebug.print("   -> Lyapunov Values (V): {V}", V=sub_data["lfs"])
 
