@@ -2,11 +2,8 @@
 #! MANUALLY POPULATE (docstring)
 """
 import jax.numpy as jnp
-from jax import jit, Array, lax
-from typing import List, Callable
-
-N = 2
-
+from jax import jit, Array
+from typing import Callable
 
 ###############################################################################
 # Terminal Cost Function
@@ -14,7 +11,7 @@ N = 2
 
 
 def terminal_cost(
-    goal: float, obstacle: float, obstacle_radius: float, **kwargs
+    goal: Array, obstacle: Array, obstacle_radius: float, **kwargs
 ) -> Callable[[Array, Array], Array]:
     """Super-level set convention.
 
@@ -37,8 +34,8 @@ def terminal_cost(
             Array: cbf value
         """
         x = state_and_time
-        return 0.2 * ((x[0] - goal[0]) ** 2 + (x[1] - goal[1]) ** 2) + 10.0 / jnp.max(
-            jnp.array([(jnp.linalg.norm(x[0:2] - obstacle[0:2]) - obstacle_radius), 0.01])
+        return 0.2 * ((x[0] - goal[0]) ** 2 + (x[1] - goal[1]) ** 2) + 10.0 / jnp.maximum(
+            (jnp.linalg.norm(x[0:2] - obstacle[0:2]) - obstacle_radius), 0.01
         )
 
     return func

@@ -25,9 +25,8 @@ from matplotlib.patches import Arrow, Circle
 
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
+from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf.vanilla_cbf_clf_qp_control_laws import (
     vanilla_cbf_clf_qp_controller as cbf_controller,
 )
@@ -174,6 +173,11 @@ def run_simulation():
 def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt):
     """Creates animation and plots."""
     print("Generating visualization...")
+
+    # Convert JAX arrays to NumPy
+    states = np.array(states)
+    controls = np.array(controls)
+    goal_state = np.array(goal_state)
 
     # --- Plot 1: Static Trajectory with Obstacle Trails ---
     fig, ax = plt.subplots(figsize=(12, 8))

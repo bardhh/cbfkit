@@ -6,12 +6,14 @@ Demonstrates the robot navigating a head-on encounter with a pedestrian.
 
 import os
 import sys
+from pathlib import Path
 
 import jax.numpy as jnp
 import numpy as np
 
 # Add project root
-sys.path.append(os.getcwd())
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
 
 from jax import jit
 
@@ -34,7 +36,7 @@ def run_demo():
 
     # Pedestrian moving Left towards robot
     manager.add_pedestrian(
-        init_state=[10.0, 5.0, -1.0, 0.0],
+        init_state=jnp.array([10.0, 5.0, -1.0, 0.0]),
         behavior=social_force_policy(goal=jnp.array([0.0, 5.0]), desired_speed=1.0),
         id="ped_head_on",
     )
@@ -117,7 +119,8 @@ def run_demo():
         verbose=True,
     )
 
-    os.makedirs("examples/pedestrian/results", exist_ok=True)
+    results_dir = Path(__file__).parent / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
     visualize_crowd(
         states=x,
         num_pedestrians=num_peds,
@@ -126,7 +129,7 @@ def run_demo():
         dt=dt,
         p_values=p_values,
         p_keys=p_keys,
-        save_path="examples/pedestrian/results/head_on_demo.mp4",
+        save_path=str(results_dir / "head_on_demo.mp4"),
     )
 
     print("Demo Complete!")
