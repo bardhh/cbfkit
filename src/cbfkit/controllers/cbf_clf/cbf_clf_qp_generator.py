@@ -70,37 +70,53 @@ def _normalize_certificate_collection(
     if cert_collection is None:
         return EMPTY_CERTIFICATE_COLLECTION
 
+    collection = None
+
     # Case 1: Already a CertificateCollection
     if isinstance(cert_collection, CertificateCollection):
-        return cert_collection
+        collection = cert_collection
 
     # Case 2: List/Tuple of CertificateCollections (user passed [c1, c2] or [])
-    if isinstance(cert_collection, (list, tuple)):
+    elif isinstance(cert_collection, (list, tuple)):
         if len(cert_collection) == 0:
             return EMPTY_CERTIFICATE_COLLECTION
         if isinstance(cert_collection[0], CertificateCollection):
-            return concatenate_certificates(*cert_collection)
+            collection = concatenate_certificates(*cert_collection)
 
-    # Case 3: Raw tuple of length 5 (legacy structure: (funcs, jacs, hess, parts, conds))
-    # Check if it's iterable
-    try:
-        iter(cert_collection)
-    except TypeError:
-        raise TypeError(
-            f"'{name}' must be a CertificateCollection (tuple/list of length 5) or a list of them, but got {type(cert_collection)}."
-        )
+    if collection is None:
+        # Case 3: Raw tuple of length 5 (legacy structure: (funcs, jacs, hess, parts, conds))
+        # Check if it's iterable
+        try:
+            iter(cert_collection)
+        except TypeError:
+            raise TypeError(
+                f"'{name}' must be a CertificateCollection (tuple/list of length 5) or a list of them, but got {type(cert_collection)}."
+            )
 
-    # Check length
-    if len(cert_collection) != 5:
+        # Check length
+        if len(cert_collection) != 5:
+            raise ValueError(
+                f"Invalid structure for '{name}'. Expected a CertificateCollection with 5 elements "
+                "(functions, jacobians, hessians, partials, conditions), "
+                f"but got a collection of length {len(cert_collection)}. "
+                "Did you pass a list of barrier functions directly? You must provide the derivatives and conditions as well, "
+                "or use a helper like 'cbfkit.certificates.CertificateCollection'."
+            )
+
+        collection = CertificateCollection(*cert_collection)
+
+    # Validate component consistency
+    # Aegis: Ensure all component lists have the same length to prevent obscure JAX errors downstream.
+    lengths = [len(x) for x in collection]
+    if len(set(lengths)) > 1:
         raise ValueError(
-            f"Invalid structure for '{name}'. Expected a CertificateCollection with 5 elements "
-            "(functions, jacobians, hessians, partials, conditions), "
-            f"but got a collection of length {len(cert_collection)}. "
-            "Did you pass a list of barrier functions directly? You must provide the derivatives and conditions as well, "
-            "or use a helper like 'cbfkit.certificates.CertificateCollection'."
+            f"Inconsistent component lengths in '{name}'. "
+            f"All components (functions, jacobians, hessians, partials, conditions) must have the same length. "
+            f"Got lengths: functions={lengths[0]}, jacobians={lengths[1]}, hessians={lengths[2]}, "
+            f"partials={lengths[3]}, conditions={lengths[4]}."
         )
 
-    return CertificateCollection(*cert_collection)
+    return collection
 
 
 def cbf_clf_qp_generator(
