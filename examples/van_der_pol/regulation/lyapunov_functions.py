@@ -1,6 +1,6 @@
 from jax import Array
 
-from cbfkit.models.single_integrator.certificate_functions.lyapunov_function_catalog import position
+from cbfkit.systems.single_integrator.certificates.lyapunov_function_catalog import position
 from cbfkit.utils.user_types import LyapunovTuple
 
 
