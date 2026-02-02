@@ -428,6 +428,23 @@ def cbf_clf_qp_generator(
             g_mat = jnp.vstack([g_mat_u, g_mat_c])
             h_vec = jnp.hstack([h_vec_u, h_vec_c])
 
+            # Bolt: Enforce non-negativity for tunable Class K parameters to prevent safety inversion
+            if "tunable_class_k" in kwargs and kwargs["tunable_class_k"] and n_bfs > 0:
+                # Constraints: -delta <= 0  (delta >= 0)
+                # tunable parameters are located at indices [n_con : n_con + n_bfs]
+                n_total_vars = n_con + n_bfs + n_lfs
+                g_pos = jnp.zeros((n_bfs, n_total_vars))
+
+                # Set -1.0 for the tunable columns using vector indexing
+                row_indices = jnp.arange(n_bfs)
+                col_indices = n_con + jnp.arange(n_bfs)
+                g_pos = g_pos.at[row_indices, col_indices].set(-1.0)
+
+                h_pos = jnp.zeros((n_bfs,))
+
+                g_mat = jnp.vstack([g_mat, g_pos])
+                h_vec = jnp.hstack([h_vec, h_pos])
+
             # Sentinel: Detect NaNs in QP inputs
             nan_in_inputs = jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isnan(h_vec))
 
