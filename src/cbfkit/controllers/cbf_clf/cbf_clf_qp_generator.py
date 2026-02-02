@@ -451,7 +451,8 @@ def cbf_clf_qp_generator(
 
             # Sentinel: Explicitly catch NaN solutions even if solver claims success
             # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0)
-            status = jnp.where(jnp.any(jnp.isnan(sol)) | nan_in_inputs, -1, status)
+            status = jnp.where(jnp.any(jnp.isnan(sol)), -1, status)
+            status = jnp.where(nan_in_inputs, -2, status)
 
             # Bolt: Rescale solution back to physical units
             if auto_p_mat:
@@ -464,11 +465,21 @@ def cbf_clf_qp_generator(
             success = status == 1
 
             def _print_failure(status, iter_num, sub_data):
-                jdebug.print(
-                    "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
-                    status=status,
-                    iter=iter_num,
-                )
+                def _print_generic():
+                    jdebug.print(
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} (Iter: {iter}). Output set to NaN.",
+                        status=status,
+                        iter=iter_num,
+                    )
+
+                def _print_nan_input():
+                    jdebug.print(
+                        "⚠️ CBF-CLF-QP Failed! NaN detected in QP inputs (dynamics or certificates). Status: {status}. Output set to NaN.",
+                        status=status,
+                    )
+
+                lax.cond(status == -2, _print_nan_input, _print_generic)
+
                 if "bfs" in sub_data:
                     jdebug.print("   -> Barrier Values (h): {h}", h=sub_data["bfs"])
                 if "lfs" in sub_data:
