@@ -26,12 +26,14 @@ dependencies = [
     "kvxopt>=1.3.2.0,<2.0; platform_machine == 'aarch64' or platform_machine == 'arm64'",
     "jaxopt>=0.8.3,<0.9",
     "control>=0.9.4,<1.0",
-    "matplotlib>=3.8.2,<4.0",
     "casadi>=3.6.4,<4.0",
     "tqdm>=4.66.2,<5.0"
 ]
 
 [project.optional-dependencies]
+vis = [
+    "matplotlib>=3.8.2,<4.0",
+]
 codegen = [
     "black>=23.12.1,<24.0",
     "jinja2>=3.0.0",
