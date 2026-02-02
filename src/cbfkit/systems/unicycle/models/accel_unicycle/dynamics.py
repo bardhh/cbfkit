@@ -8,6 +8,10 @@ def accel_unicycle_dynamics(**kwargs) -> DynamicsCallable:
     """Returns a function that represents the plant model, which computes the drift vector 'f' and
     control matrix 'g' based on the given state.
 
+    Any keyword arguments provided are attached as attributes to the returned dynamics function.
+    This allows for storing system-specific metadata (e.g., physical limits, configuration)
+    directly on the dynamics object.
+
     States are the following:
         x: x-coordinate of unicycle c.o.m. (m)
         y: y-coordinate of unicycle c.o.m. (m)
@@ -19,12 +23,13 @@ def accel_unicycle_dynamics(**kwargs) -> DynamicsCallable:
         omega: rate of change of heading angle (rad/s)
 
     Args:
-        kwargs: keyword arguments
+        kwargs: keyword arguments (e.g., a_max=5.0, omega_max=1.0)
 
     Returns
     -------
         dynamics (Callable): takes state as input and returns dynamics components
-            f, g of the form dx/dt = f(x) + g(x)u
+            f, g of the form dx/dt = f(x) + g(x)u.
+            Has attributes matching `kwargs`.
     """
 
     @jit
@@ -42,5 +47,9 @@ def accel_unicycle_dynamics(**kwargs) -> DynamicsCallable:
         g = jnp.array([[0.0, 0.0], [0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
 
         return f, g
+
+    # Attach kwargs as attributes to the dynamics function
+    for key, value in kwargs.items():
+        setattr(dynamics, key, value)
 
     return dynamics
