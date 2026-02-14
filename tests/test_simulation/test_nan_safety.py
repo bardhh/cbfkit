@@ -65,15 +65,17 @@ def test_nan_detection_jit_loop(capsys):
         use_jit=True
     )
 
-    # JIT returns full size array but logic should flag error
+    # JIT returns full size array.
+    # Sentinel fix: NaNs should be prevented (frozen state), but error flagged.
     assert results.states.shape[0] == 10
-    assert jnp.any(jnp.isnan(results.states))
+    assert not jnp.any(jnp.isnan(results.states))
+
+    # Verify trajectory is frozen
+    assert jnp.allclose(results.states, x0)
 
     captured = capsys.readouterr()
-    assert "Sentinel: Simulation failed due to NaNs" in captured.out
-    # JIT loop might not print "CONTROLLER ERROR: NAN_DETECTED" because error_data is None?
-    # In my verify run, I saw:
-    # Sentinel: Simulation failed due to NaNs in state trajectory.
-    # Warning: Simulation stopped early due to controller error at step 0.
+    # "Sentinel: Simulation failed due to NaNs" is only printed if NaNs are present in the final trajectory.
+    # Since we prevent them, this message is NOT printed.
 
+    # However, controller error must be flagged.
     assert "Simulation stopped early due to controller error" in captured.out
