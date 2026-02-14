@@ -6,6 +6,7 @@ from jax import Array, jit, lax
 from cbfkit.controllers.cbf_clf.utils.barrier_activation import compute_activation_weights
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCollection,
     DynamicsCallable,
     State,
@@ -26,7 +27,7 @@ def generate_compute_activated_cbf_constraints(
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
-) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     """
     Generates compute function for Activated CBF constraints.
     Scales constraints by activation weights based on proximity.
@@ -51,10 +52,10 @@ def generate_compute_activated_cbf_constraints(
         pass
 
     @jit
-    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints with activation."""
         nonlocal a_cbf, b_cbf
-        data: Dict[str, Any] = {}
+        data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
 
         if n_bfs > 0:

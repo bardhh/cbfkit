@@ -9,6 +9,7 @@ from jax import Array, jit, lax
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCollection,
     DynamicsCallable,
     State,
@@ -29,7 +30,7 @@ def generate_compute_zeroing_cbf_constraints(
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
-) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     """
     #! To Do: docstring
     """
@@ -48,10 +49,10 @@ def generate_compute_zeroing_cbf_constraints(
         x: State,
         f: Optional[Array] = None,
         g: Optional[Array] = None,
-    ) -> Tuple[Array, Array, Dict[str, Any]]:
+    ) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
         nonlocal a_cbf, b_cbf
-        data: Dict[str, Any] = {}
+        data: CbfClfQpData = {}
 
         dyn_f = f
         dyn_g = g

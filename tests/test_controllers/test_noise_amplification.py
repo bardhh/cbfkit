@@ -39,7 +39,7 @@ def test_noise_amplification():
     # Create controller
     controller = generator(
         control_limits=control_limits,
-        dynamics_func=lambda t, x: (jnp.zeros(2), jnp.eye(2)), # Dummy
+        dynamics_func=lambda x: (jnp.zeros(2), jnp.eye(2)), # Dummy
         barriers=([], [], [], [], []),
         lyapunovs=([], [], [], [], []),
     )

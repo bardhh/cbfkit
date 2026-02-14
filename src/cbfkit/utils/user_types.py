@@ -295,22 +295,6 @@ QpSolverCallable = Callable[
 ]
 
 
-# CBF-CLF-QP-Generators
-class GenerateComputeCertificateConstraintCallable(Protocol):
-    """Protocol for generating compute certificate constraint function."""
-
-    def __call__(
-        self,
-        control_limits: Array,
-        dyn_func: DynamicsCallable,
-        barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-        lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-        **kwargs: Any,
-    ) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
-        """Call method."""
-        ...
-
-
 class CbfClfQpConfig(TypedDict, total=False):
     """Configuration for CBF-CLF-QP controllers.
 
@@ -358,7 +342,25 @@ class CbfClfQpData(TypedDict, total=False):
     complete: bool
     bfs: Array
     lfs: Array
+    lfs_nom: Array
     violated: Union[bool, Array]
+    activation_weights: Array
+
+
+# CBF-CLF-QP-Generators
+class GenerateComputeCertificateConstraintCallable(Protocol):
+    """Protocol for generating compute certificate constraint function."""
+
+    def __call__(
+        self,
+        control_limits: Array,
+        dyn_func: DynamicsCallable,
+        barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
+        lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
+        **kwargs: Any,
+    ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
+        """Call method."""
+        ...
 
 
 class CbfClfQpGenerator(Protocol):
@@ -396,7 +398,7 @@ class ComputeCertificateConstraintFunctionGenerator(Protocol):
         barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
         lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
         **kwargs: Any,
-    ) -> Callable[[Time, Array], Tuple[Array, Array, Dict[str, Any]]]:
+    ) -> Callable[[Time, Array], Tuple[Array, Array, CbfClfQpData]]:
         """Call method."""
         ...
 

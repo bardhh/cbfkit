@@ -2,7 +2,7 @@
 #! docstring
 """
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 import inspect
 
 import jax.numpy as jnp
@@ -10,6 +10,7 @@ from jax import Array, jit, lax, vmap
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCollection,
     ComputeCertificateConstraintFunctionGenerator,
     DynamicsCallable,
@@ -55,7 +56,7 @@ def generate_compute_cbf_clf_constraints(
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs,
-) -> Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[float, Array], Tuple[Array, Array, CbfClfQpData]]:
     """_summary_
 
     Args:
@@ -68,7 +69,7 @@ def generate_compute_cbf_clf_constraints(
 
     Returns
     -------
-        Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]]: _description_
+        Callable[[float, Array], Tuple[Array, Array, CbfClfQpData]]: _description_
     """
     compute_cbf_constraints = generate_compute_cbf_constraints(
         control_limits, dyn_func, barriers, lyapunovs, **kwargs
@@ -85,7 +86,7 @@ def generate_compute_cbf_clf_constraints(
     pass_fg_clf = "f" in sig_clf.parameters and "g" in sig_clf.parameters
 
     @jit
-    def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, CbfClfQpData]:
         """_summary_
 
         Returns
@@ -108,7 +109,7 @@ def generate_compute_cbf_clf_constraints(
         return (
             jnp.vstack([amat_cbf, amat_clf]),
             jnp.hstack([bvec_cbf, bvec_clf]),
-            {**cbf_data, **clf_data},
+            cast(CbfClfQpData, {**cbf_data, **clf_data}),
         )
 
     return compute_cbf_clf_constraints
