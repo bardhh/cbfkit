@@ -95,16 +95,13 @@ def test_infeasible_qp_behavior():
     # u will be pushed to limit 0.5. delta will take up the rest (1.5).
 
     print(f"Relaxable U: {u_relaxable}")
-    # Janus: Relaxable case currently fails in this environment (returns NaN).
-    # This seems to be an existing issue with solver configuration or test setup.
-    # Allowing NaN return to pass CI for now, as robust failure is better than crash.
-    if jnp.all(jnp.isnan(u_relaxable)):
-        print("WARNING: Relaxable QP failed (returned NaN). This is robust but unexpected for this feasible problem.")
-    else:
-        assert (
-            jnp.abs(u_relaxable[0] - 0.5) < 1e-3
-        ), f"Relaxable QP should return max control 0.5, got {u_relaxable}"
-        assert not data_relaxable.error
+
+    # Verify strict success for relaxable case
+    assert not data_relaxable.error, "Relaxable QP should not fail"
+    assert not jnp.any(jnp.isnan(u_relaxable)), "Relaxable QP should return valid control"
+    assert (
+        jnp.abs(u_relaxable[0] - 0.5) < 1e-3
+    ), f"Relaxable QP should return max control 0.5, got {u_relaxable}"
 
 
 if __name__ == "__main__":
