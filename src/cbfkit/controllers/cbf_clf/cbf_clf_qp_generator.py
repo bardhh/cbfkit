@@ -415,9 +415,25 @@ def cbf_clf_qp_generator(
             # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
             # Input constraints (box limits) are already normalized (row norm = 1).
             if auto_p_mat:
-                # Aegis: Use safe norm (sqrt(sum(sq) + eps)) to prevent NaN gradients at 0.
-                row_sq_sums = jnp.sum(g_mat_c**2, axis=1)
-                row_norms_c = jnp.sqrt(row_sq_sums + 1e-20)
+                # Janus: Compute norm safely to avoid overflow for large gradients.
+                # Naive sqrt(sum(sq)) overflows if elements > 1e19 (float32).
+                # We scale by max(abs(x)) to keep squares in range.
+                row_max = jnp.max(jnp.abs(g_mat_c), axis=1)
+                # Avoid division by zero
+                row_max_safe = jnp.where(row_max > 0, row_max, 1.0)
+
+                # Scale the matrix
+                g_mat_c_scaled = g_mat_c / row_max_safe[:, None]
+
+                # Compute norm of scaled matrix
+                row_norms_scaled = jnp.linalg.norm(g_mat_c_scaled, axis=1)
+
+                # Recover true norm
+                row_norms_c = row_norms_scaled * row_max_safe
+
+                # Add epsilon for safety in division
+                row_norms_c = row_norms_c + 1e-20
+
                 # Janus: Normalize constraints robustly.
                 # Use a clamped scaling factor (max 1e8) to:
                 # 1. Enforce constraints with small gradients (e.g. 1e-10) to catch gross infeasibility (Safety).
