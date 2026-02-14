@@ -4,7 +4,7 @@ from typing import Any, List, Optional, Tuple
 
 import jax.numpy as jnp
 import numpy as np
-from jax import Array, jacfwd
+from jax import Array, jacfwd, random
 
 import cbfkit.simulation.simulator as sim
 
@@ -24,14 +24,28 @@ from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 
 # Load initial conditions
-from cbfkit.utils.user_types import PlannerData
+from cbfkit.utils.user_types import (
+    Control,
+    ControllerCallable,
+    ControllerData,
+    DynamicsCallable,
+    EstimatorCallable,
+    IntegratorCallable,
+    Key,
+    NominalControllerCallable,
+    PerturbationCallable,
+    PlannerCallable,
+    PlannerData,
+    SensorCallable,
+    State,
+)
 from examples.unicycle.common.config import ekf_state_estimation as initial_conditions
 from examples.unicycle.common.visualizations import plot_trajectory
 
 # Whether or not to simulate, plot
 plot = 1
 save = 1
-save_path = "examples/unicycle/reach_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
+save_path = "examples/unicycle/reach_goal/results/"
 file_name = os.path.basename(__file__)[:-8]
 
 # Define time parameters
@@ -139,75 +153,6 @@ x0s = [initial_conditions.initial_state for _ in range(N_TRIALS)]
 # Optional arguments for sim.execute (if not defined elsewhere)
 planner = None
 perturbation = None
-sigma = None
-
-
-import functools
-import os
-
-# Load dynamics, sensors, controller, estimator, integrator
-import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
-from cbfkit.certificates import concatenate_certificates
-from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
-from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import e_s
-
-# Import controller functions
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
-from cbfkit.estimators import ct_ekf_dtmeas as ekf
-
-# Load initial conditions
-from cbfkit.utils.user_types import (
-    Control,
-    ControllerCallable,
-    DynamicsCallable,
-    EstimatorCallable,
-    IntegratorCallable,
-    Key,
-    NominalControllerCallable,
-    PerturbationCallable,
-    PlannerCallable,
-    SensorCallable,
-    State,
-)
-from examples.unicycle.common.config import ekf_state_estimation as initial_conditions
-
-# Whether or not to simulate, plot
-plot = 1
-save = 1
-save_path = "examples/unicycle/reach_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
-file_name = os.path.basename(__file__)[:-8]
-
-# Define time parameters
-tf = 2.0
-dt = 0.01
-n_steps = int(tf / dt)
-
-X_MAX = 5.0
-Y_MAX = 5.0
-if os.environ.get("CBFKIT_TEST_MODE") == "true":
-    N_TRIALS = 2
-else:
-    N_TRIALS = 50
-N_STEPS = int(tf / dt)
-N_STATES = len(initial_conditions.desired_state)
-N_CONTROLS = 2
-
-# N_TRIALS: num_sims
-# N_STEPS: num_steps
-# N_STATES: n_states
-# N_CONTROLS: n_controls
-
-# Define variables for execute function to access
-n_sims = N_TRIALS
-num_steps = N_STEPS
-N = N_STEPS
-
-# x0s for monte carlo simulation
-x0s = [initial_conditions.initial_state for _ in range(N_TRIALS)]
-
-# Optional arguments for sim.execute (if not defined elsewhere)
-planner = None
-perturbation = None
 sigma = initial_conditions.R
 
 
@@ -233,6 +178,10 @@ def execute_trial(
 ) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
     print(f"Simulation {ii+1}/{n_sims}")
     x0 = x0s[ii]
+    # Pass a unique key for each trial based on the index ii
+    # This ensures deterministic reproducibility for the entire script run
+    # while providing different noise sequences for each trial.
+    key = random.PRNGKey(ii)
     x, u, z, p, data_keys, data_values, planner_keys, planner_values = sim.execute(
         x0=x0,
         dt=dt,
@@ -246,6 +195,7 @@ def execute_trial(
         estimator=estimator,
         perturbation=perturbation,
         sigma=sigma,
+        key=key,
         planner_data=sim.PlannerData(
             u_traj=jnp.zeros((2, N)),
             x_traj=jnp.tile(initial_conditions.desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
@@ -312,6 +262,7 @@ if __name__ == "__main__":
             save_data[save_keys[i]] = array
 
         # Save data in pickle format
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         with open(save_path + file_name + ".pkl", "wb") as f_save:
             pickle.dump(save_data, f_save)
 
