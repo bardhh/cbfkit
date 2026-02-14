@@ -18,6 +18,7 @@ Examples
 """
 
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+import time
 
 import jax
 import jax.numpy as jnp
@@ -493,6 +494,7 @@ def execute(
             else:
                 print("JIT compilation/execution started. No progress bar will be shown.")
 
+        start_time = time.time()
         xs, us, zs, cs, c_datas, p_datas = simulator_jit(
             dt=dt,
             num_steps=num_steps,
@@ -515,9 +517,10 @@ def execute(
         )
         # Ensure progress callbacks flush before printing completion.
         xs.block_until_ready()
+        elapsed = time.time() - start_time
 
         if verbose:
-            print("JIT execution completed.")
+            print(f"JIT execution completed in {elapsed:.4f}s.")
 
         if progress_cb:
             progress_cb.on_end(success=True)
