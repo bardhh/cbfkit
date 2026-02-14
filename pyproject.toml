@@ -27,6 +27,9 @@ dependencies = [
     "rich>=13.0,<15.0"
 ]
 
+
+[project.scripts]
+cbfkit-bench = "cbfkit.cli.bench:main"
 [project.urls]
 Repository = "https://github.com/bardhh/cbfkit"
 
