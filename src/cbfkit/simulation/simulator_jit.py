@@ -184,10 +184,14 @@ def simulator_jit(
         def _hold(_):
             return key, x
 
-        key, x_next = lax.cond(stop, _hold, _integrate, operand=None)
+        key, x_next_candidate = lax.cond(stop, _hold, _integrate, operand=None)
 
         # Sentinel: Check for NaNs in the next state to prevent divergent simulation
-        nan_in_next = jnp.any(jnp.isnan(x_next))
+        nan_in_next = jnp.any(jnp.isnan(x_next_candidate))
+
+        # If NaN is detected, revert to previous state to freeze simulation at last valid point
+        x_next = jnp.where(nan_in_next, x, x_next_candidate)
+
         # If NaN is detected, force controller error to True.
         # This ensures the next iteration's 'stop' condition is triggered.
         current_error = controller_data.error
