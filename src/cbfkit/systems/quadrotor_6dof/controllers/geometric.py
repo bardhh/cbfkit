@@ -1,9 +1,9 @@
 from typing import Callable, Optional, Tuple
 
 import jax.numpy as jnp
-from control import lqr
 from jax import Array, jit
 
+from cbfkit.utils.lqr import compute_lqr_gain
 from cbfkit.utils.matrix_vector_operations import hat, normalize, vee
 from cbfkit.utils.user_types import (
     ControllerCallable,
@@ -272,7 +272,7 @@ def lqr_control(xd: Array, dt: float) -> Callable[[float, Array], Tuple[Array, A
     R = jnp.eye(3)
 
     # Compute LQR gain
-    K, _, _ = lqr(A, B, Q, R)
+    K = compute_lqr_gain(A, B, Q, R)
 
     # @jit
     def controller(_t: float, x: Array) -> Tuple[Array, Array, Array]:
