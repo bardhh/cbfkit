@@ -72,6 +72,7 @@ class DummyObstacle:
         self.noise = [[0.01]*4, [0.01]*4]
 
 def test_controller_determinism():
+    pytest.importorskip("casadi")
     # Setup
     dynamics_model = {
         "dt": 0.1,

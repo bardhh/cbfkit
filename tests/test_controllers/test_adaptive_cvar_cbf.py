@@ -1,5 +1,10 @@
 import unittest
 
+try:
+    import casadi
+except ImportError:
+    casadi = None
+
 import jax.numpy as jnp
 import jax.random as random
 import numpy as np
@@ -16,6 +21,7 @@ class MockObstacle:
         self.noise = [[0.01] * 4, [0.01] * 4]
 
 
+@unittest.skipIf(casadi is None, "CasADi not installed")
 class TestAdaptiveCVaRController(unittest.TestCase):
     def test_controller_factory_and_execution(self):
         # Setup
