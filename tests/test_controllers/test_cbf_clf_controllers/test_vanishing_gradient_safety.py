@@ -34,7 +34,7 @@ def test_vanishing_gradient_infeasibility():
 
     controller = generator(
         control_limits=control_limits,
-        dynamics_func=lambda t, x: (jnp.zeros(1), jnp.eye(1)),
+        dynamics_func=lambda x: (jnp.zeros(1), jnp.eye(1)),
         barriers=([], [], [], [], []),
         lyapunovs=([], [], [], [], []),
         relaxable_cbf=False
@@ -81,7 +81,7 @@ def test_vanishing_gradient_spurious():
 
     controller = generator(
         control_limits=control_limits,
-        dynamics_func=lambda t, x: (jnp.zeros(1), jnp.eye(1)),
+        dynamics_func=lambda x: (jnp.zeros(1), jnp.eye(1)),
         barriers=([], [], [], [], []),
         lyapunovs=([], [], [], [], []),
         relaxable_cbf=False
