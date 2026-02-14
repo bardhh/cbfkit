@@ -10,6 +10,7 @@ from jax import Array, jit, lax
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCollection,
     DynamicsCallable,
     State,
@@ -30,7 +31,7 @@ def generate_compute_ra_pi_cbf_constraints(
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
-) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     """
     #! To Do: docstring
     """
@@ -53,10 +54,10 @@ def generate_compute_ra_pi_cbf_constraints(
     ra_params.integrator_states = jnp.zeros((n_bfs,))
 
     @jit
-    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
         nonlocal a_cbf, b_cbf, ra_params
-        data: Dict[str, Any] = {}
+        data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
         assert ra_params.sigma is not None
         sigma = ra_params.sigma(x)

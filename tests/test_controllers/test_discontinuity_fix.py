@@ -41,7 +41,7 @@ def test_discontinuity_fix():
 
     controller = generator(
         control_limits=control_limits,
-        dynamics_func=lambda t, x: (jnp.zeros(1), jnp.eye(1)),
+        dynamics_func=lambda x: (jnp.zeros(1), jnp.eye(1)),
         barriers=([], [], [], [], []),
         lyapunovs=([], [], [], [], []),
     )
