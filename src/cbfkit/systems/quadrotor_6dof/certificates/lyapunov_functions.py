@@ -1,9 +1,9 @@
 from typing import Callable, List, Tuple
 
 import jax.numpy as jnp
-from control import lqr
 from jax import Array, jacfwd, jacrev, jit
 
+from cbfkit.utils.lqr import compute_lqr_gain
 from cbfkit.utils.matrix_vector_operations import normalize, vee
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
@@ -687,7 +687,7 @@ def double_integrator_control(
     R = jnp.eye(3)
 
     # Compute LQR gain
-    K, _, _ = lqr(A, B, Q, R)
+    K = compute_lqr_gain(A, B, Q, R)
 
     @jit
     def lqr_control(_t: float, x: Array) -> Tuple[Array, Array, Array]:
