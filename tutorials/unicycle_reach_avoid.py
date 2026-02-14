@@ -11,7 +11,6 @@ from cbfkit.estimators import naive
 from cbfkit.integration import runge_kutta_4
 from cbfkit.sensors import perfect
 from cbfkit.simulation import simulator
-from cbfkit.utils.user_types import PlannerData
 from cbfkit.systems.unicycle.models.accel_unicycle.dynamics import accel_unicycle_dynamics
 from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 
@@ -23,6 +22,7 @@ num_steps = 1000 if not os.getenv("CBFKIT_TEST_MODE") else 50
 
 # Dynamics
 dynamics = accel_unicycle_dynamics()
+
 
 # Nominal Controller
 @jit
@@ -47,28 +47,35 @@ def nominal_controller_func(t, state, key, data):
 
     return jnp.array([accel, omega]), {}
 
+
 # Barriers
 # 1. Obstacle Avoidance: (x-xo)^2 + (y-yo)^2 - r^2 >= 0
+# The ellipsoidal_barrier_factory creates a factory for generating barrier functions.
+# It expects the center position and the semi-axes lengths of the ellipsoid.
 cbf_factory, _, _ = ellipsoidal_barrier_factory(
     system_position_indices=(0, 1),
     obstacle_position_indices=(0, 1),
-    ellipsoid_axis_indices=(0, 1)
+    ellipsoid_axis_indices=(0, 1),
 )
 
-# Obstacle parameters: xo=0.9, yo=1.0, r=0.5
+# Obstacle parameters: xo=0.9, yo=1.0, semi-axes=[0.5, 0.5] (circle with r=0.5)
 obs_pos = jnp.array([0.9, 1.0])
 obs_axes = jnp.array([0.5, 0.5])
 
-# Create the barrier function
+# Create the barrier function h(x)
 h_obs = cbf_factory(obs_pos, obs_axes)
 
-# Rectify relative degree (position -> accel requires 2 derivatives)
-cbf1_package = rectify_relative_degree(
+# Rectify relative degree:
+# The barrier function h(x) depends on position, but the control input (acceleration)
+# appears in the second derivative of position. Thus, the relative degree is 2.
+# rectify_relative_degree automatically computes the necessary derivatives and
+# returns a function that generates the high-order barrier certificate.
+obstacle_cbf_package = rectify_relative_degree(
     function=h_obs,
     system_dynamics=dynamics,
     state_dim=len(initial_state),
     form="exponential",
-    roots=jnp.array([-1.0, -1.0])
+    roots=jnp.array([-1.0, -1.0]),  # Roots for the pole placement in the linear system
 )
 
 # 2. Speed Limit: l^2 - v^2 >= 0 => l=1.0
@@ -78,17 +85,20 @@ def h_speed(state_and_time):
     l = 1.0
     return l**2 - v**2
 
-cbf2_package = rectify_relative_degree(
+
+# The speed limit barrier function depends on velocity. The control input (acceleration)
+# appears in the first derivative of velocity. Thus, the relative degree is 1.
+speed_limit_cbf_package = rectify_relative_degree(
     function=h_speed,
     system_dynamics=dynamics,
     state_dim=len(initial_state),
     form="exponential",
-    roots=jnp.array([-1.0])
+    roots=jnp.array([-1.0]),
 )
 
 certificate_collection = concatenate_certificates(
-    cbf1_package(certificate_conditions=linear_class_k(10.0)),
-    cbf2_package(certificate_conditions=linear_class_k(1.0)),
+    obstacle_cbf_package(certificate_conditions=linear_class_k(10.0)),
+    speed_limit_cbf_package(certificate_conditions=linear_class_k(1.0)),
 )
 
 # Controller
@@ -110,7 +120,6 @@ x_sim, u_sim, z_sim, p_sim, dkeys, dvals, planner_data, planner_data_keys = simu
     controller=controller,
     sensor=perfect,
     estimator=naive,
-    planner_data=PlannerData(x_traj=jnp.zeros((4, num_steps + 1))),
     use_jit=True,
 )
 
@@ -119,9 +128,22 @@ fig, ax = plt.subplots()
 circle1 = patches.Circle((0.9, 1.0), radius=0.5, edgecolor="r", facecolor="k")
 ax.add_patch(circle1)
 ax.plot(x_sim[:, 0], x_sim[:, 1])
+ax.set_aspect("equal")
+plt.title("Unicycle Reach-Avoid with CBF")
+plt.xlabel("X Position")
+plt.ylabel("Y Position")
 plt.savefig("trajectory_plot.png")
 
+if not os.getenv("CBFKIT_TEST_MODE"):
+    plt.show()
+
 plt.figure()
-plt.plot(jnp.linspace(0.0, dt*len(u_sim[:, 0]), len(u_sim[:, 0])), u_sim[:, 0])
-plt.plot(jnp.linspace(0.0, dt*len(u_sim[:, 1]), len(u_sim[:, 1])), u_sim[:, 1])
-# plt.show()
+plt.plot(jnp.linspace(0.0, dt * len(u_sim[:, 0]), len(u_sim[:, 0])), u_sim[:, 0], label="Accel")
+plt.plot(jnp.linspace(0.0, dt * len(u_sim[:, 1]), len(u_sim[:, 1])), u_sim[:, 1], label="Omega")
+plt.legend()
+plt.title("Control Inputs")
+plt.xlabel("Time (s)")
+plt.ylabel("Control")
+
+if not os.getenv("CBFKIT_TEST_MODE"):
+    plt.show()
