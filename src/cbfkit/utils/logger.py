@@ -113,10 +113,6 @@ def print_progress(
         fill        - Optional  : bar fill character (Str)
         printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
     """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + "-" * (length - filledLength)
-    print(f"\r{prefix} |{bar}| {percent}% {suffix}", end=printEnd)
-    # Print New Line on Complete
-    if iteration == total:
-        print()
+    from cbfkit.simulation.ui import print_trial_progress
+
+    print_trial_progress(iteration, total, prefix=prefix, suffix=suffix)
