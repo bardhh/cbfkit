@@ -71,6 +71,7 @@ def simulator_jit(
     -------
         xs, us, zs, cs, c_datas (stacked), p_datas (stacked)
     """
+    print(f"JIT COMPILATION: simulator_jit (dt={dt}, num_steps={num_steps})")
 
     # Define the scan step function
     def scan_step(carry, step_idx):
