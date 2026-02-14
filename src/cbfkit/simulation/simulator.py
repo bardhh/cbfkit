@@ -47,6 +47,7 @@ from cbfkit.utils.user_types import (
 from .backend import stepper
 from .callbacks import LoggingCallback, ProgressCallback, SimulationCallback
 from .simulator_jit import simulator_jit
+from .ui import create_progress, print_error, print_jit_status, print_warning
 from .utils import SimulationStepData
 
 
@@ -86,7 +87,7 @@ def _check_simulation_status(
     """Checks for simulation errors and prints warnings if found."""
     # Sentinel: Explicit check for NaNs
     if nan_detected:
-        print("Sentinel: Simulation failed due to NaNs in state trajectory.")
+        print_error("Simulation failed due to NaNs in state trajectory.")
 
     # Check controller errors
     if "error" in controller_data_keys:
@@ -105,8 +106,8 @@ def _check_simulation_status(
                 status = error_data[first_error_idx].item()
                 status_msg = f" ({_format_error_status(status)})"
 
-            print(
-                f"Warning: Simulation stopped early due to controller error at step {first_error_idx}{status_msg}."
+            print_warning(
+                f"Simulation stopped early due to controller error at step {first_error_idx}{status_msg}."
             )
 
     # Sentinel: Warn if solver hit MAX_ITER_REACHED (status 2) but was accepted
@@ -124,8 +125,8 @@ def _check_simulation_status(
         max_iter_mask = status_codes == 2
         if jnp.any(max_iter_mask):
             count = int(jnp.sum(max_iter_mask).item())
-            print(
-                f"Warning: Solver reached max iterations in {count} steps. "
+            print_warning(
+                f"Solver reached max iterations in {count} steps. "
                 "Solutions were accepted but may be suboptimal."
             )
 
@@ -135,8 +136,8 @@ def _check_simulation_status(
         errors = planner_data_values[idx]
         if jnp.any(errors):
             first_error_idx = int(jnp.argmax(errors).item())
-            print(
-                f"Warning: Simulation stopped early due to planner error at step {first_error_idx}."
+            print_warning(
+                f"Simulation stopped early due to planner error at step {first_error_idx}."
             )
 
 
@@ -455,23 +456,25 @@ def execute(
         _perturbation = perturbation if perturbation is not None else _default_perturbation
         sigma_val = sigma if sigma is not None else jnp.zeros(0)
 
-        progress_cb: Optional[ProgressCallback] = None
+        progress_bar = None
+        progress_task_id = None
         progress_hook = None
         if verbose and jit_progress:
-            progress_cb = ProgressCallback()
-            progress_cb.on_start(total_steps=num_steps, dt=dt)
+            progress_bar = create_progress(total=num_steps, description="JIT Simulation")
+            progress_bar.start()
+            progress_task_id = progress_bar.add_task("JIT Simulation", total=num_steps)
             last_step_reported = -1
 
             def progress_hook(step_idx: int) -> None:
                 nonlocal last_step_reported
-                if progress_cb and progress_cb.pbar:
+                if progress_bar is not None and progress_task_id is not None:
                     step_delta = step_idx - last_step_reported
                     if step_delta > 0:
-                        progress_cb.pbar.update(step_delta)
+                        progress_bar.update(progress_task_id, advance=step_delta)
                         last_step_reported = step_idx
 
         if verbose:
-            print("Warming up JIT...")
+            print_jit_status("Warming up JIT...")
 
         prime_key1, prime_key2, prime_key3 = random.split(key, 3)  # type: ignore
 
@@ -486,13 +489,15 @@ def execute(
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
         if verbose:
-            if progress_cb:
-                print(
+            if progress_bar is not None:
+                print_jit_status(
                     f"JIT compilation/execution started. Progress updates every "
                     f"{jit_progress_interval} steps."
                 )
             else:
-                print("JIT compilation/execution started. No progress bar will be shown.")
+                print_jit_status(
+                    "JIT compilation/execution started. No progress bar will be shown."
+                )
 
         start_time = time.time()
         xs, us, zs, cs, c_datas, p_datas = simulator_jit(
@@ -520,10 +525,10 @@ def execute(
         elapsed = time.time() - start_time
 
         if verbose:
-            print(f"JIT execution completed in {elapsed:.4f}s.")
+            print_jit_status(f"JIT execution completed in {elapsed:.4f}s.")
 
-        if progress_cb:
-            progress_cb.on_end(success=True)
+        if progress_bar is not None:
+            progress_bar.stop()
 
         # If logging was requested, we must simulate the callbacks behavior
         if logging_callback:
