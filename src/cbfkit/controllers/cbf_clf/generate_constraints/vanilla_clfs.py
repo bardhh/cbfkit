@@ -61,7 +61,7 @@ def generate_compute_vanilla_clf_constraints(
             if relaxable:
                 # Janus: Use additive relaxation (-scale_clf) instead of multiplicative (-lc_x * scale_clf).
                 # Multiplicative relaxation vanishes at V=0, causing loss of authority and ill-conditioning.
-                a_clf = a_clf.at[:, -n_lfs:].set(-scale_clf)
+                a_clf = a_clf.at[:, -n_lfs:].set(-scale_clf * jnp.eye(n_lfs))
                 # Keep b_clf as is (with lc_x), realizing additive relaxation: V_dot <= lc_x + delta
 
             # Treat goal reached when Lyapunov value is sufficiently small

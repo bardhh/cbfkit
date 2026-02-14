@@ -64,10 +64,10 @@ def generate_compute_zeroing_cbf_constraints(
             a_cbf = a_cbf.at[:, :n_con].set(-jnp.matmul(bj_x, dyn_g))
             b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) + bc_x)
             if tunable:
-                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-bc_x * scale_cbf)
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-scale_cbf * jnp.diag(bc_x))
                 b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f))
             elif relaxable:
-                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-scale_cbf)
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-scale_cbf * jnp.eye(n_bfs))
 
             violated = lax.cond(jnp.any(bf_x < 0), lambda _fake: True, lambda _fake: False, 0)
 
