@@ -7,6 +7,7 @@ from cbfkit.certificates import certificate_package
 from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCallable,
     CertificateCollection,
     DynamicsCallable,
@@ -108,7 +109,7 @@ def generate_compute_consolidated_cbf_constraints(
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
-) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     """
     #! To Do: docstring
     """
@@ -131,10 +132,10 @@ def generate_compute_consolidated_cbf_constraints(
     )
 
     @jit
-    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
         nonlocal a_cbf, b_cbf
-        data = {}
+        data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
 
         if n_bfs > 0:
