@@ -43,10 +43,10 @@ def test_nan_detection_python_loop(capsys):
     assert results.states.shape[0] == 1
     assert jnp.any(jnp.isnan(results.states))
 
-    # Check captured stdout for Sentinel warning
+    # Check captured stderr for error/warning messages (rich Console writes to stderr)
     captured = capsys.readouterr()
-    assert "Sentinel: Simulation failed due to NaNs" in captured.out
-    assert "CONTROLLER ERROR: NAN_DETECTED" in captured.out
+    assert "Simulation failed due to NaNs" in captured.err
+    assert "CONTROLLER ERROR: NAN_DETECTED" in captured.err
 
 def test_nan_detection_jit_loop(capsys):
     """Test that NaNs are detected in the JIT simulation loop."""
@@ -77,5 +77,5 @@ def test_nan_detection_jit_loop(capsys):
     # "Sentinel: Simulation failed due to NaNs" is only printed if NaNs are present in the final trajectory.
     # Since we prevent them, this message is NOT printed.
 
-    # However, controller error must be flagged.
-    assert "Simulation stopped early due to controller error" in captured.out
+    # However, controller error must be flagged (rich Console writes to stderr).
+    assert "Simulation stopped early due to controller error" in captured.err

@@ -1,9 +1,11 @@
 from typing import Any, Dict, List, Optional, Protocol, Union
 
-from tqdm import tqdm
+from rich.progress import Progress, TaskID
 
 from cbfkit.simulation.utils import SimulationStepData
 from cbfkit.utils.logger import write_log
+
+from .ui import create_progress, print_simulation_end
 
 
 class SimulationCallback(Protocol):
@@ -15,23 +17,23 @@ class SimulationCallback(Protocol):
 
 
 class ProgressCallback:
-    def __init__(self):
-        self.pbar: Optional[tqdm] = None
+    def __init__(self) -> None:
+        self._progress: Optional[Progress] = None
+        self._task_id: Optional[TaskID] = None
 
     def on_start(self, total_steps: int, dt: float) -> None:
-        self.pbar = tqdm(total=total_steps)
+        self._progress = create_progress(total=total_steps)
+        self._progress.start()
+        self._task_id = self._progress.add_task("Simulating", total=total_steps)
 
     def on_step(self, step_idx: int, time: float, data: SimulationStepData) -> None:
-        if self.pbar:
-            self.pbar.update(1)
+        if self._progress is not None and self._task_id is not None:
+            self._progress.update(self._task_id, advance=1)
 
     def on_end(self, success: bool, message: str = "") -> None:
-        if self.pbar:
-            self.pbar.close()
-        if not success and message:
-            print(f"Simulation stopped: {message}")
-        elif success and message:
-            print(message)
+        if self._progress is not None:
+            self._progress.stop()
+        print_simulation_end(success, message)
 
 
 class LoggingCallback:
