@@ -27,6 +27,9 @@ dependencies = [
     "tqdm>=4.66.2,<5.0"
 ]
 
+[project.urls]
+Repository = "https://github.com/bardhh/cbfkit"
+
 [project.optional-dependencies]
 casadi = [
     "casadi>=3.6.4,<4.0",
@@ -50,6 +53,10 @@ dev = [
     "pytest>=8.0.2",
     "ruff>=0.3.4",
     "python-dotenv>=1.2.1",
+    "pytest-cov",
+    "casadi>=3.6.4,<4.0",
+    "matplotlib>=3.8.2,<4.0",
+    "jinja2>=3.0.0",
 ]
 
 [build-system]
