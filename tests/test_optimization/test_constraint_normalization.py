@@ -92,3 +92,40 @@ def test_large_gradient_normalization():
 
     assert not data.error, f"Controller failed with status {data.error_data}"
     assert jnp.allclose(u, 1.0, atol=1e-3), f"Expected u=1.0, got {u}"
+
+def test_pico_gradient_normalization():
+    """
+    Test that the controller can solve a QP with extremely small gradients (1e-12)
+    by normalizing the constraints.
+    Constraint: 1e-12 * u >= 1e-12  => u >= 1.0
+    """
+    def dynamics(x):
+        return jnp.array([0.0]), jnp.array([[1.0]])
+
+    scale = 1e-12
+    def h(t, x): return -scale
+    def dhdx(t, x): return jnp.array([scale])
+    def d2hdx2(t, x): return jnp.zeros((1,1))
+    def partial_t(t, x): return 0.0
+    def condition(val): return 1.0 * val
+
+    barriers = ([h], [dhdx], [d2hdx2], [partial_t], [condition])
+
+    controller = vanilla_cbf_clf_qp_controller(
+        control_limits=jnp.array([10.0]),
+        dynamics_func=dynamics,
+        barriers=barriers,
+        relaxable_cbf=False
+    )
+
+    x = jnp.array([0.0])
+    t = 0.0
+    u_nom = jnp.array([0.0])
+    key = random.PRNGKey(0)
+    data = ControllerData()
+
+    u, data = controller(t, x, u_nom, key, data)
+
+    assert not data.error, f"Controller failed with status {data.error_data}"
+    # Tolerance 1e-3 is acceptable given jaxopt default settings
+    assert jnp.allclose(u, 1.0, atol=1e-3), f"Expected u=1.0, got {u}. Normalization might be broken (solver tolerated 1e-12 as 0)."
