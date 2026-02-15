@@ -59,6 +59,7 @@ from typing import (
 )
 
 from jax import Array, random
+import jax.numpy as jnp
 
 # Define types for readability
 Time: TypeAlias = Union[float, Array]
@@ -92,6 +93,27 @@ class PlannerData(NamedTuple):
     error: bool = False
     xs: Optional[Array] = None
     sampled_x_traj: Optional[Array] = None
+
+    @classmethod
+    def from_constant(cls, state: State) -> "PlannerData":
+        """Creates a PlannerData object with a constant reference state.
+
+        This helper creates a single-column trajectory, which the simulator
+        will broadcast across all time steps, effectively treating it as a
+        fixed setpoint/goal.
+
+        Args:
+            state (State): The constant reference state (e.g., goal).
+                           Can be a 1D array or a list.
+
+        Returns:
+            PlannerData: A new instance with `x_traj` set to the provided state
+                         (reshaped to a column vector).
+        """
+        state = jnp.atleast_1d(jnp.array(state))
+        if state.ndim == 1:
+            state = state.reshape(-1, 1)
+        return cls(x_traj=state)
 
 
 class SimulationResults(NamedTuple):
