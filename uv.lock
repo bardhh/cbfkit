@@ -214,13 +214,10 @@ wheels = [
 name = "cbfkit"
 source = { editable = "." }
 dependencies = [
-    { name = "control" },
-    { name = "cvxopt", marker = "platform_machine != 'aarch64' and platform_machine != 'arm64'" },
     { name = "jax" },
-    { name = "jaxlib" },
     { name = "jaxopt" },
-    { name = "kvxopt", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'" },
-    { name = "tqdm" },
+    { name = "rich" },
+    { name = "scipy" },
 ]
 
 [package.optional-dependencies]
@@ -231,11 +228,21 @@ codegen = [
     { name = "black" },
     { name = "jinja2" },
 ]
+cvxopt = [
+    { name = "cvxopt", marker = "platform_machine != 'aarch64' and platform_machine != 'arm64'" },
+    { name = "kvxopt", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'" },
+]
 dev = [
     { name = "black" },
+    { name = "casadi" },
+    { name = "cvxopt", marker = "platform_machine != 'aarch64' and platform_machine != 'arm64'" },
+    { name = "jinja2" },
     { name = "jupyter" },
+    { name = "kvxopt", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'" },
+    { name = "matplotlib" },
     { name = "mypy" },
     { name = "pytest" },
+    { name = "pytest-cov" },
     { name = "python-dotenv" },
     { name = "ruff" },
 ]
@@ -248,48 +255,28 @@ vis = [
     { name = "matplotlib" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "jupyter" },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "python-dotenv" },
-    { name = "ruff" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'codegen'", specifier = ">=23.12.1,<24.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.12.1,<24.0" },
     { name = "casadi", marker = "extra == 'casadi'", specifier = ">=3.6.4,<4.0" },
-    { name = "control", specifier = ">=0.9.4,<1.0" },
-    { name = "cvxopt", marker = "platform_machine != 'aarch64' and platform_machine != 'arm64'", specifier = ">=1.3.2,<2.0" },
+    { name = "cbfkit", extras = ["casadi", "codegen", "cvxopt", "test", "vis"], marker = "extra == 'dev'" },
+    { name = "cvxopt", marker = "platform_machine != 'aarch64' and platform_machine != 'arm64' and extra == 'cvxopt'", specifier = ">=1.3.2,<2.0" },
     { name = "jax", specifier = ">=0.4.23" },
-    { name = "jaxlib", specifier = ">=0.4.23" },
     { name = "jaxopt", specifier = ">=0.8.3,<0.9" },
     { name = "jinja2", marker = "extra == 'codegen'", specifier = ">=3.0.0" },
     { name = "jupyter", marker = "extra == 'dev'", specifier = ">=1.0.0,<2.0" },
-    { name = "kvxopt", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'", specifier = ">=1.3.2.0,<2.0" },
+    { name = "kvxopt", marker = "(platform_machine == 'aarch64' and extra == 'cvxopt') or (platform_machine == 'arm64' and extra == 'cvxopt')", specifier = ">=1.3.2.0,<2.0" },
     { name = "matplotlib", marker = "extra == 'vis'", specifier = ">=3.8.2,<4.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0,<2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.2" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.2" },
     { name = "pytest-cov", marker = "extra == 'test'" },
-    { name = "python-dotenv", marker = "extra == 'dev'", specifier = ">=1.2.1" },
     { name = "python-dotenv", marker = "extra == 'test'", specifier = ">=1.2.1" },
+    { name = "rich", specifier = ">=13.0,<15.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3.4" },
-    { name = "tqdm", specifier = ">=4.66.2,<5.0" },
+    { name = "scipy", specifier = ">=1.9,<2.0" },
 ]
-provides-extras = ["casadi", "vis", "codegen", "test", "dev"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jupyter", specifier = ">=1.0.0" },
-    { name = "mypy", specifier = ">=1.18.2" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "python-dotenv", specifier = ">=1.2.1" },
-    { name = "ruff", specifier = ">=0.14.14" },
-]
+provides-extras = ["cvxopt", "casadi", "vis", "codegen", "test", "dev"]
 
 [[package]]
 name = "certifi"
@@ -477,20 +464,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/3e/4f/e56862e64b52b55b5ddcff4090085521fc228ceb09a88390a2b103dccd1b/contourpy-1.3.1-pp310-pypy310_pp73-macosx_10_15_x86_64.whl", hash = "sha256:b457d6430833cee8e4b8e9b6f07aa1c161e5e0d52e118dc102c8f9bd7dd060d6", size = 265605, upload-time = "2024-11-12T10:57:51.188Z" },
     { url = "https://files.pythonhosted.org/packages/b0/2e/52bfeeaa4541889f23d8eadc6386b442ee2470bd3cff9baa67deb2dd5c57/contourpy-1.3.1-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cb76c1a154b83991a3cbbf0dfeb26ec2833ad56f95540b442c73950af2013750", size = 315040, upload-time = "2024-11-12T10:57:56.492Z" },
     { url = "https://files.pythonhosted.org/packages/52/94/86bfae441707205634d80392e873295652fc313dfd93c233c52c4dc07874/contourpy-1.3.1-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:44a29502ca9c7b5ba389e620d44f2fbe792b1fb5734e8b931ad307071ec58c53", size = 218221, upload-time = "2024-11-12T10:58:00.033Z" },
-]
-
-[[package]]
-name = "control"
-version = "0.10.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "scipy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/13/f8/f93a41af0fe5fc8534908fb3c2b3e87059cc68bea7533c056f180356274c/control-0.10.2.tar.gz", hash = "sha256:d0cf63f6cfb68a4c8e827c26c3744d129e9777fedc9a5d86ca4740548f23a98b", size = 12407506, upload-time = "2025-07-05T21:24:38.337Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f2/0a/9f4c2a811b065c92f2483f26657dca373699388c959193ef27a644af1805/control-0.10.2-py3-none-any.whl", hash = "sha256:8f7b5c58f5ccd761a6c070e3dedceca4c53c7a9cf105fcc22caba7a67f99025a", size = 578274, upload-time = "2025-07-05T21:24:35.523Z" },
 ]
 
 [[package]]
@@ -1296,6 +1269,18 @@ wheels = [
 ]
 
 [[package]]
+name = "markdown-it-py"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mdurl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5b/f5/4ec618ed16cc4f8fb3b701563655a69816155e79e24a17b651541804721d/markdown_it_py-4.0.0.tar.gz", hash = "sha256:cb0a2b4aa34f932c007117b194e945bd74e0ec24133ceb5bac59009cda1cb9f3", size = 73070, upload-time = "2025-08-11T12:57:52.854Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl", hash = "sha256:87327c59b172c5011896038353a81343b6754500a08cd7a4973bb48c6d578147", size = 87321, upload-time = "2025-08-11T12:57:51.923Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1380,6 +1365,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c7/74/97e72a36efd4ae2bccb3463284300f8953f199b5ffbc04cbbb0ec78f74b1/matplotlib_inline-0.2.1.tar.gz", hash = "sha256:e1ee949c340d771fc39e241ea75683deb94762c8fa5f2927ec57c83c4dffa9fe", size = 8110, upload-time = "2025-10-23T09:00:22.126Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/af/33/ee4519fa02ed11a94aef9559552f3b17bb863f2ecfe1a35dc7f548cde231/matplotlib_inline-0.2.1-py3-none-any.whl", hash = "sha256:d56ce5156ba6085e00a9d54fead6ed29a9c47e215cd1bba2e976ef39f5710a76", size = 9516, upload-time = "2025-10-23T09:00:20.675Z" },
+]
+
+[[package]]
+name = "mdurl"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729, upload-time = "2022-08-14T12:40:10.846Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
 ]
 
 [[package]]
@@ -2028,6 +2022,19 @@ wheels = [
 ]
 
 [[package]]
+name = "rich"
+version = "14.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/74/99/a4cab2acbb884f80e558b0771e97e21e939c5dfb460f488d19df485e8298/rich-14.3.2.tar.gz", hash = "sha256:e712f11c1a562a11843306f5ed999475f09ac31ffb64281f73ab29ffdda8b3b8", size = 230143, upload-time = "2026-02-01T16:20:47.908Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ef/45/615f5babd880b4bd7d405cc0dc348234c5ffb6ed1ea33e152ede08b2072d/rich-14.3.2-py3-none-any.whl", hash = "sha256:08e67c3e90884651da3239ea668222d19bea7b589149d8014a21c633420dbb69", size = 309963, upload-time = "2026-02-01T16:20:46.078Z" },
+]
+
+[[package]]
 name = "rpds-py"
 version = "0.29.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2279,18 +2286,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e8/59/593bd0f40f7355806bf6573b47b8c22f8e1374c9b6fd03114bd6b7a3dcfd/tornado-6.5.2-cp39-abi3-win32.whl", hash = "sha256:c6f29e94d9b37a95013bb669616352ddb82e3bfe8326fccee50583caebc8a5f0", size = 445023, upload-time = "2025-08-08T18:26:56.677Z" },
     { url = "https://files.pythonhosted.org/packages/c7/2a/f609b420c2f564a748a2d80ebfb2ee02a73ca80223af712fca591386cafb/tornado-6.5.2-cp39-abi3-win_amd64.whl", hash = "sha256:e56a5af51cc30dd2cae649429af65ca2f6571da29504a07995175df14c18f35f", size = 445427, upload-time = "2025-08-08T18:26:57.91Z" },
     { url = "https://files.pythonhosted.org/packages/5e/4f/e1f65e8f8c76d73658b33d33b81eed4322fb5085350e4328d5c956f0c8f9/tornado-6.5.2-cp39-abi3-win_arm64.whl", hash = "sha256:d6c33dc3672e3a1f3618eb63b7ef4683a7688e7b9e6e8f0d9aa5726360a004af", size = 444456, upload-time = "2025-08-08T18:26:59.207Z" },
-]
-
-[[package]]
-name = "tqdm"
-version = "4.67.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a8/4b/29b4ef32e036bb34e4ab51796dd745cdba7ed47ad142a9f4a1eb8e0c744d/tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2", size = 169737, upload-time = "2024-11-24T20:12:22.481Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/30/dc54f88dd4a2b5dc8a0279bdd7270e735851848b762aeb1c1184ed1f6b14/tqdm-4.67.1-py3-none-any.whl", hash = "sha256:26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2", size = 78540, upload-time = "2024-11-24T20:12:19.698Z" },
 ]
 
 [[package]]
