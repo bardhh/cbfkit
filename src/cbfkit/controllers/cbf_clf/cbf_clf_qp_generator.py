@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import jax.numpy as jnp
 import jax.debug as jdebug
-from jax import Array, jit, lax
+from jax import Array, jit, lax, config
 
 from cbfkit.certificates import concatenate_certificates
 from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
@@ -443,42 +443,61 @@ def cbf_clf_qp_generator(
             # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
             # Input constraints (box limits) are already normalized (row norm = 1).
             if auto_p_mat:
-                # Janus: Compute norm safely to avoid overflow for large gradients.
-                # Naive sqrt(sum(sq)) overflows if elements > 1e19 (float32).
-                # We scale by max(abs(x)) to keep squares in range.
-                row_max = jnp.max(jnp.abs(g_mat_c), axis=1)
-                # Avoid division by zero
-                row_max_safe = jnp.where(row_max > 0, row_max, 1.0)
+                if config.jax_enable_x64:
+                    # Bolt: Compute norms directly (safe because jax_enable_x64 is active)
+                    # This avoids expensive max/divide/norm/multiply sequence needed for float32 overflow protection.
+                    # Use float64 precision for norm to prevent overflow for large float32 inputs and ensure autodiff safety.
+                    g_mat_c_f64 = g_mat_c.astype(jnp.float64)
+                    sq_sum = jnp.sum(g_mat_c_f64**2, axis=1)
 
-                # Check if row is effectively zero (to avoid nan gradients at 0)
-                is_zero_row = row_max < 1e-20
+                    # Add tiny epsilon to avoid NaN gradient at 0
+                    row_norms_c = jnp.sqrt(sq_sum + 1e-300)
 
-                # Scale the matrix
-                g_mat_c_scaled = g_mat_c / row_max_safe[:, None]
+                    # Identify effectively zero rows (norm < 1e-20)
+                    is_zero_row = row_norms_c < 1e-20
 
-                # Compute norm of scaled matrix
-                # Fix: Ensure we don't compute norm of zero vector, which has undefined gradient
-                g_mat_c_safe_norm = jnp.where(
-                    is_zero_row[:, None],
-                    jnp.ones_like(g_mat_c_scaled),
-                    g_mat_c_scaled,
-                )
+                    # Avoid division by zero in norm
+                    safe_norms = jnp.where(is_zero_row, 1.0, row_norms_c)
 
-                row_norms_scaled = jnp.linalg.norm(g_mat_c_safe_norm, axis=1)
+                    # Compute scaling factor: 1/norm, clamped to 1e15
+                    scale_factor = jnp.minimum(1.0 / safe_norms, 1e15)
 
-                # Recover true norm
-                row_norms_c = row_norms_scaled * row_max_safe
+                    # Apply scaling factor, but keep 1.0 for zero rows
+                    safe_scales_c = jnp.where(is_zero_row, 1.0, scale_factor)
+                else:
+                    # Janus: Compute norm safely to avoid overflow for large gradients (float32 fallback).
+                    # Naive sqrt(sum(sq)) overflows if elements > 1e19 (float32).
+                    # We scale by max(abs(x)) to keep squares in range.
+                    row_max = jnp.max(jnp.abs(g_mat_c), axis=1)
+                    # Avoid division by zero
+                    row_max_safe = jnp.where(row_max > 0, row_max, 1.0)
 
-                # Add epsilon for safety in division
-                row_norms_c = row_norms_c + 1e-20
+                    # Check if row is effectively zero (to avoid nan gradients at 0)
+                    is_zero_row = row_max < 1e-20
 
-                # Janus: Normalize constraints robustly.
-                # Use a clamped scaling factor (max 1e15) to:
-                # 1. Enforce constraints with small gradients (e.g. 1e-13) to catch gross infeasibility (Safety).
-                # 2. Allow normalization of small signals (e.g. 1e-15) for solver convergence.
-                safe_scales_c = jnp.where(
-                    is_zero_row, 1.0, jnp.minimum(1.0 / row_norms_c, 1e15)
-                )
+                    # Scale the matrix
+                    g_mat_c_scaled = g_mat_c / row_max_safe[:, None]
+
+                    # Compute norm of scaled matrix
+                    # Fix: Ensure we don't compute norm of zero vector, which has undefined gradient
+                    g_mat_c_safe_norm = jnp.where(
+                        is_zero_row[:, None],
+                        jnp.ones_like(g_mat_c_scaled),
+                        g_mat_c_scaled,
+                    )
+
+                    row_norms_scaled = jnp.linalg.norm(g_mat_c_safe_norm, axis=1)
+
+                    # Recover true norm
+                    row_norms_c = row_norms_scaled * row_max_safe
+
+                    # Add epsilon for safety in division
+                    row_norms_c = row_norms_c + 1e-20
+
+                    # Janus: Normalize constraints robustly.
+                    safe_scales_c = jnp.where(
+                        is_zero_row, 1.0, jnp.minimum(1.0 / row_norms_c, 1e15)
+                    )
 
                 g_mat_c = g_mat_c * safe_scales_c[:, None]
                 h_vec_c = h_vec_c * safe_scales_c
