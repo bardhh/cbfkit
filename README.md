@@ -180,10 +180,11 @@ Each function (dynamics, cost, constraint, controller) must follow a specific st
    * Input arguments:  x (state)
    * Return arguments:  f, g (dynamics matrix for affine dynamics x_dot = f(x) + g(x)u)
 - nominal controller:
-   * Input arguments: t (time), x (state)
+   * Input arguments: t (time), x (state), key (random key), reference (optional reference state)
    * Return arguments: u (control), data (dictionary with the key "u_nom" mapping to designed u )
+   * Note: You can use `cbfkit.controllers.setup_nominal_controller` to adapt simpler functions like `f(t, x)` to this signature.
 - cost function:
-   * Input arguments: state_and_time (concatenated state and time in 1D array)
+   * Input arguments: state (array), action (array)
    * Return arguments: cost (float)
 - planner:
    * Input arguments: t (time), x (state), key (for random number generation), data (dictionary containing necessary information)
@@ -223,13 +224,13 @@ unicycle_dynamics = plant(lam=1.0)
 
 # MPPI Cost Functions
 @jit
-def stage_cost(state_and_time: Array, action: Array) -> Array:
-    x, y, xd, yd = state_and_time[0], state_and_time[1], desired_state[0], desired_state[1]
+def stage_cost(state: Array, action: Array) -> Array:
+    x, y, xd, yd = state[0], state[1], desired_state[0], desired_state[1]
     return 10.0 * ((x - xd) ** 2 + (y - yd) ** 2)
 
 @jit
-def terminal_cost(state_and_time: Array, action: Array) -> Array:
-    x, y, xd, yd = state_and_time[0], state_and_time[1], desired_state[0], desired_state[1]
+def terminal_cost(state: Array, action: Array) -> Array:
+    x, y, xd, yd = state[0], state[1], desired_state[0], desired_state[1]
     return 100.0 * ((x - xd) ** 2 + (y - yd) ** 2)
 
 # MPPI Configuration
