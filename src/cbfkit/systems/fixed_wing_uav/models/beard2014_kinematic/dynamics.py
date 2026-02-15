@@ -48,8 +48,8 @@ def plant() -> DynamicsCallable:
     @jit
     def kinematics(state: Array) -> DynamicsCallableReturns:
         """Computes the drift vector 'f', control matrix 'g', and perturbation 'p' based on the
-        given state x, which consists of px, py, pz (positions in m), v (flight speed in m/s), gamma
-        (flight path angle in rad), and psi (heading angle in rad).
+        given state x, which consists of px, py, pz (positions in m), v (flight speed in m/s), psi
+        (heading angle in rad), and gamma (flight path angle in rad).
 
         Args:
             state (Array): state vector
