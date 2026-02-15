@@ -483,14 +483,10 @@ def cbf_clf_qp_generator(
                 h_vec = jnp.hstack([h_vec, h_pos])
 
             # Sentinel: Detect NaNs in QP inputs
-            nan_in_inputs = (
-                jnp.any(jnp.isnan(q_vec))
-                | jnp.any(jnp.isnan(g_mat))
-                | jnp.any(jnp.isnan(h_vec))
-                | jnp.any(jnp.isinf(q_vec))
-                | jnp.any(jnp.isinf(g_mat))
-                | jnp.any(jnp.isinf(h_vec))
-            )
+            nan_q = jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isinf(q_vec))
+            nan_g = jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isinf(g_mat))
+            nan_h = jnp.any(jnp.isnan(h_vec)) | jnp.any(jnp.isinf(h_vec))
+            nan_in_inputs = nan_q | nan_g | nan_h
 
             # Solve QP
             solver_params = None
@@ -545,7 +541,17 @@ def cbf_clf_qp_generator(
                 lax.switch(
                     status + 2,  # Map -2 to index 0
                     [
-                        lambda: print_status_msg("NAN_INPUT_DETECTED"),  # -2
+                        lambda: jdebug.print(
+                            "⚠️ CBF-CLF-QP Failed! Status: -2 (NAN_INPUT_DETECTED) (Iter: {iter}). Output set to NaN.\n"
+                            "   Sources: q_vec={q}, g_mat={g}, h_vec={h}\n"
+                            "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
+                            iter=iter_num,
+                            q=nan_q,
+                            g=nan_g,
+                            h=nan_h,
+                            relax_cbf=relaxable_cbf,
+                            relax_clf=relaxable_clf,
+                        ),  # -2
                         lambda: print_status_msg("NAN_DETECTED"),  # -1
                         lambda: print_status_msg("UNSOLVED"),  # 0
                         lambda: jdebug.print(
