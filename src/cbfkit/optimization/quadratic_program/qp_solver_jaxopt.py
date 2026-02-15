@@ -6,6 +6,8 @@ import jax.numpy as jnp
 from jax import Array, jit
 from jaxopt import OSQP, EqualityConstrainedQP
 
+from cbfkit.utils.jit_monitor import JitMonitor
+
 # Instantiate QP solver objects
 MAX_ITER = 1000000
 QP = OSQP(maxiter=MAX_ITER, tol=1e-3)
@@ -119,6 +121,8 @@ def solve_with_details(
     -------
         QpSolution: Solution, raw status (int), and solver parameters.
     """
+    JitMonitor.increment("qp_solver_jaxopt.solve_with_details")
+
     if f_vec.ndim != 1:
         raise ValueError(
             f"Linear cost 'f_vec' must be a 1D array of shape (n_vars,), but got {f_vec.shape}. "
