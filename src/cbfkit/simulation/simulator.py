@@ -52,6 +52,7 @@ from .utils import SimulationStepData
 
 
 SOLVER_STATUS_MAP = {
+    -10: "INTEGRATION_ERROR (NaN/Inf)",
     -2: "NAN_INPUT_DETECTED",
     -1: "NAN_DETECTED",
     0: "UNSOLVED (Likely Infeasible)",
@@ -88,7 +89,7 @@ def _check_simulation_status(
     """Checks for simulation errors and prints warnings if found."""
     # Sentinel: Explicit check for NaNs
     if nan_detected:
-        print_error("Simulation failed due to NaNs in state trajectory.")
+        print_error("Simulation failed due to NaNs/Infs in state trajectory.")
 
     # Check controller errors
     if "error" in controller_data_keys:
@@ -265,16 +266,21 @@ def simulator(
                 dt * s, x, u, z, c, controller_data, planner_data
             )
 
-            # Sentinel: Check for NaNs
-            if jnp.any(jnp.isnan(x_ret)):
-                controller_data = controller_data._replace(
-                    error=jnp.array(True), error_data=jnp.array(-1)
-                )
-
+            # Update auxiliary variables regardless of integration success
             u = u_ret
             z = z_ret
             c = c_ret
-            x = x_ret
+
+            # Sentinel: Check for NaNs
+            # Hermes: Check for both NaN and Inf to prevent divergent simulation
+            if jnp.any(jnp.isnan(x_ret)) or jnp.any(jnp.isinf(x_ret)):
+                controller_data = controller_data._replace(
+                    error=jnp.array(True), error_data=jnp.array(-10)
+                )
+                # Hermes: Freeze simulation at last valid state
+                # Do NOT update x to the invalid values.
+            else:
+                x = x_ret
 
             # Efficient accumulation
             xs_list.append(x.reshape(-1, 1))
@@ -621,7 +627,7 @@ def execute(
             planner_data_keys.append(key_str)
             planner_data_values.append(val)
 
-        nan_detected = jnp.any(jnp.isnan(xs))
+        nan_detected = jnp.any(jnp.isnan(xs)) | jnp.any(jnp.isinf(xs))
         _check_simulation_status(
             controller_data_keys,
             controller_data_values,
@@ -684,7 +690,9 @@ def execute(
     # Check states for NaNs
     nan_detected = False
     if len(formatted_data.states) > 0:
-        nan_detected = jnp.any(jnp.isnan(formatted_data.states))
+        nan_detected = jnp.any(jnp.isnan(formatted_data.states)) | jnp.any(
+            jnp.isinf(formatted_data.states)
+        )
 
     _check_simulation_status(
         controller_data_keys,

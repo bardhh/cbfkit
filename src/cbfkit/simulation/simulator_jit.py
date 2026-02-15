@@ -197,10 +197,12 @@ def simulator_jit(
 
         key, x_next_candidate = lax.cond(stop, _hold, _integrate, operand=None)
 
-        # Sentinel: Check for NaNs in the next state to prevent divergent simulation
-        nan_in_next = jnp.any(jnp.isnan(x_next_candidate))
+        # Sentinel: Check for NaNs/Infs in the next state to prevent divergent simulation
+        nan_in_next = jnp.any(jnp.isnan(x_next_candidate)) | jnp.any(
+            jnp.isinf(x_next_candidate)
+        )
 
-        # If NaN is detected, revert to previous state to freeze simulation at last valid point
+        # If NaN/Inf is detected, revert to previous state to freeze simulation at last valid point
         x_next = jnp.where(nan_in_next, x, x_next_candidate)
 
         # If NaN is detected, force controller error to True.
@@ -216,11 +218,11 @@ def simulator_jit(
             )
             controller_data = controller_data._replace(error_data=new_error_data)
 
-        # Hermes: Print warning if NaN detected
+        # Hermes: Print warning if NaN/Inf detected
         lax.cond(
             nan_in_next,
             lambda: jdebug.print(
-                "⚠️ Simulation stopped: NaN detected during integration at t={t}", t=t
+                "⚠️ Simulation stopped: NaN/Inf detected during integration at t={t}", t=t
             ),
             lambda: None,
         )

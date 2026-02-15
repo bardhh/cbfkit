@@ -41,12 +41,20 @@ def test_nan_detection_python_loop(capsys):
     # So 1 element.
 
     assert results.states.shape[0] == 1
-    assert jnp.any(jnp.isnan(results.states))
+
+    # Updated behavior: State is frozen at last valid value, not NaN
+    assert not jnp.any(jnp.isnan(results.states))
+    assert jnp.allclose(results.states, x0)
 
     # Check captured stderr for error/warning messages (rich Console writes to stderr)
     captured = capsys.readouterr()
-    assert "Simulation failed due to NaNs" in captured.err
-    assert "CONTROLLER ERROR: NAN_DETECTED" in captured.err
+
+    # "Simulation failed due to NaNs" is only printed if NaNs are present in the trajectory.
+    # Since we prevent them, this is NOT printed.
+    # assert "Simulation failed due to NaNs" in captured.err
+
+    # Controller error MUST be flagged with correct status (-10)
+    assert "CONTROLLER ERROR: INTEGRATION_ERROR" in captured.err
 
 def test_nan_detection_jit_loop(capsys):
     """Test that NaNs are detected in the JIT simulation loop."""
