@@ -10,6 +10,7 @@ conduct_monte_carlo(execute, n_trials, n_processes, **kwargs)
 import inspect
 import logging
 import multiprocessing as mp
+import os
 from typing import Callable, Optional
 import numpy as np
 from jax import random
@@ -90,7 +91,21 @@ def conduct_monte_carlo(
     args_list = []
 
     # Generate integer seeds for each trial
-    # If seed is None, we use entropy to ensure trials are different
+    # If seed is None, check CBFKIT_SEED environment variable
+    if seed is None:
+        env_seed = os.environ.get("CBFKIT_SEED")
+        if env_seed is not None:
+            try:
+                seed = int(env_seed)
+                logging.getLogger(__name__).info(
+                    f"Monte Carlo simulation initialized with CBFKIT_SEED: {seed}"
+                )
+            except ValueError:
+                logging.getLogger(__name__).warning(
+                    f"CBFKIT_SEED '{env_seed}' is not a valid integer. Using random entropy."
+                )
+
+    # If seed is still None (no env var or invalid), use entropy
     if seed is None:
         seed = np.random.SeedSequence().entropy
         logging.getLogger(__name__).warning(
