@@ -152,8 +152,33 @@ def certificate_package(
 
             elif input_style == CertificateInputStyle.SEPARATED:
                 # User provided grad(t, x). We need j_func(xt)
+                # Aegis: Robustly handle manual gradients for separated input style.
+                # If user returns spatial gradient (dx, len=n), auto-append temporal gradient (dt).
+                # If user returns full gradient (len=n+1), use as is.
+
+                # Capture _orig_v_sep for temporal partial derivative (defined above)
+                grad_t_auto = grad(_orig_v_sep, argnums=0)
+
                 def j_func(xt):
-                    return user_grad(xt[-1], xt[:-1])
+                    t = xt[-1]
+                    x = xt[:-1]
+                    gx = user_grad(t, x)
+                    gx = jnp.atleast_1d(gx)
+
+                    # Check if user returned full gradient or spatial gradient
+                    if gx.shape[0] == n:
+                        # Spatial gradient provided. Append auto-diff temporal gradient.
+                        gt = grad_t_auto(t, x)
+                        return jnp.append(gx, gt)
+                    elif gx.shape[0] == n + 1:
+                        # Full gradient provided (legacy behavior).
+                        return gx
+                    else:
+                        raise ValueError(
+                            f"Manual gradient shape mismatch for SEPARATED input style. "
+                            f"Expected shape ({n},) (spatial only) or ({n+1},) (full [dx, dt]), "
+                            f"but got {gx.shape}."
+                        )
 
                 t_func = j_func
 
