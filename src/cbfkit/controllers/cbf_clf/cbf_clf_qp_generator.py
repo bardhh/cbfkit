@@ -579,7 +579,7 @@ def cbf_clf_qp_generator(
 
             # Sentinel: Only print failure if we weren't already in error state
             prev_error = data.error if data.error is not None else jnp.array(False)
-            should_print = (success == False) & (prev_error == False)
+            should_print = jnp.logical_not(success) & jnp.logical_not(prev_error)
 
             # Debug hook: Print failure details if solver failed AND it's a new failure
             lax.cond(
