@@ -136,20 +136,54 @@ def certificate_package(
             t_func = j_func
         else:
             if use_factory:
-                j_func = func_grad(**kwargs)
-                t_func = func_grad(**kwargs)
+                user_grad = func_grad(**kwargs)
             else:
-                j_func = func_grad  # type: ignore[assignment]
-                t_func = func_grad  # type: ignore[assignment]
+                user_grad = func_grad  # type: ignore[assignment]
+
+            # Aegis: Wrap manual gradient to accept concatenated input 'xt'
+            if input_style == CertificateInputStyle.STATE:
+                # User provided grad(x). We need j_func(xt) -> [grad(x), 0]
+                def j_func(xt):
+                    gx = user_grad(xt[:-1])
+                    gx = jnp.atleast_1d(gx)
+                    return jnp.append(gx, 0.0)
+
+                t_func = j_func
+
+            elif input_style == CertificateInputStyle.SEPARATED:
+                # User provided grad(t, x). We need j_func(xt)
+                def j_func(xt):
+                    return user_grad(xt[-1], xt[:-1])
+
+                t_func = j_func
+
+            else:
+                # User provided grad(xt)
+                j_func = user_grad
+                t_func = user_grad
 
         if func_hess is None:
             # Auto-differentiate
             h_func = hessian(v_func)
         else:
             if use_factory:
-                h_func = func_hess(**kwargs)
+                user_hess = func_hess(**kwargs)
             else:
-                h_func = func_hess  # type: ignore[assignment]
+                user_hess = func_hess  # type: ignore[assignment]
+
+            # Aegis: Wrap manual hessian to accept concatenated input 'xt'
+            if input_style == CertificateInputStyle.STATE:
+                # User provided hess(x). We need h_func(xt)
+                def h_func(xt):
+                    return user_hess(xt[:-1])
+
+            elif input_style == CertificateInputStyle.SEPARATED:
+                # User provided hess(t, x). We need h_func(xt)
+                def h_func(xt):
+                    return user_hess(xt[-1], xt[:-1])
+
+            else:
+                h_func = user_hess
 
         c_func = certificate_conditions
 
