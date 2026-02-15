@@ -248,6 +248,10 @@ def cbf_clf_qp_generator(
         barriers = _normalize_certificate_collection(barriers, "barriers")
         lyapunovs = _normalize_certificate_collection(lyapunovs, "lyapunovs")
 
+        # Get number of functions for semantic mapping in error reporting
+        n_cbf_total = len(barriers.functions)
+        n_clf_total = len(lyapunovs.functions)
+
         if tunable_class_k:
             b_funcs, _, _, _, _ = barriers
             n_bfs = len(b_funcs)
@@ -375,24 +379,51 @@ def cbf_clf_qp_generator(
             **kwargs,
         )
 
-        # def controller(
-        #     t: float, x: State, u_nom: Control, key: Key, data: list
-        # ) -> ControllerCallableReturns:
-        #     """CBF-CLQ-QP control law.
+        def _log_nan_indices(q_mask, g_mask, h_mask):
+            import numpy as np
 
-        #     Args:
-        #         t (float): time (in sec)
-        #         x (State): state vector
+            q_idx = np.where(q_mask)[0]
+            g_rows = np.where(np.any(g_mask, axis=1))[0]
+            h_idx = np.where(h_mask)[0]
 
-        #     Returns:
-        #         ControllerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
-        #     """
-        #     return jittable_controller(t, x, u_nom, key, data)
+            if len(q_idx) > 0:
+                print(f"      -> NaN/Inf in q_vec at indices: {q_idx}")
+            if len(g_rows) > 0:
+                print(f"      -> NaN/Inf in g_mat at rows: {g_rows}")
+            if len(h_idx) > 0:
+                print(f"      -> NaN/Inf in h_vec at indices: {h_idx}")
 
-        # @jit
-        # def jittable_controller(
-        #     t: float, x: State, u_nom: Array, key: Key, data: list
-        # ) -> ControllerCallableReturns:
+            # Semantic mapping
+            offset = 0
+
+            # Input limits
+            n_inputs_constraints = 2 * n_con
+            bad_inputs = h_idx[(h_idx >= offset) & (h_idx < offset + n_inputs_constraints)]
+            if len(bad_inputs) > 0:
+                print(f"      - Input Limits: {bad_inputs - offset}")
+            offset += n_inputs_constraints
+
+            # Tunable constraints
+            is_tunable = kwargs.get("tunable_class_k", False)
+            if is_tunable and n_bfs > 0:
+                bad_tunable = h_idx[(h_idx >= offset) & (h_idx < offset + n_bfs)]
+                if len(bad_tunable) > 0:
+                    print(f"      - Tunable Class K: {bad_tunable - offset}")
+                offset += n_bfs
+
+            # CBF constraints
+            if n_cbf_total > 0:
+                bad_cbf = h_idx[(h_idx >= offset) & (h_idx < offset + n_cbf_total)]
+                if len(bad_cbf) > 0:
+                    print(f"      - CBF Constraints: {bad_cbf - offset}")
+                offset += n_cbf_total
+
+            # CLF constraints
+            if n_clf_total > 0:
+                bad_clf = h_idx[(h_idx >= offset) & (h_idx < offset + n_clf_total)]
+                if len(bad_clf) > 0:
+                    print(f"      - CLF Constraints: {bad_clf - offset}")
+
         @jit
         def controller(
             t: float, x: State, u_nom: Control, key: Key, data: ControllerData
@@ -451,7 +482,7 @@ def cbf_clf_qp_generator(
                 row_max_safe = jnp.where(row_max > 0, row_max, 1.0)
 
                 # Check if row is effectively zero (to avoid nan gradients at 0)
-                is_zero_row = row_max < 1e-20
+                is_zero_row = row_max < 1e-30
 
                 # Scale the matrix
                 g_mat_c_scaled = g_mat_c / row_max_safe[:, None]
@@ -470,14 +501,14 @@ def cbf_clf_qp_generator(
                 row_norms_c = row_norms_scaled * row_max_safe
 
                 # Add epsilon for safety in division
-                row_norms_c = row_norms_c + 1e-20
+                row_norms_c = row_norms_c + 1e-30
 
                 # Janus: Normalize constraints robustly.
-                # Use a clamped scaling factor (max 1e15) to:
-                # 1. Enforce constraints with small gradients (e.g. 1e-13) to catch gross infeasibility (Safety).
-                # 2. Allow normalization of small signals (e.g. 1e-15) for solver convergence.
+                # Use a clamped scaling factor (max 1e30) to:
+                # 1. Enforce constraints with small gradients (e.g. 1e-25) to catch gross infeasibility (Safety).
+                # 2. Allow normalization of small signals (e.g. 1e-25) for solver convergence.
                 safe_scales_c = jnp.where(
-                    is_zero_row, 1.0, jnp.minimum(1.0 / row_norms_c, 1e15)
+                    is_zero_row, 1.0, jnp.minimum(1.0 / row_norms_c, 1e30)
                 )
 
                 g_mat_c = g_mat_c * safe_scales_c[:, None]
@@ -488,9 +519,13 @@ def cbf_clf_qp_generator(
             h_vec = jnp.hstack([h_vec_static, h_vec_c])
 
             # Sentinel: Detect NaNs in QP inputs
-            nan_q = jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isinf(q_vec))
-            nan_g = jnp.any(jnp.isnan(g_mat)) | jnp.any(jnp.isinf(g_mat))
-            nan_h = jnp.any(jnp.isnan(h_vec)) | jnp.any(jnp.isinf(h_vec))
+            mask_q = jnp.isnan(q_vec) | jnp.isinf(q_vec)
+            mask_g = jnp.isnan(g_mat) | jnp.isinf(g_mat)
+            mask_h = jnp.isnan(h_vec) | jnp.isinf(h_vec)
+
+            nan_q = jnp.any(mask_q)
+            nan_g = jnp.any(mask_g)
+            nan_h = jnp.any(mask_h)
             nan_in_inputs = nan_q | nan_g | nan_h
 
             # Solve QP
@@ -546,17 +581,20 @@ def cbf_clf_qp_generator(
                 lax.switch(
                     status + 2,  # Map -2 to index 0
                     [
-                        lambda: jdebug.print(
-                            "⚠️ CBF-CLF-QP Failed! Status: -2 (NAN_INPUT_DETECTED) (Iter: {iter}). Output set to NaN.\n"
-                            "   Sources: q_vec={q}, g_mat={g}, h_vec={h}\n"
-                            "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
-                            iter=iter_num,
-                            q=nan_q,
-                            g=nan_g,
-                            h=nan_h,
-                            relax_cbf=relaxable_cbf,
-                            relax_clf=relaxable_clf,
-                        ),  # -2
+                        lambda: (
+                            jdebug.print(
+                                "⚠️ CBF-CLF-QP Failed! Status: -2 (NAN_INPUT_DETECTED) (Iter: {iter}). Output set to NaN.\n"
+                                "   Sources: q_vec={q}, g_mat={g}, h_vec={h}\n"
+                                "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
+                                iter=iter_num,
+                                q=nan_q,
+                                g=nan_g,
+                                h=nan_h,
+                                relax_cbf=relaxable_cbf,
+                                relax_clf=relaxable_clf,
+                            ),
+                            jdebug.callback(_log_nan_indices, mask_q, mask_g, mask_h),
+                        )[0],  # -2
                         lambda: print_status_msg("NAN_DETECTED"),  # -1
                         lambda: print_status_msg("UNSOLVED"),  # 0
                         lambda: jdebug.print(
