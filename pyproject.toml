@@ -91,13 +91,3 @@ convention = "numpy"
 
 [tool.uv.pip]
 system = true
-
-[dependency-groups]
-dev = [
-    "black>=23.12.1,<24.0",
-    "mypy>=1.8.0,<2.0",
-    "jupyter>=1.0.0,<2.0",
-    "pytest>=8.0.2",
-    "ruff>=0.3.4",
-    "python-dotenv>=1.2.1",
-]
