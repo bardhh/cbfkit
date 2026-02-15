@@ -3,7 +3,6 @@ import time
 import jax.numpy as jnp
 import pytest
 from jax import random
-from numpy.random import uniform
 
 import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
 from cbfkit.certificates import concatenate_certificates
