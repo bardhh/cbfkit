@@ -64,7 +64,7 @@ def linear_class_k(alpha: float) -> Callable[[Array], Array]:
     where alpha(h) = alpha * h.
 
     Args:
-        None
+        alpha (float): The coefficient for the linear class K function.
 
     Returns
     -------
@@ -85,7 +85,7 @@ def cubic_class_k(alpha: float) -> Callable[[Array], Array]:
     where alpha(h) = alpha * h^3.
 
     Args:
-        None
+        alpha (float): The coefficient for the cubic class K function.
 
     Returns
     -------
@@ -104,7 +104,7 @@ def generic_class_k(alpha: Callable[[Array], Array]) -> Callable[[Array], Array]
     hdot >= -alpha(h)
 
     Args:
-        None
+        alpha (Callable[[Array], Array]): The class K function itself.
 
     Returns
     -------

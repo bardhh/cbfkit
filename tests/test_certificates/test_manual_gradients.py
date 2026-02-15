@@ -52,7 +52,8 @@ class TestManualGradients(unittest.TestCase):
         )
 
         # Dummy conditions
-        dummy_conditions = lambda val: val
+        def dummy_conditions(val):
+            return val
 
         cert = pkg_factory(certificate_conditions=dummy_conditions)
         j_func = cert.jacobians[0]
@@ -132,6 +133,52 @@ class TestManualGradients(unittest.TestCase):
             self.fail(f"Handling of separated manual gradient failed with TypeError: {e}")
         except Exception as e:
             self.fail(f"Handling of separated manual gradient failed: {e}")
+
+    def test_separated_input_style_manual_spatial_grad(self):
+        """
+        Tests input_style='separated' with manual spatial gradient (dh/dx only).
+        Ensures certificate_package correctly identifies this and computes dh/dt automatically.
+        """
+        n = 1
+        # h(t, x) = x[0] - t
+        # grad_x = [1.0]
+        # grad_t = -1.0
+
+        def cbf_factory(**kwargs):
+            def func(t, x):
+                return x[0] - t
+            return func
+
+        def grad_factory(**kwargs):
+            def grad_func(t, x):
+                # Only return spatial gradient dh/dx (length n=1)
+                return jnp.array([1.0])
+            return grad_func
+
+        pkg_factory = certificate_package(
+            cbf_factory,
+            func_grad=grad_factory,
+            n=n,
+            input_style="separated",
+            use_factory=True
+        )
+
+        cert = pkg_factory(certificate_conditions=lambda v: v)
+        j_func = cert.jacobians[0]
+        t_func = cert.partials[0]
+
+        t = 0.0
+        x = jnp.array([0.0])
+
+        # Expected behavior:
+        # dh/dx = 1.0 (from manual grad)
+        # dh/dt = -1.0 (from auto-diff grad_t)
+
+        gx = j_func(t, x)
+        pt = t_func(t, x)
+
+        self.assertTrue(jnp.allclose(gx, jnp.array([1.0])), f"dh/dx mismatch: {gx}")
+        self.assertAlmostEqual(pt, -1.0, places=5, msg=f"dh/dt mismatch: {pt} (expected -1.0)")
 
 if __name__ == '__main__':
     unittest.main()
