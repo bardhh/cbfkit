@@ -482,7 +482,7 @@ def cbf_clf_qp_generator(
                 row_max_safe = jnp.where(row_max > 0, row_max, 1.0)
 
                 # Check if row is effectively zero (to avoid nan gradients at 0)
-                is_zero_row = row_max < 1e-20
+                is_zero_row = row_max < 1e-30
 
                 # Scale the matrix
                 g_mat_c_scaled = g_mat_c / row_max_safe[:, None]
@@ -501,14 +501,14 @@ def cbf_clf_qp_generator(
                 row_norms_c = row_norms_scaled * row_max_safe
 
                 # Add epsilon for safety in division
-                row_norms_c = row_norms_c + 1e-20
+                row_norms_c = row_norms_c + 1e-30
 
                 # Janus: Normalize constraints robustly.
-                # Use a clamped scaling factor (max 1e15) to:
-                # 1. Enforce constraints with small gradients (e.g. 1e-13) to catch gross infeasibility (Safety).
-                # 2. Allow normalization of small signals (e.g. 1e-15) for solver convergence.
+                # Use a clamped scaling factor (max 1e30) to:
+                # 1. Enforce constraints with small gradients (e.g. 1e-25) to catch gross infeasibility (Safety).
+                # 2. Allow normalization of small signals (e.g. 1e-25) for solver convergence.
                 safe_scales_c = jnp.where(
-                    is_zero_row, 1.0, jnp.minimum(1.0 / row_norms_c, 1e15)
+                    is_zero_row, 1.0, jnp.minimum(1.0 / row_norms_c, 1e30)
                 )
 
                 g_mat_c = g_mat_c * safe_scales_c[:, None]
