@@ -53,20 +53,18 @@ unicycle_dynamics = plant(lam=1.0)
 # This is crucial for MPPI performance as these cost functions are evaluated
 # thousands of times per step (num_samples * prediction_horizon).
 @jit
-def stage_cost(state_and_time: Array, action: Array) -> Array:
+def stage_cost(state: Array, action: Array) -> Array:
     """Calculates the stage cost for the MPPI planner.
 
     Args:
-        state_and_time (Array): The current state and time [x, y, v, theta, t]
+        state (Array): The current state [x, y, v, theta]
         action (Array): The control action [a, omega]
 
     Returns
     -------
         Array: The scalar cost.
     """
-    # state: [x, y, v, theta]
-    # action: [a, omega]
-    x, y = state_and_time[0], state_and_time[1]
+    x, y = state[0], state[1]
     xd, yd = desired_state[0], desired_state[1]
 
     dist_sq = (x - xd) ** 2 + (y - yd) ** 2
@@ -74,18 +72,18 @@ def stage_cost(state_and_time: Array, action: Array) -> Array:
 
 
 @jit
-def terminal_cost(state_and_time: Array, action: Array) -> Array:
+def terminal_cost(state: Array, action: Array) -> Array:
     """Calculates the terminal cost for the MPPI planner.
 
     Args:
-        state_and_time (Array): The current state and time [x, y, v, theta, t]
+        state (Array): The current state [x, y, v, theta]
         action (Array): The control action [a, omega]
 
     Returns
     -------
         Array: The scalar cost.
     """
-    x, y = state_and_time[0], state_and_time[1]
+    x, y = state[0], state[1]
     xd, yd = desired_state[0], desired_state[1]
 
     dist_sq = (x - xd) ** 2 + (y - yd) ** 2
