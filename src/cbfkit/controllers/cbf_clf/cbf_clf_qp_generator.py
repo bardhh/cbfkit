@@ -512,6 +512,10 @@ def cbf_clf_qp_generator(
             # new_params is (KKTSolution, OSQPState)
             _, state = new_params
             iter_num = state.iter_num
+            solver_error = state.error
+
+            # Sentinel: Detect NaNs in u_nom
+            nan_u_nom = jnp.any(jnp.isnan(u_nom)) | jnp.any(jnp.isinf(u_nom))
 
             # Sentinel: Explicitly catch NaN solutions even if solver claims success
             # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0)
@@ -530,17 +534,22 @@ def cbf_clf_qp_generator(
             # Status 2 (MAX_ITER) or 5 (MAX_ITER_UNSOLVED) means potentially unconverged/unsafe solution.
             success = status == 1
 
-            def _print_failure(status, iter_num, sub_data):
+            def _print_failure(status, iter_num, sub_data, solver_error):
                 # Sentinel: Map status codes to human-readable strings
-                def print_status_msg(msg):
+                def print_status_msg(msg_fmt, **kwargs):
+                    full_fmt = (
+                        "⚠️ CBF-CLF-QP Failed! Status: {status} ("
+                        + msg_fmt
+                        + ") (Iter: {iter}). Output set to NaN.\n"
+                        "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}"
+                    )
                     jdebug.print(
-                        "⚠️ CBF-CLF-QP Failed! Status: {status} ({msg}) (Iter: {iter}). Output set to NaN.\n"
-                        "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
+                        full_fmt,
                         status=status,
-                        msg=msg,
                         iter=iter_num,
                         relax_cbf=relaxable_cbf,
                         relax_clf=relaxable_clf,
+                        **kwargs,
                     )
 
                 lax.switch(
@@ -548,9 +557,10 @@ def cbf_clf_qp_generator(
                     [
                         lambda: jdebug.print(
                             "⚠️ CBF-CLF-QP Failed! Status: -2 (NAN_INPUT_DETECTED) (Iter: {iter}). Output set to NaN.\n"
-                            "   Sources: q_vec={q}, g_mat={g}, h_vec={h}\n"
+                            "   Sources: u_nom={u}, q_vec={q}, g_mat={g}, h_vec={h}\n"
                             "   Config: relax_cbf={relax_cbf}, relax_clf={relax_clf}",
                             iter=iter_num,
+                            u=nan_u_nom,
                             q=nan_q,
                             g=nan_g,
                             h=nan_h,
@@ -563,10 +573,10 @@ def cbf_clf_qp_generator(
                             "⚠️ CBF-CLF-QP Succeeded (Unexpected failure call). Status: {status}",
                             status=status,
                         ),  # 1 (Should not happen)
-                        lambda: print_status_msg("MAX_ITER_REACHED"),  # 2
+                        lambda: print_status_msg("MAX_ITER_REACHED (Residual: {res})", res=solver_error),  # 2
                         lambda: print_status_msg("PRIMAL_INFEASIBLE"),  # 3
                         lambda: print_status_msg("DUAL_INFEASIBLE"),  # 4
-                        lambda: print_status_msg("MAX_ITER_UNSOLVED"),  # 5
+                        lambda: print_status_msg("MAX_ITER_UNSOLVED (Residual: {res})", res=solver_error),  # 5
                     ],
                 )
 
@@ -594,6 +604,7 @@ def cbf_clf_qp_generator(
                 status,
                 iter_num,
                 sub_data,
+                solver_error,
             )
 
             u = lax.cond(
