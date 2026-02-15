@@ -6,6 +6,10 @@ It does not define any new functions, and primarily loads modules from the
 src/cbfkit tree.
 
 """
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+
 import matplotlib
 
 # Hack to prevent matplotlib.use("macosx") error in imported modules
@@ -105,7 +109,6 @@ else:
     pass
 
 if plot:
-    import os
     from examples.unicycle.common.visualizations import animate
 
     if save:

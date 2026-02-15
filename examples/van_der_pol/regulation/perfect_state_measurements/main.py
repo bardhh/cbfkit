@@ -3,6 +3,10 @@ This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks
 to reach a goal region while avoiding dynamic obstacles.
 
 """
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
+
 import matplotlib
 
 # Hack to prevent matplotlib.use("macosx") error in imported modules
