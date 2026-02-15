@@ -1,10 +1,14 @@
 """Quadratic program solver using the Jaxopt library."""
 
+import warnings
 from typing import Any, NamedTuple, Optional, Tuple, Union
 
 import jax.numpy as jnp
 from jax import Array, jit
-from jaxopt import OSQP, EqualityConstrainedQP
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="jaxopt")
+    from jaxopt import OSQP, EqualityConstrainedQP
 
 from cbfkit.utils.jit_monitor import JitMonitor
 
