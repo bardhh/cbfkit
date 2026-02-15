@@ -292,8 +292,15 @@ def cbf_clf_qp_generator(
             scale_cbf = 1.0 / jnp.sqrt(eff_penalty_cbf + 1e-8)
             scale_clf = 1.0 / jnp.sqrt(eff_penalty_clf + 1e-8)
 
-            weight_cbf = penalty_cbf * (scale_cbf**2)
-            weight_clf = penalty_clf * (scale_clf**2)
+            # Janus: Clamp weight to avoid catastrophic ill-conditioning in P matrix.
+            # Even with robust scaling, extremely large penalties (>1e14) create huge condition numbers
+            # for float32 QPs, leading to solver failure (MAX_ITER_UNSOLVED).
+            # A max weight of 1e4 preserves 4 orders of magnitude relative to control cost (u^2),
+            # which is sufficient for "hard" constraints while retaining numerical solvability (float32).
+            # Note: With tol=1e-3 and float32 eps=1e-7, values > 1e4 cause residuals > tol purely due to precision loss.
+            MAX_WEIGHT = 1.0e4
+            weight_cbf = jnp.minimum(penalty_cbf * (scale_cbf**2), MAX_WEIGHT)
+            weight_clf = jnp.minimum(penalty_clf * (scale_clf**2), MAX_WEIGHT)
 
             p_mat = jnp.diag(
                 jnp.hstack(
