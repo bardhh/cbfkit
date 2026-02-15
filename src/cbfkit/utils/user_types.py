@@ -43,18 +43,30 @@ Examples
 """
 
 from enum import Enum
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Protocol, Tuple, TypedDict, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    Protocol,
+    Tuple,
+    TypeAlias,
+    TypedDict,
+    Union,
+)
 
 from jax import Array, random
 
 # Define types for readability
-Time = Union[float, Array]
-State = Array
-Control = Array
-Estimate = Array
-Covariance = Array
-Key = Array
-NumSteps = int
+Time: TypeAlias = Union[float, Array]
+State: TypeAlias = Array
+Control: TypeAlias = Array
+Estimate: TypeAlias = Array
+Covariance: TypeAlias = Array
+Key: TypeAlias = Array
+NumSteps: TypeAlias = int
 
 
 # Data Schemas
@@ -295,6 +307,11 @@ QpSolverCallable = Callable[
 ]
 
 
+# Solver Params Type Alias
+SolverParams: TypeAlias = Tuple[Any, Any]
+"""Solver parameters type (usually (KKTSolution, OSQPState) from jaxopt)."""
+
+
 class CbfClfQpConfig(TypedDict, total=False):
     """Configuration for CBF-CLF-QP controllers.
 
@@ -302,7 +319,7 @@ class CbfClfQpConfig(TypedDict, total=False):
         relaxable_clf (bool): Whether to treat CLF as a soft constraint (default: True).
         relaxable_cbf (bool): Whether to treat CBF as a soft constraint (default: False).
         tunable_class_k (bool): Whether to tune the Class K function parameter (default: False).
-        slack_bound_cbf (float): Maximum slack for CBF constraints (default: 100.0 or 1e4).
+        slack_bound_cbf (Optional[float]): Maximum slack for CBF constraints (default: 100.0 or 1e4).
         slack_bound_clf (float): Maximum slack for CLF constraints (default: 1e9).
         slack_penalty_cbf (float): Penalty weight for CBF slack variables (default: 2e3).
         slack_penalty_clf (float): Penalty weight for CLF slack variables (default: 2e3).
@@ -314,7 +331,7 @@ class CbfClfQpConfig(TypedDict, total=False):
     relaxable_clf: bool
     relaxable_cbf: bool
     tunable_class_k: bool
-    slack_bound_cbf: float
+    slack_bound_cbf: Optional[float]
     slack_bound_clf: float
     slack_penalty_cbf: float
     slack_penalty_clf: float
@@ -327,7 +344,7 @@ class CbfClfQpData(TypedDict, total=False):
     """Data returned by CBF-CLF-QP controllers in sub_data.
 
     Attributes:
-        solver_params (Tuple[Any, Any]): Tuple of (KKTSolution, OSQPState) from jaxopt.
+        solver_params (SolverParams): Tuple of (KKTSolution, OSQPState) from jaxopt.
         solver_iter (Union[int, Array]): Number of iterations taken by the solver.
         solver_status (Union[int, Array]): Exit status of the solver.
         complete (bool): Whether the CLF task is complete.
@@ -336,7 +353,7 @@ class CbfClfQpData(TypedDict, total=False):
         violated (Union[bool, Array]): Whether any barrier function is violated.
     """
 
-    solver_params: Tuple[Any, Any]
+    solver_params: SolverParams
     solver_iter: Union[int, Array]
     solver_status: Union[int, Array]
     complete: bool
