@@ -60,7 +60,8 @@ def right_hand_side(alpha: float, beta: float) -> Callable[[Array], Array]:
     hdot + (alpha*h - beta) >= 0
 
     Args:
-        None
+        alpha (float): Linear coefficient for the barrier condition.
+        beta (float): Constant term for the barrier condition.
 
     Returns
     -------
