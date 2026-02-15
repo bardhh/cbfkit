@@ -7,13 +7,6 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
-mach = platform.machine().lower()
-if "arm" in mach or "aarch" in mach:
-    # pylint: disable=E0401
-    from kvxopt import matrix, solvers  # type: ignore[reportMissingImports]
-else:
-    from cvxopt import matrix, solvers
-
 
 def solve(
     p_mat: Array,
@@ -37,6 +30,19 @@ def solve(
     -------
         sol['x']: Solution to the QP
     """
+    try:
+        mach = platform.machine().lower()
+        if "arm" in mach or "aarch" in mach:
+            # pylint: disable=E0401
+            from kvxopt import matrix, solvers  # type: ignore[reportMissingImports]
+        else:
+            from cvxopt import matrix, solvers
+    except ImportError as e:
+        raise ImportError(
+            "To use the cvxopt solver, please install the 'cvxopt' extra: "
+            "pip install 'cbfkit[cvxopt]'"
+        ) from e
+
     # Use the cvxopt library to solve the quadratic program
     p_mat = matrix(np.array(p_mat, dtype=float))
     q_vec = matrix(np.array(q_vec, dtype=float))
