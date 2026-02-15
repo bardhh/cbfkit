@@ -103,7 +103,10 @@ def run_demo():
     combined_controller = manager.get_nominal_controller(planner, use_augmented_state=True)
 
     dt = 0.1
-    tf = 10.0
+    if os.getenv("CBFKIT_TEST_MODE"):
+        tf = 1.0
+    else:
+        tf = 10.0
 
     print("Starting Simulation...")
     x, u, z_sim, p, c_keys, c_values, p_keys, p_values = sim.execute(
@@ -121,16 +124,17 @@ def run_demo():
 
     results_dir = Path(__file__).parent / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
-    visualize_crowd(
-        states=x,
-        num_pedestrians=num_peds,
-        robot_goal=goal_robot,
-        d_safe=1.0,
-        dt=dt,
-        p_values=p_values,
-        p_keys=p_keys,
-        save_path=str(results_dir / "head_on_demo.mp4"),
-    )
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        visualize_crowd(
+            states=x,
+            num_pedestrians=num_peds,
+            robot_goal=goal_robot,
+            d_safe=1.0,
+            dt=dt,
+            p_values=p_values,
+            p_keys=p_keys,
+            save_path=str(results_dir / "head_on_demo.mp4"),
+        )
 
     print("Demo Complete!")
 

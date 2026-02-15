@@ -12,6 +12,7 @@ Future Relay runs will skip these files to avoid stalling on known issues.
 | File | Error Type | Reason | Date Added |
 |------|------------|--------|------------|
 | tutorials/single_integrator_dynamic_obstacles.py | Empty File | File content is missing/empty. | 2026-02-02 |
+| tutorials/tutorials/mppi_cbf_si/ros2/controller.py | ROS2 Dependency | Requires ROS2 infrastructure | 2026-02-02 |
 
 ---
 

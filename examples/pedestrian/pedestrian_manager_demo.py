@@ -127,7 +127,10 @@ def run_demo():
 
     # 8. Run Simulation
     dt = 0.1
-    tf = 10.0
+    if os.getenv("CBFKIT_TEST_MODE"):
+        tf = 1.0
+    else:
+        tf = 10.0
 
     print("Starting Simulation...")
     x, u, z_sim, p, c_keys, c_values, p_keys, p_values = sim.execute(
@@ -160,16 +163,17 @@ def run_demo():
     # Let's see what we get.
 
     os.makedirs("examples/pedestrian/results", exist_ok=True)
-    visualize_crowd(
-        states=x,
-        num_pedestrians=num_peds,
-        robot_goal=goal_robot,
-        d_safe=1.0,
-        dt=dt,
-        # p_values=p_values, # Likely empty
-        # p_keys=p_keys,
-        save_path="examples/pedestrian/results/pedestrian_manager_demo.mp4",
-    )
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        visualize_crowd(
+            states=x,
+            num_pedestrians=num_peds,
+            robot_goal=goal_robot,
+            d_safe=1.0,
+            dt=dt,
+            # p_values=p_values, # Likely empty
+            # p_keys=p_keys,
+            save_path="examples/pedestrian/results/pedestrian_manager_demo.mp4",
+        )
 
     print("Demo Complete!")
 

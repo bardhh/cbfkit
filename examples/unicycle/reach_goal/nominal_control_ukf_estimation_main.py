@@ -17,8 +17,8 @@ import numpy as np
 from jax import jacfwd
 
 # Whether or not to simulate, plot
-plot = 1
-save = 1
+plot = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
+save = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
 save_path = "examples/unicycle/reach_goal/results/"  # nominally_controlled/ekf_state_estimation/results/"
 file_name = os.path.basename(__file__)[:-8]
 
@@ -38,7 +38,7 @@ from examples.unicycle.common.config import (
 )
 
 # Define time parameters
-tf = 5.0
+tf = 5.0 if not os.environ.get("CBFKIT_TEST_MODE") else 1.0
 dt = 0.01
 n_steps = int(tf / dt)
 
