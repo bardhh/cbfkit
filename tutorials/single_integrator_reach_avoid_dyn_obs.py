@@ -199,10 +199,11 @@ from cbfkit.sensors import perfect as sensor
 from cbfkit.simulation import simulator
 
 # Simulate the closed-loop system
+num_steps = 1000 if not os.getenv("CBFKIT_TEST_MODE") else 100
 x, u, z, p, dkeys, dvals, _, _ = simulator.execute(
     x0=initial_state,
     dt=1e-2,
-    num_steps=1000,
+    num_steps=num_steps,
     dynamics=dynamics,
     integrator=runge_kutta_4,
     nominal_controller=nominal_controller,
@@ -213,6 +214,9 @@ x, u, z, p, dkeys, dvals, _, _ = simulator.execute(
 
 #####################################################################
 #####################################################################
+
+if os.getenv("CBFKIT_TEST_MODE"):
+    sys.exit(0)
 
 import matplotlib.animation as animation
 import matplotlib.patches as patches
