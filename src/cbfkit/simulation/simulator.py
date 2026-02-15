@@ -52,6 +52,7 @@ from .utils import SimulationStepData
 
 
 SOLVER_STATUS_MAP = {
+    -2: "NAN_INPUT_DETECTED",
     -1: "NAN_DETECTED",
     0: "UNSOLVED (Likely Infeasible)",
     1: "SOLVED",
@@ -123,6 +124,15 @@ def _check_simulation_status(
         status_codes = controller_data_values[idx_data]
         # Check for status 2 (MAX_ITER_REACHED)
         max_iter_mask = status_codes == 2
+
+        # Sentinel: Filter out cases where error occurred (avoid confusing "accepted" message)
+        if "error" in controller_data_keys:
+            idx_err = controller_data_keys.index("error")
+            errors = controller_data_values[idx_err]
+            # Ensure errors array matches shape (it should, as both are stacked per-step)
+            # errors is boolean mask of errors
+            max_iter_mask = max_iter_mask & (~errors)
+
         if jnp.any(max_iter_mask):
             count = int(jnp.sum(max_iter_mask).item())
             print_warning(
