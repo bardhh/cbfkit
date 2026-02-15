@@ -110,7 +110,7 @@ controller = vanilla_cbf_clf_qp_controller(
 )
 
 # Simulation
-x_sim, u_sim, z_sim, p_sim, dkeys, dvals, planner_data, planner_data_keys = simulator.execute(
+x_sim, u_sim, z_sim, p_sim, controller_keys, controller_values, planner_keys, planner_values = simulator.execute(
     x0=initial_state,
     dt=dt,
     num_steps=num_steps,
