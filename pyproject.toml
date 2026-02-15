@@ -62,10 +62,10 @@ requires = ["setuptools>=69.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.dynamic]
-version = {attr = "cbfkit._version.__version__"}
+version = {file = "src/cbfkit/VERSION"}
 
 [tool.setuptools.package-data]
-"cbfkit" = ["codegen/templates/*.j2", "py.typed"]
+"cbfkit" = ["codegen/templates/*.j2", "py.typed", "VERSION"]
 
 [tool.black]
 line-length = 100
