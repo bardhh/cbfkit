@@ -52,10 +52,8 @@ jobs:
       env:
         UV_SYSTEM_PYTHON: 1
       run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        ruff check src --select=E9,F63,F7,F82 --target-version=py310
-        # Exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        ruff check src --exit-zero
+        # Run ruff check. Exit non-zero on failure.
+        ruff check src
     - name: Type check with mypy
       if: matrix.python-version == '3.10'
       env:
