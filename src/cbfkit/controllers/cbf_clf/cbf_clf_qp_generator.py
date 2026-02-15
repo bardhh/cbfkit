@@ -343,6 +343,28 @@ def cbf_clf_qp_generator(
         assert p_mat is not None
 
         compute_input_constraints = generate_compute_input_constraints(control_limits)
+
+        # Bolt: Pre-compute static input constraints (box limits + tunable non-negativity)
+        # to avoid repeated creation and stacking inside the JIT loop.
+        dummy_t = 0.0
+        dummy_x = jnp.zeros((1,))  # Shape irrelevant for static constraints
+        g_mat_static, h_vec_static = compute_input_constraints(dummy_t, dummy_x)
+
+        if "tunable_class_k" in kwargs and kwargs["tunable_class_k"] and n_bfs > 0:
+            # Constraints: -delta <= 0  (delta >= 0)
+            # tunable parameters are located at indices [n_con : n_con + n_bfs]
+            n_total_vars = n_con + n_bfs + n_lfs
+            g_pos = jnp.zeros((n_bfs, n_total_vars))
+
+            # Set -1.0 for the tunable columns using vector indexing
+            row_indices = jnp.arange(n_bfs)
+            col_indices = n_con + jnp.arange(n_bfs)
+            g_pos = g_pos.at[row_indices, col_indices].set(-1.0)
+            h_pos = jnp.zeros((n_bfs,))
+
+            g_mat_static = jnp.vstack([g_mat_static, g_pos])
+            h_vec_static = jnp.hstack([h_vec_static, h_pos])
+
         compute_cbf_clf_constraints = generate_compute_cbf_clf_constraints(
             generate_compute_cbf_constraints,
             generate_compute_clf_constraints,
@@ -409,7 +431,6 @@ def cbf_clf_qp_generator(
             # Compute QP cost, constraint functions
             # Bolt: Keep vectors 1D to avoid JAX broadcasting overhead in solver (prevents (N,1) vs (N,) mismatch)
             q_vec = jnp.matmul(-2 * p_mat, u_nom)
-            g_mat_u, h_vec_u = compute_input_constraints(t, x)
             g_mat_c, h_vec_c, sub_data = compute_cbf_clf_constraints(t, x)
             if "complete" in sub_data:
                 complete = sub_data["complete"]
@@ -462,25 +483,9 @@ def cbf_clf_qp_generator(
                 g_mat_c = g_mat_c * safe_scales_c[:, None]
                 h_vec_c = h_vec_c * safe_scales_c
 
-            g_mat = jnp.vstack([g_mat_u, g_mat_c])
-            h_vec = jnp.hstack([h_vec_u, h_vec_c])
-
-            # Bolt: Enforce non-negativity for tunable Class K parameters to prevent safety inversion
-            if "tunable_class_k" in kwargs and kwargs["tunable_class_k"] and n_bfs > 0:
-                # Constraints: -delta <= 0  (delta >= 0)
-                # tunable parameters are located at indices [n_con : n_con + n_bfs]
-                n_total_vars = n_con + n_bfs + n_lfs
-                g_pos = jnp.zeros((n_bfs, n_total_vars))
-
-                # Set -1.0 for the tunable columns using vector indexing
-                row_indices = jnp.arange(n_bfs)
-                col_indices = n_con + jnp.arange(n_bfs)
-                g_pos = g_pos.at[row_indices, col_indices].set(-1.0)
-
-                h_pos = jnp.zeros((n_bfs,))
-
-                g_mat = jnp.vstack([g_mat, g_pos])
-                h_vec = jnp.hstack([h_vec, h_pos])
+            # Bolt: Use pre-computed static constraints (input limits + tunable non-negativity)
+            g_mat = jnp.vstack([g_mat_static, g_mat_c])
+            h_vec = jnp.hstack([h_vec_static, h_vec_c])
 
             # Sentinel: Detect NaNs in QP inputs
             nan_q = jnp.any(jnp.isnan(q_vec)) | jnp.any(jnp.isinf(q_vec))
