@@ -1,9 +1,10 @@
+import os
 import jax.numpy as jnp
 
 
 class BaseConfig:
     # Time settings
-    tf = 10.0
+    tf = 1.0 if os.getenv("CBFKIT_TEST_MODE") else 10.0
     dt = 1e-2
 
     # px, py, pz, v, psi, gamma
@@ -58,7 +59,7 @@ class BaseConfig:
 
 
 class EKFEstimationConfig(BaseConfig):
-    n_trials = 100
+    n_trials = 1 if os.getenv("CBFKIT_TEST_MODE") else 100
     pkl_file = f"examples/fixed_wing/reach_drop_point/results/ekf_estimation_pg{int(BaseConfig.pg * 100)}.pkl"
 
 

@@ -189,16 +189,17 @@ with open(setup.pkl_file, "wb") as file:
     pickle.dump(save_data, file)
 
 
-animate_3d(
-    trajectory=x,
+if not os.getenv("CBFKIT_TEST_MODE"):
+    animate_3d(
+        trajectory=x,
     obstacles=setup.obstacle_locations,
     r_obs=[[float(val) for val in r] for r in setup.ellipsoid_radii],
     dt=setup.dt,
     save_animation=True,
-    animation_filename="examples/fixed_wing/reach_drop_point/results/3d_animation",
-)
-animate_2d(
-    states=x,
+        animation_filename="examples/fixed_wing/reach_drop_point/results/3d_animation",
+    )
+    animate_2d(
+        states=x,
     estimates=z,
     desired_state=setup.desired_state,
     desired_state_radius=0.1,
@@ -209,5 +210,5 @@ animate_2d(
     dt=setup.dt,
     title="System Behavior",
     save_animation=True,
-    animation_filename="examples/fixed_wing/reach_drop_point/results/2d_animation",
-)
+        animation_filename="examples/fixed_wing/reach_drop_point/results/2d_animation",
+    )

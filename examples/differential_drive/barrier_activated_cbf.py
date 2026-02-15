@@ -677,9 +677,10 @@ def main():
     states, controls, _, _, _, _, goal_state, obstacles, d_min = run_simulation()
 
     # Generate enhanced outputs
-    print("\nCreating enhanced visualizations...")
-    plot_results(states, controls, goal_state, obstacles, d_min)
-    create_animation(states, goal_state, obstacles, d_min)
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        print("\nCreating enhanced visualizations...")
+        plot_results(states, controls, goal_state, obstacles, d_min)
+        create_animation(states, goal_state, obstacles, d_min)
 
     # Analyze results
     performance = analyze_performance(states, controls, goal_state, obstacles, d_min)

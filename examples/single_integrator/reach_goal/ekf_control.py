@@ -284,7 +284,12 @@ if __name__ == "__main__":
     n_success = jnp.sum(jnp.array(successes))
     fraction_success = n_success / setup.n_trials
     print(f"Success Rate: {fraction_success:.2f}")
-    print(f"Avg. Completion Time: {jnp.mean(jnp.array(completion_times)):.2f}")
+
+    valid_completion_times = [t for t in completion_times if t is not None]
+    if valid_completion_times:
+        print(f"Avg. Completion Time: {jnp.mean(jnp.array(valid_completion_times)):.2f}")
+    else:
+        print("Avg. Completion Time: N/A")
 
     # (
     #     states,

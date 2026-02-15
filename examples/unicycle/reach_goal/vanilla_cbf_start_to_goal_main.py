@@ -22,7 +22,7 @@ from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_cont
 import examples.unicycle.common.ellipsoidal_obstacle as ellipsoidal_obstacle
 
 # Simulation parameters
-tf = 10.0
+tf = 10.0 if not os.environ.get("CBFKIT_TEST_MODE") else 1.0
 dt = 0.01
 file_path = "examples/unicycle/start_to_goal/results/"
 
@@ -107,8 +107,8 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     },
 )
 
-plot = 1
-animate = 1
+plot = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
+animate = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
 save = 1
 
 if plot:

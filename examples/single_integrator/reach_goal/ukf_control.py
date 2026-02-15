@@ -236,7 +236,11 @@ if __name__ == "__main__":
     n_success = np.sum(successes)
     fraction_success = n_success / setup.n_trials
     print(f"Success Rate: {fraction_success:.2f}")
-    print(f"Avg. Completion Time: {np.mean(completion_times):.2f}")
+
+    if completion_times:
+        print(f"Avg. Completion Time: {np.mean(completion_times):.2f}")
+    else:
+        print("Avg. Completion Time: N/A")
 
     save_data = {
         "x": states,

@@ -223,6 +223,22 @@ def run_scenario(config):
 def define_scenarios():
     scenarios = []
 
+    if os.getenv("CBFKIT_TEST_MODE"):
+        scenarios.append(
+            {
+                "name": "Crossing",
+                "robot_init": [0.0, 5.0, 0.0, 0.0],
+                "robot_goal": [10.0, 5.0, 0.0, 0.0],
+                "humans": [
+                    {"init": [5.0, 0.0, 0.0, 1.0]},  # Up
+                    {"init": [5.0, 10.0, 0.0, -1.0]},  # Down
+                ],
+                "d_safe": 1.0,
+                "tf": 1.0,
+            }
+        )
+        return scenarios
+
     # 1. Crossing
     scenarios.append(
         {
@@ -467,7 +483,8 @@ def main():
         res = run_scenario(sc)
         results.append(res)
 
-    create_multi_animation(results)
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        create_multi_animation(results)
 
 
 if __name__ == "__main__":
