@@ -47,6 +47,7 @@ from cbfkit.utils.user_types import (
     DynamicsCallable,
     Key,
     MppiGenerator,
+    MppiParameters,
     PlannerCallable,
     PlannerCallableReturns,
     PlannerData,
@@ -76,7 +77,7 @@ def mppi_generator() -> MppiGenerator:
         stage_cost: Optional[StageCostCallable] = None,
         terminal_cost: Optional[TerminalCostCallable] = None,
         trajectory_cost: Optional[TrajectoryCostCallable] = None,
-        mppi_args: Any = None,
+        mppi_args: Optional[MppiParameters] = None,
         **kwargs: Dict[str, Any],
     ) -> PlannerCallable:
         """Produces the function to deploy a MPPI control law.
@@ -93,6 +94,9 @@ def mppi_generator() -> MppiGenerator:
         -------
             PlannerCallable: function for computing control input based on MPPI
         """
+        if mppi_args is None:
+            raise ValueError("mppi_args must be provided")
+
         complete = False
         n_con = len(control_limits)
 

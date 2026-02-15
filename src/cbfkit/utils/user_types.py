@@ -473,6 +473,32 @@ GenerateComputeTerminalCostCallable = Callable[
 ]
 
 
+class MppiParameters(TypedDict, total=False):
+    """Parameters for MPPI controller generation.
+
+    Attributes:
+        robot_state_dim (int): Dimension of the robot state.
+        robot_control_dim (int): Dimension of the robot control input.
+        prediction_horizon (int): Prediction horizon length.
+        num_samples (int): Number of trajectory samples.
+        time_step (float): Time step duration.
+        use_GPU (bool): Whether to use GPU acceleration.
+        costs_lambda (float): Temperature parameter for cost weighting.
+        cost_perturbation (float): Coefficient for control cost.
+        plot_samples (int): Number of samples to plot (optional).
+    """
+
+    robot_state_dim: int
+    robot_control_dim: int
+    prediction_horizon: int
+    num_samples: int
+    time_step: float
+    use_GPU: bool
+    costs_lambda: float
+    cost_perturbation: float
+    plot_samples: int
+
+
 class MppiGenerator(Protocol):
     """Protocol for MPPI generator."""
 
@@ -483,7 +509,7 @@ class MppiGenerator(Protocol):
         stage_cost: Optional[StageCostCallable] = None,
         terminal_cost: Optional[TerminalCostCallable] = None,
         trajectory_cost: Optional[TrajectoryCostCallable] = None,
-        mppi_args: Any = None,
+        mppi_args: Optional[MppiParameters] = None,
         **kwargs: Any,
     ) -> PlannerCallable:
         """Call method."""
