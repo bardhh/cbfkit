@@ -3,14 +3,17 @@ import warnings
 
 import numpy as np
 from numpy.random import Generator
-from scipy.stats import norm
 
 
 def _pdf_or_ones(values, std):
     if std == 0:
         return np.ones((len(values), 1))
     else:
-        return norm.pdf(values, 0, std).reshape(-1, 1)
+        # Manual calculation of Gaussian PDF to avoid scipy dependency
+        # f(x) = (1 / (std * sqrt(2*pi))) * exp(-0.5 * ((x - mean) / std)^2)
+        # Here mean is 0.
+        pdf_values = (1 / (std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * (values / std) ** 2)
+        return pdf_values.reshape(-1, 1)
 
 
 def generate_uncertainty_pmf(

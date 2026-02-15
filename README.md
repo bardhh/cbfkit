@@ -40,14 +40,58 @@ CBFKit can be applied to diverse robotics applications, including:
 - **Multi-Robot Coordination:** Coordinate the movement of multiple robots while maintaining safe distances and avoiding collisions.
 
 ## Installation
-CBFKit is readily deployable via a Docker image. After setting up Docker (refer to the [official Docker documentation](https://docs.docker.com/get-started/) for detailed instructions), proceed with one of the following methods:
 
-### 1. VS Code Dev Container Launch
+### Prerequisites
+- **Python 3.10 – 3.12** (3.13+ is not yet supported)
+
+### Local Installation (pip)
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/bardhh/cbfkit.git
+   cd cbfkit
+   ```
+
+2. Install the package:
+   ```bash
+   pip install .
+   ```
+
+3. **(Optional)** Install extras depending on your use case:
+   ```bash
+   # Code generation support (needed by most tutorials)
+   pip install ".[codegen]"
+
+   # Visualization (matplotlib)
+   pip install ".[vis]"
+
+   # CasADi support
+   pip install ".[casadi]"
+
+   # Everything needed for development (linting, testing, notebooks, etc.)
+   pip install ".[dev]"
+
+   # Or combine several extras at once
+   pip install ".[codegen,vis,dev]"
+   ```
+
+4. **(Optional)** For an editable/development install so that local changes are reflected immediately:
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+> **Note:** On Apple Silicon (aarch64/arm64), `kvxopt` is installed in place of `cvxopt`. This is handled automatically.
+
+### Docker
+
+CBFKit is also deployable via Docker. After setting up Docker (refer to the [official Docker documentation](https://docs.docker.com/get-started/) for detailed instructions), proceed with one of the following methods:
+
+#### VS Code Dev Container
 1. Open the project in VS Code.
 2. When prompted, reopen the folder in container and choose the **CBFKit CPU Dev Container** definition located at `.devcontainer/cbfkit-container`.
 3. The container uses the standard `Dockerfile` through Docker Compose so macOS hosts always build the CPU image, while Linux users can optionally select the GPU profile (see below).
 
-### 2. Docker Compose (command line)
+#### Docker Compose (command line)
 The dev containers are backed by `.devcontainer/docker-compose.yml`, so you can use the same configuration outside of VS Code:
 
 1. Build the CPU image (works on macOS via x86 emulation):
@@ -63,7 +107,7 @@ The dev containers are backed by `.devcontainer/docker-compose.yml`, so you can 
    docker compose -f .devcontainer/docker-compose.yml down
    ```
 
-### 3. GPU Development (Linux hosts only)
+#### GPU Development (Linux hosts only)
 The Compose file exposes a `cbfkit_gpu` service behind a `gpu` profile. Linux users with NVIDIA GPUs can enable it with:
 
 ```bash

@@ -52,6 +52,13 @@ def _map_function(args):
         if inject_key and worker_seed is not None:
             kwargs = kwargs.copy()
             kwargs["key"] = random.PRNGKey(worker_seed)
+        elif worker_seed is not None and trial_no == 0:
+            logging.getLogger(__name__).warning(
+                "Could not inject 'key' into Monte Carlo trial function '%s'. "
+                "Ensure your function accepts 'key' or '**kwargs' to receive the JAX PRNGKey. "
+                "Otherwise, JAX-based randomness may be identical across trials (deterministic).",
+                getattr(func, "__name__", "unknown"),
+            )
 
         return func(trial_no, **kwargs)
 
