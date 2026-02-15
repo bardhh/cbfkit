@@ -46,12 +46,14 @@ from cbfkit.utils.user_types import (
 
 from .backend import stepper
 from .callbacks import LoggingCallback, ProgressCallback, SimulationCallback
-from .simulator_jit import simulator_jit
+from .simulator_jit import INTEGRATION_NAN_ERROR, simulator_jit
 from .ui import create_progress, print_error, print_jit_status, print_warning
 from .utils import SimulationStepData
 
 
 SOLVER_STATUS_MAP = {
+    -99: "NO_STATUS_AVAILABLE",
+    -10: "INTEGRATION_NAN_ERROR",
     -2: "NAN_INPUT_DETECTED",
     -1: "NAN_DETECTED",
     0: "UNSOLVED (Likely Infeasible)",
@@ -266,15 +268,17 @@ def simulator(
             )
 
             # Sentinel: Check for NaNs
-            if jnp.any(jnp.isnan(x_ret)):
+            nan_detected = jnp.any(jnp.isnan(x_ret))
+            if nan_detected:
                 controller_data = controller_data._replace(
-                    error=jnp.array(True), error_data=jnp.array(-1)
+                    error=jnp.array(True), error_data=jnp.array(INTEGRATION_NAN_ERROR)
                 )
 
             u = u_ret
             z = z_ret
             c = c_ret
-            x = x_ret
+            # Clamp state if NaN (use previous x)
+            x = x if nan_detected else x_ret
 
             # Efficient accumulation
             xs_list.append(x.reshape(-1, 1))
@@ -747,8 +751,26 @@ def format_return_data(
             first_valid = next((v for v in vals if v is not None), None)
             if first_valid is None or isinstance(first_valid, (dict, str, list, tuple)):
                 continue
+
+            # Handle mixed None/Numeric (e.g., error_data appearing mid-simulation)
             if any(v is None for v in vals):
-                continue
+                if isinstance(first_valid, (int, float, jnp.ndarray, np.ndarray)):
+                    # Replace None with default
+                    default_val = -99
+                    # Check if float to use NaN instead
+                    is_float = False
+                    if hasattr(first_valid, "dtype"):
+                        is_float = jnp.issubdtype(first_valid.dtype, jnp.floating)
+                    elif isinstance(first_valid, float):
+                        is_float = True
+
+                    if is_float:
+                        default_val = jnp.nan
+
+                    vals = [v if v is not None else default_val for v in vals]
+                else:
+                    # Non-numeric mixed with None (unsupported)
+                    continue
 
             try:
                 # jnp.stack is more efficient than jnp.array for stacking existing arrays
