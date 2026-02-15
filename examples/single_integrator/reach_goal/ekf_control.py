@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+
 from typing import List, Tuple
 
 import jax.numpy as jnp
@@ -264,7 +268,6 @@ def execute(
 # Simulate total number of trials
 if __name__ == "__main__":
     import pickle
-    import os
 
     # Execute numerous trials sim
     results = conduct_monte_carlo(execute, n_trials=setup.n_trials)

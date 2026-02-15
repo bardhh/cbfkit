@@ -1,5 +1,9 @@
 """This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks to reach a goal
 region while avoiding dynamic obstacles."""
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+
 
 from typing import List, Tuple
 
@@ -217,7 +221,6 @@ def execute(ii: int = 0) -> Tuple[Array, Array, Array, Array, List[str], List[Ar
 # Simulate total number of trials
 if __name__ == "__main__":
     import pickle
-    import os
 
     # Execute numerous trials sim
     results = conduct_monte_carlo(execute, n_trials=setup.n_trials)

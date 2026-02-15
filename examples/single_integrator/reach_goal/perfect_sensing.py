@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+
 import pickle
 from typing import List, Tuple
 
@@ -120,7 +124,6 @@ def execute(
 
 # Simulate total number of trials
 if __name__ == "__main__":
-    import os
     import pickle
 
     # Execute numerous trials sim
