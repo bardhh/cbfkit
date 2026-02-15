@@ -44,7 +44,8 @@ Example
 >>>     constraint(r1, r2),
 >>>     dynamics,
 >>>     6,
->>>     certificate_conditions=zeroing_barriers.linear_class_k(1.0)
+>>>     certificate_conditions=zeroing_barriers.linear_class_k(1.0),
+>>>     input_style="state",
 >>> )
 """
 
@@ -58,6 +59,7 @@ from cbfkit.certificates import certificate_package
 from cbfkit.utils.user_types import (
     CertificateCollection,
     CertificateConditionsCallable,
+    CertificateInputStyle,
     DynamicsCallable,
 )
 
@@ -86,6 +88,7 @@ def rectify_relative_degree(
     form: str = "exponential",
     certificate_conditions: Optional[CertificateConditionsCallable] = None,
     rng: Optional[Union[int, Array]] = None,
+    input_style: Union[str, CertificateInputStyle] = "concatenated",
 ) -> Union[Callable[..., CertificateCollection], CertificateCollection]:
     """Rectifies the relative degree of the provided constraint function with respect to the system
     dynamics deriving a new exponential- or high-order-CBF.
@@ -103,6 +106,10 @@ def rectify_relative_degree(
             If provided, returns a CertificateCollection directly. Defaults to None.
         rng (Optional[Union[int, Array]]): random seed or key for relative degree sampling.
             Defaults to None (using global default).
+        input_style (Union[str, CertificateInputStyle], optional): input signature of the function.
+            - "concatenated" (default): function(state_and_time) -> value
+            - "state": function(state) -> value
+            - "separated": function(time, state) -> value
 
     Returns
     -------
@@ -116,6 +123,29 @@ def rectify_relative_degree(
         subkey = random.PRNGKey(rng)  # type: ignore[assignment]
     else:
         subkey = rng  # type: ignore[assignment]
+
+    # Normalize input_style
+    if isinstance(input_style, str):
+        try:
+            input_style = CertificateInputStyle(input_style)
+        except ValueError:
+            valid_styles = [e.value for e in CertificateInputStyle]
+            raise ValueError(
+                f"Invalid input_style '{input_style}'. Must be one of {valid_styles}"
+            ) from None
+
+    # Wrap function to ensure concatenated (state + time) signature for compute_function_list
+    if input_style == CertificateInputStyle.STATE:
+        _orig_func_state = function
+
+        def function(xt: Array) -> Array:
+            return _orig_func_state(xt[:-1])
+
+    elif input_style == CertificateInputStyle.SEPARATED:
+        _orig_func_sep = function
+
+        def function(xt: Array) -> Array:
+            return _orig_func_sep(xt[-1], xt[:-1])
 
     function_list = compute_function_list(
         function, system_dynamics, state_dim + 1, form, subkey=subkey

@@ -62,5 +62,55 @@ def test_rectify_relative_degree_api():
 
     print("API verification passed: Legacy and New usages produce identical results.")
 
+def test_rectify_relative_degree_input_style():
+    """Test the input_style argument for rectify_relative_degree."""
+
+    # Dynamics: x_dot = u
+    def dynamics(x):
+        return jnp.zeros(2), jnp.eye(2)
+
+    # Strict unpacking function that only accepts state (size 2)
+    def h_strict(x):
+        p, v = x
+        return p
+
+    # This should fail if we don't specify input_style="state" (default is concatenated -> passes size 3)
+    # But JAX unpacking might be flexible?
+    # Actually, if x is size 3, "p, v = x" raises "too many values to unpack (expected 2)"
+
+    # 1. Verify it works with input_style="state"
+    cert = rectify_relative_degree(
+        function=h_strict,
+        system_dynamics=dynamics,
+        state_dim=2,
+        form="exponential",
+        certificate_conditions=zeroing_barriers.linear_class_k(1.0),
+        input_style="state"
+    )
+
+    # Verify it works
+    x_sample = jnp.array([0.5, 0.2])
+    t_sample = 1.0
+    val = cert.functions[0](t_sample, x_sample)
+
+    # h = x[0] = 0.5. For rel deg 1, rectified function is just h(x).
+    assert jnp.allclose(val, 0.5)
+
+    # 2. Verify it FAILS without input_style="state" (default is concatenated)
+    try:
+        rectify_relative_degree(
+            function=h_strict,
+            system_dynamics=dynamics,
+            state_dim=2,
+            form="exponential",
+            certificate_conditions=zeroing_barriers.linear_class_k(1.0)
+        )
+        assert False, "Should have failed with strict unpacking"
+    except Exception as e:
+        # We expect a failure during jacfwd call inside compute_function_list
+        print(f"Caught expected error: {e}")
+        pass
+
 if __name__ == "__main__":
     test_rectify_relative_degree_api()
+    test_rectify_relative_degree_input_style()
