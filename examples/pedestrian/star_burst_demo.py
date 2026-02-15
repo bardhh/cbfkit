@@ -128,7 +128,10 @@ def run_demo():
     combined_controller = manager.get_nominal_controller(planner, use_augmented_state=True)
 
     dt = 0.05
-    tf = 20.0
+    if os.getenv("CBFKIT_TEST_MODE"):
+        tf = 1.0
+    else:
+        tf = 20.0
 
     print("Starting Simulation...")
     x, u, z_sim, p, c_keys, c_values, p_keys, p_values = sim.execute(
@@ -147,16 +150,17 @@ def run_demo():
     )
 
     os.makedirs("examples/pedestrian/results", exist_ok=True)
-    visualize_crowd(
-        states=x,
-        num_pedestrians=num_peds,
-        robot_goal=goal_robot,
-        d_safe=0.8,
-        dt=dt,
-        p_values=p_values,
-        p_keys=p_keys,
-        save_path="examples/pedestrian/results/star_burst_demo.mp4",
-    )
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        visualize_crowd(
+            states=x,
+            num_pedestrians=num_peds,
+            robot_goal=goal_robot,
+            d_safe=0.8,
+            dt=dt,
+            p_values=p_values,
+            p_keys=p_keys,
+            save_path="examples/pedestrian/results/star_burst_demo.mp4",
+        )
 
     print("Demo Complete!")
 

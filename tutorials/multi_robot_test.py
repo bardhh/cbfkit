@@ -26,7 +26,7 @@ def main():
     INITIAL_STATE = np.zeros(2 * num_robots)
     goals = np.zeros(2 * num_robots)
     DT = 0.1
-    TF = 10
+    TF = 10 if not os.getenv("CBFKIT_TEST_MODE") else 1.0
     N_STEPS = int(TF / DT) + 1
     ACTUATION_LIMITS = 100 * jnp.ones(2 * num_robots)
 

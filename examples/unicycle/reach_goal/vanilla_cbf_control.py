@@ -100,10 +100,7 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     estimator=estimator,
     filepath=file_path + "vanilla_cbf_results",
     verbose=True,
-    planner_data=PlannerData(
-        x_traj=jnp.tile(desired_state.reshape(-1, 1), (1, int(tf / dt) + 1)),
-        prev_robustness=None,
-    ),
+    planner_data=PlannerData.from_constant(desired_state),
     use_jit=True,
 )
 

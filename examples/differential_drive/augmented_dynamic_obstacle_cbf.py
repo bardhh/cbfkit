@@ -212,8 +212,12 @@ def run_simulation():
     )
 
     # 5. Simulation
-    dt = 0.05
-    tf = 15.0
+    if os.getenv("CBFKIT_TEST_MODE"):
+        dt = 0.05
+        tf = 1.0
+    else:
+        dt = 0.05
+        tf = 15.0
     num_steps = int(tf / dt)
 
     print("Starting Simulation...")
@@ -310,7 +314,8 @@ def create_visualization(states, goal_state, d_min):
 def main():
     os.makedirs("examples/differential_drive/results", exist_ok=True)
     x, u, goal, d_min = run_simulation()
-    create_visualization(x, goal, d_min)
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        create_visualization(x, goal, d_min)
 
     final_dist = np.linalg.norm(x[-1, :2] - goal[:2])
     print(f"Final Goal Distance: {final_dist:.3f}m")

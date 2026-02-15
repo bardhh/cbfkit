@@ -55,9 +55,11 @@ from typing import (
     TypeAlias,
     TypedDict,
     Union,
+    TYPE_CHECKING,
 )
 
 from jax import Array, random
+import jax.numpy as jnp
 
 # Define types for readability
 Time: TypeAlias = Union[float, Array]
@@ -91,6 +93,27 @@ class PlannerData(NamedTuple):
     error: bool = False
     xs: Optional[Array] = None
     sampled_x_traj: Optional[Array] = None
+
+    @classmethod
+    def from_constant(cls, state: State) -> "PlannerData":
+        """Creates a PlannerData object with a constant reference state.
+
+        This helper creates a single-column trajectory, which the simulator
+        will broadcast across all time steps, effectively treating it as a
+        fixed setpoint/goal.
+
+        Args:
+            state (State): The constant reference state (e.g., goal).
+                           Can be a 1D array or a list.
+
+        Returns:
+            PlannerData: A new instance with `x_traj` set to the provided state
+                         (reshaped to a column vector).
+        """
+        state = jnp.atleast_1d(jnp.array(state))
+        if state.ndim == 1:
+            state = state.reshape(-1, 1)
+        return cls(x_traj=state)
 
 
 class SimulationResults(NamedTuple):
@@ -307,9 +330,17 @@ QpSolverCallable = Callable[
 ]
 
 
+if TYPE_CHECKING:
+    from jaxopt.base import KKTSolution
+    from jaxopt._src.osqp import OSQPState
+else:
+    KKTSolution = Any
+    OSQPState = Any
+
+
 # Solver Params Type Alias
-SolverParams: TypeAlias = Tuple[Any, Any]
-"""Solver parameters type (usually (KKTSolution, OSQPState) from jaxopt)."""
+SolverParams: TypeAlias = Tuple[KKTSolution, OSQPState]
+"""Solver parameters type (specifically (KKTSolution, OSQPState) for QP solvers)."""
 
 
 class CbfClfQpConfig(TypedDict, total=False):
@@ -442,6 +473,32 @@ GenerateComputeTerminalCostCallable = Callable[
 ]
 
 
+class MppiParameters(TypedDict, total=False):
+    """Parameters for MPPI controller configuration.
+
+    Attributes:
+        robot_state_dim (int): Dimensionality of the robot state.
+        robot_control_dim (int): Dimensionality of the robot control input.
+        prediction_horizon (int): Number of time steps in the prediction horizon.
+        num_samples (int): Number of trajectory samples.
+        time_step (float): Time step duration (seconds).
+        use_GPU (bool): Whether to use GPU for computations.
+        costs_lambda (float): Lambda parameter for cost weighting.
+        cost_perturbation (float): Coefficient for cost perturbation.
+        plot_samples (int): Number of samples to plot (optional).
+    """
+
+    robot_state_dim: int
+    robot_control_dim: int
+    prediction_horizon: int
+    num_samples: int
+    time_step: float
+    use_GPU: bool
+    costs_lambda: float
+    cost_perturbation: float
+    plot_samples: int
+
+
 class MppiGenerator(Protocol):
     """Protocol for MPPI generator."""
 
@@ -452,7 +509,7 @@ class MppiGenerator(Protocol):
         stage_cost: Optional[StageCostCallable] = None,
         terminal_cost: Optional[TerminalCostCallable] = None,
         trajectory_cost: Optional[TrajectoryCostCallable] = None,
-        mppi_args: Any = None,
+        mppi_args: Optional[MppiParameters] = None,
         **kwargs: Any,
     ) -> PlannerCallable:
         """Call method."""

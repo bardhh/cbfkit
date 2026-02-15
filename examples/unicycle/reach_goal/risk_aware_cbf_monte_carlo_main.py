@@ -58,7 +58,7 @@ n_steps = int(tf / dt)
 
 X_MAX = 5.0
 Y_MAX = 5.0
-if os.environ.get("CBFKIT_TEST_MODE") == "true":
+if os.environ.get("CBFKIT_TEST_MODE"):
     N_TRIALS = 2
 else:
     N_TRIALS = 50

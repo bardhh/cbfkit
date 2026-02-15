@@ -18,6 +18,7 @@ Examples
 """
 
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+import os
 import time
 
 import jax
@@ -46,12 +47,14 @@ from cbfkit.utils.user_types import (
 
 from .backend import stepper
 from .callbacks import LoggingCallback, ProgressCallback, SimulationCallback
-from .simulator_jit import simulator_jit
+from .simulator_jit import INTEGRATION_NAN_ERROR, simulator_jit
 from .ui import create_progress, print_error, print_jit_status, print_warning
 from .utils import SimulationStepData
 
 
 SOLVER_STATUS_MAP = {
+    -99: "NO_STATUS_AVAILABLE",
+    -10: "INTEGRATION_NAN_ERROR",
     -2: "NAN_INPUT_DETECTED",
     -1: "NAN_DETECTED",
     0: "UNSOLVED (Likely Infeasible)",
@@ -266,15 +269,17 @@ def simulator(
             )
 
             # Sentinel: Check for NaNs
-            if jnp.any(jnp.isnan(x_ret)):
+            nan_detected = jnp.any(jnp.isnan(x_ret))
+            if nan_detected:
                 controller_data = controller_data._replace(
-                    error=jnp.array(True), error_data=jnp.array(-1)
+                    error=jnp.array(True), error_data=jnp.array(INTEGRATION_NAN_ERROR)
                 )
 
             u = u_ret
             z = z_ret
             c = c_ret
-            x = x_ret
+            # Clamp state if NaN (use previous x)
+            x = x if nan_detected else x_ret
 
             # Efficient accumulation
             xs_list.append(x.reshape(-1, 1))
@@ -424,6 +429,30 @@ def execute(
             - planner_keys (List[str]): Names of logged planner data fields.
             - planner_values (List[Array]): Logged planner data values.
     """
+    # Sentinel: Validate initial state shape and dynamics consistency
+    # This prevents obscure broadcasting errors deep in the simulation loop.
+    try:
+        f_check, g_check = dynamics(x0)
+    except Exception as e:
+        raise ValueError(
+            f"Dynamics evaluation failed for initial state 'x0' with shape {x0.shape}.\n"
+            f"Ensure 'x0' has the correct dimensions for the system.\n"
+            f"Original error: {e}"
+        ) from e
+
+    if f_check.shape != x0.shape:
+        msg = (
+            f"Shape mismatch: Initial state 'x0' has shape {x0.shape}, "
+            f"but dynamics drift 'f' has shape {f_check.shape}.\n"
+            "The state vector must match the dynamics output shape."
+        )
+        if x0.ndim == 2 and x0.shape[1] == 1 and f_check.ndim == 1:
+            msg += "\nTip: Pass a 1D array for 'x0' (e.g., use x0.ravel() or x0.flatten())."
+        elif x0.shape[0] < f_check.shape[0]:
+            msg += f"\nTip: System expects {f_check.shape[0]} states, but got {x0.shape[0]}."
+
+        raise ValueError(msg)
+
     # Setup callbacks
     callbacks: List[SimulationCallback] = []
     if verbose:
@@ -436,7 +465,15 @@ def execute(
 
     # Generate key for randomization
     if key is None:
-        key = random.PRNGKey(0)  # type: ignore
+        seed = 0
+        env_seed = os.environ.get("CBFKIT_SEED")
+        if env_seed is not None:
+            try:
+                seed = int(env_seed)
+            except ValueError:
+                pass
+
+        key = random.PRNGKey(seed)  # type: ignore
 
     # Ensure data structures are NamedTuples
     if controller_data is None:
@@ -497,6 +534,11 @@ def execute(
             f_dummy, g_dummy = dynamics(x0)
             u_nom_dummy = jnp.zeros((g_dummy.shape[1],))
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
+
+        # Sentinel: Ensure error_data is initialized to enable NaN reporting in JIT loop.
+        # If controller is None, the loop propagates this structure, allowing us to report errors.
+        if controller is None and c_data.error_data is None:
+            c_data = c_data._replace(error_data=jnp.array(-99, dtype=jnp.int32))
 
         if verbose:
             if progress_bar is not None:
@@ -747,8 +789,26 @@ def format_return_data(
             first_valid = next((v for v in vals if v is not None), None)
             if first_valid is None or isinstance(first_valid, (dict, str, list, tuple)):
                 continue
+
+            # Handle mixed None/Numeric (e.g., error_data appearing mid-simulation)
             if any(v is None for v in vals):
-                continue
+                if isinstance(first_valid, (int, float, jnp.ndarray, np.ndarray)):
+                    # Replace None with default
+                    default_val = -99
+                    # Check if float to use NaN instead
+                    is_float = False
+                    if hasattr(first_valid, "dtype"):
+                        is_float = jnp.issubdtype(first_valid.dtype, jnp.floating)
+                    elif isinstance(first_valid, float):
+                        is_float = True
+
+                    if is_float:
+                        default_val = jnp.nan
+
+                    vals = [v if v is not None else default_val for v in vals]
+                else:
+                    # Non-numeric mixed with None (unsupported)
+                    continue
 
             try:
                 # jnp.stack is more efficient than jnp.array for stacking existing arrays

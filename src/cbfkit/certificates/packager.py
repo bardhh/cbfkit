@@ -136,39 +136,138 @@ def certificate_package(
             t_func = j_func
         else:
             if use_factory:
-                j_func = func_grad(**kwargs)
-                t_func = func_grad(**kwargs)
+                user_grad = func_grad(**kwargs)
             else:
-                j_func = func_grad  # type: ignore[assignment]
-                t_func = func_grad  # type: ignore[assignment]
+                user_grad = func_grad  # type: ignore[assignment]
+
+            # Aegis: Wrap manual gradient to accept concatenated input 'xt'
+            if input_style == CertificateInputStyle.STATE:
+                # User provided grad(x). We need j_func(xt) -> [grad(x), 0]
+                def j_func(xt):
+                    gx = user_grad(xt[:-1])
+                    gx = jnp.atleast_1d(gx)
+                    return jnp.append(gx, 0.0)
+
+                t_func = j_func
+
+            elif input_style == CertificateInputStyle.SEPARATED:
+                # User provided grad(t, x). We need j_func(xt)
+                # Aegis: Robustly handle manual gradients for separated input style.
+                # If user returns spatial gradient (dx, len=n), auto-append temporal gradient (dt).
+                # If user returns full gradient (len=n+1), use as is.
+
+                # Capture _orig_v_sep for temporal partial derivative (defined above)
+                grad_t_auto = grad(_orig_v_sep, argnums=0)
+
+                def j_func(xt):
+                    t = xt[-1]
+                    x = xt[:-1]
+                    gx = user_grad(t, x)
+                    gx = jnp.atleast_1d(gx)
+
+                    # Check if user returned full gradient or spatial gradient
+                    if gx.shape[0] == n:
+                        # Spatial gradient provided. Append auto-diff temporal gradient.
+                        gt = grad_t_auto(t, x)
+                        return jnp.append(gx, gt)
+                    elif gx.shape[0] == n + 1:
+                        # Full gradient provided (legacy behavior).
+                        return gx
+                    else:
+                        raise ValueError(
+                            f"Manual gradient shape mismatch for SEPARATED input style. "
+                            f"Expected shape ({n},) (spatial only) or ({n+1},) (full [dx, dt]), "
+                            f"but got {gx.shape}."
+                        )
+
+                t_func = j_func
+
+            else:
+                # User provided grad(xt)
+                j_func = user_grad
+                t_func = user_grad
 
         if func_hess is None:
             # Auto-differentiate
             h_func = hessian(v_func)
         else:
             if use_factory:
-                h_func = func_hess(**kwargs)
+                user_hess = func_hess(**kwargs)
             else:
-                h_func = func_hess  # type: ignore[assignment]
+                user_hess = func_hess  # type: ignore[assignment]
+
+            # Aegis: Wrap manual hessian to accept concatenated input 'xt'
+            if input_style == CertificateInputStyle.STATE:
+                # User provided hess(x). We need h_func(xt)
+                def h_func(xt):
+                    return user_hess(xt[:-1])
+
+            elif input_style == CertificateInputStyle.SEPARATED:
+                # User provided hess(t, x). We need h_func(xt)
+                def h_func(xt):
+                    return user_hess(xt[-1], xt[:-1])
+
+            else:
+                h_func = user_hess
 
         c_func = certificate_conditions
 
         @jit
         def v_(t: float, x: Array) -> Array:
+            if x.ndim == 0:
+                if n != 1:
+                    raise ValueError(
+                        f"State dimension mismatch: scalar input (0-D) provided but certificate_package expected n={n} (must be 1 for scalar)."
+                    )
+            elif x.shape != (n,):
+                raise ValueError(
+                    f"State dimension mismatch: expected input shape ({n},), got {x.shape}. "
+                    f"Ensure 'n={n}' in certificate_package matches your state dimension."
+                )
             return v_func(jnp.hstack([x, t]))
 
         @jit
         def j_(t: float, x: Array) -> Array:
+            if x.ndim == 0:
+                if n != 1:
+                    raise ValueError(
+                        f"State dimension mismatch: scalar input (0-D) provided but certificate_package expected n={n} (must be 1 for scalar)."
+                    )
+            elif x.shape != (n,):
+                raise ValueError(
+                    f"State dimension mismatch: expected input shape ({n},), got {x.shape}. "
+                    f"Ensure 'n={n}' in certificate_package matches your state dimension."
+                )
             # Gradient w.r.t x is the first n elements
             return j_func(jnp.hstack([x, t]))[:n]
 
         @jit
         def h_(t: float, x: Array) -> Array:
+            if x.ndim == 0:
+                if n != 1:
+                    raise ValueError(
+                        f"State dimension mismatch: scalar input (0-D) provided but certificate_package expected n={n} (must be 1 for scalar)."
+                    )
+            elif x.shape != (n,):
+                raise ValueError(
+                    f"State dimension mismatch: expected input shape ({n},), got {x.shape}. "
+                    f"Ensure 'n={n}' in certificate_package matches your state dimension."
+                )
             # Hessian w.r.t x is the top-left nxn block
             return h_func(jnp.hstack([x, t]))[:n, :n]
 
         @jit
         def t_(t: float, x: Array) -> Array:
+            if x.ndim == 0:
+                if n != 1:
+                    raise ValueError(
+                        f"State dimension mismatch: scalar input (0-D) provided but certificate_package expected n={n} (must be 1 for scalar)."
+                    )
+            elif x.shape != (n,):
+                raise ValueError(
+                    f"State dimension mismatch: expected input shape ({n},), got {x.shape}. "
+                    f"Ensure 'n={n}' in certificate_package matches your state dimension."
+                )
             # Partial w.r.t t is the last element of the gradient
             return t_func(jnp.hstack([x, t]))[-1]
 
