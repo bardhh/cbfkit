@@ -79,3 +79,19 @@ def test_simulation_results():
     assert isinstance(p_data, dict)
     assert "cost" in p_data
     assert p_data["cost"] is p_vals[0]
+
+def test_solver_params_type():
+    from cbfkit.utils.user_types import SolverParams
+    from typing import Tuple, Any
+    # Runtime check: it should be Tuple[Any, Any]
+    # Note: TypeAlias behavior varies by python version, but here it is assigned Tuple[Any, Any]
+
+    # Check if it has __origin__ (generic alias)
+    if hasattr(SolverParams, "__origin__"):
+        assert SolverParams.__origin__ is tuple
+        assert len(SolverParams.__args__) == 2
+        assert SolverParams.__args__[0] is Any
+        assert SolverParams.__args__[1] is Any
+    else:
+        # If not generic alias, it might be just tuple class (unlikely for Tuple[Any, Any])
+        pass

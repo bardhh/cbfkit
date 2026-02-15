@@ -55,6 +55,7 @@ from typing import (
     TypeAlias,
     TypedDict,
     Union,
+    TYPE_CHECKING,
 )
 
 from jax import Array, random
@@ -329,9 +330,17 @@ QpSolverCallable = Callable[
 ]
 
 
+if TYPE_CHECKING:
+    from jaxopt.base import KKTSolution
+    from jaxopt._src.osqp import OSQPState
+else:
+    KKTSolution = Any
+    OSQPState = Any
+
+
 # Solver Params Type Alias
-SolverParams: TypeAlias = Tuple[Any, Any]
-"""Solver parameters type (usually (KKTSolution, OSQPState) from jaxopt)."""
+SolverParams: TypeAlias = Tuple[KKTSolution, OSQPState]
+"""Solver parameters type (specifically (KKTSolution, OSQPState) for QP solvers)."""
 
 
 class CbfClfQpConfig(TypedDict, total=False):
