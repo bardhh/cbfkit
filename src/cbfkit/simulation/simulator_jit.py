@@ -8,6 +8,7 @@ from jax import lax, random
 
 from cbfkit.integration.forward_euler import forward_euler
 from cbfkit.integration.runge_kutta import runge_kutta_4
+from cbfkit.utils.jit_monitor import JitMonitor
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
@@ -72,6 +73,7 @@ def simulator_jit(
         xs, us, zs, cs, c_datas (stacked), p_datas (stacked)
     """
     print(f"JIT COMPILATION: simulator_jit (dt={dt}, num_steps={num_steps})")
+    JitMonitor.increment("simulator_jit")
 
     # Define the scan step function
     def scan_step(carry, step_idx):
