@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from dataclasses import dataclass
@@ -78,3 +79,30 @@ def compare_runs(
         "right": right_value,
         "delta": right_value - left_value,
     }
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run cbfkit benchmark scenario.")
+    parser.add_argument("--scenario", required=True, help="Name of the scenario to run.")
+    parser.add_argument("--seeds", default="0:4", help="Seeds range (start:end) or list (1,2,3).")
+    parser.add_argument("--output", default="./benchmark_results", help="Directory for artifacts.")
+    args = parser.parse_args()
+
+    # Import locally to ensure registry is populated if running as script
+    # (Though usually run as module `python -m cbfkit.benchmarks.runner` which imports package)
+    # The __init__.py imports everything, so if run as module, registry is populated.
+
+    try:
+        print(f"Running scenario '{args.scenario}' with seeds {args.seeds}...")
+        run = run_scenario(args.scenario, args.seeds)
+        write_artifacts(run, args.output)
+
+        print("\nSummary:")
+        for k, v in run.summary.items():
+            print(f"  {k}: {v}")
+        print(f"\nArtifacts written to {args.output}")
+    except KeyError as e:
+        print(f"Error: {e}")
+        # Print available scenarios
+        print(f"Available scenarios: {', '.join(registry.names())}")
+        exit(1)
