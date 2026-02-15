@@ -50,16 +50,11 @@ test = [
     "python-dotenv>=1.2.1",
 ]
 dev = [
+    "cbfkit[vis,codegen,test,casadi]",
     "black>=23.12.1,<24.0",
     "mypy>=1.8.0,<2.0",
     "jupyter>=1.0.0,<2.0",
-    "pytest>=8.0.2",
     "ruff>=0.3.4",
-    "python-dotenv>=1.2.1",
-    "pytest-cov",
-    "casadi>=3.6.4,<4.0",
-    "matplotlib>=3.8.2,<4.0",
-    "jinja2>=3.0.0",
 ]
 
 [build-system]
