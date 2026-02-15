@@ -2,7 +2,6 @@
 
 import jax.numpy as jnp
 import numpy as np
-from scipy.linalg import solve_continuous_are
 from jax import Array
 
 
@@ -24,6 +23,8 @@ def compute_lqr_gain(A: Array, B: Array, Q: Array, R: Array) -> Array:
     -------
         Array: Gain matrix K
     """
+    from scipy.linalg import solve_continuous_are
+
     # Convert JAX arrays to NumPy arrays for SciPy
     A_np = np.array(A)
     B_np = np.array(B)
