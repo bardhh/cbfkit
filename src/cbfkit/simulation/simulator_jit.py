@@ -6,6 +6,9 @@ import jax.debug as jdebug
 import jax.numpy as jnp
 from jax import lax, random
 
+# Hermes: Error code for NaN detected during integration
+INTEGRATION_NAN_ERROR = -10
+
 from cbfkit.integration.forward_euler import forward_euler
 from cbfkit.integration.runge_kutta import runge_kutta_4
 from cbfkit.utils.jit_monitor import JitMonitor
@@ -205,6 +208,22 @@ def simulator_jit(
         current_error = controller_data.error
         new_error = current_error | nan_in_next
         controller_data = controller_data._replace(error=new_error)
+
+        # Hermes: If NaN is detected and error_data exists, report Integration NaN error.
+        if controller_data.error_data is not None:
+            new_error_data = jnp.where(
+                nan_in_next, INTEGRATION_NAN_ERROR, controller_data.error_data
+            )
+            controller_data = controller_data._replace(error_data=new_error_data)
+
+        # Hermes: Print warning if NaN detected
+        lax.cond(
+            nan_in_next,
+            lambda: jdebug.print(
+                "⚠️ Simulation stopped: NaN detected during integration at t={t}", t=t
+            ),
+            lambda: None,
+        )
 
         if progress_callback is not None and progress_interval > 0:
             should_report = jnp.logical_or(
