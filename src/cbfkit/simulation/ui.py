@@ -7,38 +7,84 @@ file logging (no ANSI codes).
 
 from __future__ import annotations
 
+import re
+import sys
 from typing import Optional
 
-from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TaskID,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
-from rich.theme import Theme
+try:
+    from rich.console import Console
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TaskID,
+        TaskProgressColumn,
+        TextColumn,
+        TimeElapsedColumn,
+        TimeRemainingColumn,
+    )
+    from rich.theme import Theme
+
+    HAS_RICH = True
+except ImportError:
+    HAS_RICH = False
+
+    # Dummy classes
+    class Console:  # type: ignore
+        def __init__(self, stderr=False, theme=None):
+            self.stderr = stderr
+
+        def print(self, *args, **kwargs):
+            msg = " ".join(str(x) for x in args)
+            # Only strip tags that look like rich markup (start with a letter)
+            # This avoids stripping [1, 2] or [ 1. 2.]
+            clean_msg = re.sub(r"\[/?[a-z][^\]]*\]", "", msg)
+            file = sys.stderr if self.stderr else sys.stdout
+            print(clean_msg, file=file)
+
+    class Progress:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+        def add_task(self, *args, **kwargs):
+            return 0
+
+        def update(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    TaskID = int  # type: ignore
 
 # -- Singleton console --------------------------------------------------
 
-_CBFKIT_THEME = Theme(
-    {
-        "info": "cyan",
-        "warning": "yellow bold",
-        "error": "red bold",
-        "success": "green bold",
-        "jit": "magenta",
-    }
-)
-
-# The console auto-detects TTY. When stderr is not a terminal (piped or
-# redirected) force_terminal=False ensures plain text. When it IS a TTY,
-# rich renders colors and live updates.
-console = Console(stderr=True, theme=_CBFKIT_THEME)
+if HAS_RICH:
+    _CBFKIT_THEME = Theme(
+        {
+            "info": "cyan",
+            "warning": "yellow bold",
+            "error": "red bold",
+            "success": "green bold",
+            "jit": "magenta",
+        }
+    )
+    # The console auto-detects TTY. When stderr is not a terminal (piped or
+    # redirected) force_terminal=False ensures plain text. When it IS a TTY,
+    # rich renders colors and live updates.
+    console = Console(stderr=True, theme=_CBFKIT_THEME)
+else:
+    console = Console(stderr=True)
 
 
 # -- Progress bar factory -----------------------------------------------
@@ -64,21 +110,24 @@ def create_progress(
         must use it as a context manager or call ``start()``/``stop()``
         manually, and add a task via ``add_task()``.
     """
-    progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(bar_width=40),
-        TaskProgressColumn(),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        TimeRemainingColumn(),
-        console=console,
-        transient=transient,
-        # Throttle refresh to 10 Hz -- keeps overhead negligible even
-        # for 10k+ step simulations where on_step fires every iteration.
-        refresh_per_second=10,
-    )
-    return progress
+    if HAS_RICH:
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            TaskProgressColumn(),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+            transient=transient,
+            # Throttle refresh to 10 Hz -- keeps overhead negligible even
+            # for 10k+ step simulations where on_step fires every iteration.
+            refresh_per_second=10,
+        )
+        return progress
+    else:
+        return Progress()
 
 
 # -- Formatted message helpers ------------------------------------------

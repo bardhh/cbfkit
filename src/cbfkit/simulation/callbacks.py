@@ -1,6 +1,13 @@
-from typing import Any, Dict, List, Optional, Protocol, Union
+from typing import Any, Dict, List, Optional, Protocol, Union, TYPE_CHECKING
 
-from rich.progress import Progress, TaskID
+if TYPE_CHECKING:
+    from rich.progress import Progress, TaskID
+else:
+    try:
+        from rich.progress import Progress, TaskID
+    except ImportError:
+        Progress = Any
+        TaskID = Any
 
 from cbfkit.simulation.utils import SimulationStepData
 from cbfkit.utils.logger import write_log
