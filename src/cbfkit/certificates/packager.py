@@ -218,11 +218,39 @@ def certificate_package(
 
         @jit
         def j_(t: float, x: Array) -> Array:
+            # Aegis: Verify state dimension matches n
+            if x.ndim == 0:
+                x_dim = 1
+            else:
+                x_dim = x.shape[0]
+
+            if x_dim != n:
+                # This will raise a ValueError during tracing if dimensions mismatch
+                raise ValueError(
+                    f"State dimension mismatch in certificate function: "
+                    f"expected n={n}, but got input with dimension {x_dim}. "
+                    "Ensure 'n' passed to certificate_package matches your state dimension."
+                )
+
             # Gradient w.r.t x is the first n elements
             return j_func(jnp.hstack([x, t]))[:n]
 
         @jit
         def h_(t: float, x: Array) -> Array:
+            # Aegis: Verify state dimension matches n
+            if x.ndim == 0:
+                x_dim = 1
+            else:
+                x_dim = x.shape[0]
+
+            if x_dim != n:
+                # This will raise a ValueError during tracing if dimensions mismatch
+                raise ValueError(
+                    f"State dimension mismatch in certificate function: "
+                    f"expected n={n}, but got input with dimension {x_dim}. "
+                    "Ensure 'n' passed to certificate_package matches your state dimension."
+                )
+
             # Hessian w.r.t x is the top-left nxn block
             return h_func(jnp.hstack([x, t]))[:n, :n]
 
