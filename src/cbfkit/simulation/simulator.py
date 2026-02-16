@@ -373,6 +373,7 @@ def execute(
     filepath: Optional[str] = None,
     verbose: Optional[bool] = True,
     controller_data: Optional[Union[ControllerData, Dict[str, Any]]] = None,
+    goal: Optional[State] = None,
     planner_data: Optional[Union[PlannerData, Dict[str, Any]]] = None,
     initial_covariance: Optional[Covariance] = None,
     stl_trajectory_cost: Optional[StlTrajectoryCostCallable] = None,
@@ -406,6 +407,9 @@ def execute(
         filepath (Optional[str], optional): Path to save log file. Defaults to None.
         verbose (Optional[bool], optional): Print progress/status. Defaults to True.
         controller_data (ControllerData, optional): Initial controller data. Defaults to None.
+        goal (State, optional): Constant reference state (e.g., target pose).
+            If provided, creates a constant trajectory in planner_data.
+            Mutually exclusive with `planner_data.x_traj`. Defaults to None.
         planner_data (PlannerData, optional): Initial planner data. Defaults to None.
         initial_covariance (Optional[Covariance], optional): Initial estimator covariance.
         Defaults to None.
@@ -480,6 +484,26 @@ def execute(
         controller_data = ControllerData()
     elif isinstance(controller_data, dict):
         controller_data = ControllerData(**controller_data)
+
+    # Process goal
+    if goal is not None:
+        goal_arr = jnp.atleast_1d(jnp.array(goal))
+        if goal_arr.ndim == 1:
+            goal_arr = goal_arr.reshape(-1, 1)
+
+        if planner_data is None:
+            planner_data = PlannerData(x_traj=goal_arr)
+        elif isinstance(planner_data, dict):
+            if planner_data.get("x_traj") is not None:
+                raise ValueError(
+                    "Cannot specify both 'goal' and 'planner_data[\"x_traj\"]'."
+                )
+            planner_data["x_traj"] = goal_arr
+            # Convert to NamedTuple later
+        elif isinstance(planner_data, PlannerData):
+            if planner_data.x_traj is not None:
+                raise ValueError("Cannot specify both 'goal' and 'planner_data.x_traj'.")
+            planner_data = planner_data._replace(x_traj=goal_arr)
 
     if planner_data is None:
         planner_data = PlannerData()
