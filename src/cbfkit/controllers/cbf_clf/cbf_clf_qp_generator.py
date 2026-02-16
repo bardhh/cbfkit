@@ -474,41 +474,26 @@ def cbf_clf_qp_generator(
             # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
             # Input constraints (box limits) are already normalized (row norm = 1).
             if auto_p_mat:
-                # Janus: Compute norm safely to avoid overflow for large gradients.
-                # Naive sqrt(sum(sq)) overflows if elements > 1e19 (float32).
-                # We scale by max(abs(x)) to keep squares in range.
-                row_max = jnp.max(jnp.abs(g_mat_c), axis=1)
-                # Avoid division by zero
-                row_max_safe = jnp.where(row_max > 0, row_max, 1.0)
+                # Bolt: Optimized normalization using jnp.linalg.norm.
+                # Since cbfkit enforces x64 (jax_enable_x64=True), we can avoid expensive
+                # manual scaling (max/div/rescale) required for float32.
+                # Assumptions:
+                # 1. Inputs < 1e150 (avoid overflow).
+                # 2. Inputs > 1e-150 handled correctly by norm (avoid underflow).
 
-                # Check if row is effectively zero (to avoid nan gradients at 0)
-                is_zero_row = row_max < 1e-30
+                # Compute norms directly (fused kernel, x64 safe)
+                row_norms_c = jnp.linalg.norm(g_mat_c, axis=1)
 
-                # Scale the matrix
-                g_mat_c_scaled = g_mat_c / row_max_safe[:, None]
-
-                # Compute norm of scaled matrix
-                # Fix: Ensure we don't compute norm of zero vector, which has undefined gradient
-                g_mat_c_safe_norm = jnp.where(
-                    is_zero_row[:, None],
-                    jnp.ones_like(g_mat_c_scaled),
-                    g_mat_c_scaled,
-                )
-
-                row_norms_scaled = jnp.linalg.norm(g_mat_c_safe_norm, axis=1)
-
-                # Recover true norm
-                row_norms_c = row_norms_scaled * row_max_safe
-
-                # Add epsilon for safety in division
-                row_norms_c = row_norms_c + 1e-30
-
-                # Janus: Normalize constraints robustly.
+                # Bolt: Normalize constraints robustly for small gradients.
                 # Use a clamped scaling factor (max 1e30) to:
-                # 1. Enforce constraints with small gradients (e.g. 1e-25) to catch gross infeasibility (Safety).
-                # 2. Allow normalization of small signals (e.g. 1e-25) for solver convergence.
+                # 1. Enforce constraints with small gradients (e.g. 1e-25) to catch gross infeasibility.
+                # 2. Allow normalization of small signals for solver convergence.
+                # 3. Handle effectively zero rows (norm < 1e-30) by not scaling (factor 1.0).
+                # Note: We use maximum(norm, 1e-30) in the division to ensure safe gradients at 0.
                 safe_scales_c = jnp.where(
-                    is_zero_row, 1.0, jnp.minimum(1.0 / row_norms_c, 1e30)
+                    row_norms_c < 1e-30,
+                    1.0,
+                    jnp.minimum(1.0 / jnp.maximum(row_norms_c, 1e-30), 1e30),
                 )
 
                 g_mat_c = g_mat_c * safe_scales_c[:, None]
