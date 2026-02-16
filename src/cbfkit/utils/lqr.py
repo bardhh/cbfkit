@@ -23,7 +23,13 @@ def compute_lqr_gain(A: Array, B: Array, Q: Array, R: Array) -> Array:
     -------
         Array: Gain matrix K
     """
-    from scipy.linalg import solve_continuous_are
+    try:
+        from scipy.linalg import solve_continuous_are
+    except ImportError as e:
+        raise ImportError(
+            "To use 'compute_lqr_gain', please install the 'scipy' extra: "
+            "pip install 'cbfkit[scipy]'"
+        ) from e
 
     # Convert JAX arrays to NumPy arrays for SciPy
     A_np = np.array(A)
