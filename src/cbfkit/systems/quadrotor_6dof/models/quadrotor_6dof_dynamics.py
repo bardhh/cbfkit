@@ -40,7 +40,7 @@ def quadrotor_6dof_dynamics(
     def dynamics(x: Array) -> Tuple[Array, Array, Array]:
         """Computes the drift vector 'f' and control matrix 'g' based on the given state x, which
         consists of pn, pe, h (positions in m), u, v, w (body-fixed velocities in m/s), phi, theta,
-        psi (yaw, pitch, and roll angles in rad), and p, q, r (yaw, pitch, and roll rates in rad/s).
+        psi (roll, pitch, and yaw angles in rad), and p, q, r (roll, pitch, and yaw rates in rad/s).
 
         Args:
             x (Array): state vector
