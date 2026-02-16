@@ -14,7 +14,7 @@ from cbfkit.utils.jit_monitor import JitMonitor
 
 # Instantiate QP solver objects
 MAX_ITER = 1000000
-QP = OSQP(maxiter=MAX_ITER, tol=1e-3)
+QP = OSQP(maxiter=MAX_ITER, tol=1e-6)
 EC_QP = EqualityConstrainedQP()
 
 
