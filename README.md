@@ -162,7 +162,6 @@ We recommend going through the tutorials in the following order to get familiar 
 - `code_generation_tutorial.ipynb` (requires `cbfkit[codegen]`)
 - `multi_robot_coordination.ipynb` (requires `cbfkit[codegen]`)
 - `simulate_mppi_cbf.py` (requires `cbfkit[codegen]`)
-- `simulate_mppi_cbf_ellipsoidal_stochastic_cbf.py` (requires `cbfkit[codegen]`)
 - `simulate_mppi_stl.py` (requires `cbfkit[codegen]`)
 
 
@@ -196,7 +195,7 @@ Each function (dynamics, cost, constraint, controller) must follow a specific st
 The **data** *(python dictionary)* in planners and controllers is designed to cater to needs of different types of comntrollers and planners. For example, CBF-QP does not need to maintain internal state but planners/controllers like MPC or MPPI need to initialize their initial guess with solution from previous time step when implemented in receding horizon fashion. Since we focus on functional programming for computational efficiency, instead of maintaining this internal state, we pass it as input and output arguments. Controllers like CBF-QP need to maintain any internal state and can have empty dictionary whereas MPPI stores its solution trajectory in the dictionary (and received it back at next time step of the simulation). The **data** must therefore be populated appropriately. In case of planners, the control trajectory must be associated with the key *u_traj* and state trajectory must be associated with the key *x_traj*. See `cbf_clf_qp_generator.py` and `mppi_generator.py` files to understand in more detail.
 
 ## Examples
-Several additional examples of how to use CBFkit to conduct full simulations of arbitrary dynamical systems are provided, including a unicycle robot, fixed-wing aerial vehicle, and more, all of which may be found in the `examples` folder. Any file contained within `examples` or any of its subdirectories whose name takes the form of `*main.py` is an executable example that may be referenced when a user is building their own application.
+Several additional examples of how to use CBFkit to conduct full simulations of arbitrary dynamical systems are provided, including a unicycle robot, fixed-wing aerial vehicle, and more, all of which may be found in the `examples` folder. Executable examples are provided in the subdirectories of `examples`. These scripts demonstrate various control scenarios and can be run directly.
 
 See below for a simplified script to simulate a unicycle robot navigating toward a goal set amidst obstacles using Model Predictive Path Integral (MPPI) control as a planner and a Control Barrier Function (CBF) as a safety filter. A full version of this example with visualization can be found at `examples/unicycle/reach_goal/mppi_cbf_control.py`:
 
