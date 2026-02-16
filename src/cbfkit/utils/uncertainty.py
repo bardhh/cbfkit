@@ -73,7 +73,9 @@ def generate_uncertainty_pmf(
         )
         rng = np.random
     elif isinstance(rng, int):
-        rng = np.random.default_rng(rng)
+        # Use RandomState to ensure consistency with global numpy state (legacy MT19937)
+        # when rng is None. Passing a Generator object (default_rng) is still supported.
+        rng = np.random.RandomState(rng)
 
     # Sample Control Noise
     # samples_u shape: (S, 2, 1)
