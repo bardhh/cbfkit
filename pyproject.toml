@@ -30,6 +30,8 @@ dependencies = [
 cbfkit-bench = "cbfkit.cli.bench:main"
 [project.urls]
 Repository = "https://github.com/bardhh/cbfkit"
+Documentation = "https://github.com/bardhh/cbfkit#readme"
+Issues = "https://github.com/bardhh/cbfkit/issues"
 
 [project.optional-dependencies]
 cvxopt = [
@@ -88,6 +90,3 @@ ignore = ["D", "D104", "D401", "F401", "E402", "D205", "D209","E501"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
-
-[tool.uv.pip]
-system = true
