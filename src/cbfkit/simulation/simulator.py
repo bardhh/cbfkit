@@ -442,6 +442,38 @@ def execute(
     if key is None:
         key = random.PRNGKey(0)  # type: ignore
 
+    # Atlas: Validate dynamics output shapes to catch common (N, 1) vs (N,) errors early
+    try:
+        # Ensure x0 is a JAX array for this check
+        x0_arr = jnp.array(x0)
+        f_check, g_check = dynamics(x0_arr)
+
+        if f_check.ndim != 1:
+            msg = (
+                f"Dynamics function returned `f` with shape {f_check.shape}. "
+                "Expected 1D array (shape (n,)).\n"
+            )
+            if f_check.ndim == 2 and f_check.shape[1] == 1:
+                msg += (
+                    "It appears `f` is a column vector (n, 1). "
+                    "Please squeeze it to (n,) (e.g., using jnp.squeeze or .flatten())."
+                )
+            raise ValueError(msg)
+
+        if g_check.ndim != 2:
+            raise ValueError(
+                f"Dynamics function returned `g` with shape {g_check.shape}. "
+                "Expected 2D array (shape (n, m))."
+            )
+
+    except Exception as e:
+        # If dynamics evaluation fails completely (e.g. wrong x0 dimension), re-raise wrapped error
+        if isinstance(e, ValueError):
+            raise e
+        raise ValueError(
+            f"Failed to evaluate dynamics function on initial state: {e}"
+        ) from e
+
     # Ensure data structures are NamedTuples
     if controller_data is None:
         controller_data = ControllerData()
