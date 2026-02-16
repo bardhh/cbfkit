@@ -48,7 +48,13 @@ def solve_ivp(x: Array, vector_field: Callable[[Array], Array], dt: float) -> Ar
     -------
         new_state
     """
-    from scipy.integrate import solve_ivp as solve
+    try:
+        from scipy.integrate import solve_ivp as solve
+    except ImportError as e:
+        raise ImportError(
+            "To use 'solve_ivp', please install the 'scipy' extra: "
+            "pip install 'cbfkit[scipy]'"
+        ) from e
 
     # Wrap the vector field for scipy (which expects f(t, y) and uses numpy arrays)
     def fun(t, y):

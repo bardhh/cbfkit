@@ -21,7 +21,6 @@ requires-python = ">=3.10,<3.13"
 dependencies = [
     "jax>=0.4.23",
     "jaxopt>=0.8.3,<0.9",
-    "scipy>=1.9,<2.0",
     "rich>=13.0,<15.0"
 ]
 
@@ -30,6 +29,8 @@ dependencies = [
 cbfkit-bench = "cbfkit.cli.bench:main"
 [project.urls]
 Repository = "https://github.com/bardhh/cbfkit"
+Documentation = "https://github.com/bardhh/cbfkit#readme"
+Issues = "https://github.com/bardhh/cbfkit/issues"
 
 [project.optional-dependencies]
 cvxopt = [
@@ -42,6 +43,9 @@ casadi = [
 vis = [
     "matplotlib>=3.8.2,<4.0",
 ]
+scipy = [
+    "scipy>=1.9,<2.0",
+]
 codegen = [
     "black>=23.12.1,<24.0",
     "jinja2>=3.0.0",
@@ -52,7 +56,7 @@ test = [
     "python-dotenv>=1.2.1",
 ]
 dev = [
-    "cbfkit[vis,codegen,test,casadi,cvxopt]",
+    "cbfkit[vis,codegen,test,casadi,cvxopt,scipy]",
     "black>=23.12.1,<24.0",
     "mypy>=1.8.0,<2.0",
     "jupyter>=1.0.0,<2.0",
@@ -88,6 +92,3 @@ ignore = ["D", "D104", "D401", "F401", "E402", "D205", "D209","E501"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
-
-[tool.uv.pip]
-system = true
