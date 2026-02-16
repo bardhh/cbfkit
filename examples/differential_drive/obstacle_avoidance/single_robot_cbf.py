@@ -211,7 +211,7 @@ def run_simulation():
         controller=controller,  # CBF filters the planner's output
         sensor=sensor,
         estimator=estimator,
-        filepath="examples/differential_drive/results/single_robot_cbf_results",
+        filepath="examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_results",
         verbose=True,
         use_jit=True,
     )
@@ -286,7 +286,7 @@ def plot_results(states, controls, desired_state, obstacles, d_min_obstacle):
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    filename = "examples/differential_drive/results/single_robot_cbf_comprehensive.png"
+    filename = "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_comprehensive.png"
     print(f"Saving comprehensive plot to {filename}")
     plt.savefig(filename, dpi=150)
     plt.close()
@@ -500,14 +500,14 @@ def create_animation(
     # Save animation
     try:
         print("Saving animation as MP4...")
-        filepath = "examples/differential_drive/results/single_robot_cbf_animation.mp4"
+        filepath = "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.mp4"
         anim.save(filepath, writer="ffmpeg", fps=10, dpi=100)
         print(f"Animation saved to {filepath}")
     except Exception as e:
         print(f"Could not save animation: {e}")
         print("Saving as GIF instead...")
         try:
-            filepath_gif = "examples/differential_drive/results/single_robot_cbf_animation.gif"
+            filepath_gif = "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.gif"
             anim.save(filepath_gif, writer="pillow", fps=5)
             print(f"Animation saved as GIF to {filepath_gif}")
         except Exception as e2:

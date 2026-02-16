@@ -1,21 +1,20 @@
 """
-Pedestrian Manager Demo.
+Crowded Star Burst Demo.
 
-Demonstrates the use of `cbfkit.systems.pedestrian.CrowdManager` to easily setup
-a robot navigation scenario with multiple pedestrians using Social Force behavior.
-
-Scenario: 'Crossing'
-- Robot starts at (0, 5) heading Right.
-- 2 Pedestrians cross vertically.
+Demonstrates a highly naturalistic and chaotic scenario where pedestrians
+start from a circle and move towards opposing sides (Star Burst pattern),
+forcing the robot to navigate through the center of the crowd.
 """
 
 import os
 import sys
+import time
 
 import jax.numpy as jnp
+import matplotlib
+import numpy as np
 
-# Add project root
-sys.path.append(os.getcwd())
+matplotlib.use("Agg")
 
 from jax import jit
 
@@ -25,8 +24,6 @@ from cbfkit.controllers.mppi.mppi_generator import mppi_generator
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
-
-# --- New Imports ---
 from cbfkit.systems.pedestrian import CrowdManager
 from cbfkit.systems.pedestrian.behaviors import social_force_policy
 from cbfkit.utils.user_types import ControllerData, PlannerData
@@ -34,53 +31,68 @@ from cbfkit.utils.visualization import visualize_crowd
 
 
 def run_demo():
-    print("Initializing CrowdManager Demo...")
+    print("Initializing Star Burst Demo...")
 
-    # 1. Setup Manager
     manager = CrowdManager()
 
-    # 2. Add Pedestrians (Social Force)
-    # Pedestrian 1: Moving Up
-    manager.add_pedestrian(
-        init_state=[5.0, 0.0, 0.0, 0],
-        behavior=social_force_policy(goal=jnp.array([0.0, 0.0]), desired_speed=1.0),
-    )
-    # Pedestrian 2: Moving Down
-    manager.add_pedestrian(
-        init_state=[10.0, 10.0, 0.0, 0],
-        behavior=social_force_policy(goal=jnp.array([0.0, 0.0]), desired_speed=1.0),
-    )
+    # Scenario: Circle of pedestrians moving to opposite side
+    # Center at (10, 10). Radius 8.
+    center = np.array([10.0, 10.0])
+    radius = 8.0
+    num_peds_circle = 6
+
+    for i in range(num_peds_circle):
+        angle = 2 * np.pi * i / num_peds_circle
+        start_pos = center + radius * np.array([np.cos(angle), np.sin(angle)])
+        # Goal is opposite side
+        goal_pos = center - radius * np.array([np.cos(angle), np.sin(angle)])
+
+        # Initial velocity towards center
+        direction = goal_pos - start_pos
+        direction = direction / np.linalg.norm(direction)
+        speed = 0.5 + 0.5 * np.random.rand()  # Randomize speed slightly
+        init_vel = direction * speed
+
+        manager.add_pedestrian(
+            init_state=[start_pos[0], start_pos[1], init_vel[0], init_vel[1]],
+            behavior=social_force_policy(
+                goal=jnp.array(goal_pos),
+                desired_speed=1.2,
+                repulsion_strength=5.0,  # Higher repulsion to force avoidance in center
+                repulsion_range=0.5,
+            ),
+            id=f"ped_{i}",
+        )
 
     num_peds = len(manager.pedestrians)
 
-    # 3. Robot Setup
+    # Robot Setup: Crosses the circle horizontally
     robot_dyn = unicycle.plant(l=1.0)
     robot_dyn.a_max = 5.0
     robot_dyn.omega_max = 5.0
     robot_dyn.v_max = 4.0
 
-    x0_robot = jnp.array([0.0, 5.0, 0.0, 0.0])
-    goal_robot = jnp.array([10.0, 5.0, 0.0, 0.0])
+    x0_robot = jnp.array([1.0, 2.0, 0.0, 0.0])  # Start Left
+    goal_robot = jnp.array([18.0, 10.0, 0.0, 0.0])  # Goal Right
 
-    # 4. Get Augmented System
+    # Augmented System
     aug_dynamics = manager.get_augmented_dynamics(robot_dyn)
     closed_loop_dynamics = manager.get_closed_loop_dynamics(robot_dyn)
     z0 = manager.get_initial_state(x0_robot)
 
-    # 5. Configure MPPI (Nominal Planner)
     # MPPI Costs
     @jit
     def stage_cost(z, u):
         p_r = z[:2]
         dist_goal = jnp.linalg.norm(p_r - goal_robot[:2])
 
-        # Simple Obstacle Repulsion (based on augmented state z)
         c_obs = 0.0
         for i in range(num_peds):
             idx = 4 + i * 4
             p_h = z[idx : idx + 2]
             dist_h = jnp.linalg.norm(p_r - p_h)
-            c_obs += 100.0 * jnp.exp(-2.0 * (dist_h - 1.0))
+            # Stronger soft repulsion for MPPI to anticipate crowding
+            c_obs += 200.0 * jnp.exp(-2.0 * (dist_h - 1.0))
 
         return 0.01 * jnp.dot(u, u) + 2.0 * dist_goal + c_obs
 
@@ -89,10 +101,11 @@ def run_demo():
         p_r = z[:2]
         return 10.0 * jnp.linalg.norm(p_r - goal_robot[:2]) ** 2
 
+    prediction_horizon = 60
     mppi_params = {
-        "prediction_horizon": 20,
+        "prediction_horizon": prediction_horizon,
         "num_samples": 500,
-        "time_step": 0.1,
+        "time_step": 0.05,
         "use_GPU": True,
         "robot_state_dim": len(z0),
         "robot_control_dim": 2,
@@ -101,7 +114,6 @@ def run_demo():
         "cost_perturbation": 0.1,
     }
 
-    # Use closed_loop_dynamics for planning
     planner = mppi_generator()(
         control_limits=jnp.array([5.0, 5.0]),
         dynamics_func=closed_loop_dynamics,
@@ -110,27 +122,16 @@ def run_demo():
         mppi_args=mppi_params,
     )
 
-    init_planner_data = PlannerData(u_traj=jnp.zeros((20, 2)))
-
-    # Wrap planner data in ControllerData because we use MPPI as controller
-    # Use 'inner_controller_data' key for CrowdManager to unpack
+    init_planner_data = PlannerData(u_traj=jnp.zeros((prediction_horizon, 2)))
     init_controller_data = ControllerData(sub_data={"inner_controller_data": init_planner_data})
 
-    # 6. Wrap Controller
     combined_controller = manager.get_nominal_controller(planner, use_augmented_state=True)
 
-    # 7. CBF Safety Filter (Optional but Recommended)
-    # For simplicity in this demo, we might skip CBF or add it.
-    # If we add it, we must wrap the CBF controller which wraps the Nominal Controller.
-    # Let's stick to MPPI only for this demo to verify the CrowdManager logic first.
-    # If MPPI avoids, the dynamics/manager integration is correct.
-
-    # 8. Run Simulation
-    dt = 0.1
+    dt = 0.05
     if os.getenv("CBFKIT_TEST_MODE"):
         tf = 1.0
     else:
-        tf = 10.0
+        tf = 20.0
 
     print("Starting Simulation...")
     x, u, z_sim, p, c_keys, c_values, p_keys, p_values = sim.execute(
@@ -139,28 +140,14 @@ def run_demo():
         num_steps=int(tf / dt),
         dynamics=aug_dynamics,
         integrator=integrator,
-        # Note: We pass 'combined_controller' as the primary 'controller' here if we don't use CBF.
-        # If we used CBF, we'd pass CBF as controller and combined_controller as nominal.
-        # But `sim.execute` logic calls `controller`.
         controller=combined_controller,
         sensor=sensor,
         estimator=estimator,
-        controller_data=init_controller_data,  # Pass wrapped data
+        controller_data=init_controller_data,
         verbose=True,
         use_jit=True,
+        jit_progress=True,
     )
-
-    # 9. Visualize
-    # Unpack p_values from controller_data if needed?
-    # sim.execute returns p_keys, p_values if planner is used.
-    # Here planner is NONE. So p_keys/values will be empty.
-    # The planner data is hidden inside c_values (ControllerData).
-    # c_keys will contain 'sub_data' maybe?
-    # Actually, sim.execute logs controller_data fields.
-
-    # We need to extract MPPI trajectories for visualization from c_values.
-    # This might be tricky if c_values flattens sub_data.
-    # Let's see what we get.
 
     os.makedirs("examples/pedestrian/results", exist_ok=True)
     if not os.getenv("CBFKIT_TEST_MODE"):
@@ -168,11 +155,11 @@ def run_demo():
             states=x,
             num_pedestrians=num_peds,
             robot_goal=goal_robot,
-            d_safe=1.0,
+            d_safe=0.8,
             dt=dt,
-            # p_values=p_values, # Likely empty
-            # p_keys=p_keys,
-            save_path="examples/pedestrian/results/pedestrian_manager_demo.mp4",
+            p_values=p_values,
+            p_keys=p_keys,
+            save_path="examples/pedestrian/navigate_among_pedestrians/results/star_burst.mp4",
         )
 
     print("Demo Complete!")

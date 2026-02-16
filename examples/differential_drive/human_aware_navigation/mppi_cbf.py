@@ -277,7 +277,7 @@ def run_simulation():
         controller=controller,
         sensor=sensor,
         estimator=estimator,
-        filepath="examples/differential_drive/results/human_aware_results",
+        filepath="examples/differential_drive/human_aware_navigation/results/human_aware_results",
         verbose=True,
         use_jit=True,
     )
@@ -465,7 +465,7 @@ def create_animation(states, goal_state, num_humans, d_safe, dt, p_keys, p_value
 
     anim = animation.FuncAnimation(fig, animate, frames=len(states), interval=50, blit=True)
 
-    save_path = "examples/differential_drive/results/human_aware_animation.mp4"
+    save_path = "examples/differential_drive/human_aware_navigation/results/human_aware_animation.mp4"
     try:
         anim.save(save_path, writer="ffmpeg", fps=20)
         print(f"Saved animation to {save_path}")

@@ -161,8 +161,8 @@ van_der_pol_oscillator
 We recommend going through the tutorials in the following order to get familiar with the architecture of our library.
 - `code_generation_tutorial.ipynb` (requires `cbfkit[codegen]`)
 - `multi_robot_coordination.ipynb` (requires `cbfkit[codegen]`)
-- `simulate_mppi_cbf.py` (requires `cbfkit[codegen]`)
-- `simulate_mppi_stl.py` (requires `cbfkit[codegen]`)
+- `mppi_cbf_reach_avoid.py` (requires `cbfkit[codegen]`)
+- `mppi_stl_reach_avoid.py` (requires `cbfkit[codegen]`)
 
 
 
@@ -197,7 +197,7 @@ The **data** *(python dictionary)* in planners and controllers is designed to ca
 ## Examples
 Several additional examples of how to use CBFkit to conduct full simulations of arbitrary dynamical systems are provided, including a unicycle robot, fixed-wing aerial vehicle, and more, all of which may be found in the `examples` folder. Executable examples are provided in the subdirectories of `examples`. These scripts demonstrate various control scenarios and can be run directly.
 
-See below for a simplified script to simulate a unicycle robot navigating toward a goal set amidst obstacles using Model Predictive Path Integral (MPPI) control as a planner and a Control Barrier Function (CBF) as a safety filter. A full version of this example with visualization can be found at `examples/unicycle/reach_goal/mppi_cbf_control.py`:
+See below for a simplified script to simulate a unicycle robot navigating toward a goal set amidst obstacles using Model Predictive Path Integral (MPPI) control as a planner and a Control Barrier Function (CBF) as a safety filter. A full version of this example with visualization can be found at `examples/unicycle/reach_goal/mppi_cbf.py`:
 
 ```python
 import jax.numpy as jnp
