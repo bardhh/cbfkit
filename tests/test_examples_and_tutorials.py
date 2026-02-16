@@ -8,14 +8,14 @@ import pytest
 # List of script paths relative to the project root
 # These are the scripts we want to verify run successfully (exit code 0)
 SCRIPTS_TO_TEST = [
-    "examples/unicycle/reach_goal/mppi_cbf_control.py",
-    "examples/unicycle/reach_goal/stochastic_cbf_control.py",
-    "examples/unicycle/reach_goal/vanilla_cbf_control.py",
-    # "examples/unicycle/reach_goal/risk_aware_cbf_control.py",  # Disabled: needs visualization fix
+    "examples/unicycle/reach_goal/mppi_cbf.py",
+    "examples/unicycle/reach_goal/stochastic_cbf.py",
+    "examples/unicycle/reach_goal/vanilla_cbf.py",
+    # "examples/unicycle/reach_goal/risk_aware_cbf.py",  # Disabled: needs visualization fix
     "tutorials/unicycle_reach_avoid.py",
     "tutorials/single_integrator_dynamic_obstacles.py",
-    "tutorials/simulate_mppi_stl.py",
-    "tutorials/simulate_mppi_cbf.py",
+    "tutorials/mppi_stl_reach_avoid.py",
+    "tutorials/mppi_cbf_reach_avoid.py",
     "tutorials/mppi_stochastic_cbf_reach_avoid.py",
     "tutorials/code_generation_example.py",
 ]

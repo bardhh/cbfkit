@@ -24,7 +24,7 @@ import examples.unicycle.common.ellipsoidal_obstacle as ellipsoidal_obstacle
 # Simulation parameters
 tf = 10.0 if not os.environ.get("CBFKIT_TEST_MODE") else 1.0
 dt = 0.01
-file_path = "examples/unicycle/start_to_goal/results/"
+file_path = "examples/unicycle/reach_goal/results/"
 
 init_state = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
 desired_state = jnp.array([2.0, 4.0, 0.0, 0.0])

@@ -1,16 +1,19 @@
 """
-Crowded Environment Navigation Demo.
+Pedestrian Head-On Interaction Demo.
 
-Demonstrates the robot navigating through a busy environment with multiple pedestrians moving in a naturalistic manner using the Social Force Model.
+Demonstrates the robot navigating a head-on encounter with a pedestrian.
 """
 
 import os
 import sys
+from pathlib import Path
 
 import jax.numpy as jnp
+import numpy as np
 
 # Add project root
-sys.path.append(os.getcwd())
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
 
 from jax import jit
 
@@ -27,54 +30,27 @@ from cbfkit.utils.visualization import visualize_crowd
 
 
 def run_demo():
-    print("Initializing Naturalistic Crowded Demo...")
+    print("Initializing Head-On Demo...")
 
     manager = CrowdManager()
 
-    # Create a more naturalistic scenario with pedestrians moving towards different goals
-    # mimicking a busy plaza or intersection.
-
-    # Pedestrian 1: Bottom-Left -> Top-Right (Diagonal)
+    # Pedestrian moving Left towards robot
     manager.add_pedestrian(
-        init_state=[2.0, 2.0, 0.5, 0.5],
-        behavior=social_force_policy(goal=jnp.array([12.0, 12.0]), desired_speed=1.0),
-        id="ped_diag_1",
-    )
-    # Pedestrian 2: Top-Left -> Bottom-Right (Diagonal, crossing P1)
-    manager.add_pedestrian(
-        init_state=[2.0, 12.0, 0.5, -0.5],
-        behavior=social_force_policy(goal=jnp.array([12.0, 2.0]), desired_speed=1.1),
-        id="ped_diag_2",
-    )
-    # Pedestrian 3: Right -> Left (Horizontal, slightly curved path due to interactions)
-    manager.add_pedestrian(
-        init_state=[12.0, 7.0, -1.0, 0.0],
-        behavior=social_force_policy(goal=jnp.array([0.0, 7.0]), desired_speed=0.9),
-        id="ped_horiz",
-    )
-    # Pedestrian 4: Bottom -> Top (Vertical, faster)
-    manager.add_pedestrian(
-        init_state=[7.0, 0.0, 0.0, 1.2],
-        behavior=social_force_policy(goal=jnp.array([7.0, 14.0]), desired_speed=1.3),
-        id="ped_vert",
-    )
-    # Pedestrian 5: Loitering/Slow moving (Top-Right area)
-    manager.add_pedestrian(
-        init_state=[10.0, 10.0, -0.2, -0.2],
-        behavior=social_force_policy(goal=jnp.array([8.0, 8.0]), desired_speed=0.5),
-        id="ped_slow",
+        init_state=jnp.array([10.0, 5.0, -1.0, 0.0]),
+        behavior=social_force_policy(goal=jnp.array([0.0, 5.0]), desired_speed=1.0),
+        id="ped_head_on",
     )
 
     num_peds = len(manager.pedestrians)
 
-    # Robot Setup (Start Left, Goal Right)
+    # Robot moving Right towards pedestrian
     robot_dyn = unicycle.plant(l=1.0)
     robot_dyn.a_max = 5.0
     robot_dyn.omega_max = 5.0
     robot_dyn.v_max = 4.0
 
     x0_robot = jnp.array([0.0, 5.0, 0.0, 0.0])
-    goal_robot = jnp.array([14.0, 8.0, 0.0, 0.0])
+    goal_robot = jnp.array([10.0, 5.0, 0.0, 0.0])
 
     # Augmented System
     aug_dynamics = manager.get_augmented_dynamics(robot_dyn)
@@ -92,8 +68,7 @@ def run_demo():
             idx = 4 + i * 4
             p_h = z[idx : idx + 2]
             dist_h = jnp.linalg.norm(p_r - p_h)
-            # Soft repulsion field
-            c_obs += 150.0 * jnp.exp(-2.5 * (dist_h - 0.8))
+            c_obs += 150.0 * jnp.exp(-2.5 * (dist_h - 1.0))  # Stronger repulsion for head-on
 
         return 0.01 * jnp.dot(u, u) + 2.0 * dist_goal + c_obs
 
@@ -103,8 +78,8 @@ def run_demo():
         return 10.0 * jnp.linalg.norm(p_r - goal_robot[:2]) ** 2
 
     mppi_params = {
-        "prediction_horizon": 30,
-        "num_samples": 1000,  # High samples for complex interactions
+        "prediction_horizon": 25,
+        "num_samples": 500,
         "time_step": 0.1,
         "use_GPU": True,
         "robot_state_dim": len(z0),
@@ -122,7 +97,7 @@ def run_demo():
         mppi_args=mppi_params,
     )
 
-    init_planner_data = PlannerData(u_traj=jnp.zeros((30, 2)))
+    init_planner_data = PlannerData(u_traj=jnp.zeros((25, 2)))
     init_controller_data = ControllerData(sub_data={"inner_controller_data": init_planner_data})
 
     combined_controller = manager.get_nominal_controller(planner, use_augmented_state=True)
@@ -131,7 +106,7 @@ def run_demo():
     if os.getenv("CBFKIT_TEST_MODE"):
         tf = 1.0
     else:
-        tf = 15.0  # Allow time for complex navigation
+        tf = 10.0
 
     print("Starting Simulation...")
     x, u, z_sim, p, c_keys, c_values, p_keys, p_values = sim.execute(
@@ -147,17 +122,18 @@ def run_demo():
         verbose=True,
     )
 
-    os.makedirs("examples/pedestrian/results", exist_ok=True)
+    results_dir = Path(__file__).parent / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
     if not os.getenv("CBFKIT_TEST_MODE"):
         visualize_crowd(
             states=x,
             num_pedestrians=num_peds,
             robot_goal=goal_robot,
-            d_safe=0.8,
+            d_safe=1.0,
             dt=dt,
             p_values=p_values,
             p_keys=p_keys,
-            save_path="examples/pedestrian/results/crowded_naturalistic_demo.mp4",
+            save_path=str(results_dir / "head_on.mp4"),
         )
 
     print("Demo Complete!")
