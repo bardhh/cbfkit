@@ -1,20 +1,16 @@
 """
-Crowded Star Burst Demo.
+Crowded Environment Navigation Demo.
 
-Demonstrates a highly naturalistic and chaotic scenario where pedestrians
-start from a circle and move towards opposing sides (Star Burst pattern),
-forcing the robot to navigate through the center of the crowd.
+Demonstrates the robot navigating through a busy environment with multiple pedestrians moving in a naturalistic manner using the Social Force Model.
 """
 
 import os
 import sys
-import time
 
 import jax.numpy as jnp
-import matplotlib
-import numpy as np
 
-matplotlib.use("Agg")
+# Add project root
+sys.path.append(os.getcwd())
 
 from jax import jit
 
@@ -31,49 +27,54 @@ from cbfkit.utils.visualization import visualize_crowd
 
 
 def run_demo():
-    print("Initializing Star Burst Demo...")
+    print("Initializing Naturalistic Crowded Demo...")
 
     manager = CrowdManager()
 
-    # Scenario: Circle of pedestrians moving to opposite side
-    # Center at (10, 10). Radius 8.
-    center = np.array([10.0, 10.0])
-    radius = 8.0
-    num_peds_circle = 6
+    # Create a more naturalistic scenario with pedestrians moving towards different goals
+    # mimicking a busy plaza or intersection.
 
-    for i in range(num_peds_circle):
-        angle = 2 * np.pi * i / num_peds_circle
-        start_pos = center + radius * np.array([np.cos(angle), np.sin(angle)])
-        # Goal is opposite side
-        goal_pos = center - radius * np.array([np.cos(angle), np.sin(angle)])
-
-        # Initial velocity towards center
-        direction = goal_pos - start_pos
-        direction = direction / np.linalg.norm(direction)
-        speed = 0.5 + 0.5 * np.random.rand()  # Randomize speed slightly
-        init_vel = direction * speed
-
-        manager.add_pedestrian(
-            init_state=[start_pos[0], start_pos[1], init_vel[0], init_vel[1]],
-            behavior=social_force_policy(
-                goal=jnp.array(goal_pos),
-                desired_speed=1.2,
-                repulsion_strength=5.0,  # Higher repulsion to force avoidance in center
-                repulsion_range=0.5,
-            ),
-            id=f"ped_{i}",
-        )
+    # Pedestrian 1: Bottom-Left -> Top-Right (Diagonal)
+    manager.add_pedestrian(
+        init_state=[2.0, 2.0, 0.5, 0.5],
+        behavior=social_force_policy(goal=jnp.array([12.0, 12.0]), desired_speed=1.0),
+        id="ped_diag_1",
+    )
+    # Pedestrian 2: Top-Left -> Bottom-Right (Diagonal, crossing P1)
+    manager.add_pedestrian(
+        init_state=[2.0, 12.0, 0.5, -0.5],
+        behavior=social_force_policy(goal=jnp.array([12.0, 2.0]), desired_speed=1.1),
+        id="ped_diag_2",
+    )
+    # Pedestrian 3: Right -> Left (Horizontal, slightly curved path due to interactions)
+    manager.add_pedestrian(
+        init_state=[12.0, 7.0, -1.0, 0.0],
+        behavior=social_force_policy(goal=jnp.array([0.0, 7.0]), desired_speed=0.9),
+        id="ped_horiz",
+    )
+    # Pedestrian 4: Bottom -> Top (Vertical, faster)
+    manager.add_pedestrian(
+        init_state=[7.0, 0.0, 0.0, 1.2],
+        behavior=social_force_policy(goal=jnp.array([7.0, 14.0]), desired_speed=1.3),
+        id="ped_vert",
+    )
+    # Pedestrian 5: Loitering/Slow moving (Top-Right area)
+    manager.add_pedestrian(
+        init_state=[10.0, 10.0, -0.2, -0.2],
+        behavior=social_force_policy(goal=jnp.array([8.0, 8.0]), desired_speed=0.5),
+        id="ped_slow",
+    )
 
     num_peds = len(manager.pedestrians)
 
-    # Robot Setup: Crosses the circle horizontally
+    # Robot Setup (Start Left, Goal Right)
     robot_dyn = unicycle.plant(l=1.0)
     robot_dyn.a_max = 5.0
     robot_dyn.omega_max = 5.0
     robot_dyn.v_max = 4.0
 
-    x0_robot = jnp.array([1.0, 2.0, 0.0, 0.0])  # Start Left
-    goal_robot = jnp.array([18.0, 10.0, 0.0, 0.0])  # Goal Right
+    x0_robot = jnp.array([0.0, 5.0, 0.0, 0.0])
+    goal_robot = jnp.array([14.0, 8.0, 0.0, 0.0])
 
     # Augmented System
     aug_dynamics = manager.get_augmented_dynamics(robot_dyn)
@@ -91,8 +92,8 @@ def run_demo():
             idx = 4 + i * 4
             p_h = z[idx : idx + 2]
             dist_h = jnp.linalg.norm(p_r - p_h)
-            # Stronger soft repulsion for MPPI to anticipate crowding
-            c_obs += 200.0 * jnp.exp(-2.0 * (dist_h - 1.0))
+            # Soft repulsion field
+            c_obs += 150.0 * jnp.exp(-2.5 * (dist_h - 0.8))
 
         return 0.01 * jnp.dot(u, u) + 2.0 * dist_goal + c_obs
 
@@ -101,11 +102,10 @@ def run_demo():
         p_r = z[:2]
         return 10.0 * jnp.linalg.norm(p_r - goal_robot[:2]) ** 2
 
-    prediction_horizon = 60
     mppi_params = {
-        "prediction_horizon": prediction_horizon,
-        "num_samples": 500,
-        "time_step": 0.05,
+        "prediction_horizon": 30,
+        "num_samples": 1000,  # High samples for complex interactions
+        "time_step": 0.1,
         "use_GPU": True,
         "robot_state_dim": len(z0),
         "robot_control_dim": 2,
@@ -122,16 +122,16 @@ def run_demo():
         mppi_args=mppi_params,
     )
 
-    init_planner_data = PlannerData(u_traj=jnp.zeros((prediction_horizon, 2)))
+    init_planner_data = PlannerData(u_traj=jnp.zeros((30, 2)))
     init_controller_data = ControllerData(sub_data={"inner_controller_data": init_planner_data})
 
     combined_controller = manager.get_nominal_controller(planner, use_augmented_state=True)
 
-    dt = 0.05
+    dt = 0.1
     if os.getenv("CBFKIT_TEST_MODE"):
         tf = 1.0
     else:
-        tf = 20.0
+        tf = 15.0  # Allow time for complex navigation
 
     print("Starting Simulation...")
     x, u, z_sim, p, c_keys, c_values, p_keys, p_values = sim.execute(
@@ -145,8 +145,6 @@ def run_demo():
         estimator=estimator,
         controller_data=init_controller_data,
         verbose=True,
-        use_jit=True,
-        jit_progress=True,
     )
 
     os.makedirs("examples/pedestrian/results", exist_ok=True)
@@ -159,7 +157,7 @@ def run_demo():
             dt=dt,
             p_values=p_values,
             p_keys=p_keys,
-            save_path="examples/pedestrian/results/star_burst_demo.mp4",
+            save_path="examples/pedestrian/navigate_among_pedestrians/results/crowded.mp4",
         )
 
     print("Demo Complete!")

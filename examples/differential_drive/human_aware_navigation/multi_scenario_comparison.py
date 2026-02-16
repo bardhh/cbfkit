@@ -462,7 +462,7 @@ def create_multi_animation(results):
 
     anim = animation.FuncAnimation(fig, animate, frames=max_frames, interval=50, blit=True)
 
-    save_path = "examples/differential_drive/results/multi_scenario_animation.mp4"
+    save_path = "examples/differential_drive/human_aware_navigation/results/multi_scenario_animation.mp4"
     try:
         anim.save(save_path, writer="ffmpeg", fps=20)
         print(f"Saved animation to {save_path}")

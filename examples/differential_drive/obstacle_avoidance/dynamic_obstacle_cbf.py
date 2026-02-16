@@ -166,7 +166,7 @@ def run_simulation():
         nominal_controller=nom_controller,
         sensor=sensor,
         estimator=estimator,
-        filepath="examples/differential_drive/results/dynamic_obstacle_results",
+        filepath="examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_results",
         verbose=True,
     )
 
@@ -204,7 +204,7 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
     ax.grid(True)
     ax.set_aspect("equal")
 
-    plt.savefig("examples/differential_drive/results/dynamic_obstacle_trajectory.png")
+    plt.savefig("examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_trajectory.png")
     plt.close()
 
     # --- Animation ---
@@ -273,7 +273,7 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
 
     try:
         anim.save(
-            "examples/differential_drive/results/dynamic_obstacle_animation.mp4",
+            "examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.mp4",
             writer="ffmpeg",
             fps=20,
         )
@@ -281,7 +281,7 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
     except Exception as e:
         print(f"MP4 save failed, trying GIF: {e}")
         anim.save(
-            "examples/differential_drive/results/dynamic_obstacle_animation.gif",
+            "examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.gif",
             writer="pillow",
             fps=15,
         )

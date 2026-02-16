@@ -143,7 +143,7 @@ def run_simulation():
         nominal_controller=nom_controller,
         sensor=sensor,
         estimator=estimator,
-        filepath="examples/differential_drive/results/navigation_results",
+        filepath="examples/differential_drive/obstacle_avoidance/results/navigation_results",
         verbose=True,
     )
 
@@ -325,7 +325,7 @@ def plot_results(states, controls, goal_state, obstacles, d_min):
     ax4.grid(True, alpha=0.4, linestyle="--")
 
     plt.tight_layout(pad=3.0)
-    filename = "examples/differential_drive/results/navigation_analysis.png"
+    filename = "examples/differential_drive/obstacle_avoidance/results/navigation_analysis.png"
     plt.savefig(filename, dpi=200, bbox_inches="tight", facecolor="white")
     plt.close()
     print(f"Enhanced analysis saved to {filename}")
@@ -619,14 +619,14 @@ def create_animation(states, goal_state, obstacles, d_min):
     # Save with multiple format attempts
     try:
         print("Saving animation as MP4...")
-        filepath_mp4 = "examples/differential_drive/results/navigation_animation.mp4"
+        filepath_mp4 = "examples/differential_drive/obstacle_avoidance/results/navigation_animation.mp4"
         anim.save(filepath_mp4, writer="ffmpeg", fps=20, dpi=120, bitrate=1800)
         print(f"High-quality MP4 saved to {filepath_mp4}")
     except Exception as e:
         print(f"MP4 save failed: {e}")
         try:
             print("Saving as GIF...")
-            filepath_gif = "examples/differential_drive/results/navigation_animation.gif"
+            filepath_gif = "examples/differential_drive/obstacle_avoidance/results/navigation_animation.gif"
             anim.save(filepath_gif, writer="pillow", fps=15, dpi=100)
             print(f"GIF animation saved to {filepath_gif}")
         except Exception as e2:

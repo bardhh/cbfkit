@@ -144,7 +144,7 @@ def run_demo():
                 p_values if len(p_keys) > 0 else None
             ),  # Extract from controller data if needed, usually p_values is returned if planner used directly or via wrapper if sim supports it.
             p_keys=p_keys,
-            save_path=str(results_dir / "overtaking_demo.mp4"),
+            save_path=str(results_dir / "overtaking.mp4"),
         )
 
     print("Demo Complete!")
