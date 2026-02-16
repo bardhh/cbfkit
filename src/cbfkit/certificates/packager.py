@@ -214,20 +214,60 @@ def certificate_package(
 
         @jit
         def v_(t: float, x: Array) -> Array:
+            if x.ndim == 0:
+                if n != 1:
+                    raise ValueError(
+                        f"State dimension mismatch: scalar input (0-D) provided but certificate_package expected n={n} (must be 1 for scalar)."
+                    )
+            elif x.shape != (n,):
+                raise ValueError(
+                    f"State dimension mismatch: expected input shape ({n},), got {x.shape}. "
+                    f"Ensure 'n={n}' in certificate_package matches your state dimension."
+                )
             return v_func(jnp.hstack([x, t]))
 
         @jit
         def j_(t: float, x: Array) -> Array:
+            if x.ndim == 0:
+                if n != 1:
+                    raise ValueError(
+                        f"State dimension mismatch: scalar input (0-D) provided but certificate_package expected n={n} (must be 1 for scalar)."
+                    )
+            elif x.shape != (n,):
+                raise ValueError(
+                    f"State dimension mismatch: expected input shape ({n},), got {x.shape}. "
+                    f"Ensure 'n={n}' in certificate_package matches your state dimension."
+                )
             # Gradient w.r.t x is the first n elements
             return j_func(jnp.hstack([x, t]))[:n]
 
         @jit
         def h_(t: float, x: Array) -> Array:
+            if x.ndim == 0:
+                if n != 1:
+                    raise ValueError(
+                        f"State dimension mismatch: scalar input (0-D) provided but certificate_package expected n={n} (must be 1 for scalar)."
+                    )
+            elif x.shape != (n,):
+                raise ValueError(
+                    f"State dimension mismatch: expected input shape ({n},), got {x.shape}. "
+                    f"Ensure 'n={n}' in certificate_package matches your state dimension."
+                )
             # Hessian w.r.t x is the top-left nxn block
             return h_func(jnp.hstack([x, t]))[:n, :n]
 
         @jit
         def t_(t: float, x: Array) -> Array:
+            if x.ndim == 0:
+                if n != 1:
+                    raise ValueError(
+                        f"State dimension mismatch: scalar input (0-D) provided but certificate_package expected n={n} (must be 1 for scalar)."
+                    )
+            elif x.shape != (n,):
+                raise ValueError(
+                    f"State dimension mismatch: expected input shape ({n},), got {x.shape}. "
+                    f"Ensure 'n={n}' in certificate_package matches your state dimension."
+                )
             # Partial w.r.t t is the last element of the gradient
             return t_func(jnp.hstack([x, t]))[-1]
 

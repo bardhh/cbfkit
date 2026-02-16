@@ -217,7 +217,6 @@ dependencies = [
     { name = "jax" },
     { name = "jaxopt" },
     { name = "rich" },
-    { name = "scipy" },
 ]
 
 [package.optional-dependencies]
@@ -245,6 +244,10 @@ dev = [
     { name = "pytest-cov" },
     { name = "python-dotenv" },
     { name = "ruff" },
+    { name = "scipy" },
+]
+scipy = [
+    { name = "scipy" },
 ]
 test = [
     { name = "pytest" },
@@ -260,7 +263,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'codegen'", specifier = ">=23.12.1,<24.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.12.1,<24.0" },
     { name = "casadi", marker = "extra == 'casadi'", specifier = ">=3.6.4,<4.0" },
-    { name = "cbfkit", extras = ["casadi", "codegen", "cvxopt", "test", "vis"], marker = "extra == 'dev'" },
+    { name = "cbfkit", extras = ["casadi", "codegen", "cvxopt", "scipy", "test", "vis"], marker = "extra == 'dev'" },
     { name = "cvxopt", marker = "platform_machine != 'aarch64' and platform_machine != 'arm64' and extra == 'cvxopt'", specifier = ">=1.3.2,<2.0" },
     { name = "jax", specifier = ">=0.4.23" },
     { name = "jaxopt", specifier = ">=0.8.3,<0.9" },
@@ -274,9 +277,9 @@ requires-dist = [
     { name = "python-dotenv", marker = "extra == 'test'", specifier = ">=1.2.1" },
     { name = "rich", specifier = ">=13.0,<15.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3.4" },
-    { name = "scipy", specifier = ">=1.9,<2.0" },
+    { name = "scipy", marker = "extra == 'scipy'", specifier = ">=1.9,<2.0" },
 ]
-provides-extras = ["cvxopt", "casadi", "vis", "codegen", "test", "dev"]
+provides-extras = ["cvxopt", "casadi", "vis", "scipy", "codegen", "test", "dev"]
 
 [[package]]
 name = "certifi"
