@@ -526,6 +526,11 @@ def execute(
             u_nom_dummy = jnp.zeros((g_dummy.shape[1],))
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
+        # Sentinel: Ensure error_data is initialized to enable NaN reporting in JIT loop.
+        # If controller is None, the loop propagates this structure, allowing us to report errors.
+        if controller is None and c_data.error_data is None:
+            c_data = c_data._replace(error_data=jnp.array(-99, dtype=jnp.int32))
+
         if verbose:
             if progress_bar is not None:
                 print_jit_status(
