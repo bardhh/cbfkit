@@ -56,3 +56,28 @@ def test_generate_uncertainty_pmf_randomness():
 
     assert not np.array_equal(u1, u2)
     assert not np.array_equal(x1, x2)
+
+def test_legacy_reproducibility_consistency():
+    """
+    Test that passing an integer seed produces results consistent with legacy rng=None (seeded).
+
+    This ensures that users can reproduce legacy runs (where rng=None was used with global seeding)
+    by passing the seed explicitly, avoiding the mismatch between MT19937 (legacy) and PCG64 (default_rng).
+    """
+    u = np.array([0.0, 0.0])
+    x = np.array([0.0, 0.0, 0.0, 0.0])
+    # Ensure standard deviation is non-zero so we get random numbers
+    noise_params = [[0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.1, 0.1]]
+    S = 10
+    SEED = 42
+
+    # Case 1: Global seed + rng=None (Legacy behavior)
+    np.random.seed(SEED)
+    with pytest.warns(UserWarning, match="Using global numpy random state"):
+        pmf1, u1, x1 = generate_uncertainty_pmf(u, x, noise_params, S, rng=None)
+
+    # Case 2: rng=SEED (int)
+    # Should use RandomState(SEED) -> MT19937 -> Match Case 1
+    pmf2, u2, x2 = generate_uncertainty_pmf(u, x, noise_params, S, rng=SEED)
+
+    np.testing.assert_allclose(x1, x2, err_msg="Explicit integer seed failed to reproduce global seed results")
