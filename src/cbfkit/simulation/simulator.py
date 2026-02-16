@@ -18,6 +18,7 @@ Examples
 """
 
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+import os
 import time
 
 import jax
@@ -464,7 +465,15 @@ def execute(
 
     # Generate key for randomization
     if key is None:
-        key = random.PRNGKey(0)  # type: ignore
+        seed = 0
+        env_seed = os.environ.get("CBFKIT_SEED")
+        if env_seed is not None:
+            try:
+                seed = int(env_seed)
+            except ValueError:
+                pass
+
+        key = random.PRNGKey(seed)  # type: ignore
 
     # Ensure data structures are NamedTuples
     if controller_data is None:
