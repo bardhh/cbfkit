@@ -127,9 +127,6 @@ For a quick start without additional dependencies, try `tutorials/unicycle_reach
 python tutorials/unicycle_reach_avoid.py
 ```
 
-Legacy tutorial entrypoints are supported as compatibility aliases. See
-`docs/tutorial_entrypoint_migration.md` for the exact old->new mapping.
-
 Open the Python notebook in the `tutorials` directory to get started. The script `code_generation_tutorial.ipynb` automatically generates the controller, plant, and certificate function for a Van der Pol oscillator. It also generates ROS2 nodes for the plant, controller, sensor, and estimator. These serve as a starting point for developing your own CBF-based controller.
 
 Generated files/folders:
