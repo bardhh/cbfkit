@@ -1,5 +1,10 @@
 """Tests for simulation UI utilities."""
 
+from io import StringIO
+
+from rich.console import Console
+
+import cbfkit.simulation.ui as ui
 from cbfkit.simulation.ui import (
     console,
     create_progress,
@@ -80,3 +85,32 @@ def test_print_trial_progress_no_prefix_suffix():
 def test_print_trial_progress_zero_total():
     """Zero total should not raise (division by zero guard)."""
     print_trial_progress(0, 0)
+
+
+def test_non_tty_output_has_no_ansi(monkeypatch):
+    """Ensure non-TTY/redirected output remains plain text."""
+    sink = StringIO()
+    plain_console = Console(
+        file=sink,
+        force_terminal=False,
+        color_system=None,
+        no_color=True,
+        width=120,
+    )
+    monkeypatch.setattr(ui, "console", plain_console)
+
+    ui.print_info("info message")
+    ui.print_warning("warning message")
+    ui.print_error("error message")
+    ui.print_success("success message")
+    ui.print_jit_status("jit message")
+    ui.print_trial_progress(3, 10, prefix="Trial", suffix="done")
+
+    output = sink.getvalue()
+    assert "info message" in output
+    assert "Warning:" in output
+    assert "Error:" in output
+    assert "success message" in output
+    assert "jit message" in output
+    assert "Trial [3/10] 30.0% done" in output
+    assert "\x1b[" not in output

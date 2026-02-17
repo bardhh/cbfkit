@@ -1,6 +1,7 @@
 import pytest
 from cbfkit.simulation.simulator import _format_error_status
 
+
 def test_format_error_status():
     assert _format_error_status(-1) == "NAN_DETECTED (Status: -1)"
     assert _format_error_status(-2) == "NAN_INPUT_DETECTED (Status: -2)"
@@ -14,6 +15,7 @@ def test_format_error_status():
 
 import jax.numpy as jnp
 from cbfkit.simulation.simulator import _check_simulation_status
+
 
 def test_check_simulation_status_suppresses_contradictory_warning(capsys):
     """Test that MAX_ITER warning is suppressed if error is True at the same step."""
@@ -41,8 +43,9 @@ def test_check_simulation_status_suppresses_contradictory_warning(capsys):
     assert "Solutions were accepted" not in captured.out
     assert "Solutions were accepted" not in captured.err
 
-def test_check_simulation_status_warns_on_accepted_max_iter(capsys):
-    """Test that MAX_ITER warning is SHOWN if error is False."""
+
+def test_check_simulation_status_warns_on_max_iter_failure(capsys):
+    """Test that MAX_ITER warning is shown as a failure when error is False."""
 
     # Setup data where error=False and status=2 (MAX_ITER) at step 0
     # Note: simulator.py looks for "sub_data_solver_status" or "error_data" for status code
@@ -60,6 +63,5 @@ def test_check_simulation_status_warns_on_accepted_max_iter(capsys):
     )
 
     captured = capsys.readouterr()
-    # Should Warn about "Solutions were accepted"
-    assert "Solutions were accepted" in captured.out or \
-           "Solutions were accepted" in captured.err
+    assert "treated as controller failures" in captured.out or \
+           "treated as controller failures" in captured.err

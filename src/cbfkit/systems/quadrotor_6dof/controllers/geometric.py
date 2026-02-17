@@ -17,6 +17,24 @@ from ..models.quadrotor_6dof_dynamics import g_accel as g
 from ..utils.rotations import rotation_body_frame_to_inertial_frame
 
 
+def _extract_drift(dynamics_output: Tuple[Array, ...]) -> Array:
+    """Extract drift vector from dynamics outputs supporting 2- or 3-tuples.
+
+    Some dynamics call sites return ``(f, g)`` while older/stochastic variants
+    return ``(f, g, s)``. Geometric control only uses the drift component.
+    """
+    if len(dynamics_output) == 2:
+        f_val, _ = dynamics_output
+        return f_val
+    if len(dynamics_output) == 3:
+        f_val, _, _ = dynamics_output
+        return f_val
+    raise ValueError(
+        "Expected dynamics callable to return (f, g) or (f, g, s). "
+        f"Received tuple of length {len(dynamics_output)}."
+    )
+
+
 def geometric_controller(
     dynamics: DynamicsCallable,
     desired_state: Array,
@@ -106,7 +124,7 @@ def geometric_controller(
         # returns a tuple/list and the first element is f.
         # Assuming dynamics(x) -> (f, g) or similar.
         # And unpacking f: _, _, _, _, _, _, phi_dot, theta_dot, psi_dot, _, _, _ = f
-        f_val, _ = dynamics(x)
+        f_val = _extract_drift(dynamics(x))
         _, _, _, _, _, _, phi_dot, theta_dot, psi_dot, _, _, _ = f_val
 
         # Get rotation matrix

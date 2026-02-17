@@ -1,3 +1,4 @@
+import ast
 import os
 import shutil
 import subprocess
@@ -21,6 +22,30 @@ SCRIPTS_TO_TEST = [
 ]
 
 
+def _assert_script_has_executable_code(script_path: str) -> None:
+    """Guard against silently passing placeholder scripts."""
+    with open(script_path, "r", encoding="utf-8") as f:
+        source = f.read()
+
+    tree = ast.parse(source, filename=script_path)
+    nodes = list(tree.body)
+
+    # Ignore module-level docstring when checking whether the script is real code.
+    if (
+        nodes
+        and isinstance(nodes[0], ast.Expr)
+        and isinstance(nodes[0].value, ast.Constant)
+        and isinstance(nodes[0].value.value, str)
+    ):
+        nodes = nodes[1:]
+
+    executable_nodes = [node for node in nodes if not isinstance(node, ast.Pass)]
+    if not executable_nodes:
+        pytest.fail(
+            f"Script {script_path} has no executable code (docstring/comment placeholder)."
+        )
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("script_path", SCRIPTS_TO_TEST)
 def test_example_script_execution(script_path, tmp_path):
@@ -28,11 +53,17 @@ def test_example_script_execution(script_path, tmp_path):
     # Check if file exists
     if not os.path.exists(script_path):
         pytest.fail(f"Script not found: {script_path}")
+    _assert_script_has_executable_code(script_path)
 
     # Set environment variables to force headless mode for matplotlib
     env = os.environ.copy()
     env["MPLBACKEND"] = "Agg"
+    env["MPLCONFIGDIR"] = str(tmp_path / ".mplconfig")
     env["CBFKIT_TEST_MODE"] = "1"
+    # Force CPU backend in subprocesses to avoid Metal/GPU initialization aborts
+    # in CI/sandboxed environments where no visible accelerator is present.
+    env["JAX_PLATFORM_NAME"] = "cpu"
+    env["JAX_PLATFORMS"] = "cpu"
     # Ensure tmp_path (for generated/copied modules), src and root (for examples) are in python path
     # Prepend tmp_path to PYTHONPATH so that imported modules (like 'tutorials') are loaded
     # from the temporary directory (where code generation happens) instead of the source tree.

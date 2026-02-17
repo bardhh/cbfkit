@@ -27,6 +27,7 @@ import jax.tree_util
 import numpy as np
 from jax import Array, random
 
+from cbfkit.controllers.utils import setup_controller
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
@@ -114,8 +115,8 @@ def _check_simulation_status(
                 f"Simulation stopped early due to controller error at step {first_error_idx}{status_msg}."
             )
 
-    # Sentinel: Warn if solver hit MAX_ITER_REACHED (status 2) but was accepted
-    # We check 'sub_data_solver_status' (explicit) or 'error_data' (legacy/implicit)
+    # Check solver status telemetry from controller data.
+    # We check 'sub_data_solver_status' (explicit) or 'error_data' (legacy/implicit).
     status_key = None
     if "sub_data_solver_status" in controller_data_keys:
         status_key = "sub_data_solver_status"
@@ -125,22 +126,18 @@ def _check_simulation_status(
     if status_key:
         idx_data = controller_data_keys.index(status_key)
         status_codes = controller_data_values[idx_data]
-        # Check for status 2 (MAX_ITER_REACHED)
-        max_iter_mask = status_codes == 2
-
-        # Sentinel: Filter out cases where error occurred (avoid confusing "accepted" message)
+        # Status 2 and 5 indicate max-iteration termination in the QP solver.
+        # In the current controller policy these are failures (not accepted solutions).
+        max_iter_like_mask = (status_codes == 2) | (status_codes == 5)
         if "error" in controller_data_keys:
             idx_err = controller_data_keys.index("error")
             errors = controller_data_values[idx_err]
-            # Ensure errors array matches shape (it should, as both are stacked per-step)
-            # errors is boolean mask of errors
-            max_iter_mask = max_iter_mask & (~errors)
-
-        if jnp.any(max_iter_mask):
-            count = int(jnp.sum(max_iter_mask).item())
+            max_iter_like_mask = max_iter_like_mask & (~errors)
+        if jnp.any(max_iter_like_mask):
+            count = int(jnp.sum(max_iter_like_mask).item())
             print_warning(
                 f"Solver reached max iterations in {count} steps. "
-                "Solutions were accepted but may be suboptimal."
+                "These steps are treated as controller failures and may produce NaN controls."
             )
 
     # Check planner errors
@@ -205,6 +202,9 @@ def simulator(
     perturbation_func: PerturbationCallable = (
         perturbation if perturbation is not None else _default_perturbation
     )
+    controller_func: Optional[ControllerCallable] = (
+        setup_controller(controller) if controller is not None else None
+    )
 
     sigma_val: Array
     if sigma is None:
@@ -223,7 +223,7 @@ def simulator(
         sensor=sensor_func,
         planner=planner,
         nominal_controller=nominal_controller,
-        controller=controller,
+        controller=controller_func,
         estimator=estimator_func,
         perturbation=perturbation_func,
         integrator=integrator,
@@ -510,6 +510,9 @@ def execute(
         raise ValueError(
             f"Failed to evaluate dynamics function on initial state: {e}"
         ) from e
+
+    if controller is not None:
+        controller = setup_controller(controller)
 
     # Ensure data structures are NamedTuples
     if controller_data is None:
