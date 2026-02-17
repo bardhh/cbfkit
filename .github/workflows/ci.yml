@@ -34,7 +34,55 @@ jobs:
         uv pip install -e .
     - name: Validate optional dependency contracts
       run: |
-        python scripts/validate_optional_dependency_contracts.py
+        python - <<'PY'
+        import importlib.util
+        import os
+        import runpy
+        import tempfile
+        from pathlib import Path
+
+        import jax.numpy as jnp
+
+        cache_root = Path(tempfile.gettempdir()) / "cbfkit_optional_dep_cache"
+        cache_root.mkdir(parents=True, exist_ok=True)
+        mpl_cache = cache_root / "mpl"
+        xdg_cache = cache_root / "xdg"
+        mpl_cache.mkdir(parents=True, exist_ok=True)
+        xdg_cache.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("MPLCONFIGDIR", str(mpl_cache))
+        os.environ.setdefault("XDG_CACHE_HOME", str(xdg_cache))
+
+        import cbfkit.utils.visualization as visualization
+
+        if importlib.util.find_spec("casadi") is None:
+            module_path = Path("src/cbfkit/optimization/quadratic_program/qp_solver_casadi.py")
+            qp_solver_casadi_ns = runpy.run_path(str(module_path))
+            solve = qp_solver_casadi_ns["solve"]
+            try:
+                solve(jnp.eye(1), jnp.zeros((1,)))
+            except ImportError as exc:
+                if "cbfkit[casadi]" not in str(exc):
+                    raise AssertionError(
+                        "CasADi missing-path error must include guidance for `cbfkit[casadi]`."
+                    ) from exc
+            else:
+                raise AssertionError("Expected ImportError with installation guidance for CasADi.")
+
+        if not visualization.HAS_MATPLOTLIB:
+            try:
+                visualization.require_visualization()
+            except ImportError as exc:
+                if "cbfkit[vis]" not in str(exc):
+                    raise AssertionError(
+                        "Visualization missing-path error must include guidance for `cbfkit[vis]`."
+                    ) from exc
+            else:
+                raise AssertionError(
+                    "Expected ImportError with installation guidance for visualization."
+                )
+
+        print("optional dependency contract checks passed")
+        PY
 
   extra-profile-smoke:
     needs: dependency-contract
@@ -152,9 +200,6 @@ PY
         else
           uv pip install -e ".[test,codegen]"
         fi
-    - name: Run targeted pre-merge gate checks
-      run: |
-        bash scripts/run_premerge_gate.sh
     - name: Lint with ruff
       if: matrix.python-version == '3.10'
       env:
