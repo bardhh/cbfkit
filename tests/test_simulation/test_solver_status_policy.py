@@ -18,7 +18,7 @@ def test_check_simulation_status_treats_status_2_as_failure_warning(monkeypatch)
 
     sim._check_simulation_status(
         controller_data_keys=["error", "sub_data_solver_status"],
-        controller_data_values=[np.array([False, True]), np.array([1, 2])],
+        controller_data_values=[np.array([False, False]), np.array([1, 2])],
         planner_data_keys=[],
         planner_data_values=[],
         nan_detected=False,
@@ -36,7 +36,7 @@ def test_check_simulation_status_treats_status_5_as_failure_warning(monkeypatch)
 
     sim._check_simulation_status(
         controller_data_keys=["error", "sub_data_solver_status"],
-        controller_data_values=[np.array([False, True]), np.array([1, 5])],
+        controller_data_values=[np.array([False, False]), np.array([1, 5])],
         planner_data_keys=[],
         planner_data_values=[],
         nan_detected=False,

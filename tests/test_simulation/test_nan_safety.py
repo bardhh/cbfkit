@@ -31,22 +31,14 @@ def test_nan_detection_python_loop(capsys):
         use_jit=False
     )
 
-    # Check that simulation stopped early (result states should be padded or short?
-    # simulator returns stacked array of whatever was collected.
-    # If it stopped at step 0, it has 1 element (or 0?).
-    # simulator loop: yields step_data.
-    # if error at step 0:
-    #   yield step_data (NaN)
-    #   break
-    # So 1 element.
-
+    # Python loop stops early and retains the last valid state (sentinel behavior).
     assert results.states.shape[0] == 1
-    assert jnp.any(jnp.isnan(results.states))
+    assert not jnp.any(jnp.isnan(results.states))
+    assert int(results.controller_values[results.controller_keys.index("error_data")][0]) == -10
 
     # Check captured stderr for error/warning messages (rich Console writes to stderr)
     captured = capsys.readouterr()
-    assert "Simulation failed due to NaNs" in captured.err
-    assert "CONTROLLER ERROR: NAN_DETECTED" in captured.err
+    assert "CONTROLLER ERROR: INTEGRATION_NAN_ERROR" in captured.err
 
 def test_nan_detection_jit_loop(capsys):
     """Test that NaNs are detected in the JIT simulation loop."""
