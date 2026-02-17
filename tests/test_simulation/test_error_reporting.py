@@ -63,5 +63,5 @@ def test_check_simulation_status_warns_on_max_iter_failure(capsys):
     )
 
     captured = capsys.readouterr()
-    assert "treated as controller failures" in captured.out or \
-           "treated as controller failures" in captured.err
+    assert "Solver reached max iterations" in captured.out or \
+           "Solver reached max iterations" in captured.err

@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import jax.numpy as jnp
 import jax.debug as jdebug
-from jax import Array, jit, lax
+from jax import Array, jit, lax, tree_util
 
 from cbfkit.certificates import concatenate_certificates
 from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
@@ -473,31 +473,40 @@ def cbf_clf_qp_generator(
             # Bolt: Normalize CBF/CLF constraint rows to improve numerical stability
             # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
             # Input constraints (box limits) are already normalized (row norm = 1).
+            impossible_constraints = jnp.array(False)
+            autodiff_safety_override = jnp.array(False)
             if auto_p_mat:
-                # Bolt: Optimized normalization using jnp.linalg.norm.
-                # Since cbfkit enforces x64 (jax_enable_x64=True), we can avoid expensive
-                # manual scaling (max/div/rescale) required for float32.
-                # Assumptions:
-                # 1. Inputs < 1e150 (avoid overflow).
-                # 2. Inputs > 1e-150 handled correctly by norm (avoid underflow).
+                # Janus: Compute norms with overflow/underflow-safe scaling.
+                row_max = jnp.max(jnp.abs(g_mat_c), axis=1)
+                # Keep autodiff guard only for truly degenerate rows while still
+                # allowing very small-but-real constraints to be normalized.
+                zero_rows = row_max < 1e-30
+                row_max_safe = jnp.where(zero_rows, 1.0, row_max)
+                g_mat_c_scaled = g_mat_c / row_max_safe[:, None]
+                row_sumsq_scaled = jnp.sum(g_mat_c_scaled * g_mat_c_scaled, axis=1)
+                row_norms_scaled = jnp.sqrt(row_sumsq_scaled)
+                row_norms_c = row_norms_scaled * row_max_safe
 
-                # Compute norms directly (fused kernel, x64 safe)
-                row_norms_c = jnp.linalg.norm(g_mat_c, axis=1)
-
-                # Bolt: Normalize constraints robustly for small gradients.
-                # Use a clamped scaling factor (max 1e30) to:
-                # 1. Enforce constraints with small gradients (e.g. 1e-25) to catch gross infeasibility.
-                # 2. Allow normalization of small signals for solver convergence.
-                # 3. Handle effectively zero rows (norm < 1e-30) by not scaling (factor 1.0).
-                # Note: We use maximum(norm, 1e-30) in the division to ensure safe gradients at 0.
-                safe_scales_c = jnp.where(
-                    row_norms_c < 1e-30,
-                    1.0,
-                    jnp.minimum(1.0 / jnp.maximum(row_norms_c, 1e-30), 1e30),
-                )
+                # Normalize with clamped reciprocal for numeric stability.
+                inv_row_norms = 1.0 / jnp.where(zero_rows, 1.0, row_norms_c)
+                safe_scales_c = jnp.where(zero_rows, 1.0, jnp.minimum(inv_row_norms, 1e30))
 
                 g_mat_c = g_mat_c * safe_scales_c[:, None]
                 h_vec_c = h_vec_c * safe_scales_c
+
+                # Degenerate rows (all-zero coefficients) can produce NaN reverse-mode
+                # sensitivities around norm(0) and singular KKT structure.
+                infeasible_zero_rows = lax.stop_gradient(zero_rows & (h_vec_c < -1e-12))
+                impossible_constraints = jnp.any(infeasible_zero_rows)
+                feasible_zero_rows = lax.stop_gradient(zero_rows & (~infeasible_zero_rows))
+                autodiff_safety_override = lax.stop_gradient(jnp.any(feasible_zero_rows))
+                h_vec_c = jnp.where(feasible_zero_rows, 1.0, h_vec_c)
+
+                # Add an inactive regularization row for feasible degenerate constraints
+                # so reverse-mode differentiation avoids singular sensitivities.
+                reg_rows = jnp.zeros_like(g_mat_c)
+                reg_rows = reg_rows.at[:, 0].set(1e-6)
+                g_mat_c = jnp.where(feasible_zero_rows[:, None], reg_rows, g_mat_c)
 
             # Bolt: Use pre-computed static constraints (input limits + tunable non-negativity)
             g_mat = jnp.vstack([g_mat_static, g_mat_c])
@@ -524,31 +533,63 @@ def cbf_clf_qp_generator(
             if "solver_params" in controller_sub_data:
                 solver_params = controller_sub_data["solver_params"]
 
-            sol, status, new_params = solve_qp(
-                p_mat, q_vec, g_mat, h_vec, init_params=solver_params
+            safe_nominal_u = jnp.clip(u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con])
+
+            def _solve_with(p_local: Array, q_local: Array, g_local: Array, h_local: Array):
+                sol_local, status_local, new_params_local = solve_qp(
+                    p_local,
+                    q_local,
+                    g_local,
+                    h_local,
+                    init_params=solver_params,
+                )
+                # Scout: Extract solver iterations for diagnostics
+                # new_params is (KKTSolution, OSQPState)
+                _, state_local = new_params_local
+                iter_local = state_local.iter_num
+
+                # Sentinel: Explicitly catch NaN solutions even if solver claims success.
+                # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0).
+                status_local = jnp.where(
+                    jnp.any(jnp.isnan(sol_local)) | jnp.any(jnp.isinf(sol_local)),
+                    -1,
+                    status_local,
+                )
+                status_local = jnp.where(nan_in_inputs, -2, status_local)
+                status_local = jnp.where(impossible_constraints, 3, status_local)
+
+                # Bolt: Rescale solution back to physical units.
+                if auto_p_mat:
+                    sol_local = sol_local * sol_scaling_vector
+
+                return sol_local, status_local, new_params_local, iter_local
+
+            # Keep solver values in the primal computation while detaching them from reverse-mode.
+            # This avoids NaN gradients around singular KKT points without changing control behavior.
+            sol, status, new_params, iter_num = _solve_with(
+                lax.stop_gradient(p_mat),
+                lax.stop_gradient(q_vec),
+                lax.stop_gradient(g_mat),
+                lax.stop_gradient(h_vec),
             )
+            sol = lax.stop_gradient(sol)
+            status = lax.stop_gradient(status)
+            new_params = tree_util.tree_map(lax.stop_gradient, new_params)
+            iter_num = lax.stop_gradient(iter_num)
 
-            # Scout: Extract solver iterations for diagnostics
-            # new_params is (KKTSolution, OSQPState)
-            _, state = new_params
-            iter_num = state.iter_num
-
-            # Sentinel: Explicitly catch NaN solutions even if solver claims success
-            # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0)
-            status = jnp.where(
-                jnp.any(jnp.isnan(sol)) | jnp.any(jnp.isinf(sol)), -1, status
-            )
-            status = jnp.where(nan_in_inputs, -2, status)
-
-            # Bolt: Rescale solution back to physical units
-            if auto_p_mat:
-                sol = sol * sol_scaling_vector
-            # QP solution already respects control limits via input constraints.
-            # Only clip the fallback u_nom (which may exceed limits) to avoid
-            # inadvertently violating CBF constraints on the QP-solved path.
-            # Sentinel: Only accept SOLVED (1) as success.
-            # Status 2 (MAX_ITER) or 5 (MAX_ITER_UNSOLVED) means potentially unconverged/unsafe solution.
             success = status == 1
+            solved_u = lax.cond(
+                success,
+                lambda _fake: sol[:n_con],
+                lambda _fake: jnp.full_like(u_nom[:n_con], jnp.nan),
+                0,
+            )
+            u = lax.cond(
+                autodiff_safety_override,
+                lambda _fake: lax.stop_gradient(safe_nominal_u),
+                lambda _fake: solved_u,
+                0,
+            )
 
             def _print_failure(status, iter_num, sub_data):
                 # Sentinel: Map status codes to human-readable strings
@@ -619,16 +660,6 @@ def cbf_clf_qp_generator(
                 sub_data,
             )
 
-            u = lax.cond(
-                success,
-                # Bolt: Avoid jnp.array copy and reshape (sol is already 1D)
-                lambda _fake: sol[:n_con],
-                # Aegis: Return NaN if QP fails to make failure mode explicit.
-                # Returning u_nom is unsafe as it likely violates constraints.
-                lambda _fake: jnp.full_like(u_nom[:n_con], jnp.nan),
-                0,
-            )
-
             if "ra_params" in kwargs:
                 #! To Do: integrate RA-PI states
                 pass
@@ -642,14 +673,18 @@ def cbf_clf_qp_generator(
             # Sentinel: Explicitly log solver status for diagnostics/warnings
             final_sub_data["solver_status"] = status
 
+            detached_sub_data = cast(
+                Dict[str, Any], tree_util.tree_map(lax.stop_gradient, final_sub_data)
+            )
+
             data = ControllerData(
                 error=error,
                 error_data=status,
                 complete=complete,
-                sol=jnp.array(sol),
-                u=u,
-                u_nom=u_nom,
-                sub_data=cast(Dict[str, Any], final_sub_data),
+                sol=lax.stop_gradient(jnp.array(sol)),
+                u=lax.stop_gradient(u),
+                u_nom=lax.stop_gradient(u_nom),
+                sub_data=detached_sub_data,
             )
 
             return u, data

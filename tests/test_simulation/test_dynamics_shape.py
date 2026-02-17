@@ -16,8 +16,7 @@ def test_dynamics_shape_validation():
     dt = 0.1
     num_steps = 2
 
-    # Expect ValueError with specific message about column vector
-    with pytest.raises(ValueError, match="It appears `f` is a column vector"):
+    with pytest.raises(ValueError, match="Shape mismatch: Initial state 'x0' has shape"):
         simulator.execute(
             x0=x0,
             dt=dt,
