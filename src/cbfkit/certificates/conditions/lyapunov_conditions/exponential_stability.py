@@ -59,13 +59,14 @@ from jax import Array, lax
 def e_s(c: float) -> Callable[[Array], Array]:
     """Generates function for computing RHS of Lyapunov conditions for Exponential stability:
 
-    Vdot <= -c1*V
+    Vdot <= -c*V
 
     Args:
-        c1 (float): convergence constant
+        c (float): convergence constant
 
     Returns
     -------
         Callable[[Array], Array]: ES Lyapunov conditions
     """
+    assert c > 0
     return lambda V: lax.cond(V > 0, lambda _fake: -c * V, lambda _fake: 0.0, 0)

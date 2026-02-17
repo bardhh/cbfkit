@@ -1,3 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+
+import matplotlib
+
+# Hack to prevent matplotlib.use("macosx") error in imported modules
+matplotlib.use = lambda *args, **kwargs: None
+
 from typing import List, Tuple
 
 import jax.numpy as jnp

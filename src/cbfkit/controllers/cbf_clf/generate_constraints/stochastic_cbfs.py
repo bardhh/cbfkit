@@ -9,6 +9,7 @@ from jax import Array, jit, lax
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCollection,
     DynamicsCallable,
     State,
@@ -22,14 +23,14 @@ from .unpack import unpack_for_cbf
 
 
 ###################################################################################################
-### STOCHASTIC CBF: LfB + LgB*u + 0.5*Tr[sigma.T * d2B/dx2 * sigma] <= -alpha*B + beta ############
+### STOCHASTIC CBF: LfB + LgB*u + 0.5*Tr[sigma.T * d2B/dx2 * sigma] >= -alpha*B + beta ############
 def generate_compute_stochastic_cbf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-    **kwargs: Dict[str, Any],
-) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
+    **kwargs: Any,
+) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     """
     #! To Do: docstring
     """
@@ -46,10 +47,10 @@ def generate_compute_stochastic_cbf_constraints(
         raise ValueError("sigma must be of type Callable[[Array], Array]!")
 
     @jit
-    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
         nonlocal a_cbf, b_cbf
-        data: Dict[str, Any] = {}
+        data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
         s = sigma(x)
 

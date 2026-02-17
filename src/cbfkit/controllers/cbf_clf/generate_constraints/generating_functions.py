@@ -2,13 +2,15 @@
 #! docstring
 """
 
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+import inspect
 
 import jax.numpy as jnp
 from jax import Array, jit, lax, vmap
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCollection,
     ComputeCertificateConstraintFunctionGenerator,
     DynamicsCallable,
@@ -54,7 +56,7 @@ def generate_compute_cbf_clf_constraints(
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs,
-) -> Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]]:
+) -> Callable[[float, Array], Tuple[Array, Array, CbfClfQpData]]:
     """_summary_
 
     Args:
@@ -67,7 +69,7 @@ def generate_compute_cbf_clf_constraints(
 
     Returns
     -------
-        Callable[[float, Array], Tuple[Array, Array, Dict[str, Any]]]: _description_
+        Callable[[float, Array], Tuple[Array, Array, CbfClfQpData]]: _description_
     """
     compute_cbf_constraints = generate_compute_cbf_constraints(
         control_limits, dyn_func, barriers, lyapunovs, **kwargs
@@ -76,62 +78,113 @@ def generate_compute_cbf_clf_constraints(
         control_limits, dyn_func, barriers, lyapunovs, **kwargs
     )
 
+    # Bolt: Check if sub-functions accept pre-computed dynamics (f, g)
+    sig_cbf = inspect.signature(compute_cbf_constraints)
+    pass_fg_cbf = "f" in sig_cbf.parameters and "g" in sig_cbf.parameters
+
+    sig_clf = inspect.signature(compute_clf_constraints)
+    pass_fg_clf = "f" in sig_clf.parameters and "g" in sig_clf.parameters
+
     @jit
-    def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, CbfClfQpData]:
         """_summary_
 
         Returns
         -------
             _type_: _description_
         """
-        amat_cbf, bvec_cbf, cbf_data = compute_cbf_constraints(t, x)
-        amat_clf, bvec_clf, clf_data = compute_clf_constraints(t, x)
+        # Bolt: Evaluate dynamics once to avoid double evaluation in sub-functions
+        f, g = dyn_func(x)
+
+        if pass_fg_cbf:
+            amat_cbf, bvec_cbf, cbf_data = compute_cbf_constraints(t, x, f=f, g=g)
+        else:
+            amat_cbf, bvec_cbf, cbf_data = compute_cbf_constraints(t, x)
+
+        if pass_fg_clf:
+            amat_clf, bvec_clf, clf_data = compute_clf_constraints(t, x, f=f, g=g)
+        else:
+            amat_clf, bvec_clf, clf_data = compute_clf_constraints(t, x)
 
         return (
             jnp.vstack([amat_cbf, amat_clf]),
             jnp.hstack([bvec_cbf, bvec_clf]),
-            {**cbf_data, **clf_data},
+            cast(CbfClfQpData, {**cbf_data, **clf_data}),
         )
 
     return compute_cbf_clf_constraints
 
 
-def generate_compute_certificate_values_list_comprehension(certificate_package):
+def _stack_and_validate(
+    values: List[Array], name: str, expected_ndim: Optional[int] = None
+) -> Array:
+    """Stacks a list of arrays and validates that they all have the same shape."""
+    if not values:
+        return jnp.stack(values)
+
+    first_shape = jnp.shape(values[0])
+    if expected_ndim is not None:
+        if len(first_shape) != expected_ndim:
+            type_map = {0: "scalar", 1: "vector", 2: "matrix"}
+            exp_type = type_map.get(expected_ndim, f"rank-{expected_ndim}")
+            raise ValueError(
+                f"Shape mismatch in {name}: Expected {exp_type} output (shape rank {expected_ndim}), "
+                f"but got shape {first_shape}. Ensure that your {name} return {exp_type}s."
+            )
+
+    for i, val in enumerate(values):
+        val_shape = jnp.shape(val)
+        if val_shape != first_shape:
+            raise ValueError(
+                f"Shape mismatch in {name} at index {i}: "
+                f"Expected {first_shape} (consistent with index 0), but got {val_shape}. "
+                f"Ensure all {name} return arrays of the same shape."
+            )
+
+    return jnp.stack(values)
+
+
+def generate_compute_certificate_values_list_comprehension(
+    certificate_package: CertificateCollection, compute_hessians: bool = True
+) -> Callable[[float, Array], Tuple[Array, Array, Optional[Array], Array, Array]]:
     functions, jacobians, hessians, partials, conditions = certificate_package
 
     @jit
     def compute_certificate_values_list_comprehension(t, x):
-        bf_x = jnp.stack([lf(t, x) for lf in functions])
-        bj_x = jnp.stack([lj(t, x) for lj in jacobians])
-        bh_x = jnp.stack([lj(t, x) for lj in hessians])
-        dbf_t = jnp.stack([lt(t, x) for lt in partials])
-        bc_x = jnp.stack([lc(lf) for lc, lf in zip(conditions, bf_x)])
+        bf_values = [lf(t, x) for lf in functions]
+        bf_x = _stack_and_validate(bf_values, "certificate functions", expected_ndim=0)
+
+        bj_values = [lj(t, x) for lj in jacobians]
+        bj_x = _stack_and_validate(bj_values, "certificate jacobians", expected_ndim=1)
+
+        if compute_hessians:
+            bh_values = [lh(t, x) for lh in hessians]
+            bh_x = _stack_and_validate(bh_values, "certificate hessians", expected_ndim=2)
+        else:
+            bh_x = None
+
+        dbf_t_values = [lt(t, x) for lt in partials]
+        dbf_t = _stack_and_validate(dbf_t_values, "certificate partials", expected_ndim=0)
+
+        bc_values = [lc(lf) for lc, lf in zip(conditions, bf_x)]
+        bc_x = _stack_and_validate(bc_values, "certificate conditions", expected_ndim=0)
 
         return bf_x, bj_x, bh_x, dbf_t, bc_x
 
     return compute_certificate_values_list_comprehension
 
 
-def generate_compute_certificate_values_vmap(certificate_package):
-    functions, jacobians, hessians, partials, conditions = certificate_package
-    vmap_bf = vmap(lambda i, t, x: lax.switch(i, functions, t, x))
-    vmap_bj = vmap(lambda i, t, x: lax.switch(i, jacobians, t, x))
-    vmap_bh = vmap(lambda i, t, x: lax.switch(i, hessians, t, x))
-    vmap_bt = vmap(lambda i, t, x: lax.switch(i, partials, t, x))
-    vmap_bc = vmap(lambda i, bf: lax.switch(i, conditions, bf))
-    index = jnp.arange(len(functions))
+def generate_compute_certificate_values_vmap(
+    certificate_package: CertificateCollection, compute_hessians: bool = True
+) -> Callable[[float, Array], Tuple[Array, Array, Optional[Array], Array, Array]]:
+    """
+    Computes certificate values using list comprehension (unrolling).
 
-    @jit
-    def compute_certificate_values_vmap(t, x):
-        n_tiles = len(index)
-        t = jnp.repeat(t, n_tiles)
-        x = jnp.tile(x, (n_tiles, 1))
-        bf_x = vmap_bf(index, t, x)
-        bj_x = vmap_bj(index, t, x)
-        bh_x = vmap_bh(index, t, x)
-        dbf_t = vmap_bt(index, t, x)
-        bc_x = vmap_bc(index, bf_x)
-
-        return bf_x, bj_x, bh_x, dbf_t, bc_x
-
-    return compute_certificate_values_vmap
+    Note (Bolt): This function was optimized to use list comprehension instead of
+    lax.switch inside vmap. For lists of distinct closures (standard in cbfkit),
+    vmap+switch introduces overhead without reducing graph size. Unrolling avoids
+    dispatch overhead and allows XLA to optimize the concatenated graph effectively.
+    """
+    return generate_compute_certificate_values_list_comprehension(
+        certificate_package, compute_hessians
+    )

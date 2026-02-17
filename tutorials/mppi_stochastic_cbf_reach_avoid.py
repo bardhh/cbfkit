@@ -6,8 +6,12 @@ function below.
 """
 
 import os
+import sys
+from pathlib import Path
 
 import jax.numpy as jnp
+
+sys.path.append(str(Path(__file__).parent.parent))
 from jax import Array, jit, lax
 
 import cbfkit.controllers.mppi as mppi_planner
@@ -25,11 +29,13 @@ from examples.unicycle.common.ellipsoidal_obstacle import stochastic_cbf as elli
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 target_directory = file_path + "/generated"
+if not os.path.exists(target_directory):
+    os.makedirs(target_directory)
 model_name = "mppi_cbf_unicycle_ellipsoidal_obstacles"
 
 
 # Simulation parameters
-tf = 3.0
+tf = 3.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
 dt = 0.01
 
 # Robot initialization
@@ -90,8 +96,6 @@ barriers = [
         form="exponential",
     )(
         certificate_conditions=stochastic_barrier.right_hand_side(alpha=1.0, beta=1.0),
-        obstacle=obs,
-        ellipsoid=ell,
     )
     for obs, ell in zip(obstacles, ellipsoids)
 ]
@@ -155,7 +159,7 @@ mppi_args = {
     "robot_state_dim": 4,
     "robot_control_dim": 2,
     "prediction_horizon": 80,  # 150,
-    "num_samples": 1000,  # Reduced from 20000 to prevent memory issues with JIT data logging
+    "num_samples": 1000 if not os.getenv("CBFKIT_TEST_MODE") else 100,  # Reduced from 20000 to prevent memory issues with JIT data logging
     "plot_samples": 30,
     "time_step": dt * 2.0,
     "use_GPU": False,
@@ -205,13 +209,13 @@ from cbfkit.utils.user_types import ControllerData, PlannerData
     sensor=sensor,
     estimator=estimator,
     perturbation=generate_stochastic_perturbation(sigma=sigma, dt=dt),
-    filepath=file_path + "vanilla_cbf_results",
+    filepath=os.path.join(file_path, "vanilla_cbf_results"),
     planner_data=PlannerData(u_traj=u_guess, prev_robustness=None),
     controller_data=ControllerData(),
     use_jit=True,
 )
 
-plot = 1
+plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 save = 1
 
 if plot:

@@ -5,11 +5,12 @@
 from typing import Any, Callable, Dict, Tuple
 
 import jax.numpy as jnp
-from jax import Array, jit, lax, scipy
+from jax import Array, jit, lax
 
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCollection,
     DynamicsCallable,
     State,
@@ -29,8 +30,8 @@ def generate_compute_ra_pi_cbf_constraints(
     dyn_func: DynamicsCallable,
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-    **kwargs: Dict[str, Any],
-) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
+    **kwargs: Any,
+) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     """
     #! To Do: docstring
     """
@@ -43,28 +44,20 @@ def generate_compute_ra_pi_cbf_constraints(
     # Check for Risk-Aware Params object
     if "ra_cbf_params" in kwargs:
         ra_params: RiskAwareParams = kwargs["ra_cbf_params"]  # type: ignore[assignment]
-        assert ra_params.eta is not None
-        assert ra_params.t_max is not None
-        assert ra_params.p_bound is not None
-        assert ra_params.gamma is not None
-        r_buffer = float(
-            ra_params.eta * jnp.sqrt(2 * ra_params.t_max) * scipy.special.erfinv(ra_params.p_bound)
-        )
     else:
         ra_params = RiskAwareParams(
             sigma=lambda x: jnp.zeros((x.shape[0], 1)),
             gamma=jnp.zeros(n_bfs),  # Initialize gamma
             integrator_states=jnp.zeros((n_bfs,)),  # Initialize integrator_states
         )
-        r_buffer = 0.0
 
     ra_params.integrator_states = jnp.zeros((n_bfs,))
 
     @jit
-    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
         nonlocal a_cbf, b_cbf, ra_params
-        data: Dict[str, Any] = {}
+        data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
         assert ra_params.sigma is not None
         sigma = ra_params.sigma(x)
@@ -74,9 +67,8 @@ def generate_compute_ra_pi_cbf_constraints(
 
         if n_bfs > 0:
             bf_x, bj_x, bh_x, dbf_t, _ = compute_barrier_values(t, x)
-            assert ra_params.gamma is not None
             # Ensure array types for addition
-            w_vals = ra_params.integrator_states + ra_params.gamma + r_buffer
+            w_vals = ra_params.integrator_states
             bc_x = jnp.stack([bc(w_vals[ii]) for ii, bc in enumerate(conditions)])
             traces = jnp.array(
                 [0.5 * jnp.trace(jnp.matmul(jnp.matmul(sigma.T, bh_ii), sigma)) for bh_ii in bh_x]

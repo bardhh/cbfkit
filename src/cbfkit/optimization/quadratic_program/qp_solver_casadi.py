@@ -4,9 +4,13 @@ import contextlib
 import os
 from typing import Tuple, Union
 
-import casadi as ca
 import jax.numpy as jnp
 import numpy as np
+
+try:
+    import casadi as ca
+except ImportError:
+    ca = None
 from jax import Array
 
 
@@ -33,6 +37,11 @@ def solve(
         solution: Solution to the QP
         status: True if optimal solution found
     """
+    if ca is None:
+        raise ImportError(
+            "CasADi is not installed. Please install it with `pip install cbfkit[casadi]`."
+        )
+
     # Define decision variables
     n = len(f_vec)
     x = ca.MX.sym("x", n)

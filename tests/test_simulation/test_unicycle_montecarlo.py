@@ -19,9 +19,11 @@ To run all tests in this module (from the root of the repository):
     $ python -m unittest tests.test_simulation.test_fixedwing_simulation.py
 """
 
+import os
 import unittest
 from typing import List
 
+import pytest
 import jax.numpy as jnp
 from jax import Array, jacfwd, random
 
@@ -41,10 +43,10 @@ from cbfkit.utils.user_types import PlannerData
 # Simulation setup
 N = 3  # n_states
 M = 2  # n_controls
-TF = 5.0
+TF = 5.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.1
 DT = 1e-2
 N_STEPS = int(TF / DT)
-N_TRIALS = 4
+N_TRIALS = 4 if not os.getenv("CBFKIT_TEST_MODE") else 1
 
 # Initial conditions
 x_max = 5.0
@@ -203,6 +205,7 @@ def run_monte_carlo(n_trials: int, use_jit: bool = False) -> bool:
     return True
 
 
+@pytest.mark.slow
 class TestUnicycleMonteCarlo(unittest.TestCase):
     """
     Takes care of unit tests for the unicycle Monte Carlo start-to-goal case study.

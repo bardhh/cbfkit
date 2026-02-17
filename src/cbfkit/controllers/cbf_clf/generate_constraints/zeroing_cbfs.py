@@ -2,13 +2,14 @@
 #! docstring
 """
 
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import jax.numpy as jnp
 from jax import Array, jit, lax
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCollection,
     DynamicsCallable,
     State,
@@ -28,23 +29,35 @@ def generate_compute_zeroing_cbf_constraints(
     dyn_func: DynamicsCallable,
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-    **kwargs: Dict[str, Any],
-) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
+    **kwargs: Any,
+) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     """
     #! To Do: docstring
     """
-    compute_barrier_values = generate_compute_certificate_values(barriers)
+    compute_barrier_values = generate_compute_certificate_values(
+        barriers, compute_hessians=False
+    )
 
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
+    scale_cbf = kwargs.get("scale_cbf", 1.0)
 
     @jit
-    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_cbf_constraints(
+        t: Time,
+        x: State,
+        f: Optional[Array] = None,
+        g: Optional[Array] = None,
+    ) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
         nonlocal a_cbf, b_cbf
-        data: Dict[str, Any] = {}
-        dyn_f, dyn_g = dyn_func(x)
+        data: CbfClfQpData = {}
+
+        dyn_f = f
+        dyn_g = g
+        if dyn_f is None or dyn_g is None:
+            dyn_f, dyn_g = dyn_func(x)
 
         if n_bfs > 0:
             bf_x, bj_x, _, dbf_t, bc_x = compute_barrier_values(t, x)
@@ -52,10 +65,10 @@ def generate_compute_zeroing_cbf_constraints(
             a_cbf = a_cbf.at[:, :n_con].set(-jnp.matmul(bj_x, dyn_g))
             b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) + bc_x)
             if tunable:
-                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-bc_x)
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-scale_cbf * jnp.diag(bc_x))
                 b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f))
             elif relaxable:
-                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-1.0)
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-scale_cbf * jnp.eye(n_bfs))
 
             violated = lax.cond(jnp.any(bf_x < 0), lambda _fake: True, lambda _fake: False, 0)
 

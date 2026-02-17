@@ -9,6 +9,7 @@ from jax import Array, jit, lax
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
+    CbfClfQpData,
     CertificateCollection,
     DynamicsCallable,
     State,
@@ -29,12 +30,14 @@ def generate_compute_robust_cbf_constraints(
     dyn_func: DynamicsCallable,
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
-    **kwargs: Dict[str, Any],
-) -> Callable[[Time, State], Tuple[Array, Array, Dict[str, Any]]]:
+    **kwargs: Any,
+) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     """
     #! To Do: docstring
     """
-    compute_barrier_values = generate_compute_certificate_values(barriers)
+    compute_barrier_values = generate_compute_certificate_values(
+        barriers, compute_hessians=False
+    )
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
@@ -56,10 +59,10 @@ def generate_compute_robust_cbf_constraints(
         robustness_term = robustness_sup_norm(disturbance_norm_bound)
 
     @jit
-    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, Dict[str, Any]]:
+    def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
         nonlocal a_cbf, b_cbf
-        data = {}
+        data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
 
         if n_bfs > 0:

@@ -3,6 +3,7 @@ from jax import random
 
 from cbfkit.certificates import certificate_package
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+from cbfkit.utils.user_types import ControllerData
 
 
 def test_infeasible_qp_behavior():
@@ -66,14 +67,14 @@ def test_infeasible_qp_behavior():
     x = jnp.array([-2.0])
     t = 0.0
     key = random.PRNGKey(0)
-    data = {}
+    data = ControllerData()
     u_nom = jnp.array([0.0])
 
     # Execute
     u_vanilla, data_vanilla = controller_vanilla(t, x, u_nom, key, data)
 
-    # Expect u=0 because QP failed and fallback is 0
-    assert jnp.abs(u_vanilla[0]) < 1e-6, f"Vanilla QP should fail and return 0, got {u_vanilla}"
+    # Expect u=NaN because QP failed and fallback is NaN (Aegis policy)
+    assert jnp.all(jnp.isnan(u_vanilla)), f"Vanilla QP should fail and return NaN, got {u_vanilla}"
     assert data_vanilla.error
     # 2. Relaxable Case (Should succeed and return saturated limit 0.5)
     controller_relaxable = vanilla_cbf_clf_qp_controller(
@@ -94,10 +95,13 @@ def test_infeasible_qp_behavior():
     # u will be pushed to limit 0.5. delta will take up the rest (1.5).
 
     print(f"Relaxable U: {u_relaxable}")
+
+    # Verify strict success for relaxable case
+    assert not data_relaxable.error, "Relaxable QP should not fail"
+    assert not jnp.any(jnp.isnan(u_relaxable)), "Relaxable QP should return valid control"
     assert (
         jnp.abs(u_relaxable[0] - 0.5) < 1e-3
     ), f"Relaxable QP should return max control 0.5, got {u_relaxable}"
-    assert not data_relaxable.error
 
 
 if __name__ == "__main__":

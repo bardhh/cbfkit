@@ -3,6 +3,7 @@ from typing import Any, Callable, List, Optional, Tuple
 import jax.numpy as jnp
 from jax import Array, random
 
+from cbfkit.simulation.integration_utils import integrate_with_cached_dynamics
 from cbfkit.simulation.utils import SimulationStepData
 from cbfkit.utils.user_types import (
     Control,
@@ -20,6 +21,7 @@ from cbfkit.utils.user_types import (
     PlannerData,
     SensorCallable,
     State,
+    StlTrajectoryCostCallable,
     Time,
 )
 
@@ -36,7 +38,7 @@ def stepper(
     perturbation: PerturbationCallable,
     sigma: Array,
     key: Key,
-    stl_trajectory_cost,
+    stl_trajectory_cost: Optional[StlTrajectoryCostCallable],
 ) -> Callable[
     [
         Time,
@@ -69,7 +71,7 @@ def stepper(
             planner_data = PlannerData()
 
         nonlocal key
-        key, subkey = random.split(key)  # type: ignore
+        key, _ = random.split(key)  # type: ignore
 
         if z is None:
             z = x
@@ -96,7 +98,8 @@ def stepper(
             planner_data = planner_data._replace(prev_robustness=None)
 
         if planner is not None:
-            u_planner, planner_data = planner(t, z, None, subkey, planner_data)  # type: ignore
+            key, planner_key = random.split(key)  # type: ignore
+            u_planner, planner_data = planner(t, z, None, planner_key, planner_data)
             if planner_data.error:
                 return (
                     x,
@@ -114,15 +117,18 @@ def stepper(
         elif planner_data.x_traj is not None:
             timestep_idx = jnp.round(t / dt).astype(int)
             timestep_idx = jnp.clip(timestep_idx, 0, planner_data.x_traj.shape[1] - 1)
-            u, _ = nominal_controller(t, z, subkey, planner_data.x_traj[:, timestep_idx])  # type: ignore
+            key, nom_key = random.split(key)  # type: ignore
+            u, _ = nominal_controller(t, z, nom_key, planner_data.x_traj[:, timestep_idx])
         else:
             if nominal_controller is None:
                 u = jnp.zeros((g.shape[1],))
             else:
-                u, _ = nominal_controller(t, z, subkey, None)  # type: ignore
+                key, nom_key = random.split(key)  # type: ignore
+                u, _ = nominal_controller(t, z, nom_key, None)
 
+        key, ctrl_key = random.split(key)  # type: ignore
         if controller is not None:
-            u, controller_data = controller(t, z, u, subkey, controller_data)  # type: ignore
+            u, controller_data = controller(t, z, u, ctrl_key, controller_data)
             if controller_data.error:
                 return (
                     x,
@@ -147,11 +153,17 @@ def stepper(
         p = perturbation(x, u, f, g)
         key, subkey = random.split(key)  # type: ignore
 
-        def vector_field(s: State) -> Array:
-            f_s, g_s = dynamics(s)
-            return f_s + jnp.matmul(g_s, u) + p(subkey)
-
-        x = integrator(x, vector_field, dt)
+        p_val = p(subkey)
+        x = integrate_with_cached_dynamics(
+            x=x,
+            u=u,
+            dt=dt,
+            dynamics=dynamics,
+            integrator=integrator,
+            f=f,
+            g=g,
+            perturbation_value=p_val,
+        )
 
         u_ret = u
         c_ret = c if c is not None else jnp.zeros((len(z), len(z)))
