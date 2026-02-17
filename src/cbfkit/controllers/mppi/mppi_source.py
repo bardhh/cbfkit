@@ -3,7 +3,6 @@ import inspect
 import jax
 import jax.numpy as jnp
 from jax import jit, lax
-from jax.random import multivariate_normal
 
 
 def setup_mppi(
@@ -22,15 +21,18 @@ def setup_mppi(
     cost_perturbation_coeff=0.1,
 ):
     if dyn_func is None:
-        print("Dynamics function not passed")
-        exit()
+        raise ValueError("Dynamics function must be provided")
     if trajectory_cost_func is None:
         if stage_cost_func is None:
-            print("Neither Trajectury Cost nor Stage Cost function is passed.")
-            exit()
+            raise ValueError(
+                "Either Trajectory Cost or Stage Cost function must be provided. "
+                "Both are currently None."
+            )
         if terminal_cost_func is None:
-            print("Neither Trajectory Cost nor Terminal Cost function is passed")
-            exit()
+            raise ValueError(
+                "Either Trajectory Cost or Terminal Cost function must be provided. "
+                "Both are currently None."
+            )
 
     # Detect terminal_cost_func signature to support both (state) and (state, action) patterns
     terminal_cost_takes_action = False
@@ -45,13 +47,13 @@ def setup_mppi(
     horizon = horizon
     samples = samples
     dt = dt
-    use_gpu = use_GPU
 
     robot_state_dim = robot_state_dim
     robot_control_dim = robot_control_dim
     control_mu = jnp.zeros(robot_control_dim)  # .reshape(-1,1)
     control_cov = 4.0 * jnp.eye(robot_control_dim)
     control_cov_inv = jnp.linalg.inv(control_cov)
+    control_cov_inv_diag = jnp.diag(control_cov_inv)
     control_bound = control_bound
     # TODO: implement separate lower and upper bounds
     # control_bound_lb = -jnp.array([1, 1]).reshape(-1, 1)
@@ -66,87 +68,89 @@ def setup_mppi(
         Args: state and input vector
         Returns: next state
         """
-        f, g = dyn_func(state[:, 0])  # , input)
-        return state + (f.reshape(-1, 1) + g @ input) * dt
+        # Bolt: Avoid reshapes. state: (dim,), input: (m,)
+        f, g = dyn_func(state)  # , input)
+        return state + (f + g @ input) * dt
 
     @jit
     def weighted_sum(U, perturbation, costs):
         """
         Args:
-            U: control input trajectory of all samples
+            U: Nominal control input trajectory
             perturbation: random perturbation trajectory of all samples
             costs: cost of each sampled trajectory
         """
-        # Normalize costs in a numerically stable way
+        # Bolt: Improved numerical stability using standard Log-Sum-Exp
+        # Removed range normalization to preserve optimization gradient in presence of outliers
         costs_shifted = costs - jnp.min(costs)
-        scale = jnp.maximum(jnp.max(costs_shifted), 1e-8)
-        costs_norm = costs_shifted / scale
-        lambd = costs_lambda
-        log_weights = -costs_norm / jnp.maximum(lambd, 1e-8)
+        lambd = jnp.maximum(costs_lambda, 1e-8)
+        log_weights = -costs_shifted / lambd
         max_logw = jnp.max(log_weights)
         weights = jnp.exp(log_weights - max_logw)
         normalization_factor = jnp.maximum(jnp.sum(weights), 1e-8)
 
-        def body(i, inputs):
-            U = inputs
-            U = U + perturbation[i] * weights[i] / normalization_factor
-            return U
-
-        return lax.fori_loop(0, samples, body, (U))
+        # Vectorized weighted sum
+        weighted_perturbation = jnp.sum(perturbation * weights[:, None, None], axis=0)
+        U = U + weighted_perturbation / normalization_factor
+        return U
 
     @jit
     def single_sample_rollout(
         time, robot_states_init, perturbed_control, perturbation, x_prev, prev_robustness
     ):
-        # Initialize robot_state
-        robot_states = jnp.zeros((robot_state_dim, horizon))
-        robot_states = robot_states.at[:, 0].set(robot_states_init)
+        def step_fn(carry, inputs):
+            current_state, current_cost = carry
+            u_t, pert_t = inputs
+            # u_t_col = u_t.reshape(-1, 1)
 
-        # loop over horizon
-        cost_sample = 0
+            # Bolt: Use 1D arrays for cost calc. u_t and pert_t are already (m,)
+            diff = u_t - pert_t
+            delta_cost = cost_perturbation_coeff * jnp.sum(diff * control_cov_inv_diag * pert_t)
 
-        def body(i, inputs):
-            cost_sample, robot_states = inputs
-
-            # get robot state
-            robot_state = robot_states[:, [i]]
-
-            # Get cost
-            cost_sample = (
-                cost_sample
-                + cost_perturbation_coeff
-                * (
-                    (perturbed_control[:, [i]] - perturbation[:, [i]]).T
-                    @ control_cov_inv
-                    @ perturbation[:, [i]]
-                )[0, 0]
-            )
             if trajectory_cost_func is None:
-                cost_sample = cost_sample + stage_cost_func(
-                    robot_state[:, 0], perturbed_control[:, [i]][:, 0]
-                )
+                delta_cost = delta_cost + stage_cost_func(current_state, u_t)
 
-            # Update robot states
-            robot_states = robot_states.at[:, i + 1].set(
-                robot_dynamics_step(robot_states[:, [i]], perturbed_control[:, [i]])[:, 0]
-            )
-            return cost_sample, robot_states
+            # Bolt: Pass 1D arrays directly
+            next_state = robot_dynamics_step(current_state, u_t)
+            new_cost = current_cost + delta_cost
+            return (next_state, new_cost), current_state
 
-        cost_sample, robot_states = lax.fori_loop(0, horizon - 1, body, (cost_sample, robot_states))
+        init_carry = (robot_states_init, 0.0)
+        # Scan over 0 to horizon-2
+        scan_inputs = (perturbed_control[:, :-1].T, perturbation[:, :-1].T)
 
-        robot_states[:, [horizon - 1]]
-        cost_sample = (
-            cost_sample
-            + cost_perturbation_coeff
-            * (
-                (perturbed_control[:, [horizon]] - perturbation[:, [horizon]]).T
-                @ control_cov_inv
-                @ perturbation[:, [horizon]]
-            )[0, 0]
+        (final_carry_state, accumulated_cost), intermediate_states = lax.scan(
+            step_fn, init_carry, scan_inputs
         )
+
+        # intermediate_states contains x0 ... x_{H-2}
+        # final_carry_state is x_{H-1}
+
+        # Add final step cost (u_{H-1})
+        u_final = perturbed_control[:, horizon - 1]
+        pert_final = perturbation[:, horizon - 1]
+        # u_final_col = u_final.reshape(-1, 1)
+        # pert_final_col = pert_final.reshape(-1, 1)
+
+        diff_final = u_final - pert_final
+        delta_cost_final = cost_perturbation_coeff * jnp.sum(diff_final * control_cov_inv_diag * pert_final)
+
+        cost_sample = accumulated_cost + delta_cost_final
+
+        # Note: We do NOT compute x_H.
+
+        # Reconstruct robot_states
+        # We need [x0, x1, ..., x_{H-1}]
+        # intermediate_states has shape (H-1, dim) -> x0 ... x_{H-2}
+        # final_carry_state has shape (dim,) -> x_{H-1}
+
+        # Concatenate
+        robot_states = jnp.vstack([intermediate_states, final_carry_state.reshape(1, -1)]).T
+        # Shape (dim, H)
+
         if trajectory_cost_func is None:
             final_state = robot_states[:, horizon - 1]
-            final_action = perturbed_control[:, horizon - 1]
+            final_action = u_final
             if terminal_cost_takes_action:
                 cost_sample = cost_sample + terminal_cost_func(final_state, final_action)
             else:
@@ -164,65 +168,42 @@ def setup_mppi(
     ):
         ##### Initialize
 
-        # Robot
-        robot_states = jnp.zeros((samples, robot_state_dim, horizon))
-        robot_states = robot_states.at[:, :, 0].set(jnp.tile(robot_init_state.T, (samples, 1)))
-
-        # Cost
-        cost_total = jnp.zeros(samples)
+        # Flatten initial state for broadcasting
+        # robot_init_state is (dim, 1), we need (dim,) for single_sample_rollout
+        x0 = robot_init_state.reshape(-1)
 
         # Single sample rollout
-        if use_gpu:
-
-            @jit
-            def body_sample(robot_states_init, perturbed_control_sample, perturbation_sample):
-                cost_sample, robot_states_sample = single_sample_rollout(
-                    time,
-                    robot_states_init,
-                    perturbed_control_sample.T,
-                    perturbation_sample.T,
-                    x_prev,
-                    prev_robustness,
-                )
-                return cost_sample, robot_states_sample
-
-            batched_body_sample = jax.vmap(body_sample, in_axes=0)
-            (
-                cost_total,
-                robot_states,
-            ) = batched_body_sample(robot_states[:, :, 0], perturbed_control, perturbation)
-        else:
-
-            @jit
-            def body_samples(i, inputs):
-                robot_states, cost_total = inputs
-
-                # Get cost
-                cost_sample, robot_states_sample = single_sample_rollout(
-                    time,
-                    robot_states[i, :, 0],
-                    perturbed_control[i, :, :].T,
-                    perturbation[i, :, :].T,
-                    x_prev,
-                    prev_robustness,
-                )
-                cost_total = cost_total.at[i].set(cost_sample)
-                robot_states = robot_states.at[i, :, :].set(robot_states_sample)
-                return robot_states, cost_total
-
-            robot_states, cost_total = lax.fori_loop(
-                0, samples, body_samples, (robot_states, cost_total)
+        @jit
+        def body_sample(robot_states_init, perturbed_control_sample, perturbation_sample):
+            cost_sample, robot_states_sample = single_sample_rollout(
+                time,
+                robot_states_init,
+                perturbed_control_sample.T,
+                perturbation_sample.T,
+                x_prev,
+                prev_robustness,
             )
+            return cost_sample, robot_states_sample
+
+        # Broadcast x0 (robot_states_init) across all samples
+        batched_body_sample = jax.vmap(body_sample, in_axes=(None, 0, 0))
+        (
+            cost_total,
+            robot_states,
+        ) = batched_body_sample(x0, perturbed_control, perturbation)
 
         return robot_states, cost_total
 
     @jit
     def compute_perturbed_control(subkey, control_mu, control_cov, control_bound, U):
-        perturbation = multivariate_normal(
-            subkey, control_mu, control_cov, shape=(samples, horizon)
-        )  # K x T x nu
+        # Bolt: Optimized sampling for diagonal covariance
+        # Avoids Cholesky decomposition and matrix multiplication
+        std = jnp.sqrt(jnp.diag(control_cov))
+        perturbation = control_mu + jax.random.normal(
+            subkey, shape=(samples, horizon, robot_control_dim)
+        ) * std
 
-        perturbation = jnp.clip(perturbation, -3.0, 3.0)  # 0.3
+        perturbation = jnp.clip(perturbation, -3.0, 3.0)
         perturbed_control = U + perturbation
 
         perturbed_control = jnp.clip(perturbed_control, -control_bound, control_bound)
@@ -232,17 +213,13 @@ def setup_mppi(
     @staticmethod
     @jit
     def rollout_control(init_state, actions):
-        states = jnp.zeros((robot_state_dim, horizon + 1))
-        states = states.at[:, 0].set(init_state[:, 0])
+        def step_fn(current_state, action):
+            next_state = robot_dynamics_step(current_state, action)
+            return next_state, current_state
 
-        def body(i, inputs):
-            states = inputs
-            states = states.at[:, i + 1].set(
-                robot_dynamics_step(states[:, [i]], actions[i, :].reshape(-1, 1))[:, 0]
-            )
-            return states
+        final_state, intermediate_states = lax.scan(step_fn, init_state[:, 0], actions)
 
-        states = lax.fori_loop(0, horizon, body, states)
+        states = jnp.vstack([intermediate_states, final_state.reshape(1, -1)]).T
         return states
 
     @jit

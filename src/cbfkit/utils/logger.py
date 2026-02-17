@@ -22,19 +22,17 @@ Examples
 """
 
 import os
-from typing import Any, Dict, List
-
-import pandas as pd
+from typing import Any, Dict, List, Union
 
 LogEntry = Dict[str, Any]
 
 
-def write_log(filepath: str, data: List[LogEntry]) -> None:
+def write_log(filepath: str, data: Union[List[LogEntry], Dict[str, Any]]) -> None:
     """Writes logged data out to csv file specified at filepath.
 
     Args:
     filepath (str): path to save file
-    data (List[LogEntry]): list of log entries
+    data (Union[List[LogEntry], Dict[str, Any]]): list of log entries or dict of arrays
 
     Returns
     -------
@@ -49,8 +47,34 @@ def write_log(filepath: str, data: List[LogEntry]) -> None:
             raise ValueError("filepath must have no extension, or have extension `.csv`")
         filepath += ".csv"
 
-    df = pd.DataFrame.from_dict(data)
-    df.to_csv(filepath)
+    import csv
+
+    if isinstance(data, list):
+        if not data:
+            return
+        keys = data[0].keys()
+        with open(filepath, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=keys)
+            writer.writeheader()
+            writer.writerows(data)
+    elif isinstance(data, dict):
+        keys = list(data.keys())
+        if not keys:
+            return
+
+        # Check that all columns have the same length to prevent data loss with zip
+        length = len(data[keys[0]])
+        for k in keys[1:]:
+            if len(data[k]) != length:
+                raise ValueError("All arrays must be of the same length")
+
+        rows = zip(*[data[k] for k in keys])
+        with open(filepath, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(keys)
+            writer.writerows(rows)
+    else:
+        raise ValueError("data must be a list of dicts or a dict of lists")
 
 
 def extract_log(key: str, data: List[LogEntry]) -> List[Any]:
@@ -89,10 +113,6 @@ def print_progress(
         fill        - Optional  : bar fill character (Str)
         printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
     """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + "-" * (length - filledLength)
-    print(f"\r{prefix} |{bar}| {percent}% {suffix}", end=printEnd)
-    # Print New Line on Complete
-    if iteration == total:
-        print()
+    from cbfkit.simulation.ui import print_trial_progress
+
+    print_trial_progress(iteration, total, prefix=prefix, suffix=suffix)

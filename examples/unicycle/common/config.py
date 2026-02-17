@@ -16,7 +16,7 @@ class BaseConfig:
 
 
 class PerfectMeasurementsConfig(BaseConfig):
-    R = None
+    R = jnp.zeros((len(BaseConfig.initial_state), len(BaseConfig.initial_state)))
 
 
 class EKFEstimationConfig(BaseConfig):

@@ -22,9 +22,9 @@ To run all tests in this module (from the root of the repository):
 import time
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from jax import jacfwd, random
-from numpy.random import uniform
 
 # Simulation-specific
 import cbfkit.systems.unicycle.models.olfatisaber2002approximate as unicycle
@@ -121,12 +121,13 @@ def initial_state():
     """Fixture to generate a valid initial state."""
     invalid_initial_condition = True
     state = None
+    rng = np.random.default_rng(42)  # Seeded random generator for reproducibility
 
     # Generate random initial condition
     while invalid_initial_condition:
-        x_rand = uniform(low=-x_max, high=x_max)
-        y_rand = uniform(low=-y_max, high=y_max)
-        a_rand = uniform(low=-jnp.pi, high=jnp.pi)
+        x_rand = rng.uniform(low=-x_max, high=x_max)
+        y_rand = rng.uniform(low=-y_max, high=y_max)
+        a_rand = rng.uniform(low=-jnp.pi, high=jnp.pi)
         state = jnp.array([x_rand, y_rand, a_rand])
 
         invalid_initial_condition = any(
@@ -137,6 +138,7 @@ def initial_state():
 
 
 @pytest.mark.benchmark
+@pytest.mark.slow
 def test_execution_performance_jit(initial_state):
     """Tests that JIT-compiled execution is fast (average step < 1ms)."""
     planner_data = PlannerData(
@@ -149,7 +151,7 @@ def test_execution_performance_jit(initial_state):
     sim.execute(
         x0=initial_state,
         dt=DT,
-        num_steps=10,
+        num_steps=N_STEPS,
         dynamics=DYNAMICS,
         integrator=integrator,
         planner=None,

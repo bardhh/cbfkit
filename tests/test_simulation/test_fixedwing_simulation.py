@@ -1,6 +1,8 @@
+import os
 import unittest
 from typing import List, Tuple
 
+import pytest
 import jax.numpy as jnp
 from jax import Array, jacfwd
 
@@ -24,7 +26,7 @@ from cbfkit.utils.user_types import PlannerData
 # Simulation setup
 N = 6  # n_states
 M = 3  # n_controls
-TF = 1.0
+TF = 1.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.1
 DT = 1e-2
 N_STEPS = int(TF / DT)
 INITIAL_STATE = jnp.array([500.0, 250.0, 250.0, 100.0, -jnp.pi / 2, 0.0])
@@ -118,6 +120,7 @@ def execute(controller) -> Tuple[bool, int, Array]:
     return True, x.shape[0], x[-1]
 
 
+@pytest.mark.slow
 class TestFixedWingSimulation(unittest.TestCase):
     """Takes care of unit tests intended to simulate versions of the fixed-wing UAV reach drop point
     case study."""

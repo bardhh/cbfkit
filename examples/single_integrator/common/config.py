@@ -1,3 +1,4 @@
+import os
 import jax.numpy as jnp
 
 
@@ -34,7 +35,7 @@ class PerfectMeasurementsConfig(BaseConfig):
     R = 0.01 * jnp.eye(len(BaseConfig.desired_state))
     pg = 0.50
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2
-    n_trials = 10
+    n_trials = 1 if os.getenv("CBFKIT_TEST_MODE") else 10
     pkl_file = f"examples/single_integrator/reach_goal/results/perfect_measurements_n{n_trials}_pg{int(pg * 100)}.pkl"
 
 
@@ -44,16 +45,16 @@ class EKFEstimationConfig(BaseConfig):
     R = 0.25 * jnp.eye(len(BaseConfig.desired_state))
     pg = 0.95
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2
-    n_trials = 10
+    n_trials = 1 if os.getenv("CBFKIT_TEST_MODE") else 10
     pkl_file = f"examples/single_integrator/reach_goal/results/ekf_estimation_n{n_trials}_pg{int(pg * 100)}.pkl"
 
 
 class UKFEstimationConfig(BaseConfig):
-    VISUALIZE = True
+    VISUALIZE = False if os.getenv("CBFKIT_TEST_MODE") else True
     R = 0.25 * jnp.eye(len(BaseConfig.desired_state))
     pg = 0.50
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2
-    n_trials = 3
+    n_trials = 1 if os.getenv("CBFKIT_TEST_MODE") else 3
     pkl_file = f"examples/single_integrator/reach_goal/results/ukf_estimation_n{n_trials}_pg{int(pg * 100)}.pkl"
 
 

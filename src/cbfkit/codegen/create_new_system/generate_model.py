@@ -28,7 +28,12 @@ import re
 import subprocess
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from jinja2 import Environment, FileSystemLoader
+try:
+    from jinja2 import Environment, FileSystemLoader
+except ImportError as exc:
+    raise ImportError(
+        "Code generation requires 'jinja2'. Please install it with: pip install cbfkit[codegen]"
+    ) from exc
 
 op_sys = platform.system()
 DELIMITER = "/" if op_sys == "Darwin" or op_sys == "Linux" else "\\"
@@ -82,7 +87,8 @@ def run_black(file_path: str) -> None:
     except FileNotFoundError as exc:
         LOGGER.error("Black executable not found while formatting %s", file_path)
         raise RuntimeError(
-            "Black executable not found. Please ensure Black is installed and available."
+            "Black executable not found. Please ensure Black is installed and available. "
+            "You can install it with: pip install cbfkit[codegen]"
         ) from exc
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr.decode().strip() if exc.stderr else str(exc)

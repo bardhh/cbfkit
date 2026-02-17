@@ -31,16 +31,16 @@ class TestCbfkitModels(unittest.TestCase):
         f, g = dynamics(state_2)
         self.assertTrue((f == jnp.zeros((3,))).all())
         self.assertTrue(
-            (
-                g
-                == jnp.array(
+            jnp.allclose(
+                g,
+                jnp.array(
                     [
                         [jnp.sqrt(2) / 2, -jnp.sqrt(2) / 2],
                         [jnp.sqrt(2) / 2, jnp.sqrt(2) / 2],
                         [0.0, 1.0],
                     ]
-                )
-            ).all()
+                ),
+            )
         )
 
     def test_quadrotor_model(self):

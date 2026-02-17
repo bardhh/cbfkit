@@ -3,12 +3,12 @@ path_integral_barrier.py
 ================
 
 This module contains the function specifying the right-hand side of risk-aware path-integral
-CBF inequalities, e.g., 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - rho) + integral for
-Lh <= 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - rho) + integral.
+CBF inequalities, e.g., 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - 2*rho) + integral for
+Lh <= 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - 2*rho) + integral.
 
 Functions
 ---------
--right_hand_side(rho, gamma, eta, time_period): 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - rho) + integral
+-right_hand_side(rho, gamma, eta, time_period): 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - 2*rho) + integral
 
 Notes
 -----
@@ -59,7 +59,7 @@ def right_hand_side(
 ) -> Callable[[Array], Array]:
     """Generates function for computing RHS of barrier conditions for risk-aware path integral CBF:
 
-    Lh <= 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - rho) + integral
+    Lh <= 1 - gamma - sqrt(2 * T) * eta * erfinv(1 - 2*rho) + integral
 
     where integral is the Lebesgue integral of the generator of h from 0 to the current time.
 
@@ -78,4 +78,4 @@ def right_hand_side(
     assert eta > 0
     assert 0 < time_period < jnp.inf
 
-    return lambda integral: 1 - gamma - jnp.sqrt(2 * time_period) * eta * erfinv(1 - rho) + integral
+    return lambda integral: 1 - gamma - jnp.sqrt(2 * time_period) * eta * erfinv(1 - 2 * rho) + integral

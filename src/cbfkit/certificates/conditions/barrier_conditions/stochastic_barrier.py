@@ -3,11 +3,11 @@ stochastic_barrier.py
 ================
 
 This module contains the function specifying the right-hand side of stochastic CBF inequalities,
-e.g., -alpha*h + beta for hdot <= -alpha*h + beta.
+e.g., -alpha*h + beta for hdot >= -alpha*h + beta.
 
 Functions
 ---------
--right_hand_side(alpha, beta):  -alpha*h + beta
+-right_hand_side(alpha, beta):  alpha*h - beta
 
 Notes
 -----
@@ -54,10 +54,14 @@ from jax import Array
 def right_hand_side(alpha: float, beta: float) -> Callable[[Array], Array]:
     """Generates function for computing RHS of barrier conditions for stochastic CBF:
 
-    hdot <= -alpha*h + beta
+    hdot >= -alpha*h + beta
+
+    Returns the term `alpha*h - beta` to be added to the inequality:
+    hdot + (alpha*h - beta) >= 0
 
     Args:
-        None
+        alpha (float): Linear coefficient for the barrier condition.
+        beta (float): Constant term for the barrier condition.
 
     Returns
     -------
@@ -65,4 +69,4 @@ def right_hand_side(alpha: float, beta: float) -> Callable[[Array], Array]:
     """
     assert alpha >= 0
     assert beta >= 0
-    return lambda h: -alpha * h + beta
+    return lambda h: alpha * h - beta

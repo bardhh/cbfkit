@@ -12,7 +12,7 @@ def unpack_for_cbf(
     control_limits: Array,
     barriers: CertificateCollection,
     lyapunovs: CertificateCollection,
-    **kwargs: Dict[str, Any],
+    **kwargs: Any,
 ):
     """Unpacks information required to generate CLF constraints of arbitrary type.
 
@@ -40,6 +40,8 @@ def unpack_for_cbf(
     elif kwargs["relaxable_clf"]:
         n_lfs = len(lyapunovs[0])
         n_con -= n_lfs
+    else:
+        n_lfs = 0
 
     # Check whether Barrier functions are tunable or relaxable
     if "tunable_class_k" in kwargs and kwargs["tunable_class_k"]:
@@ -56,7 +58,7 @@ def unpack_for_clf(
     control_limits: Array,
     lyapunovs: CertificateCollection,
     barriers: CertificateCollection,
-    **kwargs: Dict[str, Any],
+    **kwargs: Any,
 ):
     """Unpacks information required to generate CLF constraints of arbitrary type.
 
@@ -78,11 +80,14 @@ def unpack_for_clf(
     a_clf = jnp.zeros((n_lfs, n_con))
 
     # Check for tunable barrier functions
-    if "tunable_class_k" not in kwargs:
-        n_bfs = 0
-    elif kwargs["tunable_class_k"]:
+    if "tunable_class_k" in kwargs and kwargs["tunable_class_k"]:
         n_bfs = len(barriers[0])
         n_con -= n_bfs
+    elif "relaxable_cbf" in kwargs and kwargs["relaxable_cbf"]:
+        n_bfs = len(barriers[0])
+        n_con -= n_bfs
+    else:
+        n_bfs = 0
 
     # Check whether Lyapunov functions are relaxable
     if "relaxable_clf" not in kwargs:

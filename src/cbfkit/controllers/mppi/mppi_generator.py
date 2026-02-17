@@ -47,6 +47,7 @@ from cbfkit.utils.user_types import (
     DynamicsCallable,
     Key,
     MppiGenerator,
+    MppiParameters,
     PlannerCallable,
     PlannerCallableReturns,
     PlannerData,
@@ -76,7 +77,7 @@ def mppi_generator() -> MppiGenerator:
         stage_cost: Optional[StageCostCallable] = None,
         terminal_cost: Optional[TerminalCostCallable] = None,
         trajectory_cost: Optional[TrajectoryCostCallable] = None,
-        mppi_args: Any = None,
+        mppi_args: Optional[MppiParameters] = None,
         **kwargs: Dict[str, Any],
     ) -> PlannerCallable:
         """Produces the function to deploy a MPPI control law.
@@ -95,6 +96,10 @@ def mppi_generator() -> MppiGenerator:
         """
         complete = False
         n_con = len(control_limits)
+
+        # Cast mppi_args to MppiParameters to avoid mypy errors, as the code assumes it is not None.
+        # This preserves the original runtime behavior (crashing if None is passed) while enforcing types.
+        mppi_args = cast(MppiParameters, mppi_args)
 
         mppi = setup_mppi(
             dyn_func=dynamics_func,
@@ -162,12 +167,16 @@ def mppi_generator() -> MppiGenerator:
                 (n_con,)
             )
 
+            # Sentinel: Explicitly catch NaN solutions
+            is_nan = jnp.isnan(u).any()
+
             # logging data
             data = data._replace(
                 sampled_x_traj=robot_sampled_states,
                 x_traj=robot_selected_states,
                 u_traj=action_trajectory,
                 prev_robustness=prev_robustness,
+                error=is_nan,
             )
 
             return u, data

@@ -4,11 +4,26 @@ Visualization Utilities for Crowd and Robot Simulations.
 
 from typing import Any, Dict, List, Optional
 
-import matplotlib.animation as animation
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.collections import LineCollection
-from matplotlib.patches import Circle
+
+try:
+    import matplotlib.animation as animation
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import LineCollection
+    from matplotlib.patches import Circle
+
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+
+
+def require_visualization():
+    """Raise an ImportError if matplotlib is not installed."""
+    if not HAS_MATPLOTLIB:
+        raise ImportError(
+            "Optional dependency 'matplotlib' not found. "
+            "Please install cbfkit[vis] to use visualization features."
+        )
 
 
 def get_fading_segments(x, y):
@@ -45,6 +60,7 @@ def visualize_crowd(
         p_keys (list, optional): Planner data keys.
         save_path (str): Output filename.
     """
+    require_visualization()
     print(f"Generating Animation -> {save_path}...")
 
     fig, ax = plt.subplots(figsize=(10, 8))

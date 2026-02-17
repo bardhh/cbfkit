@@ -17,13 +17,17 @@ Examples
 >>> run code
 """
 
-from typing import Any, Callable, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+import os
+import time
 
 import jax
 import jax.numpy as jnp
 import jax.tree_util
+import numpy as np
 from jax import Array, random
 
+from cbfkit.controllers.utils import setup_controller
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
@@ -36,14 +40,137 @@ from cbfkit.utils.user_types import (
     PlannerCallable,
     PlannerData,
     SensorCallable,
+    SimulationResults,
     State,
+    StlTrajectoryCostCallable,
     Time,
 )
 
 from .backend import stepper
 from .callbacks import LoggingCallback, ProgressCallback, SimulationCallback
-from .simulator_jit import simulator_jit
+from .simulator_jit import INTEGRATION_NAN_ERROR, simulator_jit
+from .ui import create_progress, print_error, print_jit_status, print_warning
 from .utils import SimulationStepData
+
+
+SOLVER_STATUS_MAP = {
+    -99: "NO_STATUS_AVAILABLE",
+    -10: "INTEGRATION_NAN_ERROR",
+    -2: "NAN_INPUT_DETECTED",
+    -1: "NAN_DETECTED",
+    0: "UNSOLVED (Likely Infeasible)",
+    1: "SOLVED",
+    2: "MAX_ITER_REACHED",
+    3: "PRIMAL_INFEASIBLE",
+    4: "DUAL_INFEASIBLE",
+    5: "MAX_ITER_REACHED (UNSOLVED)",
+}
+
+
+def _format_error_status(status_code: Any) -> str:
+    """Formats a solver status code into a human-readable string."""
+    if isinstance(status_code, (int, float, jnp.ndarray, np.ndarray)):
+        # Handle scalar arrays or ints
+        try:
+            code = int(status_code)
+            if code in SOLVER_STATUS_MAP:
+                return f"{SOLVER_STATUS_MAP[code]} (Status: {code})"
+            else:
+                return f"Status: {code}"
+        except (ValueError, TypeError):
+            pass
+    return str(status_code)
+
+
+def _check_simulation_status(
+    controller_data_keys: List[str],
+    controller_data_values: List[Array],
+    planner_data_keys: List[str],
+    planner_data_values: List[Array],
+    nan_detected: bool = False,
+) -> None:
+    """Checks for simulation errors and prints warnings if found."""
+    # Sentinel: Explicit check for NaNs
+    if nan_detected:
+        print_error("Simulation failed due to NaNs in state trajectory.")
+
+    # Check controller errors
+    if "error" in controller_data_keys:
+        idx = controller_data_keys.index("error")
+        errors = controller_data_values[idx]
+        if jnp.any(errors):
+            # Find first error index
+            first_error_idx = int(jnp.argmax(errors).item())
+
+            # Try to get error data/status
+            status_msg = ""
+            if "error_data" in controller_data_keys:
+                idx_data = controller_data_keys.index("error_data")
+                error_data = controller_data_values[idx_data]
+                # Get status at the point of failure
+                status = error_data[first_error_idx].item()
+                status_msg = f" ({_format_error_status(status)})"
+
+            print_warning(
+                f"Simulation stopped early due to controller error at step {first_error_idx}{status_msg}."
+            )
+
+    # Check solver status telemetry from controller data.
+    # We check 'sub_data_solver_status' (explicit) or 'error_data' (legacy/implicit).
+    status_key = None
+    if "sub_data_solver_status" in controller_data_keys:
+        status_key = "sub_data_solver_status"
+    elif "error_data" in controller_data_keys:
+        status_key = "error_data"
+
+    if status_key:
+        idx_data = controller_data_keys.index(status_key)
+        status_codes = controller_data_values[idx_data]
+        # Status 2 and 5 indicate max-iteration termination in the QP solver.
+        # In the current controller policy these are failures (not accepted solutions).
+        max_iter_like_mask = (status_codes == 2) | (status_codes == 5)
+        if "error" in controller_data_keys:
+            idx_err = controller_data_keys.index("error")
+            errors = controller_data_values[idx_err]
+            max_iter_like_mask = max_iter_like_mask & (~errors)
+        if jnp.any(max_iter_like_mask):
+            count = int(jnp.sum(max_iter_like_mask).item())
+            print_warning(
+                f"Solver reached max iterations in {count} steps. "
+                "These steps are treated as controller failures and may produce NaN controls."
+            )
+
+    # Check planner errors
+    if "error" in planner_data_keys:
+        idx = planner_data_keys.index("error")
+        errors = planner_data_values[idx]
+        if jnp.any(errors):
+            first_error_idx = int(jnp.argmax(errors).item())
+            print_warning(
+                f"Simulation stopped early due to planner error at step {first_error_idx}."
+            )
+
+
+def _default_sensor(
+    t: Time,
+    x: Array,
+    *,
+    sigma: Optional[Array] = None,
+    key: Optional[Array] = None,
+    **kwargs: Any,
+) -> Array:
+    return x
+
+
+def _default_estimator(t, y, z, u, c):
+    return y, c if c is not None else jnp.zeros((len(y), len(y)))
+
+
+def _default_perturbation(x, u, f, g):
+    def p(key):
+        return jnp.zeros_like(x)
+
+    return p
 
 
 def simulator(
@@ -60,7 +187,7 @@ def simulator(
     sigma: Optional[Array],
     key: Array,
     callbacks: List[SimulationCallback] = [],
-    stl_trajectory_cost=None,
+    stl_trajectory_cost: Optional[StlTrajectoryCostCallable] = None,
 ) -> Callable[
     [Array, Optional[ControllerData], Optional[PlannerData]],
     Iterator[SimulationStepData],
@@ -70,45 +197,14 @@ def simulator(
     ...
     """
     # Handle defaults for Optional callables
-    sensor_func: SensorCallable
-    if sensor is None:
-
-        def _default_sensor(
-            t: Time,
-            x: Array,
-            *,
-            sigma: Optional[Array] = None,
-            key: Optional[Array] = None,
-            **kwargs: Any,
-        ) -> Array:
-            return x
-
-        sensor_func = _default_sensor
-    else:
-        sensor_func = sensor
-
-    estimator_func: EstimatorCallable
-    if estimator is None:
-
-        def _default_estimator(t, y, z, u, c):
-            return y, c
-
-        estimator_func = _default_estimator
-    else:
-        estimator_func = estimator
-
-    perturbation_func: PerturbationCallable
-    if perturbation is None:
-
-        def _default_perturbation(x, u, f, g):
-            def p(key):
-                return jnp.zeros(x.shape)
-
-            return p
-
-        perturbation_func = _default_perturbation
-    else:
-        perturbation_func = perturbation
+    sensor_func: SensorCallable = sensor if sensor is not None else _default_sensor
+    estimator_func: EstimatorCallable = estimator if estimator is not None else _default_estimator
+    perturbation_func: PerturbationCallable = (
+        perturbation if perturbation is not None else _default_perturbation
+    )
+    controller_func: Optional[ControllerCallable] = (
+        setup_controller(controller) if controller is not None else None
+    )
 
     sigma_val: Array
     if sigma is None:
@@ -127,7 +223,7 @@ def simulator(
         sensor=sensor_func,
         planner=planner,
         nominal_controller=nominal_controller,
-        controller=controller,
+        controller=controller_func,
         estimator=estimator_func,
         perturbation=perturbation_func,
         integrator=integrator,
@@ -171,10 +267,19 @@ def simulator(
             x_ret, u_ret, z_ret, c_ret, controller_data, planner_data = step(
                 dt * s, x, u, z, c, controller_data, planner_data
             )
+
+            # Sentinel: Check for NaNs
+            nan_detected = jnp.any(jnp.isnan(x_ret))
+            if nan_detected:
+                controller_data = controller_data._replace(
+                    error=jnp.array(True), error_data=jnp.array(INTEGRATION_NAN_ERROR)
+                )
+
             u = u_ret
             z = z_ret
             c = c_ret
-            x = x_ret
+            # Clamp state if NaN (use previous x)
+            x = x if nan_detected else x_ret
 
             # Efficient accumulation
             xs_list.append(x.reshape(-1, 1))
@@ -229,7 +334,7 @@ def simulator(
 
             if controller_data.error:
                 err_msg = (
-                    controller_data.error_data
+                    _format_error_status(controller_data.error_data)
                     if controller_data.error_data is not None
                     else "Unknown error"
                 )
@@ -267,14 +372,15 @@ def execute(
     key: Optional[Union[Array, None]] = None,
     filepath: Optional[str] = None,
     verbose: Optional[bool] = True,
-    controller_data: Optional[ControllerData] = None,
-    planner_data: Optional[PlannerData] = None,
+    controller_data: Optional[Union[ControllerData, Dict[str, Any]]] = None,
+    goal: Optional[State] = None,
+    planner_data: Optional[Union[PlannerData, Dict[str, Any]]] = None,
     initial_covariance: Optional[Covariance] = None,
-    stl_trajectory_cost=None,
+    stl_trajectory_cost: Optional[StlTrajectoryCostCallable] = None,
     use_jit: bool = False,
     jit_progress: bool = False,
     jit_progress_interval: int = 50,
-) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
+) -> SimulationResults:
     """Executes a complete simulation of the dynamical system.
 
     This function runs the simulation for `num_steps` starting from `x0`.
@@ -301,6 +407,9 @@ def execute(
         filepath (Optional[str], optional): Path to save log file. Defaults to None.
         verbose (Optional[bool], optional): Print progress/status. Defaults to True.
         controller_data (ControllerData, optional): Initial controller data. Defaults to None.
+        goal (State, optional): Constant reference state (e.g., target pose).
+            If provided, creates a constant trajectory in planner_data.
+            Mutually exclusive with `planner_data.x_traj`. Defaults to None.
         planner_data (PlannerData, optional): Initial planner data. Defaults to None.
         initial_covariance (Optional[Covariance], optional): Initial estimator covariance.
         Defaults to None.
@@ -314,7 +423,7 @@ def execute(
 
     Returns
     -------
-        Tuple containing:
+        SimulationResults object containing:
             - states (Array): Trajectory of states (num_steps x state_dim).
             - controls (Array): Trajectory of control inputs.
             - estimates (Array): Trajectory of state estimates.
@@ -324,6 +433,30 @@ def execute(
             - planner_keys (List[str]): Names of logged planner data fields.
             - planner_values (List[Array]): Logged planner data values.
     """
+    # Sentinel: Validate initial state shape and dynamics consistency
+    # This prevents obscure broadcasting errors deep in the simulation loop.
+    try:
+        f_check, g_check = dynamics(x0)
+    except Exception as e:
+        raise ValueError(
+            f"Dynamics evaluation failed for initial state 'x0' with shape {x0.shape}.\n"
+            f"Ensure 'x0' has the correct dimensions for the system.\n"
+            f"Original error: {e}"
+        ) from e
+
+    if f_check.shape != x0.shape:
+        msg = (
+            f"Shape mismatch: Initial state 'x0' has shape {x0.shape}, "
+            f"but dynamics drift 'f' has shape {f_check.shape}.\n"
+            "The state vector must match the dynamics output shape."
+        )
+        if x0.ndim == 2 and x0.shape[1] == 1 and f_check.ndim == 1:
+            msg += "\nTip: Pass a 1D array for 'x0' (e.g., use x0.ravel() or x0.flatten())."
+        elif x0.shape[0] < f_check.shape[0]:
+            msg += f"\nTip: System expects {f_check.shape[0]} states, but got {x0.shape[0]}."
+
+        raise ValueError(msg)
+
     # Setup callbacks
     callbacks: List[SimulationCallback] = []
     if verbose:
@@ -336,13 +469,76 @@ def execute(
 
     # Generate key for randomization
     if key is None:
-        key = random.PRNGKey(0)  # type: ignore
+        seed = 0
+        env_seed = os.environ.get("CBFKIT_SEED")
+        if env_seed is not None:
+            try:
+                seed = int(env_seed)
+            except ValueError:
+                pass
+
+        key = random.PRNGKey(seed)  # type: ignore
+
+    # Atlas: Validate dynamics output shapes to catch common (N, 1) vs (N,) errors early
+    try:
+        # Ensure x0 is a JAX array for this check
+        x0_arr = jnp.array(x0)
+        f_check, g_check = dynamics(x0_arr)
+
+        if f_check.ndim != 1:
+            msg = (
+                f"Dynamics function returned `f` with shape {f_check.shape}. "
+                "Expected 1D array (shape (n,)).\n"
+            )
+            if f_check.ndim == 2 and f_check.shape[1] == 1:
+                msg += (
+                    "It appears `f` is a column vector (n, 1). "
+                    "Please squeeze it to (n,) (e.g., using jnp.squeeze or .flatten())."
+                )
+            raise ValueError(msg)
+
+        if g_check.ndim != 2:
+            raise ValueError(
+                f"Dynamics function returned `g` with shape {g_check.shape}. "
+                "Expected 2D array (shape (n, m))."
+            )
+
+    except Exception as e:
+        # If dynamics evaluation fails completely (e.g. wrong x0 dimension), re-raise wrapped error
+        if isinstance(e, ValueError):
+            raise e
+        raise ValueError(
+            f"Failed to evaluate dynamics function on initial state: {e}"
+        ) from e
+
+    if controller is not None:
+        controller = setup_controller(controller)
 
     # Ensure data structures are NamedTuples
     if controller_data is None:
         controller_data = ControllerData()
     elif isinstance(controller_data, dict):
         controller_data = ControllerData(**controller_data)
+
+    # Process goal
+    if goal is not None:
+        goal_arr = jnp.atleast_1d(jnp.array(goal))
+        if goal_arr.ndim == 1:
+            goal_arr = goal_arr.reshape(-1, 1)
+
+        if planner_data is None:
+            planner_data = PlannerData(x_traj=goal_arr)
+        elif isinstance(planner_data, dict):
+            if planner_data.get("x_traj") is not None:
+                raise ValueError(
+                    "Cannot specify both 'goal' and 'planner_data[\"x_traj\"]'."
+                )
+            planner_data["x_traj"] = goal_arr
+            # Convert to NamedTuple later
+        elif isinstance(planner_data, PlannerData):
+            if planner_data.x_traj is not None:
+                raise ValueError("Cannot specify both 'goal' and 'planner_data.x_traj'.")
+            planner_data = planner_data._replace(x_traj=goal_arr)
 
     if planner_data is None:
         planner_data = PlannerData()
@@ -361,54 +557,60 @@ def execute(
 
         # Handle defaults (locally, as simulator_jit expects non-None)
         # This logic matches simulator() but must be explicit for JIT call prep
-        _sensor = sensor if sensor else (lambda t, x, **k: x)
-        _estimator = (
-            estimator
-            if estimator
-            else (lambda t, y, z, u, c: (y, c if c is not None else jnp.zeros((len(y), len(y)))))
-        )
-        _perturbation = (
-            perturbation if perturbation else (lambda x, u, f, g: (lambda k: jnp.zeros(x.shape)))
-        )
+        _sensor = sensor if sensor is not None else _default_sensor
+        _estimator = estimator if estimator is not None else _default_estimator
+        _perturbation = perturbation if perturbation is not None else _default_perturbation
         sigma_val = sigma if sigma is not None else jnp.zeros(0)
 
-        progress_cb: Optional[ProgressCallback] = None
+        progress_bar = None
+        progress_task_id = None
         progress_hook = None
         if verbose and jit_progress:
-            progress_cb = ProgressCallback()
-            progress_cb.on_start(total_steps=num_steps, dt=dt)
+            progress_bar = create_progress(total=num_steps, description="JIT Simulation")
+            progress_bar.start()
+            progress_task_id = progress_bar.add_task("JIT Simulation", total=num_steps)
             last_step_reported = -1
 
             def progress_hook(step_idx: int) -> None:
                 nonlocal last_step_reported
-                if progress_cb and progress_cb.pbar:
+                if progress_bar is not None and progress_task_id is not None:
                     step_delta = step_idx - last_step_reported
                     if step_delta > 0:
-                        progress_cb.pbar.update(step_delta)
+                        progress_bar.update(progress_task_id, advance=step_delta)
                         last_step_reported = step_idx
 
         if verbose:
-            print("Warming up JIT...")
+            print_jit_status("Warming up JIT...")
 
         prime_key1, prime_key2, prime_key3 = random.split(key, 3)  # type: ignore
 
         if planner is not None:
             _, p_data = planner(0.0, x0, None, prime_key1, p_data)  # type: ignore
+            # Bolt: Strip sampled_x_traj from p_data to avoid carrying it in JIT loop
+            p_data = p_data._replace(sampled_x_traj=None)
 
         if controller is not None:
             f_dummy, g_dummy = dynamics(x0)
             u_nom_dummy = jnp.zeros((g_dummy.shape[1],))
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
+        # Sentinel: Ensure error_data is initialized to enable NaN reporting in JIT loop.
+        # If controller is None, the loop propagates this structure, allowing us to report errors.
+        if controller is None and c_data.error_data is None:
+            c_data = c_data._replace(error_data=jnp.array(-99, dtype=jnp.int32))
+
         if verbose:
-            if progress_cb:
-                print(
+            if progress_bar is not None:
+                print_jit_status(
                     f"JIT compilation/execution started. Progress updates every "
                     f"{jit_progress_interval} steps."
                 )
             else:
-                print("JIT compilation/execution started. No progress bar will be shown.")
+                print_jit_status(
+                    "JIT compilation/execution started. No progress bar will be shown."
+                )
 
+        start_time = time.time()
         xs, us, zs, cs, c_datas, p_datas = simulator_jit(
             dt=dt,
             num_steps=num_steps,
@@ -431,54 +633,114 @@ def execute(
         )
         # Ensure progress callbacks flush before printing completion.
         xs.block_until_ready()
+        elapsed = time.time() - start_time
 
         if verbose:
-            print("JIT execution completed.")
+            print_jit_status(f"JIT execution completed in {elapsed:.4f}s.")
 
-        if progress_cb:
-            progress_cb.on_end(success=True)
+        if progress_bar is not None:
+            progress_bar.stop()
 
-        # Unpack JIT results into SimulationStepData list
-        c_keys = list(c_datas._fields)
-        p_keys = list(p_datas._fields)
-
-        # We reconstruct the list of step data to support the return format and logging
-        simulation_data_list: List[SimulationStepData] = []
-
-        for t in range(num_steps):
-            # Use tree_map to extract the t-th slice of the PyTree
-            # This correctly handles nested structures (like dicts in sub_data)
-            c_data_t = jax.tree_util.tree_map(lambda x: x[t], c_datas)
-            p_data_t = jax.tree_util.tree_map(lambda x: x[t], p_datas)
-
-            c_val_t = [getattr(c_data_t, k) for k in c_keys]
-            p_val_t = [getattr(p_data_t, k) for k in p_keys]
-
-            simulation_data_list.append(
-                SimulationStepData(
-                    state=xs[t],
-                    control=us[t],
-                    estimate=zs[t],
-                    covariance=cs[t],
-                    controller_keys=c_keys,
-                    controller_values=c_val_t,
-                    planner_keys=p_keys,
-                    planner_values=p_val_t,
-                )
-            )
-
-        simulation_data = tuple(simulation_data_list)
-
-        # If logging was requested, we must simulate the callbacks behavior or use the data directly
+        # If logging was requested, we must simulate the callbacks behavior
         if logging_callback:
-            # Populate the logging callback with the JIT data
-            # This effectively "logs" the JIT run after the fact
             logging_callback.on_start(num_steps, dt)
-            for idx, step_data in enumerate(simulation_data):
-                logging_callback.on_step(idx, idx * dt, step_data)
-            logging_callback.on_end(success=True)  # JIT runs don't fail mid-stream in the same way
 
-        return format_return_data(simulation_data)
+            # Optimization (Bolt): Use bulk logging instead of per-step loop
+            c_keys = list(c_datas._fields)
+            p_keys = list(p_datas._fields)
+
+            log_dict = {
+                "state": list(np.array(xs)),
+                "control": list(np.array(us)),
+                "estimate": list(np.array(zs)),
+                "covariance": list(np.array(cs)),
+            }
+
+            def process_bulk_data(keys, data_obj, prefix):
+                for k in keys:
+                    val = getattr(data_obj, k)
+                    # val could be Array(T, ...), Dict[str, Array(T, ...)], or None
+                    if val is None:
+                        log_dict[f"{prefix}_{k}"] = [None] * num_steps
+                    elif isinstance(val, dict):
+                        # Unstack dict of arrays -> list of dicts
+                        # First convert to numpy to speed up iteration
+                        val_np = {}
+                        for sk, sv in val.items():
+                            try:
+                                if isinstance(sv, tuple):
+                                    val_np[sk] = list(zip(*sv))
+                                else:
+                                    val_np[sk] = list(np.array(sv))
+                            except Exception:
+                                val_np[sk] = [None] * num_steps
+                        # zip now works on lists of values
+                        vals = [dict(zip(val_np.keys(), t)) for t in zip(*val_np.values())]
+                        log_dict[f"{prefix}_{k}"] = vals
+                    else:
+                        log_dict[f"{prefix}_{k}"] = list(np.array(val))
+
+            process_bulk_data(c_keys, c_datas, "controller")
+            process_bulk_data(p_keys, p_datas, "planner")
+
+            logging_callback.log_bulk(log_dict)
+            logging_callback.on_end(success=True)
+
+        # Fast return path for JIT: Extract data directly from stacked arrays
+        # This bypasses the expensive object creation loop + format_return_data
+
+        controller_data_keys: List[str] = []
+        controller_data_values: List[Array] = []
+        for key in c_datas._fields:
+            key_str = str(key)
+            val = getattr(c_datas, key_str)
+            if val is None:
+                continue
+            if isinstance(val, dict):
+                # Flatten dictionary fields (e.g., sub_data)
+                for sub_k, sub_v in val.items():
+                    if isinstance(sub_v, (dict, list, tuple)):
+                        continue
+                    controller_data_keys.append(f"{key_str}_{sub_k}")
+                    controller_data_values.append(sub_v)
+                continue
+            if isinstance(val, (list, tuple)):
+                continue
+
+            # We assume JIT results are arrays.
+            # If a field was None in input and stayed None, it's None.
+            controller_data_keys.append(key_str)
+            controller_data_values.append(val)
+
+        planner_data_keys: List[str] = []
+        planner_data_values: List[Array] = []
+        for key in p_datas._fields:
+            key_str = str(key)
+            val = getattr(p_datas, key_str)
+            if val is None or isinstance(val, (dict, list, tuple)):
+                continue
+            planner_data_keys.append(key_str)
+            planner_data_values.append(val)
+
+        nan_detected = jnp.any(jnp.isnan(xs))
+        _check_simulation_status(
+            controller_data_keys,
+            controller_data_values,
+            planner_data_keys,
+            planner_data_values,
+            nan_detected=bool(nan_detected),
+        )
+
+        return SimulationResults(
+            xs,
+            us,
+            zs,
+            cs,
+            controller_data_keys,
+            controller_data_values,
+            planner_data_keys,
+            planner_data_values,
+        )
 
     # Python Execution Path
     simulate_iter = simulator(
@@ -507,65 +769,125 @@ def execute(
         )
     )
 
-    return format_return_data(simulation_data)
+    formatted_data = format_return_data(simulation_data)
+
+    (
+        _,
+        _,
+        _,
+        _,
+        controller_data_keys,
+        controller_data_values,
+        planner_data_keys,
+        planner_data_values,
+    ) = formatted_data
+
+    # Check states for NaNs
+    nan_detected = False
+    if len(formatted_data.states) > 0:
+        nan_detected = jnp.any(jnp.isnan(formatted_data.states))
+
+    _check_simulation_status(
+        controller_data_keys,
+        controller_data_values,
+        planner_data_keys,
+        planner_data_values,
+        nan_detected=bool(nan_detected),
+    )
+
+    return formatted_data
 
 
 def format_return_data(
     data: Tuple[SimulationStepData, ...],
-) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
+) -> SimulationResults:
     """Extracts simulation data into JAX arrays."""
+    if not data:
+        return SimulationResults(
+            jnp.array([]),
+            jnp.array([]),
+            jnp.array([]),
+            jnp.array([]),
+            [],
+            [],
+            [],
+            [],
+        )
 
-    states = jnp.array([step.state for step in data])
-    controls = jnp.array([step.control for step in data])
-    estimates = jnp.array([step.estimate for step in data])
-    covariances = jnp.array([step.covariance for step in data])
+    # Optimization: Transpose tuple of NamedTuples to NamedTuple of tuples
+    # This avoids iterating over `data` multiple times and speeds up array stacking
+    transposed = SimulationStepData(*zip(*data))
+
+    states = jnp.stack(transposed.state)
+    controls = jnp.stack(transposed.control)
+    estimates = jnp.stack(transposed.estimate)
+    covariances = jnp.stack(transposed.covariance)
 
     controller_data_keys = []
     controller_data_values = []
     planner_data_keys = []
     planner_data_values = []
 
-    if len(data) > 0:
-        # Controller Keys
-        raw_c_keys = data[0].controller_keys
-        for i, key in enumerate(raw_c_keys):
-            vals = [step.controller_values[i] for step in data]
+    def process_keys_values(keys, values_tuple_of_lists):
+        processed_keys = []
+        processed_values = []
+
+        if not values_tuple_of_lists:
+            return processed_keys, processed_values
+
+        # zip(*tuple_of_lists) -> list of tuples (per key)
+        vals_by_key = list(zip(*values_tuple_of_lists))
+
+        if not vals_by_key:
+            return processed_keys, processed_values
+
+        for i, key in enumerate(keys):
+            vals = vals_by_key[i]
 
             # Check consistency and stackability
             first_valid = next((v for v in vals if v is not None), None)
             if first_valid is None or isinstance(first_valid, (dict, str, list, tuple)):
                 continue
+
+            # Handle mixed None/Numeric (e.g., error_data appearing mid-simulation)
             if any(v is None for v in vals):
-                continue
+                if isinstance(first_valid, (int, float, jnp.ndarray, np.ndarray)):
+                    # Replace None with default
+                    default_val = -99
+                    # Check if float to use NaN instead
+                    is_float = False
+                    if hasattr(first_valid, "dtype"):
+                        is_float = jnp.issubdtype(first_valid.dtype, jnp.floating)
+                    elif isinstance(first_valid, float):
+                        is_float = True
+
+                    if is_float:
+                        default_val = jnp.nan
+
+                    vals = [v if v is not None else default_val for v in vals]
+                else:
+                    # Non-numeric mixed with None (unsupported)
+                    continue
 
             try:
-                arr = jnp.array(vals)
-                controller_data_keys.append(key)
-                controller_data_values.append(arr)
-            except ValueError:
-                # Skip fields that cannot be stacked (e.g. variable shapes)
-                pass
-
-        # Planner Keys
-        raw_p_keys = data[0].planner_keys
-        for i, key in enumerate(raw_p_keys):
-            vals = [step.planner_values[i] for step in data]
-
-            first_valid = next((v for v in vals if v is not None), None)
-            if first_valid is None or isinstance(first_valid, (dict, str, list, tuple)):
-                continue
-            if any(v is None for v in vals):
-                continue
-
-            try:
-                arr = jnp.array(vals)
-                planner_data_keys.append(key)
-                planner_data_values.append(arr)
+                # jnp.stack is more efficient than jnp.array for stacking existing arrays
+                arr = jnp.stack(vals)
+                processed_keys.append(key)
+                processed_values.append(arr)
             except ValueError:
                 # Skip fields that cannot be stacked
                 pass
+        return processed_keys, processed_values
 
-    return (
+    if len(data) > 0:
+        controller_data_keys, controller_data_values = process_keys_values(
+            data[0].controller_keys, transposed.controller_values
+        )
+        planner_data_keys, planner_data_values = process_keys_values(
+            data[0].planner_keys, transposed.planner_values
+        )
+
+    return SimulationResults(
         states,
         controls,
         estimates,

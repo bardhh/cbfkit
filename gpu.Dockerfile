@@ -82,11 +82,10 @@ RUN python3 -m pip install --no-cache-dir \
     black>=23.12.1 \
     mypy>=1.8.0 \
     jaxopt>=0.8.3 \
+    jinja2>=3.0.0 \
     jupyter>=1.0.0 \
     control>=0.9.4 \
     pandas>=2.1.4 \
-    cvxpy>=1.4.1 \
-    cvxpylayers>=0.1.6 \
     casadi>=3.6.4 \
     tqdm>=4.66.2 \
     && if [ "$(uname -m)" = "x86_64" ]; then python3 -m pip install --no-cache-dir cvxopt; fi

@@ -64,11 +64,15 @@ def fxt_s(c1: float, c2: float, e1: float, e2: float) -> Callable[[Array], Array
     Args:
         c1 (float): convergence constant 1
         c2 (float): convergence constant 2
-        e1 (float): exponential constant 1
-        e2 (float): exponential constant 2
+        e1 (float): exponential constant 1 (0 < e1 < 1)
+        e2 (float): exponential constant 2 (e2 > 1)
 
     Returns
     -------
         Callable[[Array], Array]: FxTS Lyapunov conditions
     """
+    assert c1 > 0
+    assert c2 > 0
+    assert 0 < e1 < 1
+    assert e2 > 1
     return lambda V: lax.cond(V > 0, lambda _fake: -c1 * V**e1 - c2 * V**e2, lambda _fake: 0.0, 0)

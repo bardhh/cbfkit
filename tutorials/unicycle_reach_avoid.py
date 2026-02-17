@@ -1,78 +1,113 @@
-from typing import Any, Dict
-
-#####################################################################
-#####################################################################
+import os
 import jax.numpy as jnp
-import matplotlib.patches as patches
-import matplotlib.pyplot as plt
+from jax import jit
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
 
-import tutorials.models.accel_unicycle as unicycle
+    PLOT_AVAILABLE = True
+except ImportError:
+    PLOT_AVAILABLE = False
+    print("Matplotlib not found. Plotting disabled. Install 'cbfkit[vis]' to enable plotting.")
+
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
 from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
-from cbfkit.codegen.create_new_system.generate_model import generate_model
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
 from cbfkit.estimators import naive
 from cbfkit.integration import runge_kutta_4
 from cbfkit.sensors import perfect
 from cbfkit.simulation import simulator
-from cbfkit.utils.user_types import PlannerData
-from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.barrier_1 import cbf
-from tutorials.models.accel_unicycle.certificate_functions.barrier_functions.barrier_2 import (
-    cbf2_package,
-)
+from cbfkit.systems.unicycle.models.accel_unicycle.dynamics import accel_unicycle_dynamics
+from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 
-
-def compute_theta_d(x, y, th):
-    """Compute desired theta."""
-    thd = f"arctan2(yg - {y}, xg - {x})"
-    return f"{th} + arctan2(sin({thd} - {th}), cos({thd} - {th}))"
-
-
-def norm(x, y):
-    """Compute norm string."""
-    z = f"linalg.norm(array([{x} - xg, {y} - yg]))"
-    return z
-
-
-params: Dict[str, Any] = {}
-x, y, v, th = "x[0]", "x[1]", "x[2]", "x[3]"
-drift = [f"{v} * cos({th})", f"{v} * sin({th})", "0", "0"]
-control_mat = ["[0, 0]", "[0, 0]", "[1, 0]", "[0, 1]"]
-barriers = [f"({x} - xo)**2 + ({y} - yo)**2 - r**2", f"l**2 - {v}**2"]
-params["cbf"] = [{"xo: float": 1.0, "yo: float": 1.0, "r: float": 1.0}, {"l: float": 1.0}]
-u_nom = f"array([kp * ({norm(x ,y)} - {v}), kp * ({compute_theta_d(x, y, th)} - {th})])"
-params["controller"] = {"kp: float": 1.0, "xg: float": 1.0, "yg: float": 1.0}
-
-generate_model(
-    directory="./tutorials/models",
-    model_name="accel_unicycle",
-    drift_dynamics=drift,
-    control_matrix=control_mat,
-    barrier_funcs=barriers,
-    nominal_controller=u_nom,
-    params=params,
-)
-
-#####################################################################
-#####################################################################
-
+# Simulation Parameters
 initial_state = jnp.array([2.0, 2.0, 0.0, -3 * jnp.pi / 4])
 actuation_limits = jnp.array([1.0, jnp.pi])
-dynamics = unicycle.plant()
-nominal_controller_func = unicycle.controllers.controller_1(kp=1.0, xg=-2.0, yg=-2.0)
+dt = 1e-2
+num_steps = 1000 if not os.getenv("CBFKIT_TEST_MODE") else 50
+
+# Dynamics
+dynamics = accel_unicycle_dynamics()
 
 
-#####################################################################
-#####################################################################
+# Nominal Controller
+@jit
+def nominal_controller_func(t, state, key, data):
+    # Unpack state
+    x, y, v, th = state
 
-cbf1_package = rectify_relative_degree(
-    cbf(xo=0.9, yo=1.0, r=0.5), dynamics, len(initial_state), roots=-1.0 * jnp.ones((2,))
+    # Target
+    xg, yg = -2.0, -2.0
+    kp = 1.0
+
+    # Distance error
+    dist = jnp.linalg.norm(jnp.array([x - xg, y - yg]))
+
+    # Heading error
+    thd = jnp.arctan2(yg - y, xg - x)
+    theta_err = jnp.arctan2(jnp.sin(thd - th), jnp.cos(thd - th))
+
+    # Control laws from tutorial
+    accel = kp * (dist - v)
+    omega = kp * theta_err
+
+    return jnp.array([accel, omega]), {}
+
+
+# Barriers
+# 1. Obstacle Avoidance: (x-xo)^2 + (y-yo)^2 - r^2 >= 0
+# The ellipsoidal_barrier_factory creates a factory for generating barrier functions.
+# It expects the center position and the semi-axes lengths of the ellipsoid.
+cbf_factory, _, _ = ellipsoidal_barrier_factory(
+    system_position_indices=(0, 1),
+    obstacle_position_indices=(0, 1),
+    ellipsoid_axis_indices=(0, 1),
+)
+
+# Obstacle parameters: xo=0.9, yo=1.0, semi-axes=[0.5, 0.5] (circle with r=0.5)
+obs_pos = jnp.array([0.9, 1.0])
+obs_axes = jnp.array([0.5, 0.5])
+
+# Create the barrier function h(x)
+h_obs = cbf_factory(obs_pos, obs_axes)
+
+# Rectify relative degree:
+# The barrier function h(x) depends on position, but the control input (acceleration)
+# appears in the second derivative of position. Thus, the relative degree is 2.
+# rectify_relative_degree automatically computes the necessary derivatives and
+# returns a function that generates the high-order barrier certificate.
+obstacle_cbf_package = rectify_relative_degree(
+    function=h_obs,
+    system_dynamics=dynamics,
+    state_dim=len(initial_state),
+    form="exponential",
+    roots=jnp.array([-1.0, -1.0]),  # Roots for the pole placement in the linear system
+)
+
+# 2. Speed Limit: l^2 - v^2 >= 0 => l=1.0
+@jit
+def h_speed(state_and_time):
+    v = state_and_time[2]
+    l = 1.0
+    return l**2 - v**2
+
+
+# The speed limit barrier function depends on velocity. The control input (acceleration)
+# appears in the first derivative of velocity. Thus, the relative degree is 1.
+speed_limit_cbf_package = rectify_relative_degree(
+    function=h_speed,
+    system_dynamics=dynamics,
+    state_dim=len(initial_state),
+    form="exponential",
+    roots=jnp.array([-1.0]),
 )
 
 certificate_collection = concatenate_certificates(
-    cbf1_package(certificate_conditions=linear_class_k(10.0)),
-    cbf2_package(certificate_conditions=linear_class_k(1.0), l=1.0),
+    obstacle_cbf_package(certificate_conditions=linear_class_k(10.0)),
+    speed_limit_cbf_package(certificate_conditions=linear_class_k(1.0)),
 )
+
+# Controller
 controller = vanilla_cbf_clf_qp_controller(
     control_limits=actuation_limits,
     dynamics_func=dynamics,
@@ -80,41 +115,46 @@ controller = vanilla_cbf_clf_qp_controller(
     p_mat=jnp.diag(jnp.array([1.0, 0.1])),
 )
 
-#####################################################################
-#####################################################################
-
-x_sim, u_sim, z_sim, p_sim, dkeys, dvals, planner_data, planner_data_keys = simulator.execute(
+# Simulation
+x_sim, u_sim, z_sim, p_sim, controller_keys, controller_values, planner_keys, planner_values = simulator.execute(
     x0=initial_state,
-    dt=1e-2,
-    num_steps=1000,
+    dt=dt,
+    num_steps=num_steps,
     dynamics=dynamics,
     integrator=runge_kutta_4,
     nominal_controller=nominal_controller_func,
     controller=controller,
     sensor=perfect,
     estimator=naive,
-    planner_data=PlannerData(x_traj=jnp.zeros((4, 1001))),
     use_jit=True,
 )
 
-################################################0#####################
-#####################################################################
+# Plotting
+if PLOT_AVAILABLE:
+    fig, ax = plt.subplots()
+    circle1 = patches.Circle((0.9, 1.0), radius=0.5, edgecolor="r", facecolor="k")
+    ax.add_patch(circle1)
+    ax.plot(x_sim[:, 0], x_sim[:, 1])
+    ax.set_aspect("equal")
+    plt.title("Unicycle Reach-Avoid with CBF")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.savefig("trajectory_plot.png")
 
-# Create a figure and axis
-fig, ax = plt.subplots()
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        plt.show()
 
-# Add a circle patch to the plot
-circle1 = patches.Circle((0.9, 1.0), radius=0.5, edgecolor="r", facecolor="k")
+    plt.figure()
+    plt.plot(
+        jnp.linspace(0.0, dt * len(u_sim[:, 0]), len(u_sim[:, 0])), u_sim[:, 0], label="Accel"
+    )
+    plt.plot(
+        jnp.linspace(0.0, dt * len(u_sim[:, 1]), len(u_sim[:, 1])), u_sim[:, 1], label="Omega"
+    )
+    plt.legend()
+    plt.title("Control Inputs")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Control")
 
-# Add the circle patch to the axis
-ax.add_patch(circle1)
-
-ax.plot(x_sim[:, 0], x_sim[:, 1])
-# plt.show()
-
-plt.savefig("trajectory_plot.png")
-
-plt.plot(jnp.linspace(0.0, 5.0, len(u_sim[:, 0])), u_sim[:, 0])
-plt.plot(jnp.linspace(0.0, 5.0, len(u_sim[:, 1])), u_sim[:, 1])
-
-# plt.show()
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        plt.show()

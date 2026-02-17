@@ -1,0 +1,12 @@
+work_item	phase	depends_on	scope	acceptance_criteria	estimate_days	risk	owner	status
+WI-01	PR-0	-	Baseline gate harness	Baseline artifacts captured for tests/benchmarks and attached to integration PR	0.5	Low	TBD	Closed
+WI-02	PR-1	WI-01	Solver status contract	Statuses -2..5 decoded consistently across solver/controller/simulator with tests	0.75	High	TBD	Closed
+WI-03	PR-2	WI-01	API compatibility layer	Legacy usage patterns pass compatibility tests and migration docs added	1.5	High	TBD	Closed
+WI-04	PR-3	WI-01	Dependency profile CI	CI validates base/test/codegen/vis/casadi install+smoke contracts	2.0	High	TBD	Partial
+WI-05	PR-4	WI-02	Simulation path deduplication	Python and JIT integrator logic share helper + parity tests pass	2.5	High	TBD	Closed
+WI-06	PR-5	WI-01,WI-05	MPPI parity+perf	Fixed-seed MPPI parity tests pass and benchmarks within threshold	2.0	High	TBD	Closed
+WI-07	PR-6	WI-03,WI-04	Tutorial/docs migration	Removed tutorial commands have shim/mapping and README validated	1.25	Medium	TBD	Closed
+WI-08	PR-6	WI-04	Observability validation	Rich progress output verified in TTY and non-TTY CI log modes	0.75	Medium	TBD	Closed
+WI-09	PR-7	WI-07	Structural debt cleanup	.jules policy decided and enforced in repository	0.75	Medium	TBD	Closed
+WI-10	PR-7	WI-04	Coverage gap closure	Casadi smoke lane green in CI; quadrotor LQR+geometric tests and ROS wrapper smoke added	1.25	Medium	TBD	Partial
+WI-11	Merge	WI-02,WI-03,WI-04,WI-05,WI-06,WI-07,WI-08,WI-09,WI-10	Final merge+soak	24h soak green, no unexplained regression, go gate checklist complete	1.0	High	TBD	Open

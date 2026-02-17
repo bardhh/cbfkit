@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Callable, Optional, Tuple
 
 import jax
@@ -5,6 +6,11 @@ import jax.debug as jdebug
 import jax.numpy as jnp
 from jax import lax, random
 
+# Hermes: Error code for NaN detected during integration
+INTEGRATION_NAN_ERROR = -10
+
+from cbfkit.utils.jit_monitor import JitMonitor
+from cbfkit.simulation.integration_utils import integrate_with_cached_dynamics
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
@@ -21,6 +27,22 @@ from cbfkit.utils.user_types import (
 )
 
 
+@partial(
+    jax.jit,
+    static_argnames=[
+        "dynamics",
+        "integrator",
+        "planner",
+        "nominal_controller",
+        "controller",
+        "sensor",
+        "estimator",
+        "perturbation",
+        "progress_callback",
+        "num_steps",
+        "progress_interval",
+    ],
+)
 def simulator_jit(
     dt: float,
     num_steps: int,
@@ -52,6 +74,8 @@ def simulator_jit(
     -------
         xs, us, zs, cs, c_datas (stacked), p_datas (stacked)
     """
+    print(f"JIT COMPILATION: simulator_jit (dt={dt}, num_steps={num_steps})")
+    JitMonitor.increment("simulator_jit")
 
     # Define the scan step function
     def scan_step(carry, step_idx):
@@ -138,16 +162,54 @@ def simulator_jit(
             p = perturbation(x, u, f, g)
             key_int, subkey = random.split(key)
 
-            def vector_field(s):
-                f_s, g_s = dynamics(s)
-                return f_s + jnp.matmul(g_s, u) + p(subkey)
-
-            return key_int, integrator(x, vector_field, dt)
+            # Bolt: Evaluate perturbation once per step.
+            # This avoids repeated calls inside vector_field (e.g., 4 times for RK4),
+            # reducing graph size and runtime if p is complex.
+            p_val = p(subkey)
+            x_next = integrate_with_cached_dynamics(
+                x=x,
+                u=u,
+                dt=dt,
+                dynamics=dynamics,
+                integrator=integrator,
+                f=f,
+                g=g,
+                perturbation_value=p_val,
+            )
+            return key_int, x_next
 
         def _hold(_):
             return key, x
 
-        key, x_next = lax.cond(stop, _hold, _integrate, operand=None)
+        key, x_next_candidate = lax.cond(stop, _hold, _integrate, operand=None)
+
+        # Sentinel: Check for NaNs in the next state to prevent divergent simulation
+        nan_in_next = jnp.any(jnp.isnan(x_next_candidate))
+
+        # If NaN is detected, revert to previous state to freeze simulation at last valid point
+        x_next = jnp.where(nan_in_next, x, x_next_candidate)
+
+        # If NaN is detected, force controller error to True.
+        # This ensures the next iteration's 'stop' condition is triggered.
+        current_error = controller_data.error
+        new_error = current_error | nan_in_next
+        controller_data = controller_data._replace(error=new_error)
+
+        # Hermes: If NaN is detected and error_data exists, report Integration NaN error.
+        if controller_data.error_data is not None:
+            new_error_data = jnp.where(
+                nan_in_next, INTEGRATION_NAN_ERROR, controller_data.error_data
+            )
+            controller_data = controller_data._replace(error_data=new_error_data)
+
+        # Hermes: Print warning if NaN detected
+        lax.cond(
+            nan_in_next,
+            lambda: jdebug.print(
+                "⚠️ Simulation stopped: NaN detected during integration at t={t}", t=t
+            ),
+            lambda: None,
+        )
 
         if progress_callback is not None and progress_interval > 0:
             should_report = jnp.logical_or(
@@ -168,10 +230,23 @@ def simulator_jit(
         t_next = t + dt
 
         # Pack carry
-        new_carry = (key, t_next, x_next, u, z, c, controller_data, planner_data)
+        # Bolt: Strip sampled_x_traj from carry to save bandwidth/memory
+        planner_data_carry = planner_data._replace(sampled_x_traj=None)
+        new_carry = (key, t_next, x_next, u, z, c, controller_data, planner_data_carry)
 
         # Output (trajectory)
-        output = (x, u, z, c, controller_data, planner_data)
+        # Bolt: Strip solver_params from logged data to save memory
+        log_controller_data = controller_data
+        if (
+            controller_data.sub_data is not None
+            and "solver_params" in controller_data.sub_data
+        ):
+            # Create a shallow copy and remove the key to avoid affecting carry
+            log_sub_data = controller_data.sub_data.copy()
+            del log_sub_data["solver_params"]
+            log_controller_data = controller_data._replace(sub_data=log_sub_data)
+
+        output = (x, u, z, c, log_controller_data, planner_data)
 
         return new_carry, output
 

@@ -54,48 +54,61 @@ from jax import Array
 
 
 def linear_class_k(alpha: float) -> Callable[[Array], Array]:
-    """Generates function for computing RHS of barrier conditions for zeroing CBF:
+    """Generates the class K function alpha(h) for the zeroing CBF condition:
 
-    hdot >= -alpha*h
+    hdot + alpha(h) >= 0
+
+    which is equivalent to:
+    hdot >= -alpha(h)
+
+    where alpha(h) = alpha * h.
 
     Args:
-        None
+        alpha (float): The coefficient for the linear class K function.
 
     Returns
     -------
-        Callable[[Array], Array]: Zeroing CBF barrier conditions
+        Callable[[Array], Array]: The class K function alpha(h).
     """
     assert alpha >= 0
     return lambda h: alpha * h
 
 
 def cubic_class_k(alpha: float) -> Callable[[Array], Array]:
-    """Generates function for computing RHS of barrier conditions for zeroing CBF:
+    """Generates the class K function alpha(h) for the zeroing CBF condition:
 
-    hdot >= -alpha*h**3
+    hdot + alpha(h) >= 0
+
+    which is equivalent to:
+    hdot >= -alpha(h)
+
+    where alpha(h) = alpha * h^3.
 
     Args:
-        None
+        alpha (float): The coefficient for the cubic class K function.
 
     Returns
     -------
-        Callable[[Array], Array]: Zeroing CBF barrier conditions
+        Callable[[Array], Array]: The class K function alpha(h).
     """
     assert alpha >= 0
     return lambda h: alpha * h**3
 
 
 def generic_class_k(alpha: Callable[[Array], Array]) -> Callable[[Array], Array]:
-    """Generates function for computing RHS of barrier conditions for zeroing CBF:
+    """Generates the class K function alpha(h) for the zeroing CBF condition:
 
+    hdot + alpha(h) >= 0
+
+    which is equivalent to:
     hdot >= -alpha(h)
 
     Args:
-        None
+        alpha (Callable[[Array], Array]): The class K function itself.
 
     Returns
     -------
-        Callable[[Array], Array]: Zeroing CBF barrier conditions
+        Callable[[Array], Array]: The class K function alpha(h).
     """
 
     def func(h: Array) -> Array:

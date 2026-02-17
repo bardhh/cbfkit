@@ -21,6 +21,7 @@ one with respect to the system dynamics, then the constraint function is not mod
 Example
 -------
 >>> from cbfkit.certificates import rectify_relative_degree
+>>> from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 >>>
 >>> def f(x):
 >>>     return jnp.array([x[2], x[3], x[4], x[5], 0, 0])
@@ -29,7 +30,7 @@ Example
 >>>     return jnp.array([[0, 0], [0, 0], [0, 0], [0, 0], [1, 0], [0, 1]])
 >>>
 >>> def dynamics(x):
->>>     return f(x), g(x), 1
+>>>     return f(x), g(x)
 >>>
 >>> def constraint(r1, r2):
 >>>     def h(x):
@@ -38,22 +39,38 @@ Example
 >>>
 >>> r1, r2 = 0.1, 0.05
 >>>
->>> cbf = rectify_relative_degree(constraint(r1, r2), dynamics, 6)
->>> print(cbf(jnp.array([0.5, 0.5, -0.1, 0, 0.2, 0])))
+>>> # New simpler usage
+>>> cbf = rectify_relative_degree(
+>>>     constraint(r1, r2),
+>>>     dynamics,
+>>>     6,
+>>>     certificate_conditions=zeroing_barriers.linear_class_k(1.0),
+>>>     input_style="state",
+>>> )
 """
 
-from typing import Callable, List, Union
+from typing import Callable, List, Optional, Union
 
 import jax.numpy as jnp
 import numpy as np
 from jax import Array, jacfwd, jacrev, jit, random
 
 from cbfkit.certificates import certificate_package
-from cbfkit.utils.user_types import CertificateCollection, DynamicsCallable
+from cbfkit.utils.user_types import (
+    CertificateCollection,
+    CertificateConditionsCallable,
+    CertificateInputStyle,
+    DynamicsCallable,
+)
 
 # For random sample generation
 KEY = random.PRNGKey(0)
 KEY, SUBKEY = random.split(KEY)
+
+# Tolerance for determining if relative degree is reached.
+# If total absolute control authority over random samples is below this threshold,
+# we treat it as zero (effective relative degree is higher).
+RELATIVE_DEGREE_TOLERANCE = 1e-6
 
 
 def kwargs_wrapper(func: Callable) -> Callable:
@@ -67,9 +84,12 @@ def rectify_relative_degree(
     function: Callable[[Array], Array],
     system_dynamics: DynamicsCallable,
     state_dim: int,
-    roots: Union[Array, None] = None,
+    roots: Union[float, Array, None] = None,
     form: str = "exponential",
-) -> Callable[..., CertificateCollection]:
+    certificate_conditions: Optional[CertificateConditionsCallable] = None,
+    rng: Optional[Union[int, Array]] = None,
+    input_style: Union[str, CertificateInputStyle] = "concatenated",
+) -> Union[Callable[..., CertificateCollection], CertificateCollection]:
     """Rectifies the relative degree of the provided constraint function with respect to the system
     dynamics deriving a new exponential- or high-order-CBF.
 
@@ -77,73 +97,114 @@ def rectify_relative_degree(
         function (Callable[[float, Array], Array]): constraint function
         system_dynamics (DynamicsCallable): dynamics function
         state_dim (int): dimension of the state
+        roots (Union[float, Array, None], optional): roots of the polynomial.
+            If a scalar float is provided, it is broadcasted to all required roots.
+            If an array is provided, it is used as the roots (padded/truncated as needed).
+            Defaults to None (generating default roots).
         form (str, optional): type of cascading procedure. Defaults to "exponential".
+        certificate_conditions (Optional[CertificateConditionsCallable]): certificate conditions.
+            If provided, returns a CertificateCollection directly. Defaults to None.
+        rng (Optional[Union[int, Array]]): random seed or key for relative degree sampling.
+            Defaults to None (using global default).
+        input_style (Union[str, CertificateInputStyle], optional): input signature of the function.
+            - "concatenated" (default): function(state_and_time) -> value
+            - "state": function(state) -> value
+            - "separated": function(time, state) -> value
 
     Returns
     -------
-        Callable[[Dict[str, Any]], CertificateTuple]: Function to create the CertificateCollection
+        Union[Callable[..., CertificateCollection], CertificateCollection]: Function to create the CertificateCollection,
+            or the CertificateCollection itself if certificate_conditions is provided.
     """
-    function_list = compute_function_list(function, system_dynamics, state_dim + 1, form)
+    subkey: Array
+    if rng is None:
+        subkey = SUBKEY  # type: ignore[assignment]
+    elif isinstance(rng, int):
+        subkey = random.PRNGKey(rng)  # type: ignore[assignment]
+    else:
+        subkey = rng  # type: ignore[assignment]
+
+    # Normalize input_style
+    if isinstance(input_style, str):
+        try:
+            input_style = CertificateInputStyle(input_style)
+        except ValueError:
+            valid_styles = [e.value for e in CertificateInputStyle]
+            raise ValueError(
+                f"Invalid input_style '{input_style}'. Must be one of {valid_styles}"
+            ) from None
+
+    # Wrap function to ensure concatenated (state + time) signature for compute_function_list
+    if input_style == CertificateInputStyle.STATE:
+        _orig_func_state = function
+
+        def function(xt: Array) -> Array:
+            return _orig_func_state(xt[:-1])
+
+    elif input_style == CertificateInputStyle.SEPARATED:
+        _orig_func_sep = function
+
+        def function(xt: Array) -> Array:
+            return _orig_func_sep(xt[-1], xt[:-1])
+
+    function_list = compute_function_list(
+        function, system_dynamics, state_dim + 1, form, subkey=subkey
+    )
 
     if form == "exponential":
         n_fl = len(function_list)
+        n_roots = n_fl - 1
+
+        # Handle scalar roots (Python float/int or 0-d JAX array)
+        if isinstance(roots, (float, int)):
+            roots = jnp.array([float(roots)])
+        elif roots is not None and getattr(roots, "ndim", 0) == 0:
+            roots = jnp.atleast_1d(roots)
+
         if roots is None:
             # Root locations in the left half-plane
-            roots = jnp.array([-0.1 * (ii + 1) for ii in range(n_fl)])
+            roots = jnp.array([-0.1 * (ii + 1) for ii in range(n_roots)])
 
         n_r = len(roots)
-        if n_r > n_fl:
-            roots = roots[:n_fl]
-        elif n_r < n_fl:
-            roots = jnp.hstack([roots, roots[-1] * jnp.ones((n_fl - n_r))])
+        if n_r > n_roots:
+            roots = roots[:n_roots]
+        elif n_r < n_roots:
+            roots = jnp.hstack([roots, roots[-1] * jnp.ones((n_roots - n_r))])
 
         assert jnp.all(roots < 0), "All roots must be in open left-half plane!"
-        assert len(roots) == n_fl, "Length of roots must be relative-degree of system minus 1!"
+        assert len(roots) == n_roots, "Length of roots must be relative-degree of system minus 1!"
 
         # Calculate the polynomial coefficients using JAX and SciPy
         polynomial_coefficients = polynomial_coefficients_from_roots(roots)
 
-        def cbf(**kwargs):
+        def cbf():
             @jit
             def func(x: Array) -> Array:
                 return jnp.sum(
                     jnp.array(
                         [
                             func(x) * coeff
-                            for func, coeff in zip(function_list, polynomial_coefficients)
+                            for func, coeff in zip(function_list, polynomial_coefficients[::-1])
                         ]
                     )
                 )
 
             return func
 
-        def cbf_grad(**kwargs) -> Callable[[Array], Array]:
-            jacobian = jacfwd(cbf(**kwargs))
-
-            @jit
-            def func(x: Array) -> Array:
-                return jacobian(x)
-
-            return func
-
-        def cbf_hess(**kwargs) -> Callable[[Array], Array]:
-            hessian = jacfwd(jacrev(cbf(**kwargs)))
-
-            @jit
-            def func(x: Array) -> Array:
-                return hessian(x)
-
-            return func
-
     elif form == "high-order":
 
-        def cbf(**kwargs):
+        def cbf():
             def func(x: Array) -> Array:
-                return function_list[0](x)
+                return function_list[-1](x)
 
             return func
 
-    return certificate_package(cbf, cbf_grad, cbf_hess, state_dim)
+    factory = certificate_package(cbf, n=state_dim)
+
+    if certificate_conditions is not None:
+        return factory(certificate_conditions)
+
+    return factory
 
 
 def compute_function_list(
@@ -178,11 +239,12 @@ def compute_function_list(
 
     if subkey is None:
         subkey = SUBKEY  # type: ignore[assignment]
-    else:
-        _, subkey = random.split(KEY)  # type: ignore[assignment]
+
+    # Split the key to ensure different samples are used at each recursion level
+    sample_key, next_subkey = random.split(subkey)  # type: ignore[arg-type]
 
     # Do this at every level
-    samples = random.normal(subkey, (n_samples, state_dim))  # type: ignore[arg-type]
+    samples = random.normal(sample_key, (n_samples, state_dim))  # type: ignore[arg-type]
     jacobian = jacfwd(function)
 
     total = jnp.array(0.0)
@@ -192,12 +254,30 @@ def compute_function_list(
         total += jnp.sum(jnp.abs(jnp.matmul(grad, dyn_g)))
 
     def exponential_new_func(x: Array):
-        return jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0])
+        return jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0]) + jacobian(x)[-1]
 
     def highorder_new_func(x: Array):
-        return jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0]) + function(x)
+        return (
+            jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0])
+            + jacobian(x)[-1]
+            + function(x)
+        )
 
-    if total == 0:
+    if jnp.isnan(total):
+        raise ValueError(
+            "Encountered NaN during relative degree verification. Check your dynamics function and constraint function for numerical stability."
+        )
+
+    if total < RELATIVE_DEGREE_TOLERANCE:
+        # Aegis: Safety check to prevent infinite recursion for uncontrollable systems.
+        # If the function list length exceeds state dimension (n+1), it implies relative degree
+        # is greater than system dimension (impossible for controllable output) or undefined.
+        if len(func_list) >= state_dim:
+            raise ValueError(
+                f"Relative degree undefined or exceeds system dimension ({state_dim - 1}). "
+                "Check that your barrier function depends on the state variables affected by control input."
+            )
+
         if form == "exponential":
             new_func = exponential_new_func
 
@@ -213,7 +293,7 @@ def compute_function_list(
             state_dim,
             form,
             func_list,
-            subkey,
+            next_subkey,
         )
 
     return func_list

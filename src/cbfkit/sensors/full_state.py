@@ -36,6 +36,9 @@ def unbiased_gaussian_noise(
 ) -> Array:
     """Senses the state subject to additive, unbiased (zero-mean), Gaussian noise.
 
+    Note: Previous versions averaged 10 samples at t=0. This behavior has been removed
+    for consistency with the noise model definition.
+
     Args:
         t (float): time (sec)
         x (Array): state vector (ground truth)
@@ -63,25 +66,12 @@ def unbiased_gaussian_noise(
         sigma,
     )
 
-    def sample_mean(num_samples, rng_key):
-        # Generate samples: (num_samples, dim)
-        # random.normal creates (num_samples, dim) directly
-        samples = random.normal(rng_key, shape=(num_samples, dim))
+    # Generate random vector z ~ N(0, I)
+    z = random.normal(key, shape=(dim,))
 
-        # Transform: (chol @ samples.T).T -> samples @ chol.T
-        transformed = jnp.dot(samples, chol.T)
-
-        # Mean across samples
-        vec = jnp.mean(transformed, axis=0)
-        return vec
-
-    # Logic: if t == 0, take 10 samples, else 1 sample
-    # We rely on lax.cond for JIT compatibility
-    n_initial_meas = 10
-
-    sampled_random_vector = lax.cond(
-        t == 0.0, lambda k: sample_mean(n_initial_meas, k), lambda k: sample_mean(1, k), key
-    )
+    # Transform to y ~ N(0, Sigma) via y = L @ z
+    # chol is lower triangular L such that L @ L.T = Sigma
+    sampled_random_vector = jnp.dot(chol, z)
 
     sampled_random_vector = sampled_random_vector.reshape(x.shape)
 
