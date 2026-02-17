@@ -12,12 +12,33 @@ allowing system-level overrides.
 """
 
 import os
+import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    # dotenv is optional: tests should still run when environment loading support
+    # is not installed in the current interpreter.
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 # Load .env file from project root (won't override existing env vars)
 load_dotenv(Path(__file__).parent / ".env")
+
+# Ensure local src/ package is tested, not an unrelated site-packages install.
+_ROOT_DIR = Path(__file__).parent
+_SRC_DIR = _ROOT_DIR / "src"
+if _SRC_DIR.exists():
+    src_str = str(_SRC_DIR)
+    if src_str not in sys.path:
+        sys.path.insert(0, src_str)
+
+# Default test execution to CPU JAX unless explicitly overridden.
+# This prevents hard crashes on hosts where Metal/GPU backends are visible
+# but not usable in sandboxed/CI environments.
+os.environ.setdefault("JAX_PLATFORM_NAME", "cpu")
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 
 def pytest_configure(config):

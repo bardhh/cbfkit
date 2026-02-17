@@ -81,3 +81,42 @@ def test_simulation_results_api_collisions():
 
     # Should get controller value (priority 2)
     assert jnp.all(res["shared"] == c_vals[0])
+
+
+def test_simulation_results_legacy_aliases_and_tuple_helper():
+    states = jnp.array([[1.0, 2.0]])
+    controls = jnp.array([[0.5]])
+    estimates = jnp.array([[1.1, 2.1]])
+    covariances = jnp.array([[[1.0, 0.0], [0.0, 1.0]]])
+
+    c_keys = ["solver_status"]
+    c_vals = [jnp.array([1])]
+    p_keys = ["x_traj"]
+    p_vals = [jnp.array([[1.0, 2.0]])]
+
+    res = SimulationResults(
+        states,
+        controls,
+        estimates,
+        covariances,
+        c_keys,
+        c_vals,
+        p_keys,
+        p_vals,
+    )
+
+    assert res.controller_data_keys == c_keys
+    assert res.controller_data_values == c_vals
+    assert res.planner_data_keys == p_keys
+    assert res.planner_data_values == p_vals
+
+    legacy = res.as_tuple()
+    assert len(legacy) == 8
+    assert jnp.all(legacy[0] == states)
+    assert jnp.all(legacy[1] == controls)
+    assert legacy[4] == c_keys
+    assert legacy[6] == p_keys
+
+    tail = res[4:]
+    assert isinstance(tail, tuple)
+    assert tail[0] == c_keys

@@ -9,9 +9,8 @@ from jax import lax, random
 # Hermes: Error code for NaN detected during integration
 INTEGRATION_NAN_ERROR = -10
 
-from cbfkit.integration.forward_euler import forward_euler
-from cbfkit.integration.runge_kutta import runge_kutta_4
 from cbfkit.utils.jit_monitor import JitMonitor
+from cbfkit.simulation.integration_utils import integrate_with_cached_dynamics
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
@@ -167,30 +166,17 @@ def simulator_jit(
             # This avoids repeated calls inside vector_field (e.g., 4 times for RK4),
             # reducing graph size and runtime if p is complex.
             p_val = p(subkey)
-
-            # Optimization (Bolt): If integrator is forward_euler, avoid re-evaluating dynamics.
-            if integrator == forward_euler:
-                # Forward Euler: x_next = x + dt * (f + g*u + p)
-                # We have f, g from Step 3.
-                dx = f + jnp.matmul(g, u) + p_val
-                x_next = x + dx * dt
-                return key_int, x_next
-
-            def vector_field(s):
-                f_s, g_s = dynamics(s)
-                return f_s + jnp.matmul(g_s, u) + p_val
-
-            # Optimization (Bolt): If integrator is runge_kutta_4, reuse f and g for k1
-            # to avoid one dynamics evaluation (25% reduction in integration cost).
-            if integrator == runge_kutta_4:
-                k1 = f + jnp.matmul(g, u) + p_val
-                k2 = vector_field(x + 0.5 * dt * k1)
-                k3 = vector_field(x + 0.5 * dt * k2)
-                k4 = vector_field(x + dt * k3)
-                x_next = x + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
-                return key_int, x_next
-
-            return key_int, integrator(x, vector_field, dt)
+            x_next = integrate_with_cached_dynamics(
+                x=x,
+                u=u,
+                dt=dt,
+                dynamics=dynamics,
+                integrator=integrator,
+                f=f,
+                g=g,
+                perturbation_value=p_val,
+            )
+            return key_int, x_next
 
         def _hold(_):
             return key, x

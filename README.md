@@ -127,6 +127,9 @@ For a quick start without additional dependencies, try `tutorials/unicycle_reach
 python tutorials/unicycle_reach_avoid.py
 ```
 
+Legacy tutorial entrypoints are supported as compatibility aliases. See
+`docs/tutorial_entrypoint_migration.md` for the exact old->new mapping.
+
 Open the Python notebook in the `tutorials` directory to get started. The script `code_generation_tutorial.ipynb` automatically generates the controller, plant, and certificate function for a Van der Pol oscillator. It also generates ROS2 nodes for the plant, controller, sensor, and estimator. These serve as a starting point for developing your own CBF-based controller.
 
 Generated files/folders:
@@ -278,7 +281,7 @@ controller = cbf_controller(
 )
 
 # Simulation Execution
-x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
+x, u, z, p, dkeys, dvals, planner_keys, planner_values = sim.execute(
     x0=init_state,
     dt=dt,
     num_steps=int(tf / dt),
@@ -298,6 +301,35 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     },
     use_jit=True,
 )
+```
+
+`sim.execute(...)` returns a `SimulationResults` object that preserves legacy
+8-tuple unpacking while also supporting key-based access, e.g.:
+
+```python
+results = sim.execute(...)
+states = results["states"]
+solver_status = results["solver_status"]  # from controller data when present
+# Legacy aliases are also available:
+planner_keys = results.planner_data_keys
+planner_values = results.planner_data_values
+```
+
+Legacy safety-controller signatures are also supported through
+`cbfkit.controllers.setup_controller`. During `sim.execute(...)`, controllers
+with signatures like `(t, x)`, `(t, x, u_nom)`, and `(t, x, key, data)` are
+adapted automatically to the canonical
+`(t, x, u_nom, key, data) -> (u, ControllerData)` interface.
+
+If you build simulation loops manually via `sim.simulator(...)`, you can also
+adapt explicitly:
+
+```python
+from cbfkit.controllers import setup_controller
+
+legacy_controller = lambda t, x: jnp.array([0.0])
+controller = setup_controller(legacy_controller)
+simulate_iter = sim.simulator(..., controller=controller, ...)
 ```
 
 

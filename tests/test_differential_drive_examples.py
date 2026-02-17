@@ -12,7 +12,7 @@ SCRIPTS_TO_TEST = [
 
 @pytest.mark.slow
 @pytest.mark.parametrize("script_path", SCRIPTS_TO_TEST)
-def test_differential_drive_example_execution(script_path):
+def test_differential_drive_example_execution(script_path, tmp_path):
     """Runs the specified example script as a subprocess and asserts it exits with code 0."""
     if not os.path.exists(script_path):
         pytest.fail(f"Script not found: {script_path}")
@@ -20,7 +20,12 @@ def test_differential_drive_example_execution(script_path):
     # Set environment variables to force headless mode for matplotlib
     env = os.environ.copy()
     env["MPLBACKEND"] = "Agg"
+    env["MPLCONFIGDIR"] = str(tmp_path / ".mplconfig")
     env["CBFKIT_TEST_MODE"] = "1"
+    # Force CPU backend in subprocesses to avoid Metal/GPU initialization aborts
+    # in environments without a visible accelerator.
+    env["JAX_PLATFORM_NAME"] = "cpu"
+    env["JAX_PLATFORMS"] = "cpu"
     env["PYTHONPATH"] = f"{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
 
     try:

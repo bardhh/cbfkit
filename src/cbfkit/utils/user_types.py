@@ -138,6 +138,39 @@ class SimulationResults(NamedTuple):
         """Returns planner data as a dictionary."""
         return dict(zip(self.planner_keys, self.planner_values))
 
+    @property
+    def controller_data_keys(self) -> List[str]:
+        """Legacy alias for ``controller_keys``."""
+        return self.controller_keys
+
+    @property
+    def controller_data_values(self) -> List[Array]:
+        """Legacy alias for ``controller_values``."""
+        return self.controller_values
+
+    @property
+    def planner_data_keys(self) -> List[str]:
+        """Legacy alias for ``planner_keys``."""
+        return self.planner_keys
+
+    @property
+    def planner_data_values(self) -> List[Array]:
+        """Legacy alias for ``planner_values``."""
+        return self.planner_values
+
+    def as_tuple(self) -> Tuple[
+        State,
+        Control,
+        Estimate,
+        Covariance,
+        List[str],
+        List[Array],
+        List[str],
+        List[Array],
+    ]:
+        """Returns the canonical legacy 8-tuple representation."""
+        return tuple(self)  # type: ignore[return-value]
+
     def __getitem__(self, key: Union[int, str]) -> Any:
         """Allows dictionary-like access to simulation results.
 
