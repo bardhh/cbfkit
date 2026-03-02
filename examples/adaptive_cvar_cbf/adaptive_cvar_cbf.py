@@ -29,21 +29,22 @@ class Obstacle:
 def nominal_controller(t, x, key, data=None):
     # PD controller to target
     target = jnp.array([4.0, 4.0])
-    kp = 0.5
-    kd = 2.5
+    # Keep the nominal command moderate so the CVaR-CBF QP stays feasible near obstacles.
+    kp = 0.3
+    kd = 1.5
 
     pos_err = target - x[:2]
     vel_des = kp * pos_err
     # clamp vel
     v_norm = jnp.linalg.norm(vel_des)
-    v_max = 2.8  # roughly sqrt(2^2+2^2)
+    v_max = 1.5
     vel_des = jnp.where(v_norm > v_max, vel_des * v_max / v_norm, vel_des)
 
     acc_des = kd * (vel_des - x[2:4])
 
     # clamp acc
     a_norm = jnp.linalg.norm(acc_des)
-    a_max = 2.8
+    a_max = 1.5
     acc_des = jnp.where(a_norm > a_max, acc_des * a_max / a_norm, acc_des)
 
     return acc_des, data
@@ -62,7 +63,7 @@ def main():
     radius = 0.3
 
     # Obstacles
-    obs1 = Obstacle([2.0, 2.0, 0.0, 0.0], 0.3, dt)
+    obs1 = Obstacle([2.0, 2.5, 0.0, 0.0], 0.3, dt)
     obstacles = [obs1]
 
     # Controller Setup
@@ -163,9 +164,7 @@ def main():
 
     obs_patches = []
     for obs in obstacles:
-        p = Circle(
-            (obs.x_curr[0].item(), obs.x_curr[1].item()), obs.radius, color="r", alpha=0.6
-        )
+        p = Circle((obs.x_curr[0].item(), obs.x_curr[1].item()), obs.radius, color="r", alpha=0.6)
         ax.add_patch(p)
         obs_patches.append(p)
 

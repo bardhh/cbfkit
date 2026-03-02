@@ -3,6 +3,7 @@
 from .registry import BenchmarkRegistry, register_scenario, registry
 from .runner import BenchmarkRun, compare_runs, run_scenario, write_artifacts
 from . import solver_stress
+from . import qp_solver_stress
 
 __all__ = [
     "BenchmarkRegistry",

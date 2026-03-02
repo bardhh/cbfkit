@@ -1,12 +1,17 @@
 import json
 from pathlib import Path
 
+from cbfkit.benchmarks import registry
 from cbfkit.benchmarks.runner import _parse_seeds, run_scenario, write_artifacts
 from cbfkit.cli.bench import main
 
 
 def test_parse_seed_range():
     assert _parse_seeds("2:4") == [2, 3, 4]
+
+
+def test_qp_solver_stress_scenario_registered():
+    assert "qp_solver_stress" in registry.names()
 
 
 def test_run_scenario_summary_has_expected_keys():

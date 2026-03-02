@@ -49,7 +49,7 @@ def run_demo():
     )
     # Pedestrian 2: Moving Down
     manager.add_pedestrian(
-        init_state=[10.0, 10.0, 0.0, 0],
+        init_state=[10.0, 6.0, 0.0, 0],
         behavior=social_force_policy(goal=jnp.array([0.0, 0.0]), desired_speed=1.0),
     )
 
@@ -61,7 +61,7 @@ def run_demo():
     robot_dyn.omega_max = 5.0
     robot_dyn.v_max = 4.0
 
-    x0_robot = jnp.array([0.0, 5.0, 0.0, 0.0])
+    x0_robot = jnp.array([0.0, 0.0, 0.0, 0.0])
     goal_robot = jnp.array([10.0, 5.0, 0.0, 0.0])
 
     # 4. Get Augmented System
