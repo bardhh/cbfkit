@@ -46,7 +46,7 @@ def ccbf_grad(
     """Jacobian for the constraint function defined by cbf.
 
     Args:
-        #! kwargs -- manually populate
+ually populate
 
     Returns
     -------
@@ -56,7 +56,7 @@ def ccbf_grad(
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """_summary_
+        """
 
         Args:
             state_and_time (Array): concatenated state vector and time
@@ -77,7 +77,7 @@ def ccbf_hess(
     """Hessian for the constraint function defined by cbf.
 
     Args:
-        #! kwargs -- manually populate
+ually populate
 
     Returns
     -------
@@ -87,7 +87,7 @@ def ccbf_hess(
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """_summary_
+        """
 
         Args:
             state_and_time (Array): concatenated state vector and time
@@ -110,9 +110,6 @@ def generate_compute_consolidated_cbf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    """
-    #! To Do: docstring
-    """
     if "alpha" not in kwargs:
         raise ValueError("Missing Class K function alpha from kwargs!")
     if "n_states" not in kwargs:

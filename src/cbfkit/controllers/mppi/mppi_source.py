@@ -44,18 +44,11 @@ def setup_mppi(
             # Fallback: assume 2 args (state, action) for compatibility with older code
             terminal_cost_takes_action = True
 
-    horizon = horizon
-    samples = samples
-    dt = dt
-
-    robot_state_dim = robot_state_dim
-    robot_control_dim = robot_control_dim
     control_mu = jnp.zeros(robot_control_dim)  # .reshape(-1,1)
     control_cov = 4.0 * jnp.eye(robot_control_dim)
     control_cov_inv = jnp.linalg.inv(control_cov)
     control_cov_inv_diag = jnp.diag(control_cov_inv)
     control_bound = control_bound
-    # TODO: implement separate lower and upper bounds
     # control_bound_lb = -jnp.array([1, 1]).reshape(-1, 1)
     # control_bound_ub = jnp.array([1, 1]).reshape(-1, 1)
 
@@ -68,7 +61,7 @@ def setup_mppi(
         Args: state and input vector
         Returns: next state
         """
-        # Bolt: Avoid reshapes. state: (dim,), input: (m,)
+        # Avoid reshapes. state: (dim,), input: (m,)
         f, g = dyn_func(state)  # , input)
         return state + (f + g @ input) * dt
 
@@ -80,7 +73,7 @@ def setup_mppi(
             perturbation: random perturbation trajectory of all samples
             costs: cost of each sampled trajectory
         """
-        # Bolt: Improved numerical stability using standard Log-Sum-Exp
+        # Improved numerical stability using standard Log-Sum-Exp
         # Removed range normalization to preserve optimization gradient in presence of outliers
         costs_shifted = costs - jnp.min(costs)
         lambd = jnp.maximum(costs_lambda, 1e-8)
@@ -103,14 +96,14 @@ def setup_mppi(
             u_t, pert_t = inputs
             # u_t_col = u_t.reshape(-1, 1)
 
-            # Bolt: Use 1D arrays for cost calc. u_t and pert_t are already (m,)
+            # Use 1D arrays for cost calc. u_t and pert_t are already (m,)
             diff = u_t - pert_t
             delta_cost = cost_perturbation_coeff * jnp.sum(diff * control_cov_inv_diag * pert_t)
 
             if trajectory_cost_func is None:
                 delta_cost = delta_cost + stage_cost_func(current_state, u_t)
 
-            # Bolt: Pass 1D arrays directly
+            # Pass 1D arrays directly
             next_state = robot_dynamics_step(current_state, u_t)
             new_cost = current_cost + delta_cost
             return (next_state, new_cost), current_state
@@ -196,7 +189,7 @@ def setup_mppi(
 
     @jit
     def compute_perturbed_control(subkey, control_mu, control_cov, control_bound, U):
-        # Bolt: Optimized sampling for diagonal covariance
+        # Optimized sampling for diagonal covariance
         # Avoids Cholesky decomposition and matrix multiplication
         std = jnp.sqrt(jnp.diag(control_cov))
         perturbation = control_mu + jax.random.normal(

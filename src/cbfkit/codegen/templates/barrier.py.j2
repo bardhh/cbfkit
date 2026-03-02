@@ -1,5 +1,5 @@
 """
-#! MANUALLY POPULATE (docstring)
+g)
 """
 import jax.numpy as jnp
 from jax import jit, jacfwd, jacrev, Array, lax
@@ -18,7 +18,7 @@ def cbf({{ cbf_args }}**kwargs) -> Callable[[Array], Array]:
     """Super-level set convention.
 
     Args:
-        #! kwargs -- optional to manually populate
+ually populate
 
     Returns:
         ret (float): value of constraint function evaluated at time and state
@@ -45,7 +45,7 @@ def cbf_grad({{ cbf_args }}**kwargs) -> Callable[[Array], Array]:
     """Jacobian for the constraint function defined by cbf.
 
     Args:
-        #! kwargs -- manually populate
+ually populate
 
     Returns:
         ret (float): value of constraint function evaluated at time and state
@@ -55,7 +55,7 @@ def cbf_grad({{ cbf_args }}**kwargs) -> Callable[[Array], Array]:
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """_summary_
+        """
 
         Args:
             state_and_time (Array): concatenated state vector and time
@@ -73,7 +73,7 @@ def cbf_hess({{ cbf_args }}**kwargs) -> Callable[[Array], Array]:
     """Hessian for the constraint function defined by cbf.
 
     Args:
-        #! kwargs -- manually populate
+ually populate
 
     Returns:
         ret (float): value of constraint function evaluated at time and state
@@ -83,7 +83,7 @@ def cbf_hess({{ cbf_args }}**kwargs) -> Callable[[Array], Array]:
 
     @jit
     def func(state_and_time: Array) -> Array:
-        """_summary_
+        """
 
         Args:
             state_and_time (Array): concatenated state vector and time

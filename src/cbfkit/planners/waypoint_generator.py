@@ -17,60 +17,25 @@ from cbfkit.utils.user_types import (
 
 
 def waypoint_generator() -> Callable[..., PlannerCallable]:
-    """Function for producing a generating function for MPPI laws of various forms.
-
-    Args:
-
-    Returns
-    -------
-        (WaypointGenerator): function for generating single waypoint planner law
-    """
+    """Return a factory that builds simple waypoint planner laws."""
 
     def generate_waypoint(
         target_state: Array,
         **kwargs: Dict[str, Any],
     ) -> PlannerCallable:
-        """Produces the function to deploy a waypoint enforcer.
+        """Build a planner that holds the target waypoint in planner metadata."""
 
-        Args:
-            **kwargs (Dict[str, Any]): keyword arguments, e.g., RiskAwareParams for RA-CBF-CLF-QP
-
-        Returns
-        -------
-            PlannerCallable: function for computing control input based on CBF-CLF-QP
-        """
-        complete = False
-
-        # TODO: define State, Control Trajectory types??
         def process(
             t: Time, x: State, u_nom: Optional[Control], key: Key, data: PlannerData
         ) -> PlannerCallableReturns:
-            """Waypoint law.
-
-            Args:
-                t (float): time (in sec)
-                                PlannerCallableReturns: tuple consisting of control solution (Array)
-                                and auxiliary data (Dict)"""
+            """Wrapper around the jittable waypoint update."""
             return jittable_process(t, x, key, data)
 
         @jit
         def jittable_process(
             t: Time, x: State, key: Key, data: PlannerData
         ) -> PlannerCallableReturns:
-            """JIT-compatible portion of the Waypoint planner/control law.
-
-            Args:
-                t (float): time (in sec)
-                x (State): state vector
-                u (Array): previous control input trajectory
-
-            Returns
-            -------
-                PlannerCallableReturns: tuple consisting of control solution (Array)
-                and auxiliary data (Dict)
-            """
-            nonlocal complete
-
+            """Update planner state for the waypoint and output zero nominal control."""
             # If no control input is explicitly defined, set to zeros
             u_out = jnp.zeros(x.shape)  # Placeholder for actual control logic
 

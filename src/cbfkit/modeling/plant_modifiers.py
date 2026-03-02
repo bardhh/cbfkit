@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Callable, Optional, Union
 
 from jax import Array

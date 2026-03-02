@@ -1,4 +1,4 @@
-"""Module docstring here."""
+"""ROS2 runtime helpers for sensor/controller execution loops."""
 
 from typing import Callable
 
@@ -12,12 +12,7 @@ execution_time_publisher = None  # Global publisher variable
 
 
 def spin(node_name: str, callback: Callable, frequency: float = 0.01):
-    """_summary_.
-
-    Args:
-        callback (Callable): _description_
-        frequency (float, optional): _description_. Defaults to 0.01.
-    """
+    """Create a ROS2 spinner that invokes `callback` at `frequency` Hz."""
 
     def spinner():
         nonlocal node_name, callback, frequency

@@ -86,7 +86,7 @@ def solve_inequality_constrained_qp(
     )
     status = state.status
 
-    # Sentinel: Detect ambiguous MAX_ITER_REACHED (status=0 but iter_num >= maxiter)
+    # Detect ambiguous MAX_ITER_REACHED (status=0 but iter_num >= maxiter)
     # This happens when jaxopt gives up but hasn't flagged it as 2 explicitly.
     # We map it to 5 (MAX_ITER_REACHED (UNSOLVED)) to distinguish it from a successful status (2).
     # This allows downstream controllers to fail safely (since 5 != success) but report the specific cause.

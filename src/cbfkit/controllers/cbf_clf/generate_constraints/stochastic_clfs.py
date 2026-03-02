@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Any, Callable, Dict, Tuple
 
 import jax.numpy as jnp
@@ -22,9 +18,7 @@ from .generating_functions import (
 from .unpack import unpack_for_clf
 
 
-#! To Do: implement (after discovering theory)
 ####################################################################################################
-### STOCHASTIC CLF: TBD #########################################################
 def generate_compute_stochastic_clf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
@@ -35,9 +29,6 @@ def generate_compute_stochastic_clf_constraints(
     """Placeholder.
 
     Theory still in development.
-    """
-    """
-    #! To Do: docstring
     """
     compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
     n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(

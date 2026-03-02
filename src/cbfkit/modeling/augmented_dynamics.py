@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Callable, List, Tuple
 
 import jax.numpy as jnp
@@ -28,14 +24,13 @@ def generate_augmented_dynamics(
 
     @jit
     def dynamics(z: Array) -> Tuple[Array, Array]:
-        """_summary_
+        """
 
         Args:
             z (Array): augmented state vector
 
         Returns
         -------
-            Array: _description_
         """
         # first set of dynamics
         f, g = list_of_dynamics[0](z)
@@ -143,13 +138,11 @@ def generate_w_dynamics(
 #             grad_u: Array,
 #             hess_u: Array,
 #         ) -> Tuple[Array, Array]:
-#             """_summary_
+#             """
 
 #             Args:
-#                 z (Array): _description_
 
 #             Returns:
-#                 Array: _description_
 #             """
 
 #             term1 = -hess_wdot[idx_wdot, idx_wdot]
@@ -196,13 +189,11 @@ def generate_w_dynamics(
 #             grad_u: Array,
 #             hess_u: Array,
 #         ) -> Tuple[Array, Array]:
-#             """_summary_
+#             """
 
 #             Args:
-#                 z (Array): _description_
 
 #             Returns:
-#                 Array: _description_
 #             """
 #             term1 = -hess_u[idx_u, idx_u]
 #             term2a = jnp.array(
@@ -262,13 +253,12 @@ def generate_w_dynamics(
 
 #     @jit
 #     def dynamics(z: Array) -> Array:
-#         """_summary_
+#         """
 
 #         Args:
 #             z (Array): augmented state vector
 
 #         Returns:
-#             Array: _description_
 #         """
 #         # first set of dynamics
 #         f, g = list_of_dynamics[0](z)

@@ -1,41 +1,4 @@
-"""
-cbf_clf_qp_generator.py
-================
-
-Generates the function for generating CBF-CLF-QP control laws of various forms.
-
-Functions
----------
--cbf_clf_qp_generator: produces the generating function based on
-
-Notes
------
-Used in the generation of vanilla, robust, stochastic, risk-aware, and risk-aware path integral
-CBF-CLF-QP control laws.
-
-Examples
---------
->>> import cbfkit.controllers.mppi as mppi_planner
->>> mppi_args = {
->>>     "robot_state_dim": 2,
->>>     "robot_control_dim": 2,
->>>     "prediction_horizon": 80,
->>>     "num_samples": 20000,
->>>     "plot_samples": 30,
->>>     "time_step": DT,
->>>     "use_GPU": False,
->>>     "costs_lambda": 0.03,
->>>     "cost_perturbation": 0.1,
->>> }
->>> mppi_local_planner = mppi_planner.vanilla_mppi(
->>>     control_limits=ACTUATION_LIMITS,
->>>     dynamics_func=dynamics,
->>>     trajectory_cost=None,
->>>     stage_cost=stage_cost,
->>>     terminal_cost=terminal_cost,
->>>     mppi_args=mppi_args,
->>> )
-"""
+"""MPPI planner-law generator."""
 
 from typing import Any, Dict, Optional, cast
 
@@ -62,14 +25,7 @@ from .mppi_source import setup_mppi
 
 
 def mppi_generator() -> MppiGenerator:
-    """Function for producing a generating function for MPPI laws of various forms.
-
-    Args:
-
-    Returns
-    -------
-        (MppiGenerator): function for generating MPPI control law
-    """
+    """Return a factory that builds MPPI planner callables."""
 
     def generate_mppi(
         control_limits: Array,
@@ -88,13 +44,12 @@ def mppi_generator() -> MppiGenerator:
             stage_cost (DynamicsCallable): function to compute dynamics based on current state
             terminal-cost (DynamicsCallable): function to compute dynamics based on current state
 
-            **kwargs (Dict[str, Any]): keyword argumentsEEE
+            **kwargs (Dict[str, Any]): keyword arguments
 
         Returns
         -------
             PlannerCallable: function for computing control input based on MPPI
         """
-        complete = False
         n_con = len(control_limits)
 
         # Cast mppi_args to MppiParameters to avoid mypy errors, as the code assumes it is not None.
@@ -117,7 +72,6 @@ def mppi_generator() -> MppiGenerator:
             cost_perturbation_coeff=mppi_args["cost_perturbation"],
         )
 
-        # TODO: define State, Control Trajectory types??
         def process(
             t: Time, x: State, u_nom: Optional[Control], key: Key, data: PlannerData
         ) -> PlannerCallableReturns:
@@ -149,8 +103,6 @@ def mppi_generator() -> MppiGenerator:
             -------
                 PlannerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
             """
-            nonlocal complete
-
             # Solve MPPI
             xs = data.xs if data.xs is not None else x.reshape(-1, 1)
             prev_robustness = data.prev_robustness
@@ -167,7 +119,7 @@ def mppi_generator() -> MppiGenerator:
                 (n_con,)
             )
 
-            # Sentinel: Explicitly catch NaN solutions
+            # Explicitly catch NaN solutions
             is_nan = jnp.isnan(u).any()
 
             # logging data

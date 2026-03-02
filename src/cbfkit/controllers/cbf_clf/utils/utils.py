@@ -19,7 +19,7 @@ def block_diag_matrix_from_vec(n_blocks: int) -> Array:
     Returns:
         Array: The constraint matrix A.
     """
-    # Aegis: Use pure JAX implementation to avoid scipy dependency and implicit conversion issues.
+    # Use pure JAX implementation to avoid scipy dependency and implicit conversion issues.
     # We want columns [1, -1]^T on the diagonal.
     block = jnp.array([[1.0], [-1.0]])
     return jnp.kron(jnp.eye(n_blocks), block)

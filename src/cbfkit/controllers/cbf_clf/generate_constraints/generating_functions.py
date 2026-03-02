@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 import inspect
 
@@ -57,20 +53,7 @@ def generate_compute_cbf_clf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs,
 ) -> Callable[[float, Array], Tuple[Array, Array, CbfClfQpData]]:
-    """_summary_
-
-    Args:
-        generate_compute_cbf_constraints (ComputeCertificateConstraintFunctionGenerator): _description_
-        generate_compute_clf_constraints (ComputeCertificateConstraintFunctionGenerator): _description_
-        control_limits (Array): _description_
-        dyn_func (DynamicsCallable): _description_
-        barriers (CertificateCollection, optional): _description_. Defaults to ([], [], [], [], []).
-        lyapunovs (CertificateCollection, optional): _description_. Defaults to ([], [], [], [], []).
-
-    Returns
-    -------
-        Callable[[float, Array], Tuple[Array, Array, CbfClfQpData]]: _description_
-    """
+    """Combine generated CBF and CLF constraints into one stacked constraint callable."""
     compute_cbf_constraints = generate_compute_cbf_constraints(
         control_limits, dyn_func, barriers, lyapunovs, **kwargs
     )
@@ -78,7 +61,7 @@ def generate_compute_cbf_clf_constraints(
         control_limits, dyn_func, barriers, lyapunovs, **kwargs
     )
 
-    # Bolt: Check if sub-functions accept pre-computed dynamics (f, g)
+    # Check if sub-functions accept pre-computed dynamics (f, g)
     sig_cbf = inspect.signature(compute_cbf_constraints)
     pass_fg_cbf = "f" in sig_cbf.parameters and "g" in sig_cbf.parameters
 
@@ -87,13 +70,7 @@ def generate_compute_cbf_clf_constraints(
 
     @jit
     def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, CbfClfQpData]:
-        """_summary_
-
-        Returns
-        -------
-            _type_: _description_
-        """
-        # Bolt: Evaluate dynamics once to avoid double evaluation in sub-functions
+        # Evaluate dynamics once to avoid double evaluation in sub-functions
         f, g = dyn_func(x)
 
         if pass_fg_cbf:
@@ -180,7 +157,7 @@ def generate_compute_certificate_values_vmap(
     """
     Computes certificate values using list comprehension (unrolling).
 
-    Note (Bolt): This function was optimized to use list comprehension instead of
+    Note: This function was optimized to use list comprehension instead of
     lax.switch inside vmap. For lists of distinct closures (standard in cbfkit),
     vmap+switch introduces overhead without reducing graph size. Unrolling avoids
     dispatch overhead and allows XLA to optimize the concatenated graph effectively.

@@ -27,9 +27,6 @@ def generate_compute_vanilla_clf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    """
-    #! To Do: docstring
-    """
     compute_lyapunov_values = generate_compute_certificate_values(
         lyapunovs, compute_hessians=False
     )
@@ -60,7 +57,7 @@ def generate_compute_vanilla_clf_constraints(
             a_clf = a_clf.at[:, :n_con].set(jnp.matmul(lj_x, dyn_g))
             b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) + lc_x)
             if relaxable:
-                # Janus: Use additive relaxation (-scale_clf) instead of multiplicative (-lc_x * scale_clf).
+                # Use additive relaxation (-scale_clf) instead of multiplicative (-lc_x * scale_clf).
                 # Multiplicative relaxation vanishes at V=0, causing loss of authority and ill-conditioning.
                 a_clf = a_clf.at[:, -n_lfs:].set(-scale_clf * jnp.eye(n_lfs))
                 # Keep b_clf as is (with lc_x), realizing additive relaxation: V_dot <= lc_x + delta

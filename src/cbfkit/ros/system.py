@@ -1,4 +1,4 @@
-"""Module docstring here."""
+"""ROS runtime helpers for sensor/controller execution loops."""
 
 from typing import Callable
 
@@ -12,12 +12,7 @@ execution_time_publisher = rospy.Publisher(f"/{NODE_NAME}/execution_time", Float
 
 
 def spin(node_name: str, callback: Callable, frequency: float = 0.01):
-    """_summary_.
-
-    Args:
-        callback (Callable): _description_
-        control_period (float, optional): _description_. Defaults to 0.01.
-    """
+    """Create a ROS spinner that invokes `callback` at `frequency` Hz."""
 
     def spinner():
         rospy.init_node(node_name, anonymous=True)

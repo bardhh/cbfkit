@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Any, Callable, Dict, Tuple
 
 import jax.numpy as jnp
@@ -32,9 +28,6 @@ def generate_compute_robust_clf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    """
-    #! To Do: docstring
-    """
     compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
     n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs

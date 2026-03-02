@@ -1,5 +1,5 @@
 """
-#! To Do: docstring
+
 """
 
 from typing import Any, Callable, Dict, Tuple
@@ -32,9 +32,6 @@ def generate_compute_ra_pi_cbf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    """
-    #! To Do: docstring
-    """
     conditions = barriers[-1]
     compute_barrier_values = generate_compute_certificate_values(barriers)
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
