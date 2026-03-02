@@ -11,3 +11,19 @@ services:
       - ${SSH_KEYS_DIR:-~/.ssh}:/root/.ssh:ro
     stdin_open: true
     tty: true
+
+  cbfkit_gpu:
+    profiles: ["gpu"]
+    build:
+      context: ../
+      dockerfile: gpu.Dockerfile
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+    volumes:
+      - ../:/home/cbfkit
+      - ${SSH_KEYS_DIR:-~/.ssh}:/root/.ssh:ro
+    stdin_open: true
+    tty: true
