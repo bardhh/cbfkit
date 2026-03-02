@@ -40,21 +40,24 @@ ra_clf_params = RiskAwareParams(
 # )
 approx_uniycle_nom_controller = unicycle.zero_controller()
 ACTUATION_LIMITS = jnp.array([1e3, 1e3])
+goal_radius = 0.1
+lyapunov_certificates = concatenate_certificates(
+    reach_goal(
+        certificate_conditions=fxt_s(c1=2.0, c2=2.0, e1=0.9, e2=1.1),
+        goal=desired_state,
+        radius=goal_radius,
+    )
+)
 controller = cbf_controller(
     control_limits=ACTUATION_LIMITS,
     nominal_input=approx_uniycle_nom_controller,
     dynamics_func=approx_unicycle_dynamics,
     # barriers=unicycle.barrier_funcs,
-    lyapunovs=concatenate_certificates(
-        reach_goal(
-            certificate_conditions=fxt_s(c1=2.0, c2=2.0, e1=0.9, e2=1.1),
-            goal=desired_state,
-            radius=0.1,
-        )
-    ),
+    lyapunovs=lyapunov_certificates,
     ra_clf_params=ra_clf_params,
     alpha=jnp.array([1.0] * 3),
 )
+lyapunov_function = lyapunov_certificates.functions[0]
 
 tf = 2.0 if not os.environ.get("CBFKIT_TEST_MODE") else 0.1
 dt = 0.01
@@ -66,6 +69,15 @@ N_STATES = len(desired_state)
 N_CONTROLS = approx_uniycle_nom_controller(0.0, desired_state, random.PRNGKey(0), None)[0].shape[0]
 filepath = f"examples/unicycle/reach_goal/results/monte_carlo_N{N_TRIALS}.pkl"
 progress_update_percent = 10
+
+
+def compute_lyapunov_trajectory(states: Array) -> Array:
+    times = dt * jnp.arange(states.shape[0])
+    return jnp.array([lyapunov_function(t, x) for t, x in zip(times, states)])
+
+
+def compute_covariance_trace_trajectory(covariances: Array) -> Array:
+    return jnp.trace(covariances, axis1=1, axis2=2)
 
 
 # Define simulation function, including post-processing of data
@@ -140,13 +152,33 @@ if __name__ == "__main__":
         # Convert the results to a NumPy array
         state_record = [result[0] for result in results]
         control_record = [result[1] for result in results]
-        lyapunov_record = [result[2] for result in results]
-        w_record = [result[3] for result in results]
+        estimate_record = [result[2] for result in results]
+        covariance_record = [result[3] for result in results]
+        lyapunov_record = [compute_lyapunov_trajectory(states) for states in state_record]
+        covariance_trace_record = [
+            compute_covariance_trace_trajectory(covariances) for covariances in covariance_record
+        ]
 
         # Convert data to dict object
         save_data = {}
-        save_keys = ["state_record", "control_record", "lyapunov_record", "w_record"]
-        for i, array in enumerate([state_record, control_record, lyapunov_record, w_record]):
+        save_keys = [
+            "state_record",
+            "control_record",
+            "estimate_record",
+            "covariance_record",
+            "lyapunov_record",
+            "covariance_trace_record",
+        ]
+        for i, array in enumerate(
+            [
+                state_record,
+                control_record,
+                estimate_record,
+                covariance_record,
+                lyapunov_record,
+                covariance_trace_record,
+            ]
+        ):
             save_data[save_keys[i]] = array
 
         # Save data in pickle format
@@ -156,7 +188,7 @@ if __name__ == "__main__":
         state_trajectories = state_record
         control_trajectories = control_record
         lyapunov_trajectories = lyapunov_record
-        w_trajectories = w_record
+        covariance_trace_trajectories = covariance_trace_record
 
     else:
         # Load data from file
@@ -167,39 +199,83 @@ if __name__ == "__main__":
 
         state_trajectories = loaded_data["state_record"]
         control_trajectories = loaded_data["control_record"]
-        lyapunov_trajectories = loaded_data["lyapunov_record"]
-        w_trajectories = loaded_data["w_record"]
+        lyapunov_trajectories = loaded_data.get("lyapunov_record")
+        covariance_trace_trajectories = loaded_data.get("covariance_trace_record")
+
+        # Backward compatibility with older pickle format where these fields were mislabeled.
+        if lyapunov_trajectories is None or (
+            len(lyapunov_trajectories) > 0 and lyapunov_trajectories[0].ndim != 1
+        ):
+            lyapunov_trajectories = [compute_lyapunov_trajectory(states) for states in state_trajectories]
+        if covariance_trace_trajectories is None:
+            covariance_trajectories = loaded_data.get("covariance_record", loaded_data.get("w_record"))
+            if covariance_trajectories is not None:
+                covariance_trace_trajectories = [
+                    compute_covariance_trace_trajectory(covariances)
+                    for covariances in covariance_trajectories
+                ]
+            else:
+                covariance_trace_trajectories = []
 
     if plot:
+        n_trials = len(state_trajectories)
         fig, ax = plt.subplots()
-
-        # for states in state_trajectories:
-        #     fig, ax = unicycle.plot_trajectory(
-        #         fig,
-        #         ax,
-        #         states=states,
-        #         desired_state=desired_state,
-        #         desired_state_radius=0.25,
-        #         x_lim=(-4, 4),
-        #         y_lim=(-2, 6),
-        #         title="System Behavior",
-        #     )
+        for states in state_trajectories:
+            ax.plot(states[:, 0], states[:, 1], alpha=0.5)
+        ax.plot(desired_state[0], desired_state[1], "ro", markersize=5, label="desired_state")
+        ax.add_patch(
+            plt.Circle(
+                (desired_state[0], desired_state[1]),
+                goal_radius,
+                color="r",
+                fill=False,
+                linestyle="--",
+                linewidth=1,
+            )
+        )
+        ax.set_xlabel("x [m]")
+        ax.set_ylabel("y [m]")
+        ax.set_title("State Trajectories")
+        ax.grid(True)
+        ax.axis("equal")
+        ax.legend()
 
         fig2, ax2 = plt.subplots()
-        for ii in range(N_TRIALS):
-            if w_trajectories[ii] is not None and len(w_trajectories[ii]) > 0:
-                ax2.plot(w_trajectories[ii][:, 0])
+        for ii in range(n_trials):
+            if lyapunov_trajectories[ii] is not None and len(lyapunov_trajectories[ii]) > 0:
+                ax2.plot(lyapunov_trajectories[ii], alpha=0.5)
+        ax2.axhline(0.0, color="k", linestyle="--", linewidth=1)
+        ax2.set_title("Lyapunov Value")
+        ax2.set_xlabel("Step")
+        ax2.set_ylabel("V(x)")
+        ax2.grid(True)
 
-        fig3, ax3 = plt.subplots()
-        for ii in range(N_TRIALS):
+        fig3, (ax3, ax4) = plt.subplots(2, 1, sharex=True)
+        for ii in range(n_trials):
             if control_trajectories[ii] is not None:
-                ax3.plot(control_trajectories[ii][:, 0])
-                ax3.plot(control_trajectories[ii][:, 1])
+                ax3.plot(control_trajectories[ii][:, 0], alpha=0.5)
+                ax4.plot(control_trajectories[ii][:, 1], alpha=0.5)
+        ax3.set_ylabel("u[0]")
+        ax3.set_title("Control Inputs")
+        ax3.grid(True)
+        ax4.set_ylabel("u[1]")
+        ax4.set_xlabel("Step")
+        ax4.grid(True)
+
+        fig4, ax5 = plt.subplots()
+        for ii in range(n_trials):
+            if covariance_trace_trajectories[ii] is not None and len(covariance_trace_trajectories[ii]) > 0:
+                ax5.plot(covariance_trace_trajectories[ii], alpha=0.5)
+        ax5.set_title("Estimator Covariance Trace")
+        ax5.set_xlabel("Step")
+        ax5.set_ylabel("trace(P)")
+        ax5.grid(True)
 
         plt.show()
 
+    n_trials = len(state_trajectories)
     final_deviation = jnp.array([traj[-1, :2] - desired_state[:2] for traj in state_trajectories])
-    success_fraction = jnp.sum(jnp.linalg.norm(final_deviation, axis=1) < 0.25) / N_TRIALS
+    success_fraction = jnp.sum(jnp.linalg.norm(final_deviation, axis=1) < 0.25) / n_trials
     print(f"Success Fraction: {success_fraction:.2f}")
 
 

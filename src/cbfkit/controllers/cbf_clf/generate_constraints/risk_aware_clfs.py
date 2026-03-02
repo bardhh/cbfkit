@@ -33,6 +33,7 @@ def generate_compute_ra_clf_constraints(
     n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs
     )
+    scale_clf = kwargs.get("scale_clf", 1.0)
 
     # Check for Risk-Aware Params object
     if "ra_clf_params" in kwargs:
@@ -67,8 +68,10 @@ def generate_compute_ra_clf_constraints(
             a_clf = a_clf.at[:, :n_con].set(jnp.matmul(lj_x, dyn_g))
             b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) - traces + lc_x)
             if relaxable:
-                a_clf = a_clf.at[:, -n_lfs:].set(-lc_x)
-                b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) - traces)
+                # Use additive relaxation to avoid the slack coefficient scaling with lc_x.
+                # Multiplicative relaxation (-lc_x) makes slack too cheap/flexible for large V.
+                a_clf = a_clf.at[:, -n_lfs:].set(-scale_clf * jnp.eye(n_lfs))
+                # Keep b_clf unchanged so relaxation acts as: Vdot <= lc_x + delta.
 
             complete = lax.cond(jnp.all(lf_x < 0), lambda _fake: True, lambda _fake: False, 0)
 
@@ -94,6 +97,7 @@ def generate_compute_estimate_feedback_ra_clf_constraints(
     n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs
     )
+    scale_clf = kwargs.get("scale_clf", 1.0)
 
     # Check for Risk-Aware Params object
     if "ra_clf_params" in kwargs:
@@ -148,10 +152,10 @@ def generate_compute_estimate_feedback_ra_clf_constraints(
                 -dlf_t - jnp.matmul(lj_x, dyn_f) - traces - estimate_feedback_term + lc_x
             )
             if relaxable:
-                a_clf = a_clf.at[:, -n_lfs:].set(-lc_x)
-                b_clf = b_clf.at[:].set(
-                    -dlf_t - jnp.matmul(lj_x, dyn_f) - traces - estimate_feedback_term
-                )
+                # Use additive relaxation to avoid the slack coefficient scaling with lc_x.
+                # Multiplicative relaxation (-lc_x) makes slack too cheap/flexible for large V.
+                a_clf = a_clf.at[:, -n_lfs:].set(-scale_clf * jnp.eye(n_lfs))
+                # Keep b_clf unchanged so relaxation acts as: Vdot <= lc_x + delta.
 
             complete = lax.cond(jnp.all(lf_x < 0), lambda _fake: True, lambda _fake: False, 0)
 

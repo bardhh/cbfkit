@@ -28,9 +28,7 @@ def generate_compute_robust_cbf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    compute_barrier_values = generate_compute_certificate_values(
-        barriers, compute_hessians=False
-    )
+    compute_barrier_values = generate_compute_certificate_values(barriers, compute_hessians=False)
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )

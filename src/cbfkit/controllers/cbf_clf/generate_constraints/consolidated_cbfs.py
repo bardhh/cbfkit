@@ -45,12 +45,12 @@ def ccbf_grad(
 ) -> Callable[[Array], Array]:
     """Jacobian for the constraint function defined by cbf.
 
-    Args:
-ually populate
+        Args:
+    ually populate
 
-    Returns
-    -------
-        ret (float): value of constraint function evaluated at time and state
+        Returns
+        -------
+            ret (float): value of constraint function evaluated at time and state
     """
     jacobian = jacfwd(ccbf(constraint_functions, **kwargs))
 
@@ -76,12 +76,12 @@ def ccbf_hess(
 ) -> Callable[[Array], Array]:
     """Hessian for the constraint function defined by cbf.
 
-    Args:
-ually populate
+        Args:
+    ually populate
 
-    Returns
-    -------
-        ret (float): value of constraint function evaluated at time and state
+        Returns
+        -------
+            ret (float): value of constraint function evaluated at time and state
     """
     hessian = jacrev(jacfwd(ccbf(constraint_functions, **kwargs)))
 
