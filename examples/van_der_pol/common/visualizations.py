@@ -1,5 +1,9 @@
+import os
+
 import matplotlib
-matplotlib.use("Agg")
+
+if os.getenv("CBFKIT_TEST_MODE"):
+    matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Ellipse
@@ -63,7 +67,7 @@ def plot_trajectory(
     ax.legend()
     ax.grid()
 
-    # plt.show()
+    plt.show()
 
     return fig, ax
 
@@ -86,7 +90,7 @@ def animate(
     def init():
         trajectory.set_data([], [])
         etrajectory.set_data([], [])
-        return (trajectory,)
+        return (trajectory, etrajectory)
 
     def update(frame):
         trajectory.set_data(states[:frame, 0], states[:frame, 1])
@@ -124,8 +128,26 @@ def animate(
             )
         )
 
-    (trajectory,) = ax.plot([], [], label="Trajectory")
-    (etrajectory,) = ax.plot([], [], label="Estimated Trajectory")
+    # Draw estimate as points under the true trajectory to keep the nominal behavior visible.
+    (etrajectory,) = ax.plot(
+        [],
+        [],
+        linestyle="None",
+        marker=".",
+        markersize=2,
+        alpha=0.55,
+        color="tab:orange",
+        zorder=2,
+        label="Estimated Trajectory",
+    )
+    (trajectory,) = ax.plot(
+        [],
+        [],
+        linewidth=2.0,
+        color="tab:blue",
+        zorder=3,
+        label="Trajectory",
+    )
 
     ax.set_xlim(x_lim[0], x_lim[1])
     ax.set_ylim(y_lim[0], y_lim[1])
@@ -144,6 +166,6 @@ def animate(
         os.makedirs(os.path.dirname(animation_filename), exist_ok=True)
         ani.save(animation_filename, writer="imagemagick", fps=15)
 
-    # plt.show()
+    plt.show()
 
     return fig, ax
