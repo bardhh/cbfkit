@@ -13,7 +13,9 @@ import sys
 import time
 
 # Add project root to path
-sys.path.append(os.getcwd())
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+if root_path not in sys.path:
+    sys.path.insert(0, root_path)
 
 import jax.numpy as jnp
 import matplotlib
