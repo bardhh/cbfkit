@@ -80,7 +80,7 @@ def animate(
     def init():
         trajectory.set_data([], [])
         etrajectory.set_data([], [])
-        return (trajectory,)
+        return (trajectory, etrajectory)
 
     def update(frame):
         trajectory.set_data(states[:frame, 0], states[:frame, 1])
@@ -111,7 +111,14 @@ def animate(
     )
 
     (trajectory,) = ax.plot([], [], label="Trajectory")
-    (etrajectory,) = ax.plot([], [], label="Estimated Trajectory")
+    (etrajectory,) = ax.plot(
+        [],
+        [],
+        linestyle="None",
+        marker="o",
+        markersize=2,
+        label="Estimated Trajectory",
+    )
 
     ax.set_xlim(x_lim[0], x_lim[1])
     ax.set_ylim(y_lim[0], y_lim[1])

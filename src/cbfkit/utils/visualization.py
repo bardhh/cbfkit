@@ -2,6 +2,7 @@
 Visualization Utilities for Crowd and Robot Simulations.
 """
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -62,6 +63,8 @@ def visualize_crowd(
     """
     require_visualization()
     print(f"Generating Animation -> {save_path}...")
+    output_path = Path(save_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(10, 8))
     ax.set_aspect("equal")
@@ -185,8 +188,9 @@ def visualize_crowd(
     anim = animation.FuncAnimation(fig, animate, frames=len(states), interval=50, blit=True)
 
     try:
-        anim.save(save_path, writer="ffmpeg", fps=20)
+        anim.save(str(output_path), writer="ffmpeg", fps=20)
     except Exception:
-        anim.save(save_path.replace("mp4", "gif"), writer="pillow", fps=20)
+        gif_path = output_path.with_suffix(".gif")
+        anim.save(str(gif_path), writer="pillow", fps=20)
 
     plt.close()

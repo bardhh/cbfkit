@@ -149,7 +149,8 @@ def run_demo():
         jit_progress=True,
     )
 
-    os.makedirs("examples/pedestrian/results", exist_ok=True)
+    results_dir = os.path.join(os.path.dirname(__file__), "results")
+    os.makedirs(results_dir, exist_ok=True)
     if not os.getenv("CBFKIT_TEST_MODE"):
         visualize_crowd(
             states=x,
@@ -159,7 +160,7 @@ def run_demo():
             dt=dt,
             p_values=p_values,
             p_keys=p_keys,
-            save_path="examples/pedestrian/navigate_among_pedestrians/results/star_burst.mp4",
+            save_path=os.path.join(results_dir, "star_burst.mp4"),
         )
 
     print("Demo Complete!")

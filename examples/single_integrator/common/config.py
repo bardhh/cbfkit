@@ -1,4 +1,5 @@
 import os
+
 import jax.numpy as jnp
 
 
@@ -31,7 +32,7 @@ class BaseConfig:
 
 
 class PerfectMeasurementsConfig(BaseConfig):
-    VISUALIZE = False
+    VISUALIZE = True
     R = 0.01 * jnp.eye(len(BaseConfig.desired_state))
     pg = 0.50
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2
@@ -40,7 +41,7 @@ class PerfectMeasurementsConfig(BaseConfig):
 
 
 class EKFEstimationConfig(BaseConfig):
-    VISUALIZE = False
+    VISUALIZE = True
     actuation_limits = 1e6 * jnp.array([1.0, 1.0])
     R = 0.25 * jnp.eye(len(BaseConfig.desired_state))
     pg = 0.95
@@ -50,7 +51,7 @@ class EKFEstimationConfig(BaseConfig):
 
 
 class UKFEstimationConfig(BaseConfig):
-    VISUALIZE = False if os.getenv("CBFKIT_TEST_MODE") else True
+    VISUALIZE = True if os.getenv("CBFKIT_TEST_MODE") else True
     R = 0.25 * jnp.eye(len(BaseConfig.desired_state))
     pg = 0.50
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2
