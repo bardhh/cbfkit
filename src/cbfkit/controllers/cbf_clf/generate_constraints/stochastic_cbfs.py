@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Any, Callable, Dict, Tuple
 
 import jax.numpy as jnp
@@ -31,9 +27,6 @@ def generate_compute_stochastic_cbf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    """
-    #! To Do: docstring
-    """
     compute_barrier_values = generate_compute_certificate_values(barriers)
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs

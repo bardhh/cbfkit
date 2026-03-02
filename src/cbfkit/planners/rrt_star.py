@@ -1,4 +1,1 @@
-"""rrt_star.py.
-
-#! To Do: implement
-"""
+"""RRT* planner module placeholder."""

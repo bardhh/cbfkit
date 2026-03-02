@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Any, Callable, Dict, Tuple
 
 import jax.numpy as jnp
@@ -24,9 +20,7 @@ from .generating_functions import (
 from .unpack import unpack_for_cbf
 
 
-#! To Do: implement (after developing theory)
 ####################################################################################################
-### RISK-AWARE CBF: TBD #########################################################
 def generate_compute_ra_cbf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
@@ -101,9 +95,6 @@ def generate_compute_estimate_feedback_ra_cbf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    """
-    #! To Do: docstring
-    """
     compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
     n_con, n_bfs, _n_lfs, a_clf, b_clf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs

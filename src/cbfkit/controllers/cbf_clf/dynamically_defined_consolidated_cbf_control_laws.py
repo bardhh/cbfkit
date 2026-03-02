@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Callable, Tuple
 
 import jax.numpy as jnp
@@ -28,11 +24,9 @@ def generate_compute_w2dot_udot(
     n_controls = len(idx_u)
 
     def generate(pd_matrix: Array) -> Callable[[Array], Tuple[Array, Array]]:
-        """"""
 
         @jit
         def compute_w2dot_udot(z: Array) -> Tuple[Array, Array]:
-            """"""
             f, g = dynamics(z)
             grad_wdot = jacobian_wdot(z)
             hess_wdot = hessian_wdot(z)
@@ -54,15 +48,6 @@ def generate_compute_w2dot_udot(
             grad_u: Array,
             hess_u: Array,
         ) -> Tuple[Array, Array]:
-            """_summary_
-
-            Args:
-                z (Array): _description_
-
-            Returns
-            -------
-                Array: _description_
-            """
             term1 = -hess_wdot[idx_wdot][:, idx_wdot]
             term2a = jnp.array(
                 jnp.matmul(pd_matrix[idx_u][:, idx_u], grad_u[idx_u])
@@ -105,15 +90,6 @@ def generate_compute_w2dot_udot(
             grad_u: Array,
             hess_u: Array,
         ) -> Tuple[Array, Array]:
-            """_summary_
-
-            Args:
-                z (Array): _description_
-
-            Returns
-            -------
-                Array: _description_
-            """
             term1 = -hess_u[idx_u][:, idx_u]
             term2a = jnp.array(
                 jnp.matmul(pd_matrix[idx_wdot][:, idx_wdot], grad_wdot[idx_wdot])
@@ -164,11 +140,9 @@ def generate_compute_w2dot_controlled(
     hessian_wdot = jacrev(jacfwd(augmented_cost_wdot))
 
     def generate(pd_matrix: Array) -> Callable[[Array], Tuple[Array, Array]]:
-        """"""
 
         @jit
         def compute_w2dot(z: Array) -> Tuple[Array, Array]:
-            """"""
             f, g = dynamics(z)
             grad_wdot = jacobian_wdot(z)
             hess_wdot = hessian_wdot(z)
@@ -185,15 +159,6 @@ def generate_compute_w2dot_controlled(
             grad_wdot: Array,
             hess_wdot: Array,
         ) -> Tuple[Array, Array]:
-            """_summary_
-
-            Args:
-                z (Array): _description_
-
-            Returns
-            -------
-                Array: _description_
-            """
             term1 = -hess_wdot[idx_wdot][:, idx_wdot]
             term_f = jnp.array(
                 jnp.matmul(pd_matrix[idx_wdot][:, idx_wdot], grad_wdot[idx_wdot])

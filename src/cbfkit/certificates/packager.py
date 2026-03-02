@@ -86,7 +86,6 @@ def certificate_package(
 
     Returns
     -------
-        CertificateCollection: _description_
     """
     # Validate input_style
     if isinstance(input_style, str):
@@ -102,7 +101,7 @@ def certificate_package(
         certificate_conditions: CertificateConditionsCallable,
         **kwargs: Dict[str, Any],
     ) -> CertificateCollection:
-        """_summary_
+        """
 
         Args:
             certificate_conditions (Callable): inequality conditions for certificate function
@@ -111,7 +110,6 @@ def certificate_package(
 
         Returns
         -------
-            BarrierTuple: _description_
         """
         if use_factory:
             v_func = func(**kwargs)
@@ -140,7 +138,7 @@ def certificate_package(
             else:
                 user_grad = func_grad  # type: ignore[assignment]
 
-            # Aegis: Wrap manual gradient to accept concatenated input 'xt'
+            # Wrap manual gradient to accept concatenated input 'xt'
             if input_style == CertificateInputStyle.STATE:
                 # User provided grad(x). We need j_func(xt) -> [grad(x), 0]
                 def j_func(xt):
@@ -152,7 +150,7 @@ def certificate_package(
 
             elif input_style == CertificateInputStyle.SEPARATED:
                 # User provided grad(t, x). We need j_func(xt)
-                # Aegis: Robustly handle manual gradients for separated input style.
+                # Robustly handle manual gradients for separated input style.
                 # If user returns spatial gradient (dx, len=n), auto-append temporal gradient (dt).
                 # If user returns full gradient (len=n+1), use as is.
 
@@ -196,7 +194,7 @@ def certificate_package(
             else:
                 user_hess = func_hess  # type: ignore[assignment]
 
-            # Aegis: Wrap manual hessian to accept concatenated input 'xt'
+            # Wrap manual hessian to accept concatenated input 'xt'
             if input_style == CertificateInputStyle.STATE:
                 # User provided hess(x). We need h_func(xt)
                 def h_func(xt):

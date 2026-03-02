@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Callable, Tuple, Union
 
 import jax.numpy as jnp
@@ -18,20 +14,6 @@ def generate_mpc_solver_quadratic_cost_linear_dynamics(
     Qn: Array,
     N: int,
 ) -> Callable:
-    """_summary_
-
-    Args:
-        A (Array): _description_
-        B (Array): _description_
-        Q (Array): _description_
-        R (Array): _description_
-        QN (Array): _description_
-        N (int): _description_
-
-    Returns
-    -------
-        Callable: _description_
-    """
     n = Qn.shape[0]
     m = B.shape[1]
     mpc_to_qp = generate_mpc_to_qp(A, B, Q, R, Qn, N)
@@ -72,20 +54,6 @@ def generate_mpc_to_qp(
     QN: Array,
     horizon: int,
 ) -> Callable:
-    """_summary_
-
-    Args:
-        A (Array): _description_
-        B (Array): _description_
-        Q (Array): _description_
-        R (Array): _description_
-        QN (Array): _description_
-        horizon (int): _description_
-
-    Returns
-    -------
-        Callable: _description_
-    """
     n_states, n_inputs = B.shape
 
     # Formulating the quadratic cost matrices
@@ -123,13 +91,7 @@ def generate_mpc_to_qp(
         concatenated_x_xr: Array,
     ) -> Tuple[Array, Array, Union[Array, None], Union[Array, None], Array, Array]:
         """Transforms a Discrete-Time, Linear, Time-Invariant, Model Predictive
-        Control problem of the form:
-
-        something
-
-        into a quadratic program of the form:
-
-        something
+        Control trajectory objective into a standard quadratic program.
 
         Args:
             concatenated_x_xr (Array): concatenation of current state vector (x) and reference path (xr)
@@ -175,13 +137,7 @@ def mpc_to_qp(
     x0: Array, xr: Array, A: Array, B: Array, Q: Array, R: Array, QN: Array, horizon: int
 ) -> Tuple[Array, Array, Union[Array, None], Union[Array, None], Array, Array]:
     """Transforms a Discrete-Time, Linear, Time-Invariant, Model Predictive
-    Control problem of the form:
-
-    something
-
-    into a quadratic program of the form:
-
-    something
+    Control trajectory objective into a standard quadratic program.
 
     Arguments:
         x0: initial state

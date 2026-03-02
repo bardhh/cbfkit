@@ -1,8 +1,4 @@
-"""This module provides a template for example simulations designed to be run from the interpreter
-via ''python examples/template.py''.
-
-It does not define any new functions, and primarily loads modules from the src/cbfkit tree.
-"""
+"""Executable example script for CBFKit simulations."""
 
 import os
 import sys
@@ -97,7 +93,6 @@ if simulate:
     )
 
 else:
-    # Implement load from file
     pass
 
 if plot:

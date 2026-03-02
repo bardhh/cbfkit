@@ -54,8 +54,6 @@ def ct_ukf_dtmeas(
 
     return step_ukf
 
-
-#! Possibly implement this in a better fashion in the future
 def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
     """Initialization for the continuous-time EKF with discrete-time measurements.
 
@@ -107,8 +105,7 @@ def predict_ct_dtmeas(
         """
         s, wa, wc = sigma_points(z, P)
 
-        #! Remove the for loop
-        # Predict x from sigma points
+        # Predict x from sigma points.
         sk = jnp.zeros(s.shape)
         for ii, ss in enumerate(s):
             f, g = dynamics(ss)
@@ -231,7 +228,7 @@ def generate_sigma_points(
     Wc = Wc / jnp.sum(Wc)
 
     def sigma_points(z: Array, P: Array) -> Tuple[Array, Array, Array]:
-        """_summary_
+        """
 
         Args:
             z (Array): current state estimate
@@ -239,7 +236,6 @@ def generate_sigma_points(
 
         Returns
         -------
-            _type_: _description_
         """
         # Cholesky decomposition of covariance matrix
         A = jnp.linalg.cholesky(P)

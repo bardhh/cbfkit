@@ -269,7 +269,7 @@ def compute_function_list(
         )
 
     if total < RELATIVE_DEGREE_TOLERANCE:
-        # Aegis: Safety check to prevent infinite recursion for uncontrollable systems.
+        # Safety check to prevent infinite recursion for uncontrollable systems.
         # If the function list length exceeds state dimension (n+1), it implies relative degree
         # is greater than system dimension (impossible for controllable output) or undefined.
         if len(func_list) >= state_dim:

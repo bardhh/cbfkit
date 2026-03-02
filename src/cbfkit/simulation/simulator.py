@@ -90,7 +90,7 @@ def _check_simulation_status(
     nan_detected: bool = False,
 ) -> None:
     """Checks for simulation errors and prints warnings if found."""
-    # Sentinel: Explicit check for NaNs
+    # Explicit check for NaNs
     if nan_detected:
         print_error("Simulation failed due to NaNs in state trajectory.")
 
@@ -268,7 +268,7 @@ def simulator(
                 dt * s, x, u, z, c, controller_data, planner_data
             )
 
-            # Sentinel: Check for NaNs
+            # Check for NaNs
             nan_detected = jnp.any(jnp.isnan(x_ret))
             if nan_detected:
                 controller_data = controller_data._replace(
@@ -433,7 +433,7 @@ def execute(
             - planner_keys (List[str]): Names of logged planner data fields.
             - planner_values (List[Array]): Logged planner data values.
     """
-    # Sentinel: Validate initial state shape and dynamics consistency
+    # Validate initial state shape and dynamics consistency
     # This prevents obscure broadcasting errors deep in the simulation loop.
     try:
         f_check, g_check = dynamics(x0)
@@ -586,7 +586,7 @@ def execute(
 
         if planner is not None:
             _, p_data = planner(0.0, x0, None, prime_key1, p_data)  # type: ignore
-            # Bolt: Strip sampled_x_traj from p_data to avoid carrying it in JIT loop
+            # Strip sampled_x_traj from p_data to avoid carrying it in JIT loop
             p_data = p_data._replace(sampled_x_traj=None)
 
         if controller is not None:
@@ -594,7 +594,7 @@ def execute(
             u_nom_dummy = jnp.zeros((g_dummy.shape[1],))
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
-        # Sentinel: Ensure error_data is initialized to enable NaN reporting in JIT loop.
+        # Ensure error_data is initialized to enable NaN reporting in JIT loop.
         # If controller is None, the loop propagates this structure, allowing us to report errors.
         if controller is None and c_data.error_data is None:
             c_data = c_data._replace(error_data=jnp.array(-99, dtype=jnp.int32))

@@ -109,7 +109,7 @@ def _normalize_certificate_collection(
         collection = CertificateCollection(*cert_collection)
 
     # Validate component consistency
-    # Aegis: Ensure all component lists have the same length to prevent obscure JAX errors downstream.
+    # Ensure all component lists have the same length to prevent obscure JAX errors downstream.
     lengths = [len(x) for x in collection]
     if len(set(lengths)) > 1:
         raise ValueError(
@@ -273,7 +273,7 @@ def cbf_clf_qp_generator(
         else:
             n_lfs = 0
 
-        # Bolt: Normalize slack variables to improve QP conditioning (Condition number ~ 1)
+        # Normalize slack variables to improve QP conditioning (Condition number ~ 1)
         # delta_phys = delta_raw / sqrt(penalty). Cost: delta_raw^2. Constraint: ... + delta_raw/sqrt(penalty)
         scale_cbf = 1.0
         scale_clf = 1.0
@@ -286,7 +286,7 @@ def cbf_clf_qp_generator(
             penalty_cbf = slack_penalty_cbf
             penalty_clf = slack_penalty_clf
 
-            # Janus: Robust scaling. Clamp penalty to avoid tiny scale factors (leading to ill-conditioned A).
+            # Robust scaling. Clamp penalty to avoid tiny scale factors (leading to ill-conditioned A).
             # If penalty > 1e6, scale factor saturates at 1e-3.
             # Transfer excess penalty to P matrix diagonal: weight = penalty * scale^2
             max_penalty = 1e6
@@ -296,7 +296,7 @@ def cbf_clf_qp_generator(
             scale_cbf = 1.0 / jnp.sqrt(eff_penalty_cbf + 1e-8)
             scale_clf = 1.0 / jnp.sqrt(eff_penalty_clf + 1e-8)
 
-            # Janus: Clamp weight to avoid catastrophic ill-conditioning in P matrix.
+            # Clamp weight to avoid catastrophic ill-conditioning in P matrix.
             # Even with robust scaling, extremely large penalties (>1e14) create huge condition numbers
             # for float32 QPs, leading to solver failure (MAX_ITER_UNSOLVED).
             # A max weight of 1e4 preserves 4 orders of magnitude relative to control cost (u^2),
@@ -328,12 +328,12 @@ def cbf_clf_qp_generator(
             if n_lfs > 0:
                 sol_scaling_vector = sol_scaling_vector.at[n_con + n_bfs :].set(scale_clf)
 
-        # Bolt: Pass scales to constraint generators to avoid post-hoc scaling in loop
+        # Pass scales to constraint generators to avoid post-hoc scaling in loop
         if auto_p_mat:
             kwargs["scale_cbf"] = scale_cbf
             kwargs["scale_clf"] = scale_clf
 
-        # Bolt: Pre-compute solution scaling vector to avoid repetitive slice updates in JIT loop
+        # Pre-compute solution scaling vector to avoid repetitive slice updates in JIT loop
         sol_scaling_vector = jnp.ones((n_con + n_bfs + n_lfs,))
         if auto_p_mat:
             if n_bfs > 0:
@@ -348,7 +348,7 @@ def cbf_clf_qp_generator(
 
         compute_input_constraints = generate_compute_input_constraints(control_limits)
 
-        # Bolt: Pre-compute static input constraints (box limits + tunable non-negativity)
+        # Pre-compute static input constraints (box limits + tunable non-negativity)
         # to avoid repeated creation and stacking inside the JIT loop.
         dummy_t = 0.0
         dummy_x = jnp.zeros((1,))  # Shape irrelevant for static constraints
@@ -441,7 +441,7 @@ def cbf_clf_qp_generator(
             """
             nonlocal complete
 
-            # Janus: Ensure u_nom is 1D to prevent broadcasting errors (e.g., (N,) + (N,1) -> (N,N))
+            # Ensure u_nom is 1D to prevent broadcasting errors (e.g., (N,) + (N,1) -> (N,N))
             # and to handle scalar inputs for 1D systems.
             u_nom = u_nom.ravel()
 
@@ -460,23 +460,23 @@ def cbf_clf_qp_generator(
                 u_nom = jnp.hstack([u_nom, jnp.zeros((n_lfs,))])
 
             # Compute QP cost, constraint functions
-            # Bolt: Keep vectors 1D to avoid JAX broadcasting overhead in solver (prevents (N,1) vs (N,) mismatch)
+            # Keep vectors 1D to avoid JAX broadcasting overhead in solver (prevents (N,1) vs (N,) mismatch)
             q_vec = jnp.matmul(-2 * p_mat, u_nom)
             g_mat_c, h_vec_c, sub_data = compute_cbf_clf_constraints(t, x)
             if "complete" in sub_data:
                 complete = sub_data["complete"]
 
             # Stack input and certificate function constraints
-            # Bolt: Scaling of slack columns is now handled within compute_cbf_clf_constraints (via kwargs)
+            # Scaling of slack columns is now handled within compute_cbf_clf_constraints (via kwargs)
             # This avoids large array copies and multiply operations inside the JIT loop.
 
-            # Bolt: Normalize CBF/CLF constraint rows to improve numerical stability
-            # Janus: Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
+            # Normalize CBF/CLF constraint rows to improve numerical stability
+            # Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
             # Input constraints (box limits) are already normalized (row norm = 1).
             impossible_constraints = jnp.array(False)
             autodiff_safety_override = jnp.array(False)
             if auto_p_mat:
-                # Janus: Compute norms with overflow/underflow-safe scaling.
+                # Compute norms with overflow/underflow-safe scaling.
                 row_max = jnp.max(jnp.abs(g_mat_c), axis=1)
                 # Keep autodiff guard only for truly degenerate rows while still
                 # allowing very small-but-real constraints to be normalized.
@@ -508,11 +508,11 @@ def cbf_clf_qp_generator(
                 reg_rows = reg_rows.at[:, 0].set(1e-6)
                 g_mat_c = jnp.where(feasible_zero_rows[:, None], reg_rows, g_mat_c)
 
-            # Bolt: Use pre-computed static constraints (input limits + tunable non-negativity)
+            # Use pre-computed static constraints (input limits + tunable non-negativity)
             g_mat = jnp.vstack([g_mat_static, g_mat_c])
             h_vec = jnp.hstack([h_vec_static, h_vec_c])
 
-            # Sentinel: Detect NaNs in QP inputs
+            # Detect NaNs in QP inputs
             mask_q = jnp.isnan(q_vec) | jnp.isinf(q_vec)
             mask_g = jnp.isnan(g_mat) | jnp.isinf(g_mat)
             mask_h = jnp.isnan(h_vec) | jnp.isinf(h_vec)
@@ -548,7 +548,7 @@ def cbf_clf_qp_generator(
                 _, state_local = new_params_local
                 iter_local = state_local.iter_num
 
-                # Sentinel: Explicitly catch NaN solutions even if solver claims success.
+                # Explicitly catch NaN solutions even if solver claims success.
                 # Also catch if inputs were NaN (solver might return 0 and UNSOLVED status 0).
                 status_local = jnp.where(
                     jnp.any(jnp.isnan(sol_local)) | jnp.any(jnp.isinf(sol_local)),
@@ -558,7 +558,7 @@ def cbf_clf_qp_generator(
                 status_local = jnp.where(nan_in_inputs, -2, status_local)
                 status_local = jnp.where(impossible_constraints, 3, status_local)
 
-                # Bolt: Rescale solution back to physical units.
+                # Rescale solution back to physical units.
                 if auto_p_mat:
                     sol_local = sol_local * sol_scaling_vector
 
@@ -592,7 +592,7 @@ def cbf_clf_qp_generator(
             )
 
             def _print_failure(status, iter_num, sub_data):
-                # Sentinel: Map status codes to human-readable strings
+                # Map status codes to human-readable strings
                 def print_status_msg(msg):
                     jdebug.print(
                         "⚠️ CBF-CLF-QP Failed! Status: {status} ({msg}) (Iter: {iter}). Output set to NaN.\n"
@@ -646,7 +646,7 @@ def cbf_clf_qp_generator(
                 if "lfs" in sub_data:
                     jdebug.print("   -> Lyapunov Values (V): {V}", V=sub_data["lfs"])
 
-            # Sentinel: Only print failure if we weren't already in error state
+            # Only print failure if we weren't already in error state
             prev_error = data.error if data.error is not None else jnp.array(False)
             should_print = jnp.logical_not(success) & jnp.logical_not(prev_error)
 
@@ -660,17 +660,13 @@ def cbf_clf_qp_generator(
                 sub_data,
             )
 
-            if "ra_params" in kwargs:
-                #! To Do: integrate RA-PI states
-                pass
-
             error = lax.cond(success, lambda _fake: False, lambda _fake: True, 0)
 
             # logging data
             final_sub_data = cast(CbfClfQpData, sub_data or {})
             final_sub_data["solver_params"] = new_params
             final_sub_data["solver_iter"] = iter_num
-            # Sentinel: Explicitly log solver status for diagnostics/warnings
+            # Explicitly log solver status for diagnostics/warnings
             final_sub_data["solver_status"] = status
 
             detached_sub_data = cast(

@@ -1,7 +1,3 @@
-"""
-#! docstring
-"""
-
 from typing import Callable
 
 import jax.numpy as jnp
@@ -41,10 +37,9 @@ def generate_stochastic_perturbation(
         return generate_compute(sigma_x)
 
     def generate_compute(sigma_x: Array) -> PerturbationCallableReturns:
-        """"""
 
         def compute(subkey: Key) -> Array:
-            """TO DO."""
+            """Sample one discrete-time stochastic perturbation."""
             nonlocal dt
             # Discretize SDE: x_{k+1} = x_k + f dt + sigma sqrt(dt) w, w ~ N(0,I)
             dw = random.normal(subkey, shape=(sigma_x.shape[1],))
@@ -85,11 +80,10 @@ def generate_bounded_perturbation(
         return generate_compute(perturb)
 
     def generate_compute(perturbation_x: Array) -> PerturbationCallableReturns:
-        """"""
 
         @jit
         def compute(_subkey: Key) -> Array:
-            """TO DO."""
+            """Return the bounded perturbation value."""
             nonlocal perturbation_x
             return perturbation_x
 
@@ -131,11 +125,10 @@ def generate_affine_perturbation(
         return generate_compute(perturb)
 
     def generate_compute(perturbation_x: Array) -> PerturbationCallableReturns:
-        """"""
 
         @jit
         def compute(_subkey: Key) -> Array:
-            """TO DO."""
+            """Return the affine perturbation value."""
             nonlocal perturbation_x
             return perturbation_x
 

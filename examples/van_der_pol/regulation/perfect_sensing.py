@@ -66,15 +66,6 @@ controller = cbf_clf_controller(
 def execute(
     _ii: int = 1,
 ) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array]]:
-    """_summary_
-
-    Args:
-        int (ii): _description_
-
-    Returns
-    -------
-        List[Array]: _description_
-    """
     x, u, z, p, c_keys, c_values, p_keys, p_values = sim.execute(
         x0=setup.initial_state,
         dynamics=dynamics,

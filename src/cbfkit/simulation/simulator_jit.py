@@ -162,7 +162,7 @@ def simulator_jit(
             p = perturbation(x, u, f, g)
             key_int, subkey = random.split(key)
 
-            # Bolt: Evaluate perturbation once per step.
+            # Evaluate perturbation once per step.
             # This avoids repeated calls inside vector_field (e.g., 4 times for RK4),
             # reducing graph size and runtime if p is complex.
             p_val = p(subkey)
@@ -183,7 +183,7 @@ def simulator_jit(
 
         key, x_next_candidate = lax.cond(stop, _hold, _integrate, operand=None)
 
-        # Sentinel: Check for NaNs in the next state to prevent divergent simulation
+        # Check for NaNs in the next state to prevent divergent simulation
         nan_in_next = jnp.any(jnp.isnan(x_next_candidate))
 
         # If NaN is detected, revert to previous state to freeze simulation at last valid point
@@ -230,12 +230,12 @@ def simulator_jit(
         t_next = t + dt
 
         # Pack carry
-        # Bolt: Strip sampled_x_traj from carry to save bandwidth/memory
+        # Strip sampled_x_traj from carry to save bandwidth/memory
         planner_data_carry = planner_data._replace(sampled_x_traj=None)
         new_carry = (key, t_next, x_next, u, z, c, controller_data, planner_data_carry)
 
         # Output (trajectory)
-        # Bolt: Strip solver_params from logged data to save memory
+        # Strip solver_params from logged data to save memory
         log_controller_data = controller_data
         if (
             controller_data.sub_data is not None

@@ -44,16 +44,7 @@ def controller_wrapper(
         key: Key,
         data: ControllerData,
     ) -> ControllerCallableReturns:
-        """_summary_.
-
-        Args:
-            t (float): time in sec
-            x (Array): estimated state vector
-
-        Returns
-        -------
-            Tuple: (computed input u, dict containing misc data)
-        """
+        """Invoke the primary controller and fall back to backup on constraint violations."""
         _t_float: float
         if isinstance(t, rclpy.time.Time):
             _t_float = t.to_msg().sec
@@ -81,15 +72,7 @@ def controller_wrapper(
 
 
 def ros_controller(extract_control: Callable[[], Tuple[Array, Dict]]) -> ControllerCallable:
-    """_summary_.
-
-    Args:
-        extract_control (Callable): _description_
-
-    Returns
-    -------
-        Tuple[Array, Dict]: contains computed input u and dictionary containing extra data
-    """
+    """Adapt a ROS2-side control extractor into the canonical controller callable."""
 
     def controller(
         _t: Time,

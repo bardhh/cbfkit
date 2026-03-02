@@ -211,15 +211,6 @@ controller = pi_cbf_clf_controller(
 def execute(
     ii: int = 0,
 ) -> Tuple[Array, Array, Array, Array, List[str], List[Array], List[str], List[Array], bool, float]:
-    """_summary_
-
-    Args:
-        int (ii): _description_
-
-    Returns
-    -------
-        List[Array]: _description_
-    """
     key = random.PRNGKey(ii)
     k1, k2, k3 = random.split(key, 3)
     initial_quadrant = random.randint(k1, minval=1, maxval=5, shape=())
