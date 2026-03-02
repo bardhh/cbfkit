@@ -43,7 +43,9 @@ file_path: str = "examples/unicycle/reach_goal/results/"
 # Define states and constraints
 init_state: Array = jnp.array([0.0, 0.0, 0.0, jnp.pi / 4])
 desired_state: Array = jnp.array([2.0, 4.0, 0.0, 0.0])
-actuation_constraints: Array = jnp.array([100.0, 100.0])  # Effectively, no control limits
+# The accel-unicycle becomes unstable with effectively-unbounded inputs in this MPPI setup.
+# Keep realistic bounds so MPPI explores useful controls and CBF filtering stays well-conditioned.
+actuation_constraints: Array = jnp.array([10.0, 10.0])
 
 # Define system dynamics
 unicycle_dynamics = plant(lam=1.0)
@@ -97,7 +99,7 @@ mppi_args: MPPIConfig = {
     "robot_state_dim": 4,
     "robot_control_dim": 2,
     "prediction_horizon": 50,
-    "num_samples": 500,
+    "num_samples": 1000,
     "plot_samples": 30,
     "time_step": dt,
     "use_GPU": True,
@@ -178,8 +180,8 @@ x, u, z, p, dkeys, dvals, planner_data_keys, planner_data_values = sim.execute(
 )
 
 # Visualization
-plot = 1
-animate = 1
+plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
+animate = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 save = 1
 
 if plot:
@@ -220,7 +222,7 @@ if animate:
         animation_filename=file_path + "bh_mppi_cbf_control",
     )
 
-final_pos = x[:2, -1]
+final_pos = x[-1, :2]
 desired_pos = desired_state[:2]
 dist = jnp.linalg.norm(final_pos - desired_pos)
 print(f"Final Distance to Goal: {dist}")
