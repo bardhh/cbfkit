@@ -1,7 +1,9 @@
-import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+import sys
 
+# Add the project root to the path so we can import examples
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+sys.path.insert(0, root_path)
 
 import jax.numpy as jnp
 
@@ -14,7 +16,7 @@ from cbfkit.systems.unicycle import proportional_controller
 from cbfkit.utils.user_types import PlannerData
 
 approx_unicycle_dynamics = unicycle.plant(lam=1.0)
-init_state = jnp.array([0.0, 0.0, jnp.pi / 4])
+init_state = jnp.array([0.0, 0.0, jnp.pi / 2])
 desired_state = jnp.array([4.0, 4.0, 0])
 
 # For start-to-goal without obstacles, use proportional controller

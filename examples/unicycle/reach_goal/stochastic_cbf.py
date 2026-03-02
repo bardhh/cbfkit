@@ -1,8 +1,9 @@
 import os
 import sys
 
-# Add the project root directory to the python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+# Add the project root to the path so we can import examples
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+sys.path.insert(0, root_path)
 
 import jax.numpy as jnp
 
@@ -42,7 +43,7 @@ def sigma(x):
 uniycle_nom_controller = unicycle.controllers.proportional_controller(
     dynamics=unicycle_dynamics,
     Kp_pos=1.0,
-    Kp_theta=10.0,
+    Kp_theta=5.0,
 )
 
 obstacles = [
@@ -69,8 +70,9 @@ barriers = [
         system_dynamics=unicycle_dynamics,
         state_dim=len(init_state),
         form="exponential",
+        roots=jnp.array([-1.0]),
     )(
-        certificate_conditions=stochastic_barrier.right_hand_side(alpha=1.0, beta=1.0),
+        certificate_conditions=stochastic_barrier.right_hand_side(alpha=10.0, beta=0.01),
     )
     for obs, ell in zip(obstacles, ellipsoids)
 ]

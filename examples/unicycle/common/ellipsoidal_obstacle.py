@@ -26,7 +26,7 @@ cbf, cbf_grad, cbf_hess = ellipsoidal_barrier_factory(
 def stochastic_cbf(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array]:
     """Stochastic version (High Probability Safety).
 
-    Uses exponential transformation.
+    Uses standard superlevel-set barrier: h(x) >= 0 means safe.
     """
 
     @jit
@@ -36,8 +36,7 @@ def stochastic_cbf(obstacle: Array, ellipsoid: Array) -> Callable[[Array], Array
         a1, a2 = ellipsoid
 
         b = ((x_e - x_o) / (a1)) ** 2 + ((y_e - y_o) / (a2)) ** 2 - 1.0
-        # Note: This formulation seems specific to specific noise models/theorems
-        return jnp.exp(-0.1 * b)
+        return b
 
     return func
 

@@ -37,6 +37,7 @@ def generate_compute_activated_cbf_constraints(
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
+    scale_cbf = kwargs.get("scale_cbf", 1.0)
 
     # Extract activation parameters
     obstacle_positions = kwargs.get("obstacle_positions")
@@ -66,10 +67,10 @@ def generate_compute_activated_cbf_constraints(
             b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) + bc_x)
 
             if tunable:
-                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-bc_x)
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-scale_cbf * jnp.diag(bc_x))
                 b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f))
             elif relaxable:
-                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-1.0)
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-scale_cbf * jnp.eye(n_bfs))
 
             # --- Activation Logic ---
             if obstacle_positions is not None:

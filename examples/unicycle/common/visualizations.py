@@ -125,7 +125,14 @@ def animate(
 
     (trajectory,) = ax.plot([], [], color="blue", linewidth=2, label="Trajectory")
     (etrajectory,) = ax.plot(
-        [], [], color="orange", marker=".", markersize=2, linestyle="None", alpha=0.5, label="Estimated Trajectory"
+        [],
+        [],
+        color="orange",
+        marker=".",
+        markersize=2,
+        linestyle="None",
+        alpha=0.5,
+        label="Estimated Trajectory",
     )
 
     ax.set_xlim(x_lim[0], x_lim[1])

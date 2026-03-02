@@ -5,8 +5,9 @@ from typing import List, Tuple, TypedDict
 import jax.numpy as jnp
 from jax import Array, jit
 
-# Add the project root directory to the python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+# Add the project root to the path so we can import examples
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+sys.path.insert(0, root_path)
 
 import cbfkit.simulation.simulator as sim
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
@@ -177,8 +178,8 @@ x, u, z, p, dkeys, dvals, planner_data_keys, planner_data_values = sim.execute(
 )
 
 # Visualization
-plot = 0
-animate = 0
+plot = 1
+animate = 1
 save = 1
 
 if plot:

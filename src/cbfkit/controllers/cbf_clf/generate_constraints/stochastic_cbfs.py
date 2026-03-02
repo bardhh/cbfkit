@@ -31,6 +31,7 @@ def generate_compute_stochastic_cbf_constraints(
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
+    scale_cbf = kwargs.get("scale_cbf", 1.0)
 
     # Check for sigma function
     if "sigma" not in kwargs:
@@ -83,10 +84,10 @@ def generate_compute_stochastic_cbf_constraints(
             b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) + traces + bc_x)
 
             if tunable:
-                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-bc_x)
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-scale_cbf * jnp.diag(bc_x))
                 b_cbf = b_cbf.at[:].set(dbf_t + jnp.matmul(bj_x, dyn_f) + traces)
             elif relaxable:
-                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-1.0)
+                a_cbf = a_cbf.at[:, n_con : n_con + n_bfs].set(-scale_cbf * jnp.eye(n_bfs))
 
             # For superlevel-set CBFs (h >= 0 means safe), violation occurs when h < 0
             violated = lax.cond(jnp.any(bf_x < 0), lambda _fake: True, lambda _fake: False, 0)
