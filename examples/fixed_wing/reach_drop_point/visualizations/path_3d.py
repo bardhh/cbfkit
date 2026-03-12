@@ -1,3 +1,4 @@
+"""3D trajectory plotting and animation for fixed-wing UAV paths."""
 from typing import List
 
 import jax.numpy as jnp

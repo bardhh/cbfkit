@@ -1,3 +1,4 @@
+"""FxTS Lyapunov function generators for Van der Pol oscillator regulation."""
 from typing import Callable
 
 import jax.numpy as jnp

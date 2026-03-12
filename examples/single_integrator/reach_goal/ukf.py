@@ -1,5 +1,4 @@
-"""This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks to reach a goal
-region while avoiding dynamic obstacles."""
+"""Single integrator reach-goal with UKF estimation and Monte Carlo evaluation."""
 import sys
 import os
 

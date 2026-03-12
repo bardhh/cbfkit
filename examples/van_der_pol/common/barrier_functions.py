@@ -1,4 +1,4 @@
-"""Module docstring."""
+"""Barrier function generators for obstacle avoidance in Van der Pol system."""
 
 from typing import Callable, List
 

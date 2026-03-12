@@ -1,3 +1,4 @@
+"""Trajectory plotting and animation with goal and obstacle visualization."""
 import matplotlib
 
 matplotlib.use("macosx")

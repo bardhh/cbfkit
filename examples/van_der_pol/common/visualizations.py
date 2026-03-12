@@ -1,3 +1,4 @@
+"""Trajectory plotting and animation for Van der Pol oscillator examples."""
 import os
 
 import matplotlib

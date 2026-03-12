@@ -1,3 +1,4 @@
+"""Unicycle reach-goal with MPPI planning and CBF safety filtering."""
 import os
 import sys
 from typing import List, Tuple, TypedDict

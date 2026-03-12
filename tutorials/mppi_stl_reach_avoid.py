@@ -1,3 +1,4 @@
+"""Tutorial: MPPI with Signal Temporal Logic constraints for reach-avoid tasks."""
 import os
 import sys
 import importlib

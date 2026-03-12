@@ -1,3 +1,4 @@
+"""2D trajectory animation for fixed-wing UAV paths."""
 from typing import List
 
 # matplotlib.use("macosx")

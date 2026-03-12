@@ -1,3 +1,4 @@
+"""Single integrator reach-goal with perfect state measurements and CBF-CLF control."""
 import sys
 import os
 

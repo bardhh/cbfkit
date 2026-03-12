@@ -1,3 +1,4 @@
+"""Configuration classes for Van der Pol oscillator examples."""
 import jax.numpy as jnp
 import numpy as np
 
