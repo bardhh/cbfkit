@@ -1,3 +1,4 @@
+"""Configuration classes for fixed-wing UAV examples."""
 import os
 import jax.numpy as jnp
 

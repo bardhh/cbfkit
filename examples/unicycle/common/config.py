@@ -1,3 +1,4 @@
+"""Configuration classes for unicycle examples."""
 import jax.numpy as jnp
 import numpy as np
 

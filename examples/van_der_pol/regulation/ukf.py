@@ -1,4 +1,4 @@
-"""Executable example script for CBFKit simulations."""
+"""Van der Pol regulation with UKF state estimation."""
 
 import os
 import sys

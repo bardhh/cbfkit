@@ -1,3 +1,4 @@
+"""FxTS Lyapunov function generators for single integrator reach-goal control."""
 import jax.numpy as jnp
 from jax import Array
 

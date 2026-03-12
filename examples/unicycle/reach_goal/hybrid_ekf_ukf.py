@@ -1,4 +1,4 @@
-"""Executable example script for CBFKit simulations."""
+"""Unicycle reach-goal with hybrid EKF-UKF state estimation."""
 
 import os
 import sys

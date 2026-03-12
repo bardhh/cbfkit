@@ -1,3 +1,4 @@
+"""Combined FxTS Lyapunov-barrier function generators for Van der Pol regulation."""
 from typing import Callable, List
 
 from jax import Array, lax

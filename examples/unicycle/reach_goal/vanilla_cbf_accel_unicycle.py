@@ -1,3 +1,4 @@
+"""Acceleration-controlled unicycle reach-goal with vanilla CBF-CLF QP controller."""
 import sys
 import os
 

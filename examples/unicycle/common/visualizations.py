@@ -1,3 +1,4 @@
+"""Trajectory plotting and animation for unicycle simulations."""
 # matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation

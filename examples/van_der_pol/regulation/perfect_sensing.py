@@ -1,3 +1,4 @@
+"""Van der Pol regulation with perfect state measurements and CBF-CLF control."""
 import os
 import sys
 from typing import List, Optional, Tuple
