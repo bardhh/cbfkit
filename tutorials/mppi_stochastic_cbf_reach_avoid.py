@@ -1,8 +1,8 @@
-"""Demonstrates how to use MPPI controller to achieve reach avoid tasks.
+"""Tutorial: MPPI planner with stochastic CBF safety filter for unicycle reach-avoid.
 
-Our reach avoid specification utilizes Sigmal Temporal Logic (STL) inspired robustness metrics.
-These robustness metrics are defined in cbfkit/utils/jax_stl.py and accomodated in the MPPI cost
-function below.
+Demonstrates an acceleration-controlled unicycle navigating to a goal while avoiding
+ellipsoidal obstacles under stochastic dynamics. Uses MPPI for trajectory optimization
+with a stochastic CBF-CLF QP controller as the safety filter.
 """
 
 import os
