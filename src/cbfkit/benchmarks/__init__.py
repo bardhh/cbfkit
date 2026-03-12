@@ -4,6 +4,7 @@ from .registry import BenchmarkRegistry, register_scenario, registry
 from .runner import BenchmarkRun, compare_runs, run_scenario, write_artifacts
 from . import solver_stress
 from . import qp_solver_stress
+from . import monte_carlo_gpu_benchmark
 
 __all__ = [
     "BenchmarkRegistry",
