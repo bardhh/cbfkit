@@ -47,7 +47,7 @@ scipy = [
     "scipy>=1.9,<2.0",
 ]
 codegen = [
-    "black>=23.12.1,<24.0",
+    "black>=23.12.1,<27.0",
     "jinja2>=3.0.0",
 ]
 test = [
@@ -57,7 +57,7 @@ test = [
 ]
 dev = [
     "cbfkit[vis,codegen,test,casadi,cvxopt,scipy]",
-    "black>=23.12.1,<24.0",
+    "black>=23.12.1,<27.0",
     "mypy>=1.8.0,<2.0",
     "jupyter>=1.0.0,<2.0",
     "ruff>=0.3.4",
