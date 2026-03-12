@@ -1,6 +1,8 @@
-"""
-This script replicates the `tutorials/code_generation_tutorial.ipynb` notebook.
-It demonstrates how to generate code for a new dynamical system and then simulate it.
+"""Tutorial: Code generation for dynamical systems.
+
+Script equivalent of `code_generation_tutorial.ipynb`. Demonstrates how to use
+cbfkit.codegen to generate a new dynamical system model and simulate it with
+CBF-CLF safety constraints.
 """
 
 import os

@@ -1,3 +1,4 @@
+"""Initial state and parameters for the fixed-wing reach drop point scenario."""
 import jax.numpy as jnp
 
 # Time settings

@@ -1,3 +1,4 @@
+"""Tutorial: MPPI planner with CBF safety filter for single integrator reach-avoid."""
 import os
 import importlib
 

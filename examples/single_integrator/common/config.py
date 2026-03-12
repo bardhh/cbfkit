@@ -1,3 +1,4 @@
+"""Configuration classes for single integrator examples."""
 import os
 
 import jax.numpy as jnp

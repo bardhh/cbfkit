@@ -1,3 +1,4 @@
+"""Unicycle reach-goal with vanilla CBF-CLF QP controller and zeroing barriers."""
 import os
 import sys
 

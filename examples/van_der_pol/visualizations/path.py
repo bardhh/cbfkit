@@ -1,3 +1,4 @@
+"""Trajectory plotting and animation for Van der Pol oscillator paths."""
 import matplotlib
 
 matplotlib.use("macosx")

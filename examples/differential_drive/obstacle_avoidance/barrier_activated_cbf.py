@@ -1,5 +1,8 @@
-"""
-Compact CBF Navigation with Barrier Activation
+"""Differential drive obstacle avoidance with barrier-activated CBF.
+
+Demonstrates a unicycle robot navigating among static obstacles using a
+barrier-activated CBF-CLF QP controller. Only the k-closest barriers are
+activated at each timestep, improving scalability for cluttered environments.
 """
 
 import os

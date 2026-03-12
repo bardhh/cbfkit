@@ -1,3 +1,4 @@
+"""Adaptive CVaR-CBF control for a double integrator with obstacle avoidance."""
 import os
 
 import jax.numpy as jnp

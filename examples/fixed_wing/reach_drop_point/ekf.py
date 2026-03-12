@@ -1,5 +1,4 @@
-"""This module simulates a 6 degree-of-freedom dynamic quadrotor model as it seeks to reach a goal
-region while avoiding dynamic obstacles."""
+"""Fixed-wing UAV reach drop point with EKF estimation and risk-aware CBF-CLF control."""
 import sys
 import os
 

@@ -1,3 +1,4 @@
+"""Tutorial: Unicycle reach-avoid with ellipsoidal barriers and speed limits."""
 import os
 import jax.numpy as jnp
 from jax import jit
