@@ -7,6 +7,7 @@ import time
 import jax
 import jax.numpy as jnp
 from jax import random
+from tqdm import tqdm
 
 from cbfkit.benchmarks.registry import register_scenario
 from cbfkit.controllers.cbf_clf.cbf_clf_qp_generator import cbf_clf_qp_generator
@@ -125,7 +126,7 @@ def monte_carlo_gpu_speedup(seed: int) -> dict[str, float | int]:
 
     metrics: dict[str, float | int] = {"platform": platform}
 
-    for n in TRIAL_COUNTS:
+    for n in tqdm(TRIAL_COUNTS, desc=f"  Trials (seed={seed})", unit="batch", leave=False):
         results = conduct_monte_carlo_gpu(setup, n_trials=n, seed=seed)
         stats = compute_safety_statistics(results)
 

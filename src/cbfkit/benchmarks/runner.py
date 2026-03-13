@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from tqdm import tqdm
+
 from .metrics import summarize
 from .registry import registry
 
@@ -35,7 +37,7 @@ def run_scenario(name: str, seeds: str | Iterable[int]) -> BenchmarkRun:
     spec = registry.scenario(name)
 
     records: list[dict[str, float | int | bool | str]] = []
-    for seed in parsed_seeds:
+    for seed in tqdm(parsed_seeds, desc=f"Seeds ({name})", unit="seed"):
         result = dict(spec.runner(seed))
         result["seed"] = seed
         records.append(result)
