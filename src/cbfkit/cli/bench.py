@@ -36,11 +36,10 @@ def _cmd_compare(args: argparse.Namespace) -> int:
 
 
 def _cmd_sweep(args: argparse.Namespace) -> int:
-    from cbfkit.benchmarks.sweep import run_sweep, write_sweep_artifacts
+    from cbfkit.benchmarks.sweep import run_sweep, run_optuna_sweep, write_sweep_artifacts
     from cbfkit.benchmarks.sweep_config import load_sweep_config, resolve_param_combos
 
     config = load_sweep_config(args.config)
-    param_combos = resolve_param_combos(config)
 
     spec = registry.scenario(config.scenario)
 
@@ -50,12 +49,30 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
         def runner(seed, params):
             return spec.runner(seed)
 
-    print(
-        f"Sweep: {config.scenario} | "
-        f"{len(param_combos)} combos x {len(config.seeds)} seeds = "
-        f"{len(param_combos) * len(config.seeds)} runs"
-    )
-    result = run_sweep(config.scenario, config.seeds, param_combos, runner)
+    if config.method == "optuna":
+        print(
+            f"Optuna sweep: {config.scenario} | "
+            f"{config.n_samples} trials x {len(config.seeds)} seeds | "
+            f"objective: {config.direction} {config.objective}"
+        )
+        result = run_optuna_sweep(
+            config.scenario,
+            config.seeds,
+            config.parameters,
+            runner,
+            n_trials=config.n_samples,
+            objective_metric=config.objective,
+            direction=config.direction,
+        )
+    else:
+        param_combos = resolve_param_combos(config)
+        print(
+            f"Sweep: {config.scenario} | "
+            f"{len(param_combos)} combos x {len(config.seeds)} seeds = "
+            f"{len(param_combos) * len(config.seeds)} runs"
+        )
+        result = run_sweep(config.scenario, config.seeds, param_combos, runner)
+
     write_sweep_artifacts(result, config.output_dir)
     print(f"Results written to {config.output_dir}")
     return 0

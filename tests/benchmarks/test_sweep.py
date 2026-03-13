@@ -14,6 +14,7 @@ from cbfkit.benchmarks.sweep import (
     SweepRun,
     build_param_grid,
     expand_param_spec,
+    run_optuna_sweep,
     run_sweep,
     sample_param_combos,
     write_sweep_artifacts,
@@ -235,3 +236,112 @@ class TestRegistryIntegration:
     def test_list_shows_sweepable(self):
         spec = registry.scenario("monte_carlo_gpu_sweep")
         assert len(spec.sweepable_params) > 0
+
+
+# ---------------------------------------------------------------------------
+# Optuna sweep
+# ---------------------------------------------------------------------------
+
+optuna = pytest.importorskip("optuna")
+
+
+class TestOptunaSweep:
+    def test_basic_optuna_sweep(self):
+        """Optuna sweep runs the correct number of trials."""
+        params = {
+            "alpha": {"range": [0.1, 5.0]},
+            "mode": {"values": ["fast", "slow"]},
+        }
+        result = run_optuna_sweep(
+            "test_optuna",
+            seeds=[0, 1],
+            parameters=params,
+            runner=_mock_runner,
+            n_trials=5,
+            objective_metric="avg_step_ms",
+            direction="minimize",
+        )
+        assert isinstance(result, SweepRun)
+        assert len(result.param_combos) == 5
+        assert len(result.per_combo_summaries) == 5
+        # 5 trials x 2 seeds = 10 records
+        assert len(result.records) == 10
+
+    def test_optuna_records_have_param_prefix(self):
+        params = {"alpha": {"values": [1.0, 2.0, 3.0]}}
+        result = run_optuna_sweep(
+            "test_optuna_prefix",
+            seeds=[0],
+            parameters=params,
+            runner=_mock_runner,
+            n_trials=3,
+            objective_metric="avg_step_ms",
+        )
+        for rec in result.records:
+            assert "param_alpha" in rec
+
+    def test_optuna_int_range(self):
+        params = {"count": {"int_range": [1, 10]}}
+
+        def runner(seed, p):
+            return {"success": 1, "safety_violations": 0, "solver_failures": 0,
+                    "avg_step_ms": float(p["count"])}
+
+        result = run_optuna_sweep(
+            "test_optuna_int",
+            seeds=[0],
+            parameters=params,
+            runner=runner,
+            n_trials=5,
+            objective_metric="avg_step_ms",
+        )
+        for combo in result.param_combos:
+            assert isinstance(combo["count"], int)
+            assert 1 <= combo["count"] <= 10
+
+    def test_optuna_writes_artifacts(self):
+        params = {"alpha": {"range": [0.1, 2.0]}}
+        result = run_optuna_sweep(
+            "test_optuna_artifacts",
+            seeds=[0],
+            parameters=params,
+            runner=_mock_runner,
+            n_trials=3,
+            objective_metric="avg_step_ms",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            write_sweep_artifacts(result, tmpdir)
+            out = Path(tmpdir)
+            assert (out / "sweep_results.json").exists()
+            data = json.loads((out / "sweep_results.json").read_text())
+            assert len(data["per_combo_summaries"]) == 3
+
+    def test_optuna_config_loading(self):
+        from cbfkit.benchmarks.sweep_config import load_sweep_config, resolve_param_combos
+
+        yaml_content = """\
+scenario: "sanity_random_safety"
+seeds: "0:1"
+sweep:
+  method: optuna
+  n_samples: 10
+  objective: avg_step_ms
+  direction: minimize
+  parameters:
+    alpha:
+      range: [0.1, 5.0]
+output:
+  dir: "/tmp/test_optuna"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            config = load_sweep_config(f.name)
+
+        assert config.method == "optuna"
+        assert config.objective == "avg_step_ms"
+        assert config.direction == "minimize"
+        assert config.n_samples == 10
+        # resolve_param_combos returns empty for optuna
+        combos = resolve_param_combos(config)
+        assert combos == []

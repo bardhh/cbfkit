@@ -120,6 +120,103 @@ def run_sweep(
 
 
 # ---------------------------------------------------------------------------
+# Optuna-based sweep
+# ---------------------------------------------------------------------------
+
+
+def _suggest_param(trial, name: str, spec: Dict[str, Any]) -> Any:
+    """Map a YAML param spec to an Optuna suggestion."""
+    if "values" in spec:
+        return trial.suggest_categorical(name, spec["values"])
+    if "range" in spec:
+        low, high = spec["range"]
+        log = spec.get("log", False)
+        return trial.suggest_float(name, low, high, log=log)
+    if "int_range" in spec:
+        low, high = spec["int_range"]
+        return trial.suggest_int(name, low, high)
+    if "linspace" in spec:
+        start, stop, num = spec["linspace"]
+        vals = [float(v) for v in np.linspace(start, stop, int(num))]
+        return trial.suggest_categorical(name, vals)
+    if "logspace" in spec:
+        start, stop, num = spec["logspace"]
+        vals = [float(v) for v in np.logspace(start, stop, int(num))]
+        return trial.suggest_categorical(name, vals)
+    raise ValueError(f"Cannot map param spec for '{name}' to Optuna: {spec}")
+
+
+def run_optuna_sweep(
+    name: str,
+    seeds: List[int],
+    parameters: Dict[str, Dict[str, Any]],
+    runner: SweepableRunner,
+    n_trials: int = 50,
+    objective_metric: str = "safety_violation_rate",
+    direction: str = "minimize",
+) -> SweepRun:
+    """Run an Optuna-driven parameter sweep.
+
+    Each Optuna trial evaluates the scenario across all seeds and optimises
+    the aggregated *objective_metric*.
+
+    Requires ``pip install cbfkit[optuna]``.
+    """
+    try:
+        import optuna
+    except ImportError as exc:
+        raise ImportError(
+            "Optuna is required for method='optuna'. "
+            "Install it with: pip install cbfkit[optuna]"
+        ) from exc
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    records: List[Dict[str, Any]] = []
+    param_combos: List[Dict[str, Any]] = []
+    per_combo_summaries: List[Dict[str, Any]] = []
+
+    pbar = tqdm(total=n_trials, desc=f"Optuna ({name})", unit="trial")
+
+    def objective(trial) -> float:
+        combo = {pname: _suggest_param(trial, pname, pspec)
+                 for pname, pspec in parameters.items()}
+        combo_idx = trial.number
+        param_combos.append(combo)
+
+        combo_records: List[Dict[str, Any]] = []
+        for seed in seeds:
+            result = dict(runner(seed, combo))
+            result["seed"] = seed
+            result["combo_idx"] = combo_idx
+            for k, v in combo.items():
+                result[f"param_{k}"] = v
+            records.append(result)
+            combo_records.append(result)
+
+        summary = summarize(combo_records)
+        summary["combo_idx"] = combo_idx
+        for k, v in combo.items():
+            summary[f"param_{k}"] = v
+        per_combo_summaries.append(summary)
+
+        pbar.update(1)
+        return summary.get(objective_metric, 0.0)
+
+    study = optuna.create_study(direction=direction)
+    study.optimize(objective, n_trials=n_trials)
+    pbar.close()
+
+    return SweepRun(
+        scenario=name,
+        seeds=seeds,
+        param_combos=param_combos,
+        records=records,
+        per_combo_summaries=per_combo_summaries,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Artifact I/O
 # ---------------------------------------------------------------------------
 

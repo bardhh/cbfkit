@@ -1,0 +1,26 @@
+# Optuna-driven parameter optimization for CBF alpha and control limits
+# Uses TPE (Tree-structured Parzen Estimator) to find optimal parameters
+# Run with: cbfkit-bench sweep configs/sweep_optuna_cbf.yaml
+# Requires: pip install cbfkit[optuna]
+
+scenario: "monte_carlo_gpu_sweep"
+seeds: "0:2"
+
+sweep:
+  method: optuna
+  n_samples: 30                              # Optuna trial budget
+  objective: safety_violation_rate            # metric to optimize
+  direction: minimize                        # "minimize" or "maximize"
+
+  parameters:
+    alpha:
+      range: [0.1, 5.0]                     # continuous range for Optuna
+    control_limit:
+      range: [1.0, 15.0]                    # continuous range
+    n_obstacles:
+      int_range: [3, 10]                    # integer range
+    relaxable_cbf:
+      values: [true, false]                 # categorical
+
+output:
+  dir: "./results/optuna_cbf"

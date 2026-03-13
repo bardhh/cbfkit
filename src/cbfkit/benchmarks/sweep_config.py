@@ -20,6 +20,8 @@ class SweepConfig:
     parameters: Dict[str, Dict[str, Any]]
     n_samples: int
     output_dir: str
+    objective: str = "safety_violation_rate"
+    direction: str = "minimize"
 
 
 def load_sweep_config(path: str | Path) -> SweepConfig:
@@ -37,11 +39,19 @@ def load_sweep_config(path: str | Path) -> SweepConfig:
         parameters=sweep_block.get("parameters", {}),
         n_samples=sweep_block.get("n_samples", 50),
         output_dir=output_block.get("dir", "./sweep_results"),
+        objective=sweep_block.get("objective", "safety_violation_rate"),
+        direction=sweep_block.get("direction", "minimize"),
     )
 
 
 def resolve_param_combos(config: SweepConfig) -> List[Dict[str, Any]]:
-    """Generate parameter combinations based on the config method."""
+    """Generate parameter combinations based on the config method.
+
+    For ``method='optuna'``, returns an empty list since Optuna generates
+    parameters dynamically.
+    """
+    if config.method == "optuna":
+        return []
     if config.method == "random":
         return sample_param_combos(config.parameters, config.n_samples)
     return build_param_grid(config.parameters)
