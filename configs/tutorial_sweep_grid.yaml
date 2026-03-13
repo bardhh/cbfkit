@@ -1,0 +1,17 @@
+# Tutorial: Grid sweep over CBF alpha and control limits
+# Requires: import tutorials.parameter_sweep_tutorial to register the scenario
+# Run with: cbfkit-bench sweep configs/tutorial_sweep_grid.yaml
+
+scenario: "tutorial_single_integrator_sweep"
+seeds: "0:2"
+
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [0.5, 1.0, 2.0, 5.0, 10.0]
+    control_limit:
+      values: [3.0, 5.0, 10.0]
+
+output:
+  dir: "./results/tutorial_grid"

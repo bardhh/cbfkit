@@ -1,0 +1,22 @@
+# Tutorial: Optuna optimization of CBF parameters
+# Requires: pip install cbfkit[optuna]
+# Requires: import tutorials.parameter_sweep_tutorial to register the scenario
+# Run with: cbfkit-bench sweep configs/tutorial_sweep_optuna.yaml
+
+scenario: "tutorial_single_integrator_sweep"
+seeds: "0:2"
+
+sweep:
+  method: optuna
+  n_samples: 20
+  objective: safety_violation_rate
+  direction: minimize
+
+  parameters:
+    alpha:
+      range: [0.1, 10.0]
+    control_limit:
+      range: [1.0, 15.0]
+
+output:
+  dir: "./results/tutorial_optuna"
