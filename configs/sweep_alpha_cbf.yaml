@@ -1,0 +1,16 @@
+# Example parameter sweep: vary CBF alpha gain and control limits
+# Run with: cbfkit-bench sweep configs/sweep_alpha_cbf.yaml
+
+scenario: "monte_carlo_gpu_sweep"
+seeds: "0:2"
+
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      linspace: [0.5, 3.0, 6]      # 6 values from 0.5 to 3.0
+    control_limit:
+      values: [2.0, 5.0, 10.0]     # 3 explicit values
+
+output:
+  dir: "./results/sweep_alpha_cbf"

@@ -22,7 +22,8 @@ dependencies = [
     "jax>=0.4.23",
     "jaxopt>=0.8.3,<0.9",
     "rich>=13.0,<15.0",
-    "tqdm>=4.60"
+    "tqdm>=4.60",
+    "pyyaml>=6.0"
 ]
 
 

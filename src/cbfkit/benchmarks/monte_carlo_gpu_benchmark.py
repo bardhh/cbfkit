@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from jax import random
 from tqdm import tqdm
 
-from cbfkit.benchmarks.registry import register_scenario
+from cbfkit.benchmarks.registry import register_scenario, register_sweepable_scenario
 from cbfkit.controllers.cbf_clf.cbf_clf_qp_generator import cbf_clf_qp_generator
 from cbfkit.controllers.cbf_clf.generate_constraints import (
     generate_compute_vanilla_clf_constraints,
@@ -32,13 +32,13 @@ def _dynamics(x):
     return jnp.zeros(2), jnp.eye(2)
 
 
-def _make_cbf(c, r):
+def _make_cbf(c, r, alpha=1.0):
     return (
         lambda _t, x: jnp.sum((x - c) ** 2) - r**2,
         lambda _t, x: 2 * (x - c),
         lambda _t, _x: 2 * jnp.eye(2),
         lambda _t, _x: 0.0,
-        lambda h: 1.0 * h,
+        lambda h, _alpha=alpha: _alpha * h,
     )
 
 
@@ -56,24 +56,30 @@ def _default_perturbation(x, u, f, g):
     return p
 
 
-def _build_setup(seed: int, n_obstacles: int = 5):
+def _build_setup(
+    seed: int,
+    n_obstacles: int = 5,
+    alpha: float = 1.0,
+    control_limit: float = 5.0,
+    relaxable_cbf: bool = False,
+):
     """Build a ``MonteCarloSetup`` with random circular obstacles."""
     key = random.PRNGKey(seed)
     key_c, key_r = random.split(key)
     centers = random.uniform(key_c, (n_obstacles, 2), minval=2.0, maxval=8.0)
     radii = random.uniform(key_r, (n_obstacles,), minval=0.5, maxval=1.0)
 
-    barrier_tuples = [_make_cbf(centers[i], radii[i]) for i in range(n_obstacles)]
+    barrier_tuples = [_make_cbf(centers[i], radii[i], alpha=alpha) for i in range(n_obstacles)]
     barriers = CertificateCollection(*[list(x) for x in zip(*barrier_tuples)])
 
     controller = cbf_clf_qp_generator(
         generate_compute_zeroing_cbf_constraints,
         generate_compute_vanilla_clf_constraints,
     )(
-        control_limits=jnp.array([5.0, 5.0]),
+        control_limits=jnp.array([control_limit, control_limit]),
         dynamics_func=_dynamics,
         barriers=barriers,
-        relaxable_cbf=False,
+        relaxable_cbf=relaxable_cbf,
         relaxable_clf=True,
     )
 
@@ -109,7 +115,7 @@ def _build_setup(seed: int, n_obstacles: int = 5):
 
 
 # ---------------------------------------------------------------------------
-# Benchmark scenario
+# Original benchmark scenario (non-sweep)
 # ---------------------------------------------------------------------------
 
 TRIAL_COUNTS = [100, 500, 1000]
@@ -144,3 +150,48 @@ def monte_carlo_gpu_speedup(seed: int) -> dict[str, float | int]:
     metrics["avg_step_ms"] = metrics[f"time_{TRIAL_COUNTS[0]}"] / setup.num_steps * 1000.0
 
     return metrics
+
+
+# ---------------------------------------------------------------------------
+# Sweepable benchmark scenario
+# ---------------------------------------------------------------------------
+
+SWEEP_TRIAL_COUNT = 100
+
+
+@register_sweepable_scenario(
+    "monte_carlo_gpu_sweep",
+    sweepable_params=["alpha", "control_limit", "n_obstacles", "relaxable_cbf"],
+    description="GPU Monte Carlo with sweepable CBF parameters.",
+)
+def monte_carlo_gpu_sweep(seed: int, params: dict) -> dict[str, float | int]:
+    """Sweepable version: accepts CBF parameters and runs a fixed trial count."""
+    alpha = params.get("alpha", 1.0)
+    control_limit = params.get("control_limit", 5.0)
+    n_obstacles = int(params.get("n_obstacles", 5))
+    relaxable = bool(params.get("relaxable_cbf", False))
+
+    setup = _build_setup(
+        seed,
+        n_obstacles=n_obstacles,
+        alpha=alpha,
+        control_limit=control_limit,
+        relaxable_cbf=relaxable,
+    )
+
+    results = conduct_monte_carlo_gpu(setup, n_trials=SWEEP_TRIAL_COUNT, seed=seed)
+    stats = compute_safety_statistics(results)
+    platform = jax.devices()[0].platform
+
+    return {
+        "platform": platform,
+        "n_trials": SWEEP_TRIAL_COUNT,
+        "wall_time_s": results.wall_time_s,
+        "trials_per_sec": SWEEP_TRIAL_COUNT / results.wall_time_s,
+        "violation_rate": stats.violation_rate,
+        "min_barrier_value": stats.min_barrier_value,
+        "success": 1,
+        "safety_violations": int(stats.violation_rate > 0),
+        "solver_failures": 0,
+        "avg_step_ms": results.wall_time_s / setup.num_steps * 1000.0,
+    }

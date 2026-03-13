@@ -12,7 +12,10 @@ from cbfkit.benchmarks import compare_runs, registry, run_scenario, write_artifa
 def _cmd_list() -> int:
     for name in registry.names():
         spec = registry.scenario(name)
-        print(f"{name}: {spec.description}")
+        params = ""
+        if spec.sweepable_params:
+            params = f"  [sweepable: {', '.join(spec.sweepable_params)}]"
+        print(f"{name}: {spec.description}{params}")
     return 0
 
 
@@ -29,6 +32,46 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     right = run_scenario(args.scenario, args.right_seeds)
     delta = compare_runs(left, right, args.metric)
     print(json.dumps(delta, indent=2))
+    return 0
+
+
+def _cmd_sweep(args: argparse.Namespace) -> int:
+    from cbfkit.benchmarks.sweep import run_sweep, write_sweep_artifacts
+    from cbfkit.benchmarks.sweep_config import load_sweep_config, resolve_param_combos
+
+    config = load_sweep_config(args.config)
+    param_combos = resolve_param_combos(config)
+
+    spec = registry.scenario(config.scenario)
+
+    if spec.sweep_runner is not None:
+        runner = spec.sweep_runner
+    else:
+        def runner(seed, params):
+            return spec.runner(seed)
+
+    print(
+        f"Sweep: {config.scenario} | "
+        f"{len(param_combos)} combos x {len(config.seeds)} seeds = "
+        f"{len(param_combos) * len(config.seeds)} runs"
+    )
+    result = run_sweep(config.scenario, config.seeds, param_combos, runner)
+    write_sweep_artifacts(result, config.output_dir)
+    print(f"Results written to {config.output_dir}")
+    return 0
+
+
+def _cmd_sweep_plot(args: argparse.Namespace) -> int:
+    from cbfkit.benchmarks.sweep_plot import plot_sweep
+
+    plot_sweep(
+        args.results,
+        x_param=args.x_param,
+        y_metric=args.y_metric,
+        hue_param=args.hue,
+        output_path=args.output,
+        kind=args.kind,
+    )
     return 0
 
 
@@ -49,6 +92,19 @@ def build_parser() -> argparse.ArgumentParser:
     cmp_parser.add_argument("--right-seeds", default="10:19")
     cmp_parser.add_argument("--metric", default="safety_violation_rate")
 
+    sweep_parser = sub.add_parser("sweep", help="Run a parameter sweep from YAML config")
+    sweep_parser.add_argument("config", type=Path, help="Path to sweep YAML config file")
+
+    plot_parser = sub.add_parser("sweep-plot", help="Plot sweep results")
+    plot_parser.add_argument("results", type=Path, help="Path to sweep_results.json")
+    plot_parser.add_argument("--x-param", required=True, help="Parameter for x-axis")
+    plot_parser.add_argument("--y-metric", required=True, help="Metric for y-axis")
+    plot_parser.add_argument("--hue", default=None, help="Second parameter for grouping")
+    plot_parser.add_argument(
+        "--kind", default="line", choices=["line", "heatmap", "pareto"],
+    )
+    plot_parser.add_argument("--output", type=Path, default=None, help="Save figure to path")
+
     return parser
 
 
@@ -62,6 +118,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_run(args)
     if args.command == "compare":
         return _cmd_compare(args)
+    if args.command == "sweep":
+        return _cmd_sweep(args)
+    if args.command == "sweep-plot":
+        return _cmd_sweep_plot(args)
 
     parser.error(f"Unsupported command: {args.command}")
     return 2
