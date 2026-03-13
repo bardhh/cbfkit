@@ -80,21 +80,53 @@ class SweepRun:
 # ---------------------------------------------------------------------------
 
 
+def _is_failure(result: Dict[str, Any], metric: str) -> bool:
+    """Check if a result indicates a failure for falsification purposes."""
+    val = result.get(metric, 0)
+    if isinstance(val, bool):
+        return val
+    return float(val) > 0
+
+
 def run_sweep(
     name: str,
     seeds: List[int],
     param_combos: List[Dict[str, Any]],
     runner: SweepableRunner,
+    *,
+    falsifier: bool = False,
+    falsifier_metric: str = "safety_violations",
 ) -> SweepRun:
-    """Execute a scenario across all (seed, param_combo) pairs."""
+    """Execute a scenario across all (seed, param_combo) pairs.
+
+    Parameters
+    ----------
+    falsifier : bool
+        When *True*, run in falsification mode: for each parameter combo,
+        stop iterating seeds as soon as a failure is found (the metric
+        given by *falsifier_metric* is non-zero). This skips remaining
+        seeds and moves to the next combo, saving time when you only need
+        to know whether a configuration *can* fail.
+    falsifier_metric : str
+        The result key checked for failure (default ``"safety_violations"``).
+    """
     records: List[Dict[str, Any]] = []
     per_combo_summaries: List[Dict[str, Any]] = []
 
+    label = f"Falsify ({name})" if falsifier else f"Sweep ({name})"
     total = len(param_combos) * len(seeds)
-    with tqdm(total=total, desc=f"Sweep ({name})", unit="run") as pbar:
+    skipped = 0
+
+    with tqdm(total=total, desc=label, unit="run") as pbar:
         for combo_idx, combo in enumerate(param_combos):
             combo_records: List[Dict[str, Any]] = []
+            falsified = False
             for seed in seeds:
+                if falsified:
+                    skipped += 1
+                    pbar.update(1)
+                    continue
+
                 result = dict(runner(seed, combo))
                 result["seed"] = seed
                 result["combo_idx"] = combo_idx
@@ -104,11 +136,19 @@ def run_sweep(
                 combo_records.append(result)
                 pbar.update(1)
 
+                if falsifier and _is_failure(result, falsifier_metric):
+                    result["falsified"] = True
+                    falsified = True
+
             summary = summarize(combo_records)
             summary["combo_idx"] = combo_idx
+            summary["falsified"] = falsified
             for k, v in combo.items():
                 summary[f"param_{k}"] = v
             per_combo_summaries.append(summary)
+
+    if falsifier and skipped > 0:
+        tqdm.write(f"Falsifier: skipped {skipped} runs due to early failures")
 
     return SweepRun(
         scenario=name,
@@ -154,11 +194,22 @@ def run_optuna_sweep(
     n_trials: int = 50,
     objective_metric: str = "safety_violation_rate",
     direction: str = "minimize",
+    *,
+    falsifier: bool = False,
+    falsifier_metric: str = "safety_violations",
 ) -> SweepRun:
     """Run an Optuna-driven parameter sweep.
 
     Each Optuna trial evaluates the scenario across all seeds and optimises
     the aggregated *objective_metric*.
+
+    Parameters
+    ----------
+    falsifier : bool
+        When *True*, stop iterating seeds on first failure (same semantics
+        as :func:`run_sweep`).
+    falsifier_metric : str
+        The result key checked for failure (default ``"safety_violations"``).
 
     Requires ``pip install cbfkit[optuna]``.
     """
@@ -176,7 +227,8 @@ def run_optuna_sweep(
     param_combos: List[Dict[str, Any]] = []
     per_combo_summaries: List[Dict[str, Any]] = []
 
-    pbar = tqdm(total=n_trials, desc=f"Optuna ({name})", unit="trial")
+    label = f"Falsify/Optuna ({name})" if falsifier else f"Optuna ({name})"
+    pbar = tqdm(total=n_trials, desc=label, unit="trial")
 
     def objective(trial) -> float:
         combo = {pname: _suggest_param(trial, pname, pspec)
@@ -185,7 +237,10 @@ def run_optuna_sweep(
         param_combos.append(combo)
 
         combo_records: List[Dict[str, Any]] = []
+        falsified = False
         for seed in seeds:
+            if falsified:
+                continue
             result = dict(runner(seed, combo))
             result["seed"] = seed
             result["combo_idx"] = combo_idx
@@ -194,8 +249,13 @@ def run_optuna_sweep(
             records.append(result)
             combo_records.append(result)
 
+            if falsifier and _is_failure(result, falsifier_metric):
+                result["falsified"] = True
+                falsified = True
+
         summary = summarize(combo_records)
         summary["combo_idx"] = combo_idx
+        summary["falsified"] = falsified
         for k, v in combo.items():
             summary[f"param_{k}"] = v
         per_combo_summaries.append(summary)

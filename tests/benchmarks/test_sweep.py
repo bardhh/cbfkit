@@ -114,6 +114,17 @@ def _mock_runner(seed: int, params: dict) -> dict:
     }
 
 
+def _mock_failing_runner(seed: int, params: dict) -> dict:
+    """Fails on seed >= 1 when alpha > 2."""
+    fails = params.get("alpha", 1.0) > 2.0 and seed >= 1
+    return {
+        "success": 0 if fails else 1,
+        "safety_violations": 1 if fails else 0,
+        "solver_failures": 0,
+        "avg_step_ms": 1.0,
+    }
+
+
 class TestRunSweep:
     def test_basic_sweep(self):
         combos = [{"alpha": 1.0}, {"alpha": 2.0}]
@@ -131,6 +142,71 @@ class TestRunSweep:
 
         assert summary["num_runs"] == 3.0
         assert summary["param_alpha"] == 5.0
+
+
+# ---------------------------------------------------------------------------
+# Falsifier mode
+# ---------------------------------------------------------------------------
+
+
+class TestFalsifier:
+    def test_falsifier_skips_seeds_after_failure(self):
+        """Falsifier should stop seeds for a combo on first failure."""
+        combos = [{"alpha": 3.0}]  # alpha > 2 fails on seed >= 1
+        seeds = [0, 1, 2, 3]
+        result = run_sweep(
+            "test_falsify", seeds, combos, _mock_failing_runner,
+            falsifier=True, falsifier_metric="safety_violations",
+        )
+        # seed=0 passes, seed=1 fails -> seeds 2,3 skipped
+        assert len(result.records) == 2
+        assert result.per_combo_summaries[0]["falsified"] is True
+
+    def test_falsifier_no_failure_runs_all_seeds(self):
+        """When no failure occurs, all seeds run."""
+        combos = [{"alpha": 1.0}]  # alpha <= 2 never fails
+        seeds = [0, 1, 2]
+        result = run_sweep(
+            "test_falsify_pass", seeds, combos, _mock_failing_runner,
+            falsifier=True,
+        )
+        assert len(result.records) == 3
+        assert result.per_combo_summaries[0]["falsified"] is False
+
+    def test_falsifier_disabled_runs_all(self):
+        """Without falsifier, all seeds run even with failures."""
+        combos = [{"alpha": 3.0}]
+        seeds = [0, 1, 2, 3]
+        result = run_sweep(
+            "test_no_falsify", seeds, combos, _mock_failing_runner,
+            falsifier=False,
+        )
+        assert len(result.records) == 4
+
+    def test_falsifier_yaml_config(self):
+        """YAML config should parse falsifier settings."""
+        from cbfkit.benchmarks.sweep_config import load_sweep_config
+
+        yaml_content = """\
+scenario: "sanity_random_safety"
+seeds: "0:2"
+sweep:
+  method: grid
+  falsifier: true
+  falsifier_metric: safety_violations
+  parameters:
+    alpha:
+      values: [1.0, 5.0]
+output:
+  dir: "/tmp/test_falsify"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            config = load_sweep_config(f.name)
+
+        assert config.falsifier is True
+        assert config.falsifier_metric == "safety_violations"
 
 
 # ---------------------------------------------------------------------------

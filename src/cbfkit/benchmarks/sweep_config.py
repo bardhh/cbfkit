@@ -22,6 +22,8 @@ class SweepConfig:
     output_dir: str
     objective: str = "safety_violation_rate"
     direction: str = "minimize"
+    falsifier: bool = False
+    falsifier_metric: str = "safety_violations"
 
 
 def load_sweep_config(path: str | Path) -> SweepConfig:
@@ -41,6 +43,8 @@ def load_sweep_config(path: str | Path) -> SweepConfig:
         output_dir=output_block.get("dir", "./sweep_results"),
         objective=sweep_block.get("objective", "safety_violation_rate"),
         direction=sweep_block.get("direction", "minimize"),
+        falsifier=sweep_block.get("falsifier", False),
+        falsifier_metric=sweep_block.get("falsifier_metric", "safety_violations"),
     )
 
 

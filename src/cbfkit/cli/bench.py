@@ -49,9 +49,11 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
         def runner(seed, params):
             return spec.runner(seed)
 
+    mode_label = "Falsify" if config.falsifier else "Sweep"
+
     if config.method == "optuna":
         print(
-            f"Optuna sweep: {config.scenario} | "
+            f"Optuna {mode_label.lower()}: {config.scenario} | "
             f"{config.n_samples} trials x {len(config.seeds)} seeds | "
             f"objective: {config.direction} {config.objective}"
         )
@@ -63,15 +65,21 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
             n_trials=config.n_samples,
             objective_metric=config.objective,
             direction=config.direction,
+            falsifier=config.falsifier,
+            falsifier_metric=config.falsifier_metric,
         )
     else:
         param_combos = resolve_param_combos(config)
         print(
-            f"Sweep: {config.scenario} | "
+            f"{mode_label}: {config.scenario} | "
             f"{len(param_combos)} combos x {len(config.seeds)} seeds = "
             f"{len(param_combos) * len(config.seeds)} runs"
         )
-        result = run_sweep(config.scenario, config.seeds, param_combos, runner)
+        result = run_sweep(
+            config.scenario, config.seeds, param_combos, runner,
+            falsifier=config.falsifier,
+            falsifier_metric=config.falsifier_metric,
+        )
 
     write_sweep_artifacts(result, config.output_dir)
     print(f"Results written to {config.output_dir}")
