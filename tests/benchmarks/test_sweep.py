@@ -392,6 +392,27 @@ class TestOptunaSweep:
             data = json.loads((out / "sweep_results.json").read_text())
             assert len(data["per_combo_summaries"]) == 3
 
+    def test_optuna_falsifier(self):
+        """Optuna sweep with falsifier should skip seeds after failure."""
+        params = {"alpha": {"values": [1.0, 3.0, 5.0]}}
+        seeds = [0, 1, 2, 3]
+        result = run_optuna_sweep(
+            "test_optuna_falsify",
+            seeds=seeds,
+            parameters=params,
+            runner=_mock_failing_runner,
+            n_trials=3,
+            objective_metric="avg_step_ms",
+            falsifier=True,
+            falsifier_metric="safety_violations",
+        )
+        # alpha=1.0 runs all 4 seeds (no failures)
+        # alpha=3.0 and alpha=5.0 fail on seed>=1, so only 2 seeds each
+        # Total records should be less than 3*4=12
+        assert len(result.records) < 3 * len(seeds)
+        # At least one combo should be falsified
+        assert any(s["falsified"] for s in result.per_combo_summaries)
+
     def test_optuna_config_loading(self):
         from cbfkit.benchmarks.sweep_config import load_sweep_config, resolve_param_combos
 

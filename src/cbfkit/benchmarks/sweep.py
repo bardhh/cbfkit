@@ -88,6 +88,60 @@ def _is_failure(result: Dict[str, Any], metric: str) -> bool:
     return float(val) > 0
 
 
+def _run_combo(
+    runner: SweepableRunner,
+    seeds: List[int],
+    combo: Dict[str, Any],
+    combo_idx: int,
+    records: List[Dict[str, Any]],
+    *,
+    falsifier: bool = False,
+    falsifier_metric: str = "safety_violations",
+) -> tuple[List[Dict[str, Any]], bool]:
+    """Run a single parameter combo across seeds, with optional falsification.
+
+    Returns ``(combo_records, falsified)`` where *combo_records* contains
+    only the seeds that actually executed and *falsified* indicates whether
+    early termination occurred.
+    """
+    combo_records: List[Dict[str, Any]] = []
+    falsified = False
+
+    for seed in seeds:
+        result = dict(runner(seed, combo))
+        result["seed"] = seed
+        result["combo_idx"] = combo_idx
+        for k, v in combo.items():
+            result[f"param_{k}"] = v
+
+        if falsifier and _is_failure(result, falsifier_metric):
+            result["falsified"] = True
+            falsified = True
+
+        records.append(result)
+        combo_records.append(result)
+
+        if falsified:
+            break
+
+    return combo_records, falsified
+
+
+def _build_combo_summary(
+    combo_records: List[Dict[str, Any]],
+    combo: Dict[str, Any],
+    combo_idx: int,
+    falsified: bool,
+) -> Dict[str, Any]:
+    """Create an aggregated summary for a single parameter combo."""
+    summary = summarize(combo_records)
+    summary["combo_idx"] = combo_idx
+    summary["falsified"] = falsified
+    for k, v in combo.items():
+        summary[f"param_{k}"] = v
+    return summary
+
+
 def run_sweep(
     name: str,
     seeds: List[int],
@@ -119,33 +173,20 @@ def run_sweep(
 
     with tqdm(total=total, desc=label, unit="run") as pbar:
         for combo_idx, combo in enumerate(param_combos):
-            combo_records: List[Dict[str, Any]] = []
-            falsified = False
-            for seed in seeds:
-                if falsified:
-                    skipped += 1
-                    pbar.update(1)
-                    continue
+            combo_records, falsified = _run_combo(
+                runner, seeds, combo, combo_idx, records,
+                falsifier=falsifier, falsifier_metric=falsifier_metric,
+            )
+            pbar.update(len(combo_records))
 
-                result = dict(runner(seed, combo))
-                result["seed"] = seed
-                result["combo_idx"] = combo_idx
-                for k, v in combo.items():
-                    result[f"param_{k}"] = v
-                records.append(result)
-                combo_records.append(result)
-                pbar.update(1)
+            remaining = len(seeds) - len(combo_records)
+            if remaining > 0:
+                skipped += remaining
+                pbar.update(remaining)
 
-                if falsifier and _is_failure(result, falsifier_metric):
-                    result["falsified"] = True
-                    falsified = True
-
-            summary = summarize(combo_records)
-            summary["combo_idx"] = combo_idx
-            summary["falsified"] = falsified
-            for k, v in combo.items():
-                summary[f"param_{k}"] = v
-            per_combo_summaries.append(summary)
+            per_combo_summaries.append(
+                _build_combo_summary(combo_records, combo, combo_idx, falsified)
+            )
 
     if falsifier and skipped > 0:
         tqdm.write(f"Falsifier: skipped {skipped} runs due to early failures")
@@ -236,28 +277,12 @@ def run_optuna_sweep(
         combo_idx = trial.number
         param_combos.append(combo)
 
-        combo_records: List[Dict[str, Any]] = []
-        falsified = False
-        for seed in seeds:
-            if falsified:
-                continue
-            result = dict(runner(seed, combo))
-            result["seed"] = seed
-            result["combo_idx"] = combo_idx
-            for k, v in combo.items():
-                result[f"param_{k}"] = v
-            records.append(result)
-            combo_records.append(result)
+        combo_records, falsified = _run_combo(
+            runner, seeds, combo, combo_idx, records,
+            falsifier=falsifier, falsifier_metric=falsifier_metric,
+        )
 
-            if falsifier and _is_failure(result, falsifier_metric):
-                result["falsified"] = True
-                falsified = True
-
-        summary = summarize(combo_records)
-        summary["combo_idx"] = combo_idx
-        summary["falsified"] = falsified
-        for k, v in combo.items():
-            summary[f"param_{k}"] = v
+        summary = _build_combo_summary(combo_records, combo, combo_idx, falsified)
         per_combo_summaries.append(summary)
 
         pbar.update(1)
