@@ -1,7 +1,7 @@
-# Tutorial: Optuna optimization of CBF parameters
+# CPU Optuna sweep: single integrator CBF Bayesian optimization
+# Lightweight — runs comfortably on CPU without GPU/CUDA.
 # Requires: pip install cbfkit[optuna]
-# Requires: import tutorials.parameter_sweep_tutorial to register the scenario
-# Run with: cbfkit-bench sweep configs/tutorial_sweep_optuna.yaml
+# Run with: cbfkit-bench sweep configs/cpu/sweep_optuna.yaml
 
 scenario: "tutorial_single_integrator_sweep"
 seeds: "0:2"
@@ -19,4 +19,4 @@ sweep:
       range: [1.0, 15.0]
 
 output:
-  dir: "./results/tutorial_optuna"
+  dir: "./results/cpu/sweep_optuna"

@@ -18,8 +18,8 @@ Usage::
     python tutorials/parameter_sweep_tutorial.py
 
     # Or use the CLI with YAML configs:
-    cbfkit-bench sweep configs/tutorial_sweep_grid.yaml
-    cbfkit-bench sweep configs/tutorial_sweep_optuna.yaml
+    cbfkit-bench sweep configs/cpu/sweep_grid.yaml
+    cbfkit-bench sweep configs/cpu/sweep_optuna.yaml
 """
 
 import json
@@ -253,7 +253,7 @@ def demo_optuna_sweep():
 #
 # Create a YAML config and run with the CLI:
 #
-#   cbfkit-bench sweep configs/tutorial_sweep_grid.yaml
+#   cbfkit-bench sweep configs/cpu/sweep_grid.yaml
 #
 # Then visualize:
 #
