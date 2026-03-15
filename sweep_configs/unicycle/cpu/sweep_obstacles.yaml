@@ -1,0 +1,23 @@
+# CPU grid sweep with explicit ellipsoidal obstacles for unicycle
+# Demonstrates fixed obstacle layout with sweepable alpha.
+# Run with: cbfkit-bench sweep sweep_configs/unicycle/cpu/sweep_obstacles.yaml
+
+scenario: "unicycle_obstacle_avoidance_sweep"
+seeds: "0:1"
+
+obstacles:
+  type: ellipsoidal
+  items:
+    - center: [1.0, 2.0, 0.0]
+      semi_axes: [0.5, 1.5]
+    - center: [3.0, 2.0, 0.0]
+      semi_axes: [0.75, 2.0]
+
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [1.0, 5.0]
+
+output:
+  dir: "./results/unicycle/cpu/sweep_obstacles"

@@ -1,10 +1,27 @@
 """Quadratic program solver using the Jaxopt library."""
 
+import enum
 import warnings
 from typing import Any, NamedTuple, Optional, Tuple, Union
 
 import jax.numpy as jnp
 from jax import Array, jit
+
+
+class QpStatus(enum.IntEnum):
+    """Status codes returned by the OSQP solver.
+
+    These map to the internal jaxopt status codes with one addition
+    (``MAX_ITER_UNSOLVED``) that disambiguates the case where the solver
+    hit the iteration limit without converging.
+    """
+
+    UNSOLVED = 0
+    SOLVED = 1
+    MAX_ITER_REACHED = 2
+    PRIMAL_INFEASIBLE = 3
+    DUAL_INFEASIBLE = 4
+    MAX_ITER_UNSOLVED = 5  # status=0 AND iter_num >= maxiter
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="jaxopt")
@@ -13,7 +30,7 @@ with warnings.catch_warnings():
 from cbfkit.utils.jit_monitor import JitMonitor
 
 # Instantiate QP solver objects
-MAX_ITER = 1000000
+MAX_ITER = 10000
 QP = OSQP(maxiter=MAX_ITER, tol=1e-6)
 EC_QP = EqualityConstrainedQP()
 
@@ -86,13 +103,13 @@ def solve_inequality_constrained_qp(
     )
     status = state.status
 
-    # Detect ambiguous MAX_ITER_REACHED (status=0 but iter_num >= maxiter)
-    # This happens when jaxopt gives up but hasn't flagged it as 2 explicitly.
-    # We map it to 5 (MAX_ITER_REACHED (UNSOLVED)) to distinguish it from a successful status (2).
-    # This allows downstream controllers to fail safely (since 5 != success) but report the specific cause.
+    # Detect ambiguous case: status=0 but iter_num >= maxiter means the
+    # solver hit the iteration limit without converging.  Remap to
+    # MAX_ITER_UNSOLVED so downstream code (which checks status != SOLVED)
+    # correctly treats this as a failure.
     status = jnp.where(
-        (status == 0) & (state.iter_num >= MAX_ITER),
-        5,
+        (status == QpStatus.UNSOLVED) & (state.iter_num >= MAX_ITER),
+        QpStatus.MAX_ITER_UNSOLVED,
         status,
     )
 
@@ -192,8 +209,8 @@ def solve_with_state(
     sol, status, params = solve_with_details(
         h_mat, f_vec, g_mat, h_vec, a_mat, b_vec, init_params
     )
-    # Only SOLVED (1) is success. MAX_ITER_REACHED (2) may return non-converged solution.
-    success = status == 1
+    # Only SOLVED is success. MAX_ITER_REACHED may return non-converged solution.
+    success = status == QpStatus.SOLVED
     return sol, success, params
 
 
