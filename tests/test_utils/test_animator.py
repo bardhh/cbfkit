@@ -304,8 +304,114 @@ class TestSaveAnimation:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Plotly backend
+# ---------------------------------------------------------------------------
+
+plotly = pytest.importorskip("plotly")
+
+
+class TestPlotlyBackend:
+    def test_invalid_backend_raises(self, simple_states):
+        with pytest.raises(ValueError, match="Unknown backend"):
+            CBFAnimator(simple_states, backend="invalid")
+
+    def test_build_returns_plotly_figure(self, simple_states):
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly")
+        a.add_trajectory(x_idx=0, y_idx=1)
+        fig = a.build()
+        assert fig is not None
+        assert a.fig is fig
+        assert a.ax is None  # no matplotlib axes for plotly
+
+    def test_plotly_goals_and_obstacles(self, simple_states):
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly")
+        a.add_goal([1.0, 2.0], radius=0.5, color="r")
+        a.add_obstacle([0, 0], radius=1.0, color="k")
+        a.add_obstacle([2, 2], ellipse_radii=(0.5, 0.3))
+        a.add_trajectory(x_idx=0, y_idx=1)
+        fig = a.build()
+        # Should have shapes for goal circle + 2 obstacles
+        assert len(fig.layout.shapes) == 3
+        # Should have goal marker trace + trajectory trace
+        assert len(fig.data) == 2
+
+    def test_plotly_multiple_trajectories(self, simple_states, estimates):
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly")
+        a.add_trajectory(x_idx=0, y_idx=1, label="True")
+        a.add_trajectory(x_idx=0, y_idx=1, data=estimates, style="scatter", label="Est")
+        fig = a.build()
+        assert len(fig.data) == 2  # two trajectory traces
+        assert len(fig.frames) > 0
+
+    def test_plotly_frames_contain_data(self, simple_states):
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly")
+        a.add_trajectory(x_idx=0, y_idx=1)
+        fig = a.build()
+        # Last frame should have data up to the end
+        last_frame = fig.frames[-1]
+        assert len(last_frame.data) == 1  # one trajectory
+        assert len(last_frame.data[0].x) > 0
+
+    def test_plotly_show_time_adds_annotations(self, simple_states):
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly")
+        a.add_trajectory(x_idx=0, y_idx=1)
+        a.show_time()
+        fig = a.build()
+        # Frames should have annotation layouts
+        mid_frame = fig.frames[len(fig.frames) // 2]
+        assert mid_frame.layout.annotations is not None
+        assert "Time:" in mid_frame.layout.annotations[0].text
+
+    def test_plotly_aspect_equal(self, simple_states):
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly", aspect="equal")
+        a.add_trajectory(x_idx=0, y_idx=1)
+        fig = a.build()
+        assert fig.layout.yaxis.scaleanchor == "x"
+
+    def test_plotly_save_creates_html(self, simple_states, tmp_path):
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly")
+        a.add_trajectory(x_idx=0, y_idx=1)
+        path = str(tmp_path / "test_anim.mp4")  # extension replaced to .html
+        result = a.save(path)
+        assert result.endswith(".html")
+        assert os.path.exists(result)
+
+    def test_plotly_save_nested_dirs(self, simple_states, tmp_path):
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly")
+        a.add_trajectory(x_idx=0, y_idx=1)
+        path = str(tmp_path / "sub" / "dir" / "anim.html")
+        result = a.save(path)
+        assert os.path.exists(result)
+
+    def test_plotly_downsampling(self, simple_states):
+        # With max_frames=10, a 50-step sim should be downsampled
+        cfg = AnimationConfig(plotly_max_frames=10)
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly", config=cfg)
+        a.add_trajectory(x_idx=0, y_idx=1)
+        fig = a.build()
+        assert len(fig.frames) <= 12  # 10 + possible last frame rounding
+
+    def test_plotly_animate_returns_figure(self, simple_states):
+        a = CBFAnimator(simple_states, dt=0.1, backend="plotly")
+        a.add_trajectory(x_idx=0, y_idx=1)
+        result = a.animate()
+        assert result is a.fig
+        assert a.animation is result
+
+
+# ---------------------------------------------------------------------------
+# Import guard
+# ---------------------------------------------------------------------------
+
+
 class TestImportGuard:
     def test_require_matplotlib_raises_when_missing(self, monkeypatch):
         monkeypatch.setattr(animator_module, "_HAS_MATPLOTLIB", False)
         with pytest.raises(ImportError, match=r"cbfkit\[vis\]"):
             animator_module._require_matplotlib()
+
+    def test_require_plotly_raises_when_missing(self, monkeypatch):
+        monkeypatch.setattr(animator_module, "_HAS_PLOTLY", False)
+        with pytest.raises(ImportError, match=r"cbfkit\[plotly\]"):
+            animator_module._require_plotly()

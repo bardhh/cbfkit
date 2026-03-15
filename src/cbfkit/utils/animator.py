@@ -4,6 +4,13 @@ Provides :class:`CBFAnimator` for building 2D trajectory animations with a
 declarative API, :class:`AnimationConfig` for centralised defaults, and
 :func:`save_animation` for robust file output with format fallback.
 
+Supports two backends:
+
+* ``"matplotlib"`` (default) — generates MP4 / GIF animations via
+  ``FuncAnimation``.
+* ``"plotly"`` — generates interactive HTML files with play/pause controls
+  and a timeline slider.  Requires ``pip install cbfkit[plotly]``.
+
 Example
 -------
 >>> from cbfkit.utils.animator import CBFAnimator
@@ -12,6 +19,13 @@ Example
 >>> anim.add_obstacles(obstacle_centers, ellipsoid_radii=ellipsoid_radii)
 >>> anim.add_trajectory(x_idx=0, y_idx=1, label="Trajectory")
 >>> anim.save("results/animation.mp4")
+
+Interactive Plotly version:
+
+>>> anim = CBFAnimator(states, dt=0.1, backend="plotly")
+>>> anim.add_goal(desired_state[:2], radius=0.25)
+>>> anim.add_trajectory(x_idx=0, y_idx=1, label="Trajectory")
+>>> anim.save("results/animation.html")  # interactive HTML
 """
 
 from dataclasses import dataclass
@@ -19,6 +33,10 @@ from pathlib import Path
 from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
+
+# ---------------------------------------------------------------------------
+# Optional dependency checks
+# ---------------------------------------------------------------------------
 
 try:
     import matplotlib.animation as mpl_animation
@@ -29,6 +47,13 @@ try:
 except ImportError:
     _HAS_MATPLOTLIB = False
 
+try:
+    import plotly.graph_objects as go
+
+    _HAS_PLOTLY = True
+except ImportError:
+    _HAS_PLOTLY = False
+
 
 def _require_matplotlib():
     if not _HAS_MATPLOTLIB:
@@ -36,6 +61,42 @@ def _require_matplotlib():
             "Optional dependency 'matplotlib' not found. "
             "Please install cbfkit[vis] to use visualization features."
         )
+
+
+def _require_plotly():
+    if not _HAS_PLOTLY:
+        raise ImportError(
+            "Optional dependency 'plotly' not found. "
+            "Please install cbfkit[plotly] to use the Plotly backend."
+        )
+
+
+# Matplotlib short color names / tab: palette → CSS hex for Plotly
+_MPL_TO_CSS: dict = {
+    "r": "red",
+    "g": "green",
+    "b": "blue",
+    "k": "black",
+    "w": "white",
+    "c": "cyan",
+    "m": "magenta",
+    "y": "yellow",
+    "tab:blue": "#1f77b4",
+    "tab:orange": "#ff7f0e",
+    "tab:green": "#2ca02c",
+    "tab:red": "#d62728",
+    "tab:purple": "#9467bd",
+    "tab:brown": "#8c564b",
+    "tab:pink": "#e377c2",
+    "tab:gray": "#7f7f7f",
+    "tab:olive": "#bcbd22",
+    "tab:cyan": "#17becf",
+}
+
+
+def _to_css_color(color: str) -> str:
+    """Convert a matplotlib color string to a CSS-compatible color."""
+    return _MPL_TO_CSS.get(color, color)
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +124,9 @@ class AnimationConfig:
         Transparency of the background grid.
     blit : bool
         Whether to use blitting for faster rendering.
+    plotly_max_frames : int
+        Maximum number of frames for the Plotly backend.  Long simulations
+        are downsampled to this count to keep the HTML file responsive.
     """
 
     fps: int = 20
@@ -72,6 +136,7 @@ class AnimationConfig:
     figsize: Tuple[float, float] = (10, 8)
     grid_alpha: float = 0.3
     blit: bool = True
+    plotly_max_frames: int = 200
 
 
 DEFAULT_CONFIG = AnimationConfig()
@@ -79,7 +144,7 @@ DEFAULT_CONFIG = AnimationConfig()
 
 
 # ---------------------------------------------------------------------------
-# Standalone save helper
+# Standalone save helper (matplotlib only)
 # ---------------------------------------------------------------------------
 
 
@@ -165,6 +230,8 @@ class CBFAnimator:
         Plot title.
     aspect : str or None
         Axis aspect ratio (e.g. ``"equal"``).  *None* keeps matplotlib default.
+    backend : str
+        ``"matplotlib"`` (default) or ``"plotly"``.
     config : AnimationConfig, optional
         Animation parameters.  Uses :data:`DEFAULT_CONFIG` when *None*.
 
@@ -174,6 +241,12 @@ class CBFAnimator:
     >>> anim.add_goal([1, 2], radius=0.25)
     >>> anim.add_trajectory(x_idx=0, y_idx=1, label="Robot")
     >>> anim.save("output.mp4")
+
+    Interactive Plotly output:
+
+    >>> anim = CBFAnimator(states, dt=0.1, backend="plotly")
+    >>> anim.add_trajectory(x_idx=0, y_idx=1)
+    >>> anim.show()   # opens in browser
     """
 
     def __init__(
@@ -184,10 +257,19 @@ class CBFAnimator:
         y_lim: Tuple[float, float] = (-4, 4),
         title: str = "System Behavior",
         aspect: Optional[str] = None,
+        backend: str = "matplotlib",
         config: Optional[AnimationConfig] = None,
     ):
-        _require_matplotlib()
-        self._states = states
+        if backend not in ("matplotlib", "plotly"):
+            raise ValueError(f"Unknown backend {backend!r}. Use 'matplotlib' or 'plotly'.")
+
+        self._backend = backend
+        if backend == "matplotlib":
+            _require_matplotlib()
+        else:
+            _require_plotly()
+
+        self._states = np.asarray(states)
         self._dt = dt
         self._x_lim = x_lim
         self._y_lim = y_lim
@@ -203,11 +285,14 @@ class CBFAnimator:
         self._frame_callbacks: List[Callable] = []
 
         # Matplotlib objects (created by build / animate)
-        self._fig: Optional["plt.Figure"] = None
-        self._ax: Optional["plt.Axes"] = None
-        self._anim: Optional["mpl_animation.FuncAnimation"] = None
+        self._fig = None
+        self._ax = None
+        self._anim = None
         self._traj_artists: List = []
         self._time_text = None
+
+        # Plotly figure
+        self._plotly_fig = None
 
     # -- declarative element API (all return self for chaining) -------------
 
@@ -312,19 +397,18 @@ class CBFAnimator:
 
         The callback signature is ``(frame_index: int, ax: Axes) -> list``
         and must return a list of modified matplotlib artists (may be empty).
+
+        .. note:: Callbacks are only supported with the ``"matplotlib"``
+           backend.  They are silently ignored when using ``"plotly"``.
         """
         self._frame_callbacks.append(callback)
         return self
 
-    # -- build & animate ----------------------------------------------------
+    # ======================================================================
+    # Matplotlib backend
+    # ======================================================================
 
-    def build(self) -> Tuple["plt.Figure", "plt.Axes"]:
-        """Create the figure, axes, and all static / dynamic artists.
-
-        This is called automatically by :meth:`animate` if the figure has not
-        been built yet, but you can call it early to customise the axes before
-        animation starts.
-        """
+    def _build_matplotlib(self) -> Tuple:
         self._fig, self._ax = plt.subplots(figsize=self._config.figsize)
         ax = self._ax
 
@@ -449,10 +533,9 @@ class CBFAnimator:
 
         return artists
 
-    def animate(self) -> "mpl_animation.FuncAnimation":
-        """Build (if needed) and create the :class:`FuncAnimation`."""
+    def _animate_matplotlib(self):
         if self._fig is None:
-            self.build()
+            self._build_matplotlib()
 
         self._anim = mpl_animation.FuncAnimation(
             self._fig,
@@ -464,34 +547,360 @@ class CBFAnimator:
         )
         return self._anim
 
-    def save(self, path: str, config: Optional[AnimationConfig] = None) -> str:
-        """Animate (if needed) and save to *path* with format fallback.
-
-        Returns the absolute path the file was saved to.
-        """
+    def _save_matplotlib(self, path: str, config: Optional[AnimationConfig] = None) -> str:
         if self._anim is None:
-            self.animate()
+            self._animate_matplotlib()
         return save_animation(self._anim, path, config or self._config)
 
-    def show(self):
-        """Animate (if needed) and display interactively."""
+    def _show_matplotlib(self):
         if self._anim is None:
-            self.animate()
+            self._animate_matplotlib()
         plt.show()
+
+    # ======================================================================
+    # Plotly backend
+    # ======================================================================
+
+    def _build_plotly(self):
+        """Build an animated Plotly figure from the declared elements."""
+        cfg = self._config
+        n_total = len(self._states)
+        step = max(1, n_total // cfg.plotly_max_frames)
+        frame_indices = list(range(0, n_total, step))
+        if frame_indices[-1] != n_total - 1:
+            frame_indices.append(n_total - 1)
+
+        # --- layout shapes for static elements ---
+        shapes: list = []
+        for g in self._goals:
+            pos = g["position"]
+            css = _to_css_color(g["color"])
+            shapes.append(
+                dict(
+                    type="circle",
+                    xref="x",
+                    yref="y",
+                    x0=float(pos[0]) - g["radius"],
+                    y0=float(pos[1]) - g["radius"],
+                    x1=float(pos[0]) + g["radius"],
+                    y1=float(pos[1]) + g["radius"],
+                    line=dict(color=css, dash="dash", width=1),
+                    fillcolor="rgba(0,0,0,0)",
+                )
+            )
+
+        for obs in self._obstacles:
+            c = obs["center"]
+            css = _to_css_color(obs["color"])
+            opacity = obs["alpha"]
+            if obs["ellipse_radii"] is not None:
+                rx, ry = obs["ellipse_radii"]
+            elif obs["radius"] is not None:
+                rx = ry = obs["radius"]
+            else:
+                continue
+            # SVG path for an axis-aligned ellipse
+            path_str = _ellipse_svg_path(float(c[0]), float(c[1]), float(rx), float(ry))
+            shapes.append(
+                dict(
+                    type="path",
+                    path=path_str,
+                    xref="x",
+                    yref="y",
+                    fillcolor=css,
+                    opacity=opacity,
+                    line=dict(color=css, width=1),
+                )
+            )
+
+        # --- base traces (initial frame = empty) ---
+        base_traces: list = []
+
+        # Goal markers
+        for g in self._goals:
+            pos = g["position"]
+            css = _to_css_color(g["color"])
+            base_traces.append(
+                go.Scatter(
+                    x=[float(pos[0])],
+                    y=[float(pos[1])],
+                    mode="markers",
+                    marker=dict(size=8, color=css, symbol="circle"),
+                    name=g["label"],
+                    showlegend=True,
+                )
+            )
+
+        # Trajectory traces (one per add_trajectory call)
+        for spec in self._trajectories:
+            css = _to_css_color(spec["color"])
+            mode = "markers" if spec["style"] == "scatter" else "lines"
+            marker_opts = (
+                dict(size=3, color=css, opacity=spec["alpha"] * 0.55)
+                if spec["style"] == "scatter"
+                else dict()
+            )
+            line_opts = (
+                dict(color=css, width=spec["linewidth"])
+                if spec["style"] != "scatter"
+                else dict()
+            )
+            base_traces.append(
+                go.Scatter(
+                    x=[],
+                    y=[],
+                    mode=mode,
+                    name=spec["label"],
+                    line=line_opts if line_opts else None,
+                    marker=marker_opts if marker_opts else None,
+                    opacity=spec["alpha"] if spec["style"] != "scatter" else 1.0,
+                )
+            )
+
+        # --- animation frames ---
+        n_goals = len(self._goals)
+        frames: list = []
+        for fi in frame_indices:
+            t = fi * self._dt
+            trace_updates: list = []
+            # Goal markers don't change — emit them unchanged
+            for g in self._goals:
+                pos = g["position"]
+                trace_updates.append(go.Scatter(x=[float(pos[0])], y=[float(pos[1])]))
+
+            # Trajectory traces
+            for spec in self._trajectories:
+                src = spec["data"] if spec["data"] is not None else self._states
+                trace_updates.append(
+                    go.Scatter(
+                        x=src[:fi, spec["x_idx"]].tolist(),
+                        y=src[:fi, spec["y_idx"]].tolist(),
+                    )
+                )
+
+            # Time annotation (per-frame layout update)
+            layout_update = {}
+            if self._show_time:
+                layout_update["annotations"] = [
+                    dict(
+                        x=0.02,
+                        y=0.98,
+                        xref="paper",
+                        yref="paper",
+                        text=f"Time: {t:.1f}s",
+                        showarrow=False,
+                        font=dict(size=13),
+                        bgcolor="white",
+                        opacity=0.8,
+                        bordercolor="gray",
+                        borderwidth=1,
+                    )
+                ]
+
+            frames.append(
+                go.Frame(
+                    data=trace_updates,
+                    traces=list(range(len(trace_updates))),
+                    name=f"{t:.2f}s",
+                    layout=layout_update if layout_update else None,
+                )
+            )
+
+        # --- assemble figure ---
+        width_px = int(cfg.figsize[0] * cfg.dpi)
+        height_px = int(cfg.figsize[1] * cfg.dpi)
+
+        scaleanchor = "x" if self._aspect == "equal" else None
+
+        fig = go.Figure(
+            data=base_traces,
+            frames=frames,
+            layout=go.Layout(
+                title=dict(text=self._title),
+                xaxis=dict(
+                    title="x [m]",
+                    range=list(self._x_lim),
+                    showgrid=True,
+                    gridcolor="rgba(0,0,0,0.1)",
+                ),
+                yaxis=dict(
+                    title="y [m]",
+                    range=list(self._y_lim),
+                    showgrid=True,
+                    gridcolor="rgba(0,0,0,0.1)",
+                    scaleanchor=scaleanchor,
+                ),
+                shapes=shapes,
+                width=width_px,
+                height=height_px,
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        showactive=False,
+                        y=0,
+                        x=0.5,
+                        xanchor="center",
+                        buttons=[
+                            dict(
+                                label="Play",
+                                method="animate",
+                                args=[
+                                    None,
+                                    dict(
+                                        frame=dict(
+                                            duration=cfg.interval,
+                                            redraw=True,
+                                        ),
+                                        fromcurrent=True,
+                                        transition=dict(duration=0),
+                                    ),
+                                ],
+                            ),
+                            dict(
+                                label="Pause",
+                                method="animate",
+                                args=[
+                                    [None],
+                                    dict(
+                                        frame=dict(duration=0, redraw=False),
+                                        mode="immediate",
+                                        transition=dict(duration=0),
+                                    ),
+                                ],
+                            ),
+                        ],
+                    )
+                ],
+                sliders=[
+                    dict(
+                        active=0,
+                        steps=[
+                            dict(
+                                args=[
+                                    [f.name],
+                                    dict(
+                                        frame=dict(duration=0, redraw=True),
+                                        mode="immediate",
+                                        transition=dict(duration=0),
+                                    ),
+                                ],
+                                label=f.name,
+                                method="animate",
+                            )
+                            for f in frames
+                        ],
+                        x=0.1,
+                        len=0.8,
+                        y=-0.05,
+                        currentvalue=dict(
+                            prefix="Time: ",
+                            visible=True,
+                            xanchor="center",
+                        ),
+                        transition=dict(duration=0),
+                    )
+                ],
+            ),
+        )
+
+        self._plotly_fig = fig
+        return fig
+
+    def _save_plotly(self, path: str) -> str:
+        if self._plotly_fig is None:
+            self._build_plotly()
+
+        output_path = Path(path).with_suffix(".html")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        self._plotly_fig.write_html(str(output_path), auto_open=False)
+        abs_path = str(output_path.resolve())
+        print(f"\nInteractive animation saved to: file://{abs_path}")
+        return abs_path
+
+    def _show_plotly(self):
+        if self._plotly_fig is None:
+            self._build_plotly()
+        self._plotly_fig.show()
+
+    # ======================================================================
+    # Public API — dispatches to the active backend
+    # ======================================================================
+
+    def build(self):
+        """Create the figure and all static / dynamic artists.
+
+        Returns ``(fig, ax)`` for the matplotlib backend, or the Plotly
+        ``Figure`` for the plotly backend.
+        """
+        if self._backend == "plotly":
+            return self._build_plotly()
+        return self._build_matplotlib()
+
+    def animate(self):
+        """Build (if needed) and create the animation object.
+
+        Returns a matplotlib ``FuncAnimation`` or a Plotly ``Figure``
+        (which already contains the animation frames).
+        """
+        if self._backend == "plotly":
+            if self._plotly_fig is None:
+                self._build_plotly()
+            return self._plotly_fig
+        return self._animate_matplotlib()
+
+    def save(self, path: str, config: Optional[AnimationConfig] = None) -> str:
+        """Animate (if needed) and save.
+
+        * matplotlib: saves MP4 (ffmpeg) or GIF (pillow fallback).
+        * plotly: saves an interactive ``.html`` file.
+
+        Returns the absolute path of the saved file.
+        """
+        if self._backend == "plotly":
+            return self._save_plotly(path)
+        return self._save_matplotlib(path, config)
+
+    def show(self):
+        """Animate (if needed) and display interactively.
+
+        * matplotlib: opens a matplotlib window.
+        * plotly: opens the default web browser.
+        """
+        if self._backend == "plotly":
+            return self._show_plotly()
+        return self._show_matplotlib()
 
     # -- properties ---------------------------------------------------------
 
     @property
-    def fig(self) -> Optional["plt.Figure"]:
-        """The matplotlib Figure (available after :meth:`build`)."""
+    def fig(self):
+        """The matplotlib Figure or Plotly Figure (available after :meth:`build`)."""
+        if self._backend == "plotly":
+            return self._plotly_fig
         return self._fig
 
     @property
-    def ax(self) -> Optional["plt.Axes"]:
-        """The matplotlib Axes (available after :meth:`build`)."""
+    def ax(self):
+        """The matplotlib Axes (available after :meth:`build`).  *None* for Plotly."""
         return self._ax
 
     @property
-    def animation(self) -> Optional["mpl_animation.FuncAnimation"]:
-        """The FuncAnimation (available after :meth:`animate`)."""
+    def animation(self):
+        """The FuncAnimation or Plotly Figure (available after :meth:`animate`)."""
+        if self._backend == "plotly":
+            return self._plotly_fig
         return self._anim
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _ellipse_svg_path(cx: float, cy: float, rx: float, ry: float) -> str:
+    """Return an SVG path string for an axis-aligned ellipse."""
+    return (
+        f"M {cx - rx},{cy} "
+        f"A {rx},{ry} 0 1,0 {cx + rx},{cy} "
+        f"A {rx},{ry} 0 1,0 {cx - rx},{cy} Z"
+    )

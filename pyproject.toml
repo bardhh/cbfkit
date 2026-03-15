@@ -45,6 +45,9 @@ casadi = [
 vis = [
     "matplotlib>=3.8.2,<4.0",
 ]
+plotly = [
+    "plotly>=5.18,<7.0",
+]
 scipy = [
     "scipy>=1.9,<2.0",
 ]
@@ -61,7 +64,7 @@ test = [
     "python-dotenv>=1.2.1",
 ]
 dev = [
-    "cbfkit[vis,codegen,test,casadi,cvxopt,scipy]",
+    "cbfkit[vis,plotly,codegen,test,casadi,cvxopt,scipy]",
     "black>=23.12.1,<27.0",
     "mypy>=1.8.0,<2.0",
     "jupyter>=1.0.0,<2.0",
