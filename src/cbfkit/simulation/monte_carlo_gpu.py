@@ -173,3 +173,109 @@ def conduct_monte_carlo_gpu(
         wall_time_s=wall_time,
         n_trials=n_trials,
     )
+
+
+def conduct_monte_carlo_gpu_multiseed(
+    setup: MonteCarloSetup,
+    n_trials: int,
+    seeds: list[int],
+) -> list[MonteCarloGPUResults]:
+    """Run Monte Carlo for multiple seeds in a single ``jax.vmap`` call.
+
+    Instead of looping over seeds (each triggering a separate JIT
+    compilation), this function batches all ``len(seeds) * n_trials``
+    trajectories into one vectorized kernel.  The JIT compilation
+    cost is paid only once.
+
+    Args:
+        setup: Simulation components and parameters (shared across seeds).
+        n_trials: Number of parallel trajectories per seed.
+        seeds: List of PRNG seeds.
+
+    Returns:
+        A list of ``MonteCarloGPUResults``, one per seed.
+    """
+    n_seeds = len(seeds)
+    total = n_seeds * n_trials
+
+    # Generate keys and initial states for all seeds × trials
+    all_keys_list = []
+    all_sampler_keys_list = []
+    for seed in seeds:
+        master_key = random.PRNGKey(seed)
+        all_keys_list.append(random.split(master_key, n_trials))
+        all_sampler_keys_list.append(
+            random.split(random.fold_in(master_key, 1), n_trials)
+        )
+
+    all_keys = jnp.concatenate(all_keys_list, axis=0)  # (total, 2)
+    all_sampler_keys = jnp.concatenate(all_sampler_keys_list, axis=0)
+
+    initial_states = jax.vmap(setup.initial_state_sampler)(all_sampler_keys)
+
+    # Build the vmap-safe scan step
+    scan_step = _make_scan_step(
+        dynamics=setup.dynamics,
+        integrator=setup.integrator,
+        planner=setup.planner,
+        nominal_controller=setup.nominal_controller,
+        controller=setup.controller,
+        sensor=setup.sensor,
+        estimator=setup.estimator,
+        perturbation=setup.perturbation,
+        sigma=setup.sigma,
+        dt=setup.dt,
+        num_steps=setup.num_steps,
+        enable_debug=False,
+        progress_callback=None,
+        progress_interval=1,
+    )
+
+    # Probe dimensions
+    probe_state = initial_states[0]
+    _, g_probe = setup.dynamics(probe_state)
+    control_dim = g_probe.shape[1]
+    state_dim = probe_state.shape[0]
+    c0 = jnp.zeros((state_dim, state_dim))
+
+    def single_trajectory(key, x0):
+        u0 = jnp.zeros((control_dim,))
+        z0 = x0
+        carry_init = (
+            key, 0.0, x0, u0, z0, c0,
+            setup.controller_data, setup.planner_data,
+        )
+        _final_carry, trajectory = lax.scan(
+            scan_step, carry_init, jnp.arange(setup.num_steps)
+        )
+        return trajectory
+
+    batched_fn = jax.jit(jax.vmap(single_trajectory, in_axes=(0, 0)))
+
+    # Warmup (single JIT compilation for all seeds)
+    _ = batched_fn(all_keys, initial_states)
+    jax.block_until_ready(_)
+
+    # Timed run
+    start = time.perf_counter()
+    trajectory = batched_fn(all_keys, initial_states)
+    jax.block_until_ready(trajectory)
+    wall_time = time.perf_counter() - start
+
+    xs, us, zs, cs, c_datas, p_datas = trajectory
+
+    # Split results back into per-seed MonteCarloGPUResults
+    per_seed_time = wall_time / n_seeds
+    results = []
+    for i in range(n_seeds):
+        sl = slice(i * n_trials, (i + 1) * n_trials)
+        results.append(MonteCarloGPUResults(
+            states=xs[sl],
+            controls=us[sl],
+            controller_datas=jax.tree.map(lambda a: a[sl], c_datas),
+            planner_datas=jax.tree.map(lambda a: a[sl], p_datas),
+            wall_time_s=per_seed_time,
+            n_trials=n_trials,
+        ))
+
+    return results

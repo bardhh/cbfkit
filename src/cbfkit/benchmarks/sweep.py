@@ -2,19 +2,33 @@
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import itertools
 import json
+import os
 import random as pyrandom
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping
+from typing import Any
 
 import numpy as np
-from tqdm import tqdm
+from rich.console import Group
+from rich.live import Live
+from rich.progress import Progress
 
+from ._progress import console as _console, make_progress as _make_progress
 from .metrics import summarize
-from .registry import SweepableRunner
+from .registry import BatchSweepableRunner, SweepableRunner
+from .sweep_viz import SweepViz
+
+
+@contextlib.contextmanager
+def _quiet_stdout():
+    """Redirect stdout to /dev/null to suppress jax.debug.print noise."""
+    with open(os.devnull, "w") as devnull:
+        with contextlib.redirect_stdout(devnull):
+            yield
 
 
 # ---------------------------------------------------------------------------
@@ -22,7 +36,7 @@ from .registry import SweepableRunner
 # ---------------------------------------------------------------------------
 
 
-def expand_param_spec(spec: Dict[str, Any]) -> List[Any]:
+def expand_param_spec(spec: dict[str, Any]) -> list[Any]:
     """Expand a single parameter specification into a list of values.
 
     Supported specs:
@@ -41,7 +55,7 @@ def expand_param_spec(spec: Dict[str, Any]) -> List[Any]:
     raise ValueError(f"Unknown param spec keys: {set(spec.keys())}")
 
 
-def build_param_grid(parameters: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_param_grid(parameters: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     """Cartesian product of all parameter value lists."""
     names = list(parameters.keys())
     value_lists = [expand_param_spec(parameters[n]) for n in names]
@@ -49,10 +63,10 @@ def build_param_grid(parameters: Dict[str, Dict[str, Any]]) -> List[Dict[str, An
 
 
 def sample_param_combos(
-    parameters: Dict[str, Dict[str, Any]],
+    parameters: dict[str, dict[str, Any]],
     n_samples: int,
     seed: int = 0,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Randomly sample *n_samples* combos from the full grid."""
     full_grid = build_param_grid(parameters)
     if n_samples >= len(full_grid):
@@ -69,10 +83,10 @@ def sample_param_combos(
 @dataclass(frozen=True)
 class SweepRun:
     scenario: str
-    seeds: List[int]
-    param_combos: List[Dict[str, Any]]
-    records: List[Dict[str, Any]]
-    per_combo_summaries: List[Dict[str, Any]]
+    seeds: list[int]
+    param_combos: list[dict[str, Any]]
+    records: list[dict[str, Any]]
+    per_combo_summaries: list[dict[str, Any]]
 
 
 # ---------------------------------------------------------------------------
@@ -80,8 +94,8 @@ class SweepRun:
 # ---------------------------------------------------------------------------
 
 
-def _is_failure(result: Dict[str, Any], metric: str) -> bool:
-    """Check if a result indicates a failure for falsification purposes."""
+def _is_failure(result: dict[str, Any], metric: str) -> bool:
+    """Check if a result indicates a failure."""
     val = result.get(metric, 0)
     if isinstance(val, bool):
         return val
@@ -90,22 +104,46 @@ def _is_failure(result: Dict[str, Any], metric: str) -> bool:
 
 def _run_combo(
     runner: SweepableRunner,
-    seeds: List[int],
-    combo: Dict[str, Any],
+    seeds: list[int],
+    combo: dict[str, Any],
     combo_idx: int,
-    records: List[Dict[str, Any]],
+    records: list[dict[str, Any]],
     *,
-    falsifier: bool = False,
-    falsifier_metric: str = "safety_violations",
-) -> tuple[List[Dict[str, Any]], bool]:
-    """Run a single parameter combo across seeds, with optional falsification.
+    skip_on_failure: bool = False,
+    failure_metric: str = "safety_violations",
+    progress: Progress | None = None,
+    seed_task_id: int | None = None,
+    batch_runner: BatchSweepableRunner | None = None,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Run a single parameter combo across seeds.
 
-    Returns ``(combo_records, falsified)`` where *combo_records* contains
-    only the seeds that actually executed and *falsified* indicates whether
-    early termination occurred.
+    When *batch_runner* is provided and *skip_on_failure* is False, all
+    seeds are executed in a single batched call (one JIT compilation).
+
+    When *skip_on_failure* is True, stops iterating seeds as soon as a
+    failure is detected and moves on to the next combo.
+
+    Returns ``(combo_records, skipped)`` where *combo_records* contains
+    only the seeds that actually executed and *skipped* indicates whether
+    remaining seeds were skipped due to failure.
     """
-    combo_records: List[Dict[str, Any]] = []
-    falsified = False
+    combo_records: list[dict[str, Any]] = []
+    skipped = False
+
+    # Use batch runner when available and skip_on_failure is off
+    if batch_runner is not None and not skip_on_failure:
+        batch_results = batch_runner(seeds, combo)
+        for seed, result in zip(seeds, batch_results):
+            result = dict(result)
+            result["seed"] = seed
+            result["combo_idx"] = combo_idx
+            for k, v in combo.items():
+                result[f"param_{k}"] = v
+            records.append(result)
+            combo_records.append(result)
+        if progress is not None and seed_task_id is not None:
+            progress.advance(seed_task_id, len(seeds))
+        return combo_records, False
 
     for seed in seeds:
         result = dict(runner(seed, combo))
@@ -114,29 +152,32 @@ def _run_combo(
         for k, v in combo.items():
             result[f"param_{k}"] = v
 
-        if falsifier and _is_failure(result, falsifier_metric):
-            result["falsified"] = True
-            falsified = True
+        if skip_on_failure and _is_failure(result, failure_metric):
+            result["skipped_remaining"] = True
+            skipped = True
 
         records.append(result)
         combo_records.append(result)
 
-        if falsified:
+        if progress is not None and seed_task_id is not None:
+            progress.advance(seed_task_id, 1)
+
+        if skipped:
             break
 
-    return combo_records, falsified
+    return combo_records, skipped
 
 
 def _build_combo_summary(
-    combo_records: List[Dict[str, Any]],
-    combo: Dict[str, Any],
+    combo_records: list[dict[str, Any]],
+    combo: dict[str, Any],
     combo_idx: int,
-    falsified: bool,
-) -> Dict[str, Any]:
+    skipped: bool,
+) -> dict[str, Any]:
     """Create an aggregated summary for a single parameter combo."""
     summary = summarize(combo_records)
     summary["combo_idx"] = combo_idx
-    summary["falsified"] = falsified
+    summary["skipped_on_failure"] = skipped
     for k, v in combo.items():
         summary[f"param_{k}"] = v
     return summary
@@ -144,52 +185,88 @@ def _build_combo_summary(
 
 def run_sweep(
     name: str,
-    seeds: List[int],
-    param_combos: List[Dict[str, Any]],
+    seeds: list[int],
+    param_combos: list[dict[str, Any]],
     runner: SweepableRunner,
     *,
-    falsifier: bool = False,
-    falsifier_metric: str = "safety_violations",
+    skip_on_failure: bool = False,
+    failure_metric: str = "safety_violations",
+    viz: SweepViz | None = None,
+    batch_runner: BatchSweepableRunner | None = None,
 ) -> SweepRun:
     """Execute a scenario across all (seed, param_combo) pairs.
 
     Parameters
     ----------
-    falsifier : bool
-        When *True*, run in falsification mode: for each parameter combo,
-        stop iterating seeds as soon as a failure is found (the metric
-        given by *falsifier_metric* is non-zero). This skips remaining
-        seeds and moves to the next combo, saving time when you only need
-        to know whether a configuration *can* fail.
-    falsifier_metric : str
+    skip_on_failure : bool
+        When *True*, stop iterating seeds for a parameter combo as soon as
+        a failure is detected (the metric given by *failure_metric* is
+        non-zero) and move on to the next combo.
+    failure_metric : str
         The result key checked for failure (default ``"safety_violations"``).
+    viz : SweepViz | None
+        Optional live visualization.  When provided the sweep renders a
+        colour-coded results table and scatter plot in the terminal.
     """
-    records: List[Dict[str, Any]] = []
-    per_combo_summaries: List[Dict[str, Any]] = []
-
-    label = f"Falsify ({name})" if falsifier else f"Sweep ({name})"
-    total = len(param_combos) * len(seeds)
+    records: list[dict[str, Any]] = []
+    per_combo_summaries: list[dict[str, Any]] = []
     skipped = 0
 
-    with tqdm(total=total, desc=label, unit="run") as pbar:
-        for combo_idx, combo in enumerate(param_combos):
-            combo_records, falsified = _run_combo(
-                runner, seeds, combo, combo_idx, records,
-                falsifier=falsifier, falsifier_metric=falsifier_metric,
-            )
-            pbar.update(len(combo_records))
+    progress = _make_progress()
 
+    def _build_live_renderable():
+        if viz is not None:
+            return Group(viz.render_header(), progress, viz.render())
+        return progress
+
+    with Live(_build_live_renderable(), console=_console, refresh_per_second=4,
+              transient=True, vertical_overflow="visible") as live, \
+            _quiet_stdout():
+        combo_task = progress.add_task(
+            "Combos", total=len(param_combos),
+        )
+        seed_task = progress.add_task(
+            "  Seeds", total=len(seeds),
+        )
+
+        for combo_idx, combo in enumerate(param_combos):
+            # Reset seed bar for this combo
+            progress.reset(seed_task, total=len(seeds))
+            combo_desc = ", ".join(f"{k}={v}" for k, v in combo.items())
+            if len(combo_desc) > 40:
+                combo_desc = combo_desc[:37] + "..."
+            progress.update(seed_task, description=f"  Seeds ({combo_desc})")
+
+            combo_records, was_skipped = _run_combo(
+                runner, seeds, combo, combo_idx, records,
+                skip_on_failure=skip_on_failure, failure_metric=failure_metric,
+                progress=progress, seed_task_id=seed_task,
+                batch_runner=batch_runner,
+            )
+
+            # Advance seed bar for skipped seeds
             remaining = len(seeds) - len(combo_records)
             if remaining > 0:
                 skipped += remaining
-                pbar.update(remaining)
+                progress.advance(seed_task, remaining)
 
-            per_combo_summaries.append(
-                _build_combo_summary(combo_records, combo, combo_idx, falsified)
-            )
+            progress.advance(combo_task, 1)
 
-    if falsifier and skipped > 0:
-        tqdm.write(f"Falsifier: skipped {skipped} runs due to early failures")
+            summary = _build_combo_summary(combo_records, combo, combo_idx, was_skipped)
+            per_combo_summaries.append(summary)
+
+            if viz is not None:
+                viz.add_result(combo, summary)
+                live.update(_build_live_renderable())
+
+    if skipped > 0:
+        _console.print(
+            f"[dim]Skipped {skipped} runs (moved to next combo on failure)[/dim]"
+        )
+
+    # Print final viz so it persists after Live exits
+    if viz is not None:
+        _console.print(viz.render_final())
 
     return SweepRun(
         scenario=name,
@@ -205,7 +282,7 @@ def run_sweep(
 # ---------------------------------------------------------------------------
 
 
-def _suggest_param(trial, name: str, spec: Dict[str, Any]) -> Any:
+def _suggest_param(trial, name: str, spec: dict[str, Any]) -> Any:
     """Map a YAML param spec to an Optuna suggestion."""
     if "values" in spec:
         return trial.suggest_categorical(name, spec["values"])
@@ -229,15 +306,18 @@ def _suggest_param(trial, name: str, spec: Dict[str, Any]) -> Any:
 
 def run_optuna_sweep(
     name: str,
-    seeds: List[int],
-    parameters: Dict[str, Dict[str, Any]],
+    seeds: list[int],
+    parameters: dict[str, dict[str, Any]],
     runner: SweepableRunner,
     n_trials: int = 50,
     objective_metric: str = "safety_violation_rate",
     direction: str = "minimize",
     *,
-    falsifier: bool = False,
-    falsifier_metric: str = "safety_violations",
+    skip_on_failure: bool = False,
+    failure_metric: str = "safety_violations",
+    safety_constraint: "tuple[str, float] | None" = None,
+    viz: SweepViz | None = None,
+    batch_runner: BatchSweepableRunner | None = None,
 ) -> SweepRun:
     """Run an Optuna-driven parameter sweep.
 
@@ -246,11 +326,17 @@ def run_optuna_sweep(
 
     Parameters
     ----------
-    falsifier : bool
-        When *True*, stop iterating seeds on first failure (same semantics
-        as :func:`run_sweep`).
-    falsifier_metric : str
+    skip_on_failure : bool
+        When *True*, stop iterating seeds on first failure and move to
+        the next trial.
+    failure_metric : str
         The result key checked for failure (default ``"safety_violations"``).
+    safety_constraint : tuple[str, float] | None
+        Optional ``(metric, max_value)`` pair.  When set, any trial whose
+        aggregated *metric* exceeds *max_value* is penalised with ``inf``
+        so that Optuna treats it as infeasible.
+    viz : SweepViz | None
+        Optional live visualization.
 
     Requires ``pip install cbfkit[optuna]``.
     """
@@ -264,12 +350,19 @@ def run_optuna_sweep(
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    records: List[Dict[str, Any]] = []
-    param_combos: List[Dict[str, Any]] = []
-    per_combo_summaries: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
+    param_combos: list[dict[str, Any]] = []
+    per_combo_summaries: list[dict[str, Any]] = []
 
-    label = f"Falsify/Optuna ({name})" if falsifier else f"Optuna ({name})"
-    pbar = tqdm(total=n_trials, desc=label, unit="trial")
+    progress = _make_progress()
+    live_instance: Live | None = None
+    trial_task: int | None = None
+    seed_task: int | None = None
+
+    def _build_live_renderable():
+        if viz is not None:
+            return Group(viz.render_header(), progress, viz.render())
+        return progress
 
     def objective(trial) -> float:
         combo = {pname: _suggest_param(trial, pname, pspec)
@@ -277,20 +370,58 @@ def run_optuna_sweep(
         combo_idx = trial.number
         param_combos.append(combo)
 
-        combo_records, falsified = _run_combo(
+        # Reset seed bar for this trial
+        progress.reset(seed_task, total=len(seeds))
+        combo_desc = ", ".join(f"{k}={v:.3g}" for k, v in combo.items()
+                               if isinstance(v, float))
+        if len(combo_desc) > 40:
+            combo_desc = combo_desc[:37] + "..."
+        progress.update(seed_task, description=f"  Seeds ({combo_desc})")
+
+        combo_records, was_skipped = _run_combo(
             runner, seeds, combo, combo_idx, records,
-            falsifier=falsifier, falsifier_metric=falsifier_metric,
+            skip_on_failure=skip_on_failure, failure_metric=failure_metric,
+            progress=progress, seed_task_id=seed_task,
+            batch_runner=batch_runner,
         )
 
-        summary = _build_combo_summary(combo_records, combo, combo_idx, falsified)
+        # Advance for any skipped seeds
+        remaining = len(seeds) - len(combo_records)
+        if remaining > 0:
+            progress.advance(seed_task, remaining)
+
+        progress.advance(trial_task, 1)
+
+        summary = _build_combo_summary(combo_records, combo, combo_idx, was_skipped)
         per_combo_summaries.append(summary)
 
-        pbar.update(1)
-        return summary.get(objective_metric, 0.0)
+        obj_val = summary.get(objective_metric, 0.0)
+        if safety_constraint is not None:
+            sc_metric, sc_max = safety_constraint
+            if summary.get(sc_metric, 0.0) > sc_max:
+                obj_val = float("inf")
+
+        if viz is not None:
+            summary_with_obj = dict(summary)
+            summary_with_obj[objective_metric] = obj_val
+            viz.add_result(combo, summary_with_obj)
+            live_instance.update(_build_live_renderable())
+
+        return obj_val
 
     study = optuna.create_study(direction=direction)
-    study.optimize(objective, n_trials=n_trials)
-    pbar.close()
+
+    with Live(_build_live_renderable(), console=_console, refresh_per_second=4,
+              transient=True, vertical_overflow="visible") as live, \
+            _quiet_stdout():
+        live_instance = live
+        trial_task = progress.add_task("Trials", total=n_trials)
+        seed_task = progress.add_task("  Seeds", total=len(seeds))
+        study.optimize(objective, n_trials=n_trials)
+
+    # Print final viz so it persists after Live exits
+    if viz is not None:
+        _console.print(viz.render_final())
 
     return SweepRun(
         scenario=name,
