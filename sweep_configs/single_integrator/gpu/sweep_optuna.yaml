@@ -2,7 +2,7 @@
 # Uses TPE (Tree-structured Parzen Estimator) to find optimal parameters.
 # Requires CUDA-enabled JAX: pip install --upgrade "jax[cuda12]"
 # Requires: pip install cbfkit[optuna]
-# Run with: cbfkit-bench sweep configs/gpu/sweep_optuna.yaml
+# Run with: cbfkit-bench sweep sweep_configs/single_integrator/gpu/sweep_optuna.yaml
 
 scenario: "monte_carlo_gpu_sweep"
 seeds: "0:9"
@@ -10,18 +10,19 @@ seeds: "0:9"
 sweep:
   method: optuna
   n_samples: 30
-  objective: safety_violation_rate
+  objective: final_goal_distance
   direction: minimize
+  safety_constraint:
+    metric: safety_violations
+    max: 0
 
   parameters:
     alpha:
       range: [0.1, 5.0]
-    control_limit:
-      range: [1.0, 15.0]
     n_obstacles:
       int_range: [3, 10]
     relaxable_cbf:
       values: [true, false]
 
 output:
-  dir: "./results/gpu/sweep_optuna"
+  dir: "./results/single_integrator/gpu/sweep_optuna"

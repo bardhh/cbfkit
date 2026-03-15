@@ -1,6 +1,6 @@
 # CPU falsifier sweep: find unsafe unicycle CBF parameter combos
 # Stops iterating seeds as soon as a safety violation is found.
-# Run with: cbfkit-bench sweep configs/unicycle/cpu/sweep_falsifier.yaml
+# Run with: cbfkit-bench sweep sweep_configs/unicycle/cpu/sweep_falsifier.yaml
 
 scenario: "unicycle_obstacle_avoidance_sweep"
 seeds: "0:2"

@@ -1,5 +1,5 @@
 # CPU grid sweep: unicycle obstacle avoidance CBF parameter tuning
-# Run with: cbfkit-bench sweep configs/unicycle/cpu/sweep_grid.yaml
+# Run with: cbfkit-bench sweep sweep_configs/unicycle/cpu/sweep_grid.yaml
 
 scenario: "unicycle_obstacle_avoidance_sweep"
 seeds: "0:2"

@@ -1,7 +1,7 @@
 # CPU falsifier sweep: find unsafe CBF parameter combos
 # Lightweight — runs comfortably on CPU without GPU/CUDA.
 # Stops iterating seeds as soon as a safety violation is found.
-# Run with: cbfkit-bench sweep configs/single_integrator/cpu/sweep_falsifier.yaml
+# Run with: cbfkit-bench sweep sweep_configs/single_integrator/cpu/sweep_falsifier.yaml
 
 scenario: "tutorial_single_integrator_sweep"
 seeds: "0:1"

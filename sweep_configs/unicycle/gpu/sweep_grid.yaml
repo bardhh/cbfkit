@@ -1,6 +1,6 @@
 # GPU grid sweep: unicycle obstacle avoidance via JAX vmap
 # Requires CUDA-enabled JAX: pip install --upgrade "jax[cuda12]"
-# Run with: cbfkit-bench sweep configs/unicycle/gpu/sweep_grid.yaml
+# Run with: cbfkit-bench sweep sweep_configs/unicycle/gpu/sweep_grid.yaml
 
 scenario: "unicycle_obstacle_avoidance_sweep"
 seeds: "0:9"

@@ -1,6 +1,6 @@
 # GPU grid sweep: Monte Carlo CBF parameter tuning via JAX vmap
 # Requires CUDA-enabled JAX: pip install --upgrade "jax[cuda12]"
-# Run with: cbfkit-bench sweep configs/gpu/sweep_grid.yaml
+# Run with: cbfkit-bench sweep sweep_configs/single_integrator/gpu/sweep_grid.yaml
 
 scenario: "monte_carlo_gpu_sweep"
 seeds: "0:9"
@@ -10,8 +10,6 @@ sweep:
   parameters:
     alpha:
       linspace: [0.5, 3.0, 6]
-    control_limit:
-      values: [2.0, 5.0, 10.0]
 
 output:
-  dir: "./results/gpu/sweep_grid"
+  dir: "./results/single_integrator/gpu/sweep_grid"

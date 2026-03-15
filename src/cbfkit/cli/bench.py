@@ -47,10 +47,10 @@ def _cmd_list() -> int:
     # -- Sweep configs table --
     # Search for configs relative to the package root (not CWD)
     pkg_root = Path(__file__).resolve().parents[2]  # src/cbfkit/cli -> project root
-    configs_dir = pkg_root / "configs"
+    configs_dir = pkg_root / "sweep_configs"
     if not configs_dir.is_dir():
         # Fallback: try CWD for editable installs / dev usage
-        configs_dir = Path("configs")
+        configs_dir = Path("sweep_configs")
     config_files = sorted(configs_dir.rglob("*.yaml")) if configs_dir.is_dir() else []
 
     registered = set(registry.names())

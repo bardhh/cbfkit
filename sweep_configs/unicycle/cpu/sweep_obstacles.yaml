@@ -1,6 +1,6 @@
 # CPU grid sweep with explicit ellipsoidal obstacles for unicycle
 # Demonstrates fixed obstacle layout with sweepable alpha.
-# Run with: cbfkit-bench sweep configs/unicycle/cpu/sweep_obstacles.yaml
+# Run with: cbfkit-bench sweep sweep_configs/unicycle/cpu/sweep_obstacles.yaml
 
 scenario: "unicycle_obstacle_avoidance_sweep"
 seeds: "0:1"

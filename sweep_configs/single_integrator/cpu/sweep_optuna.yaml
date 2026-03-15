@@ -1,7 +1,7 @@
 # CPU Optuna sweep: single integrator CBF Bayesian optimization
 # Lightweight — runs comfortably on CPU without GPU/CUDA.
 # Requires: pip install cbfkit[optuna]
-# Run with: cbfkit-bench sweep configs/single_integrator/cpu/sweep_optuna.yaml
+# Run with: cbfkit-bench sweep sweep_configs/single_integrator/cpu/sweep_optuna.yaml
 
 scenario: "tutorial_single_integrator_sweep"
 seeds: "0:10"

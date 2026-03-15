@@ -1,7 +1,7 @@
 # GPU falsifier sweep: find unsafe unicycle CBF parameter combos via JAX vmap
 # Stops iterating seeds as soon as a safety violation is found.
 # Requires CUDA-enabled JAX: pip install --upgrade "jax[cuda12]"
-# Run with: cbfkit-bench sweep configs/unicycle/gpu/sweep_falsifier.yaml
+# Run with: cbfkit-bench sweep sweep_configs/unicycle/gpu/sweep_falsifier.yaml
 
 scenario: "unicycle_obstacle_avoidance_sweep"
 seeds: "0:9"

@@ -1,6 +1,6 @@
 # CPU grid sweep with explicit circular obstacles
 # Demonstrates fixed obstacle layout with sweepable alpha.
-# Run with: cbfkit-bench sweep configs/single_integrator/cpu/sweep_obstacles.yaml
+# Run with: cbfkit-bench sweep sweep_configs/single_integrator/cpu/sweep_obstacles.yaml
 
 scenario: "tutorial_single_integrator_sweep"
 seeds: "0:1"
