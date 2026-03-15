@@ -500,16 +500,16 @@ def create_animation(
     # Save animation
     try:
         print("Saving animation as MP4...")
-        filepath = "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.mp4"
+        filepath = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.mp4")
         anim.save(filepath, writer="ffmpeg", fps=10, dpi=100)
-        print(f"Animation saved to {filepath}")
+        print(f"\nAnimation saved to: file://{filepath}")
     except Exception as e:
         print(f"Could not save animation: {e}")
         print("Saving as GIF instead...")
         try:
-            filepath_gif = "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.gif"
+            filepath_gif = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.gif")
             anim.save(filepath_gif, writer="pillow", fps=5)
-            print(f"Animation saved as GIF to {filepath_gif}")
+            print(f"\nAnimation saved to: file://{filepath_gif}")
         except Exception as e2:
             print(f"Could not save animation as GIF either: {e2}")
 

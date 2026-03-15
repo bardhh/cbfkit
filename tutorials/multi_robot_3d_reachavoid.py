@@ -1,44 +1,41 @@
 import os
-import numpy as np
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import matplotlib
+
+matplotlib.use("Agg")
+
+from functools import partial
+
 import jax.numpy as jnp
+import numpy as np
 from jax import jit
 from scipy.linalg import block_diag
 
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import (
-    rectify_relative_degree,
-)
-from functools import partial
+import cbfkit.controllers.cbf_clf as cbf_clf_controllers
+import cbfkit.controllers.mppi as mppi_planner
+import cbfkit.simulation.simulator as sim
 
 # Importing modules from cbfkit
 from cbfkit.codegen.create_new_system import generate_model
-import cbfkit.simulation.simulator as sim
-import cbfkit.controllers.cbf_clf as cbf_clf_controllers
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import (
-    concatenate_certificates,
-)
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import (
-    zeroing_barriers,
-)
-from cbfkit.controllers.cbf_clf.utils.lyapunov_conditions.exponential_stability import (
-    e_s,
-)
-
-from cbfkit.controllers.cbf_clf.utils.risk_aware_params import (
-    RiskAwareParams,
-)
-from cbfkit.sensors import perfect as sensor
+from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
+from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
+from cbfkit.controllers.cbf_clf.utils.lyapunov_conditions.exponential_stability import e_s
+from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
+from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator
-import cbfkit.controllers.mppi as mppi_planner
-
+from cbfkit.sensors import perfect as sensor
 
 TARGET_DIRECTORY = "./tutorials"
-MODEL_NAME = "nicole_system"
+MODEL_NAME = "multi_robot_3d_system"
 
 # Simulation Parameters
 NUM_ROBOTS = 2
 DT = 0.05  # Time step
-TF = 10  # Final time
+TF = 15  # Final time
 N_STEPS = int(TF / DT) + 1
 STATE_DIM_PER_ROBOT = 6  # Each robot has a 6-dimensional state
 CONTROL_DIM_PER_ROBOT = 3  # Each robot has 3 control inputs
@@ -196,23 +193,23 @@ generate_model.generate_model(
     params=params,
 )
 
-from tutorials.plot_helper.plot_3d_multi_robot import animate_3d_multi_robot
+import importlib
 
 # Import the Generated Model
-import tutorials.nicole_system as nicole_system
-import importlib
+import tutorials.multi_robot_3d_system as multi_robot_3d_system
+from tutorials.plot_helper.plot_3d_multi_robot import animate_3d_multi_robot
 
 # Create Barrier Functions with Linear Class K Function Derivative Conditions
 rectified_barrier_packages = []
 h = []
 for i in range(len(state_constraint_funcs)):
-    module_name = f"nicole_system.certificate_functions.barrier_functions.barrier_{i+1}"
+    module_name = f"multi_robot_3d_system.certificate_functions.barrier_functions.barrier_{i+1}"
     module = importlib.import_module(module_name)
     h = getattr(module, "cbf")(alpha=5.0)
     # Apply rectify_relative_degree using the extracted function
     cbf_package = rectify_relative_degree(
         function=h,
-        system_dynamics=nicole_system.plant(),
+        system_dynamics=multi_robot_3d_system.plant(),
         state_dim=STATE_DIM,
         form="exponential",
     )(certificate_conditions=zeroing_barriers.linear_class_k(alpha=5.0))
@@ -221,20 +218,17 @@ for i in range(len(state_constraint_funcs)):
     rectified_barrier_packages.append(cbf_package)
 
 
-from cbfkit.systems.fixed_wing_uav.models.beard2014_kinematic.certificate_functions.barrier_functions.obstacle_avoidance.high_order import (
-    cbf,
-)
-
-
 # Instantiate the Nominal Controller
-nominal_controller = nicole_system.controllers.controller_1(goal=goals, k_p=KP, k_d=KD)
+nominal_controller = multi_robot_3d_system.controllers.controller_1(goal=goals, k_p=KP, k_d=KD)
 
 barriers = concatenate_certificates(*rectified_barrier_packages)
 
 # Create Lyapunov Functions with Exponential Stability Derivative Conditions
 lyapunov = concatenate_certificates(
     *[
-        getattr(nicole_system.certificate_functions.lyapunov_functions, f"clf{i + 1}_package")(
+        getattr(
+            multi_robot_3d_system.certificate_functions.lyapunov_functions, f"clf{i + 1}_package"
+        )(
             certificate_conditions=e_s(c=LYAPUNOV_C),
             goal=goals,
         )
@@ -258,7 +252,7 @@ mppi_args = {
 # Instantiate MPPI Control Law
 mppi_local_planner = mppi_planner.vanilla_mppi(
     control_limits=ACTUATION_LIMITS,
-    dynamics_func=nicole_system.plant(),
+    dynamics_func=multi_robot_3d_system.plant(),
     trajectory_cost=None,
     stage_cost=stage_cost,
     terminal_cost=terminal_cost,
@@ -270,7 +264,7 @@ mppi_local_planner = mppi_planner.vanilla_mppi(
 cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
     control_limits=ACTUATION_LIMITS,
     nominal_input=nominal_controller,
-    dynamics_func=nicole_system.plant(),
+    dynamics_func=multi_robot_3d_system.plant(),
     barriers=barriers,
     lyapunovs=lyapunov,
     relaxable_clf=True,
@@ -286,7 +280,7 @@ results = sim.execute(
     x0=INITIAL_STATE,
     dt=DT,
     num_steps=N_STEPS,
-    dynamics=nicole_system.plant(),
+    dynamics=multi_robot_3d_system.plant(),
     integrator=integrator,
     planner=mppi_local_planner,
     nominal_controller=nominal_controller,
@@ -304,7 +298,9 @@ results = sim.execute(
 # Animate the Results
 # ================================
 
-animation_path = os.path.join(TARGET_DIRECTORY, MODEL_NAME, f"animation_{NUM_ROBOTS}_robots.gif")
+animation_path = os.path.abspath(
+    os.path.join(TARGET_DIRECTORY, MODEL_NAME, f"animation_{NUM_ROBOTS}_robots.gif")
+)
 
 animate_3d_multi_robot(
     states=results.states,
@@ -321,3 +317,5 @@ animate_3d_multi_robot(
     animation_filename=animation_path,
     include_min_distance_plot=True,
 )
+
+print(f"\nAnimation saved to: file://{animation_path}")

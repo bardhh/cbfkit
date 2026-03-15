@@ -319,7 +319,9 @@ anim = animation.FuncAnimation(
 )
 
 # Save animation to file
-anim.save("trajectory_animation.mp4", writer="ffmpeg", fps=30)
+animation_path = os.path.abspath("trajectory_animation.mp4")
+anim.save(animation_path, writer="ffmpeg", fps=30)
+print(f"\nAnimation saved to: file://{animation_path}")
 
 # Show the final figure
 plt.show()

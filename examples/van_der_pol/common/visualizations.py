@@ -166,6 +166,7 @@ def animate(
         import os
         os.makedirs(os.path.dirname(animation_filename), exist_ok=True)
         ani.save(animation_filename, writer="imagemagick", fps=15)
+        print(f"\nAnimation saved to: file://{os.path.abspath(animation_filename)}")
 
     plt.show()
 

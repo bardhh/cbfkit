@@ -274,20 +274,14 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
     anim = animation.FuncAnimation(fig, animate, frames=len(states), interval=50, blit=True)
 
     try:
-        anim.save(
-            "examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.mp4",
-            writer="ffmpeg",
-            fps=20,
-        )
-        print("Saved animation to dynamic_obstacle_animation.mp4")
+        save_path = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.mp4")
+        anim.save(save_path, writer="ffmpeg", fps=20)
+        print(f"\nAnimation saved to: file://{save_path}")
     except Exception as e:
         print(f"MP4 save failed, trying GIF: {e}")
-        anim.save(
-            "examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.gif",
-            writer="pillow",
-            fps=15,
-        )
-        print("Saved animation to dynamic_obstacle_animation.gif")
+        save_path = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.gif")
+        anim.save(save_path, writer="pillow", fps=15)
+        print(f"\nAnimation saved to: file://{save_path}")
 
     plt.close()
 

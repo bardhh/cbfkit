@@ -622,16 +622,16 @@ def create_animation(states, goal_state, obstacles, d_min):
     # Save with multiple format attempts
     try:
         print("Saving animation as MP4...")
-        filepath_mp4 = "examples/differential_drive/obstacle_avoidance/results/navigation_animation.mp4"
+        filepath_mp4 = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/navigation_animation.mp4")
         anim.save(filepath_mp4, writer="ffmpeg", fps=20, dpi=120, bitrate=1800)
-        print(f"High-quality MP4 saved to {filepath_mp4}")
+        print(f"\nAnimation saved to: file://{filepath_mp4}")
     except Exception as e:
         print(f"MP4 save failed: {e}")
         try:
             print("Saving as GIF...")
-            filepath_gif = "examples/differential_drive/obstacle_avoidance/results/navigation_animation.gif"
+            filepath_gif = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/navigation_animation.gif")
             anim.save(filepath_gif, writer="pillow", fps=15, dpi=100)
-            print(f"GIF animation saved to {filepath_gif}")
+            print(f"\nAnimation saved to: file://{filepath_gif}")
         except Exception as e2:
             print(f"GIF save failed: {e2}")
 
