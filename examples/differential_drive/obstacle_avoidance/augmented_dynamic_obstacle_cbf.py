@@ -300,13 +300,14 @@ def create_visualization(states, goal_state, d_min):
 
     anim = animation.FuncAnimation(fig, animate, frames=len(states), interval=50, blit=True)
 
-    save_path = "examples/differential_drive/obstacle_avoidance/results/augmented_dynamic_animation.mp4"
+    save_path = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/augmented_dynamic_animation.mp4")
     try:
         anim.save(save_path, writer="ffmpeg", fps=20)
-        print(f"Saved to {save_path}")
+        print(f"\nAnimation saved to: file://{save_path}")
     except Exception:
-        anim.save(save_path.replace("mp4", "gif"), writer="pillow", fps=20)
-        print(f"Saved to {save_path.replace('mp4', 'gif')}")
+        save_path_gif = save_path.replace("mp4", "gif")
+        anim.save(save_path_gif, writer="pillow", fps=20)
+        print(f"\nAnimation saved to: file://{save_path_gif}")
 
     plt.close()
 
