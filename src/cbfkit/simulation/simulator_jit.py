@@ -27,57 +27,29 @@ from cbfkit.utils.user_types import (
 )
 
 
-@partial(
-    jax.jit,
-    static_argnames=[
-        "dynamics",
-        "integrator",
-        "planner",
-        "nominal_controller",
-        "controller",
-        "sensor",
-        "estimator",
-        "perturbation",
-        "progress_callback",
-        "num_steps",
-        "progress_interval",
-    ],
-)
-def simulator_jit(
-    dt: float,
-    num_steps: int,
-    dynamics: DynamicsCallable,
-    integrator: IntegratorCallable,
-    planner: Optional[PlannerCallable],
-    nominal_controller: Optional[NominalControllerCallable],
-    controller: Optional[ControllerCallable],
-    sensor: SensorCallable,
-    estimator: EstimatorCallable,
-    perturbation: PerturbationCallable,
-    sigma: jax.Array,
-    key: jax.Array,
-    initial_state: State,
-    initial_controller_data: ControllerData,
-    initial_planner_data: PlannerData,
-    initial_covariance: Optional[Covariance] = None,
-    progress_callback: Optional[Callable[[int], None]] = None,
-    progress_interval: int = 1,
-) -> Tuple[jax.Array, jax.Array, jax.Array, jax.Array, ControllerData, PlannerData]:
-    """JIT-compiled simulation loop using jax.lax.scan.
+def _make_scan_step(
+    dynamics,
+    integrator,
+    planner,
+    nominal_controller,
+    controller,
+    sensor,
+    estimator,
+    perturbation,
+    sigma,
+    dt,
+    num_steps,
+    enable_debug=True,
+    progress_callback=None,
+    progress_interval=1,
+):
+    """Factory that builds the lax.scan step function.
 
-    Requires:
-    - planner_data and controller_data must be initialized with JAX-compatible arrays
-      (no None) for any fields that will be used/updated.
-    - Optional host-side progress reporting can be enabled via `progress_callback`.
-
-    Returns
-    -------
-        xs, us, zs, cs, c_datas (stacked), p_datas (stacked)
+    When ``enable_debug=False``, host-side callbacks (NaN warning print and
+    progress reporting) are omitted, making the returned ``scan_step``
+    compatible with ``jax.vmap``.
     """
-    print(f"JIT COMPILATION: simulator_jit (dt={dt}, num_steps={num_steps})")
-    JitMonitor.increment("simulator_jit")
 
-    # Define the scan step function
     def scan_step(carry, step_idx):
         # Unpack carry
         key, t, x, u, z, c, controller_data, planner_data = carry
@@ -202,16 +174,17 @@ def simulator_jit(
             )
             controller_data = controller_data._replace(error_data=new_error_data)
 
-        # Hermes: Print warning if NaN detected
-        lax.cond(
-            nan_in_next,
-            lambda: jdebug.print(
-                "⚠️ Simulation stopped: NaN detected during integration at t={t}", t=t
-            ),
-            lambda: None,
-        )
+        # Hermes: Print warning if NaN detected (disabled under vmap)
+        if enable_debug:
+            lax.cond(
+                nan_in_next,
+                lambda: jdebug.print(
+                    "⚠️ Simulation stopped: NaN detected during integration at t={t}", t=t
+                ),
+                lambda: None,
+            )
 
-        if progress_callback is not None and progress_interval > 0:
+        if enable_debug and progress_callback is not None and progress_interval > 0:
             should_report = jnp.logical_or(
                 step_idx == num_steps - 1, step_idx % progress_interval == 0
             )
@@ -249,6 +222,76 @@ def simulator_jit(
         output = (x, u, z, c, log_controller_data, planner_data)
 
         return new_carry, output
+
+    return scan_step
+
+
+@partial(
+    jax.jit,
+    static_argnames=[
+        "dynamics",
+        "integrator",
+        "planner",
+        "nominal_controller",
+        "controller",
+        "sensor",
+        "estimator",
+        "perturbation",
+        "progress_callback",
+        "num_steps",
+        "progress_interval",
+    ],
+)
+def simulator_jit(
+    dt: float,
+    num_steps: int,
+    dynamics: DynamicsCallable,
+    integrator: IntegratorCallable,
+    planner: Optional[PlannerCallable],
+    nominal_controller: Optional[NominalControllerCallable],
+    controller: Optional[ControllerCallable],
+    sensor: SensorCallable,
+    estimator: EstimatorCallable,
+    perturbation: PerturbationCallable,
+    sigma: jax.Array,
+    key: jax.Array,
+    initial_state: State,
+    initial_controller_data: ControllerData,
+    initial_planner_data: PlannerData,
+    initial_covariance: Optional[Covariance] = None,
+    progress_callback: Optional[Callable[[int], None]] = None,
+    progress_interval: int = 1,
+) -> Tuple[jax.Array, jax.Array, jax.Array, jax.Array, ControllerData, PlannerData]:
+    """JIT-compiled simulation loop using jax.lax.scan.
+
+    Requires:
+    - planner_data and controller_data must be initialized with JAX-compatible arrays
+      (no None) for any fields that will be used/updated.
+    - Optional host-side progress reporting can be enabled via `progress_callback`.
+
+    Returns
+    -------
+        xs, us, zs, cs, c_datas (stacked), p_datas (stacked)
+    """
+    print(f"JIT COMPILATION: simulator_jit (dt={dt}, num_steps={num_steps})")
+    JitMonitor.increment("simulator_jit")
+
+    scan_step = _make_scan_step(
+        dynamics=dynamics,
+        integrator=integrator,
+        planner=planner,
+        nominal_controller=nominal_controller,
+        controller=controller,
+        sensor=sensor,
+        estimator=estimator,
+        perturbation=perturbation,
+        sigma=sigma,
+        dt=dt,
+        num_steps=num_steps,
+        enable_debug=True,
+        progress_callback=progress_callback,
+        progress_interval=progress_interval,
+    )
 
     # Initialize carry
     # u, z, c need initial values.

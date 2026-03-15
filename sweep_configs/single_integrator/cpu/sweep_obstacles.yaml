@@ -1,0 +1,25 @@
+# CPU grid sweep with explicit circular obstacles
+# Demonstrates fixed obstacle layout with sweepable alpha.
+# Run with: cbfkit-bench sweep sweep_configs/single_integrator/cpu/sweep_obstacles.yaml
+
+scenario: "tutorial_single_integrator_sweep"
+seeds: "0:1"
+
+obstacles:
+  type: circular
+  items:
+    - center: [3.0, 4.0]
+      radius: 0.8
+    - center: [6.0, 5.0]
+      radius: 1.0
+    - center: [5.0, 7.0]
+      radius: 0.6
+
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [0.5, 1.0, 5.0]
+
+output:
+  dir: "./results/single_integrator/cpu/sweep_obstacles"

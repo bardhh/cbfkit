@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from ._progress import make_progress
 from .metrics import summarize
 from .registry import registry
 
@@ -35,10 +36,13 @@ def run_scenario(name: str, seeds: str | Iterable[int]) -> BenchmarkRun:
     spec = registry.scenario(name)
 
     records: list[dict[str, float | int | bool | str]] = []
-    for seed in parsed_seeds:
-        result = dict(spec.runner(seed))
-        result["seed"] = seed
-        records.append(result)
+    with make_progress() as progress:
+        task = progress.add_task(f"Seeds ({name})", total=len(parsed_seeds))
+        for seed in parsed_seeds:
+            result = dict(spec.runner(seed))
+            result["seed"] = seed
+            records.append(result)
+            progress.advance(task)
 
     return BenchmarkRun(
         scenario=name,

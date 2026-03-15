@@ -21,7 +21,9 @@ requires-python = ">=3.10,<3.13"
 dependencies = [
     "jax>=0.4.23",
     "jaxopt>=0.8.3,<0.9",
-    "rich>=13.0,<15.0"
+    "rich>=13.0,<15.0",
+    "tqdm>=4.60",
+    "pyyaml>=6.0"
 ]
 
 
@@ -45,6 +47,9 @@ vis = [
 ]
 scipy = [
     "scipy>=1.9,<2.0",
+]
+optuna = [
+    "optuna>=3.0",
 ]
 codegen = [
     "black>=23.12.1,<27.0",
