@@ -45,7 +45,12 @@ def _cmd_list() -> int:
     console.print(sc_table)
 
     # -- Sweep configs table --
-    configs_dir = Path("configs")
+    # Search for configs relative to the package root (not CWD)
+    pkg_root = Path(__file__).resolve().parents[2]  # src/cbfkit/cli -> project root
+    configs_dir = pkg_root / "configs"
+    if not configs_dir.is_dir():
+        # Fallback: try CWD for editable installs / dev usage
+        configs_dir = Path("configs")
     config_files = sorted(configs_dir.rglob("*.yaml")) if configs_dir.is_dir() else []
 
     registered = set(registry.names())
@@ -81,8 +86,8 @@ def _cmd_list() -> int:
                 scenario_cell = scenario
 
             details_parts: list[str] = []
-            if sweep.get("skip_on_failure"):
-                details_parts.append("[yellow]skip on failure[/yellow]")
+            if sweep.get("falsifier") or sweep.get("skip_on_failure"):
+                details_parts.append("[yellow]falsifier[/yellow]")
             n_params = len(sweep.get("parameters", {}))
             if method == "optuna":
                 n = sweep.get("n_samples", "?")
@@ -136,7 +141,9 @@ def _cmd_compare(args: argparse.Namespace) -> int:
 
 def _cmd_sweep(args: argparse.Namespace) -> int:
     from cbfkit.benchmarks.sweep import run_sweep, run_optuna_sweep, write_sweep_artifacts
-    from cbfkit.benchmarks.sweep_config import load_sweep_config, resolve_param_combos
+    from cbfkit.benchmarks.sweep_config import (
+        load_sweep_config, resolve_param_combos, _build_obstacle_fixed_params,
+    )
     from cbfkit.benchmarks.sweep_viz import SweepViz
 
     config = load_sweep_config(args.config)
@@ -150,6 +157,23 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
             return spec.runner(seed)
 
     batch_runner = spec.batch_sweep_runner
+
+    # Wrap runner to inject fixed obstacle metadata into params
+    if config.obstacles is not None:
+        _obs_fixed = _build_obstacle_fixed_params(config.obstacles)
+        _base_runner = runner
+        _base_batch = batch_runner
+
+        def runner(seed, params, *, _br=_base_runner, _of=_obs_fixed):
+            merged = dict(_of)
+            merged.update(params)
+            return _br(seed, merged)
+
+        if _base_batch is not None:
+            def batch_runner(seeds, params, *, _bb=_base_batch, _of=_obs_fixed):
+                merged = dict(_of)
+                merged.update(params)
+                return _bb(seeds, merged)
 
     # Build live viz unless disabled
     viz = None
@@ -176,8 +200,8 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
             n_trials=config.n_samples,
             objective_metric=config.objective,
             direction=config.direction,
-            skip_on_failure=config.skip_on_failure,
-            failure_metric=config.failure_metric,
+            falsifier=config.falsifier,
+            falsifier_metric=config.falsifier_metric,
             safety_constraint=(sc.metric, sc.max) if sc else None,
             viz=viz,
             batch_runner=batch_runner,
@@ -196,8 +220,8 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
             )
         result = run_sweep(
             config.scenario, config.seeds, param_combos, runner,
-            skip_on_failure=config.skip_on_failure,
-            failure_metric=config.failure_metric,
+            falsifier=config.falsifier,
+            falsifier_metric=config.falsifier_metric,
             viz=viz,
             batch_runner=batch_runner,
         )

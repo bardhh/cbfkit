@@ -1,17 +1,15 @@
 # CPU grid sweep: single integrator CBF parameter tuning
 # Lightweight — runs comfortably on CPU without GPU/CUDA.
-# Run with: cbfkit-bench sweep configs/cpu/sweep_grid.yaml
+# Run with: cbfkit-bench sweep configs/single_integrator/cpu/sweep_grid.yaml
 
 scenario: "tutorial_single_integrator_sweep"
-seeds: "0:2"
+seeds: "0:1"
 
 sweep:
   method: grid
   parameters:
     alpha:
-      values: [0.5, 1.0, 2.0, 5.0, 10.0]
-    control_limit:
-      values: [3.0, 5.0, 10.0]
+      values: [0.5, 5.0]
 
 output:
-  dir: "./results/cpu/sweep_grid"
+  dir: "./results/single_integrator/cpu/sweep_grid"

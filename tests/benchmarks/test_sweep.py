@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import tempfile
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from cbfkit.benchmarks.sweep import (
     sample_param_combos,
     write_sweep_artifacts,
 )
+from cbfkit.benchmarks.sweep_config import SweepConfigError, load_sweep_config
+from cbfkit.benchmarks.sweep_viz import SweepViz
 
 
 # ---------------------------------------------------------------------------
@@ -318,9 +321,16 @@ class TestRegistryIntegration:
 # Optuna sweep
 # ---------------------------------------------------------------------------
 
-optuna = pytest.importorskip("optuna")
+_has_optuna = False
+try:
+    import optuna  # noqa: F401
+
+    _has_optuna = True
+except ImportError:
+    _has_optuna = False
 
 
+@pytest.mark.skipif(not _has_optuna, reason="optuna not installed")
 class TestOptunaSweep:
     def test_basic_optuna_sweep(self):
         """Optuna sweep runs the correct number of trials."""
@@ -442,3 +452,433 @@ output:
         # resolve_param_combos returns empty for optuna
         combos = resolve_param_combos(config)
         assert combos == []
+
+
+# ---------------------------------------------------------------------------
+# Config validation
+# ---------------------------------------------------------------------------
+
+
+class TestConfigValidation:
+    def test_missing_scenario_raises(self):
+        yaml_content = """\
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [1.0]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            with pytest.raises(SweepConfigError, match="scenario"):
+                load_sweep_config(f.name)
+
+    def test_unknown_method_raises(self):
+        yaml_content = """\
+scenario: "sanity_random_safety"
+sweep:
+  method: bayesian_magic
+  parameters:
+    alpha:
+      values: [1.0]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            with pytest.raises(SweepConfigError, match="method"):
+                load_sweep_config(f.name)
+
+    def test_unknown_direction_raises(self):
+        yaml_content = """\
+scenario: "sanity_random_safety"
+sweep:
+  method: optuna
+  direction: sideways
+  parameters:
+    alpha:
+      range: [0.1, 5.0]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            with pytest.raises(SweepConfigError, match="direction"):
+                load_sweep_config(f.name)
+
+    def test_unknown_param_spec_raises(self):
+        yaml_content = """\
+scenario: "sanity_random_safety"
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      magic_numbers: [1.0, 2.0]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            with pytest.raises(SweepConfigError, match="alpha"):
+                load_sweep_config(f.name)
+
+    def test_legacy_skip_on_failure_still_works(self):
+        """Backward compat: skip_on_failure maps to falsifier."""
+        yaml_content = """\
+scenario: "sanity_random_safety"
+sweep:
+  method: grid
+  skip_on_failure: true
+  failure_metric: solver_failures
+  parameters:
+    alpha:
+      values: [1.0]
+output:
+  dir: /tmp/test
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            config = load_sweep_config(f.name)
+        assert config.falsifier is True
+        assert config.falsifier_metric == "solver_failures"
+
+
+# ---------------------------------------------------------------------------
+# Batch runner
+# ---------------------------------------------------------------------------
+
+
+class TestBatchRunner:
+    def test_batch_runner_used(self):
+        """When batch_runner is provided and falsifier is off, it should be used."""
+        calls = []
+
+        def batch_fn(seeds, params):
+            calls.append(seeds)
+            return [
+                {"success": 1, "safety_violations": 0, "solver_failures": 0,
+                 "avg_step_ms": 1.0, "score": params.get("alpha", 1.0) + s}
+                for s in seeds
+            ]
+
+        combos = [{"alpha": 2.0}]
+        result = run_sweep(
+            "test_batch", [0, 1, 2], combos, _mock_runner,
+            batch_runner=batch_fn,
+        )
+        assert len(calls) == 1  # single batched call
+        assert calls[0] == [0, 1, 2]
+        assert len(result.records) == 3
+
+    def test_batch_runner_skipped_with_falsifier(self):
+        """Batch runner should not be used when falsifier is on."""
+        calls = []
+
+        def batch_fn(seeds, params):
+            calls.append(seeds)
+            return [{"success": 1, "safety_violations": 0, "solver_failures": 0,
+                     "avg_step_ms": 1.0} for _ in seeds]
+
+        combos = [{"alpha": 3.0}]
+        run_sweep(
+            "test_batch_falsifier", [0, 1, 2], combos, _mock_failing_runner,
+            falsifier=True, batch_runner=batch_fn,
+        )
+        assert len(calls) == 0  # batch runner not used
+
+
+# ---------------------------------------------------------------------------
+# SweepViz NaN/inf handling
+# ---------------------------------------------------------------------------
+
+
+class TestSweepVizNaN:
+    def test_nan_values_not_tracked_as_best(self):
+        viz = SweepViz(objective_metric="score", direction="minimize")
+        viz.add_result({"a": 1}, {"score": float("inf")})
+        viz.add_result({"a": 2}, {"score": 5.0})
+        viz.add_result({"a": 3}, {"score": float("nan")})
+        viz.add_result({"a": 4}, {"score": 3.0})
+
+        assert viz._best_val == 3.0
+        assert viz._best_idx == 3
+
+    def test_first_finite_becomes_best(self):
+        viz = SweepViz(objective_metric="score", direction="maximize")
+        viz.add_result({"a": 1}, {"score": float("inf")})
+        viz.add_result({"a": 2}, {"score": 10.0})
+        assert viz._best_val == 10.0
+        assert viz._best_idx == 1
+
+    def test_all_inf_no_best(self):
+        viz = SweepViz(objective_metric="score", direction="minimize")
+        viz.add_result({"a": 1}, {"score": float("inf")})
+        viz.add_result({"a": 2}, {"score": float("inf")})
+        assert viz._best_idx == -1
+        assert not math.isfinite(viz._best_val)
+
+
+# ---------------------------------------------------------------------------
+# Obstacle config parsing
+# ---------------------------------------------------------------------------
+
+
+class TestObstacleConfig:
+    def test_parse_circular_fixed(self):
+        yaml_content = """\
+scenario: "tutorial_single_integrator_sweep"
+seeds: "0:1"
+obstacles:
+  type: circular
+  items:
+    - center: [3.0, 4.0]
+      radius: 0.8
+    - center: [6.0, 5.0]
+      radius: 1.2
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [1.0, 2.0]
+output:
+  dir: /tmp/test_obs
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            config = load_sweep_config(f.name)
+
+        assert config.obstacles is not None
+        assert config.obstacles.type == "circular"
+        assert len(config.obstacles.items) == 2
+        # Both items fully fixed
+        assert config.obstacles.items[0].fixed == {"center": [3.0, 4.0], "radius": 0.8}
+        assert config.obstacles.items[0].sweepable == {}
+        # No synthetic params added
+        assert "obstacle_0_radius" not in config.parameters
+
+    def test_parse_circular_sweepable_radius(self):
+        yaml_content = """\
+scenario: "tutorial_single_integrator_sweep"
+seeds: "0:0"
+obstacles:
+  type: circular
+  items:
+    - center: [3.0, 4.0]
+      radius:
+        linspace: [0.3, 1.5, 5]
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [1.0]
+output:
+  dir: /tmp/test_obs
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            config = load_sweep_config(f.name)
+
+        assert config.obstacles is not None
+        assert config.obstacles.items[0].sweepable == {
+            "radius": {"linspace": [0.3, 1.5, 5]}
+        }
+        # Synthetic param merged into parameters
+        assert "obstacle_0_radius" in config.parameters
+        assert config.parameters["obstacle_0_radius"] == {"linspace": [0.3, 1.5, 5]}
+
+    def test_parse_ellipsoidal_fixed(self):
+        yaml_content = """\
+scenario: "unicycle_obstacle_avoidance_sweep"
+seeds: "0:0"
+obstacles:
+  type: ellipsoidal
+  items:
+    - center: [1.0, 2.0, 0.0]
+      semi_axes: [0.5, 1.5]
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [1.0]
+output:
+  dir: /tmp/test_obs
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            config = load_sweep_config(f.name)
+
+        assert config.obstacles is not None
+        assert config.obstacles.type == "ellipsoidal"
+        assert config.obstacles.items[0].fixed == {
+            "center": [1.0, 2.0, 0.0],
+            "semi_axes": [0.5, 1.5],
+        }
+
+    def test_invalid_obstacle_type_raises(self):
+        yaml_content = """\
+scenario: "tutorial_single_integrator_sweep"
+seeds: "0:0"
+obstacles:
+  type: hexagonal
+  items:
+    - center: [1.0, 2.0]
+      radius: 0.5
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [1.0]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            with pytest.raises(SweepConfigError, match="obstacles.type"):
+                load_sweep_config(f.name)
+
+    def test_missing_required_key_raises(self):
+        yaml_content = """\
+scenario: "tutorial_single_integrator_sweep"
+seeds: "0:0"
+obstacles:
+  type: circular
+  items:
+    - center: [1.0, 2.0]
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [1.0]
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            with pytest.raises(SweepConfigError, match="missing required keys"):
+                load_sweep_config(f.name)
+
+    def test_no_obstacles_block_returns_none(self):
+        yaml_content = """\
+scenario: "tutorial_single_integrator_sweep"
+seeds: "0:0"
+sweep:
+  method: grid
+  parameters:
+    alpha:
+      values: [1.0]
+output:
+  dir: /tmp/test
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            config = load_sweep_config(f.name)
+
+        assert config.obstacles is None
+
+    def test_build_obstacle_fixed_params(self):
+        from cbfkit.benchmarks.sweep_config import ObstacleItemSpec, ObstaclesSpec, _build_obstacle_fixed_params
+
+        spec = ObstaclesSpec(
+            type="circular",
+            items=[
+                ObstacleItemSpec(
+                    fixed={"center": [3.0, 4.0], "radius": 0.8},
+                    sweepable={},
+                ),
+                ObstacleItemSpec(
+                    fixed={"center": [6.0, 5.0]},
+                    sweepable={"radius": {"linspace": [0.3, 1.5, 5]}},
+                ),
+            ],
+        )
+        fixed = _build_obstacle_fixed_params(spec)
+        assert fixed["_obstacle_count"] == 2
+        assert fixed["_obstacle_type"] == "circular"
+        assert fixed["_obstacle_0_center"] == [3.0, 4.0]
+        assert fixed["_obstacle_0_radius"] == 0.8
+        assert fixed["_obstacle_1_center"] == [6.0, 5.0]
+        # Sweepable radius is NOT in fixed params
+        assert "_obstacle_1_radius" not in fixed
+
+    def test_extract_obstacle_sweep_params(self):
+        from cbfkit.benchmarks.sweep_config import ObstacleItemSpec, ObstaclesSpec, _extract_obstacle_sweep_params
+
+        spec = ObstaclesSpec(
+            type="circular",
+            items=[
+                ObstacleItemSpec(fixed={"center": [3.0, 4.0]}, sweepable={"radius": {"values": [0.5, 1.0]}}),
+                ObstacleItemSpec(fixed={"center": [6.0, 5.0], "radius": 1.2}, sweepable={}),
+            ],
+        )
+        sweep_params = _extract_obstacle_sweep_params(spec)
+        assert sweep_params == {"obstacle_0_radius": {"values": [0.5, 1.0]}}
+
+
+# ---------------------------------------------------------------------------
+# Obstacle resolution
+# ---------------------------------------------------------------------------
+
+
+class TestObstacleResolution:
+    def test_resolve_circular_fixed_only(self):
+        from cbfkit.benchmarks.scenario_builders import resolve_circular_obstacles
+
+        params = {
+            "_obstacle_count": 2,
+            "_obstacle_type": "circular",
+            "_obstacle_0_center": [3.0, 4.0],
+            "_obstacle_0_radius": 0.8,
+            "_obstacle_1_center": [6.0, 5.0],
+            "_obstacle_1_radius": 1.2,
+        }
+        result = resolve_circular_obstacles(params)
+        assert result is not None
+        assert len(result) == 2
+        np.testing.assert_allclose(result[0][0], [3.0, 4.0])
+        assert result[0][1] == 0.8
+        np.testing.assert_allclose(result[1][0], [6.0, 5.0])
+        assert result[1][1] == 1.2
+
+    def test_resolve_circular_with_swept_radius(self):
+        from cbfkit.benchmarks.scenario_builders import resolve_circular_obstacles
+
+        # Swept values use plain keys; fixed use underscore-prefixed
+        params = {
+            "_obstacle_count": 2,
+            "_obstacle_type": "circular",
+            "_obstacle_0_center": [3.0, 4.0],
+            "obstacle_0_radius": 0.5,  # swept value
+            "_obstacle_1_center": [6.0, 5.0],
+            "_obstacle_1_radius": 1.2,  # fixed value
+        }
+        result = resolve_circular_obstacles(params)
+        assert result is not None
+        assert result[0][1] == 0.5  # swept radius
+        assert result[1][1] == 1.2  # fixed radius
+
+    def test_resolve_returns_none_when_no_obstacles(self):
+        from cbfkit.benchmarks.scenario_builders import resolve_circular_obstacles
+
+        assert resolve_circular_obstacles({"alpha": 1.0}) is None
+
+    def test_resolve_ellipsoidal_fixed(self):
+        from cbfkit.benchmarks.scenario_builders import resolve_ellipsoidal_obstacles
+
+        params = {
+            "_obstacle_count": 1,
+            "_obstacle_type": "ellipsoidal",
+            "_obstacle_0_center": [1.0, 2.0, 0.0],
+            "_obstacle_0_semi_axes": [0.5, 1.5],
+        }
+        result = resolve_ellipsoidal_obstacles(params)
+        assert result is not None
+        centers, semi_axes = result
+        assert len(centers) == 1
+        np.testing.assert_allclose(centers[0], [1.0, 2.0, 0.0])
+        np.testing.assert_allclose(semi_axes[0], [0.5, 1.5])
+
+    def test_resolve_ellipsoidal_returns_none_when_no_obstacles(self):
+        from cbfkit.benchmarks.scenario_builders import resolve_ellipsoidal_obstacles
+
+        assert resolve_ellipsoidal_obstacles({"alpha": 1.0}) is None

@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "SweepRun",
+    "build_param_grid",
+    "expand_param_spec",
+    "run_optuna_sweep",
+    "run_sweep",
+    "sample_param_combos",
+    "write_sweep_artifacts",
+]
+
 import contextlib
 import csv
 import itertools
@@ -94,6 +104,20 @@ class SweepRun:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_falsifier_kwargs(
+    falsifier: bool,
+    falsifier_metric: str,
+    skip_on_failure: bool | None,
+    failure_metric: str | None,
+) -> tuple[bool, str]:
+    """Resolve legacy alias kwargs to canonical names."""
+    if skip_on_failure is not None:
+        falsifier = skip_on_failure
+    if failure_metric is not None:
+        falsifier_metric = failure_metric
+    return falsifier, falsifier_metric
+
+
 def _is_failure(result: dict[str, Any], metric: str) -> bool:
     """Check if a result indicates a failure."""
     val = result.get(metric, 0)
@@ -109,29 +133,29 @@ def _run_combo(
     combo_idx: int,
     records: list[dict[str, Any]],
     *,
-    skip_on_failure: bool = False,
-    failure_metric: str = "safety_violations",
+    falsifier: bool = False,
+    falsifier_metric: str = "safety_violations",
     progress: Progress | None = None,
     seed_task_id: int | None = None,
     batch_runner: BatchSweepableRunner | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Run a single parameter combo across seeds.
 
-    When *batch_runner* is provided and *skip_on_failure* is False, all
+    When *batch_runner* is provided and *falsifier* is False, all
     seeds are executed in a single batched call (one JIT compilation).
 
-    When *skip_on_failure* is True, stops iterating seeds as soon as a
+    When *falsifier* is True, stops iterating seeds as soon as a
     failure is detected and moves on to the next combo.
 
-    Returns ``(combo_records, skipped)`` where *combo_records* contains
-    only the seeds that actually executed and *skipped* indicates whether
+    Returns ``(combo_records, falsified)`` where *combo_records* contains
+    only the seeds that actually executed and *falsified* indicates whether
     remaining seeds were skipped due to failure.
     """
     combo_records: list[dict[str, Any]] = []
-    skipped = False
+    was_falsified = False
 
-    # Use batch runner when available and skip_on_failure is off
-    if batch_runner is not None and not skip_on_failure:
+    # Use batch runner when available and falsifier is off
+    if batch_runner is not None and not falsifier:
         batch_results = batch_runner(seeds, combo)
         for seed, result in zip(seeds, batch_results):
             result = dict(result)
@@ -152,9 +176,9 @@ def _run_combo(
         for k, v in combo.items():
             result[f"param_{k}"] = v
 
-        if skip_on_failure and _is_failure(result, failure_metric):
+        if falsifier and _is_failure(result, falsifier_metric):
             result["skipped_remaining"] = True
-            skipped = True
+            was_falsified = True
 
         records.append(result)
         combo_records.append(result)
@@ -162,25 +186,82 @@ def _run_combo(
         if progress is not None and seed_task_id is not None:
             progress.advance(seed_task_id, 1)
 
-        if skipped:
+        if was_falsified:
             break
 
-    return combo_records, skipped
+    return combo_records, was_falsified
 
 
 def _build_combo_summary(
     combo_records: list[dict[str, Any]],
     combo: dict[str, Any],
     combo_idx: int,
-    skipped: bool,
+    falsified: bool,
 ) -> dict[str, Any]:
     """Create an aggregated summary for a single parameter combo."""
     summary = summarize(combo_records)
     summary["combo_idx"] = combo_idx
-    summary["skipped_on_failure"] = skipped
+    summary["falsified"] = falsified
     for k, v in combo.items():
         summary[f"param_{k}"] = v
     return summary
+
+
+def _format_combo_desc(combo: dict[str, Any], max_len: int = 40) -> str:
+    """Format a parameter combo as a short description string."""
+    desc = ", ".join(
+        f"{k}={v:.3g}" if isinstance(v, float) else f"{k}={v}"
+        for k, v in combo.items()
+    )
+    if len(desc) > max_len:
+        desc = desc[: max_len - 3] + "..."
+    return desc
+
+
+def _process_combo(
+    runner: SweepableRunner,
+    seeds: list[int],
+    combo: dict[str, Any],
+    combo_idx: int,
+    records: list[dict[str, Any]],
+    per_combo_summaries: list[dict[str, Any]],
+    *,
+    falsifier: bool,
+    falsifier_metric: str,
+    progress: Progress,
+    seed_task_id: int,
+    combo_task_id: int,
+    batch_runner: BatchSweepableRunner | None,
+    viz: SweepViz | None,
+    live: Live | None,
+    live_renderable_fn: Any = None,
+) -> int:
+    """Run a single combo, update progress/viz, return number of skipped seeds."""
+    progress.reset(seed_task_id, total=len(seeds))
+    combo_desc = _format_combo_desc(combo)
+    progress.update(seed_task_id, description=f"  Seeds ({combo_desc})")
+
+    combo_records, was_falsified = _run_combo(
+        runner, seeds, combo, combo_idx, records,
+        falsifier=falsifier, falsifier_metric=falsifier_metric,
+        progress=progress, seed_task_id=seed_task_id,
+        batch_runner=batch_runner,
+    )
+
+    remaining = len(seeds) - len(combo_records)
+    if remaining > 0:
+        progress.advance(seed_task_id, remaining)
+
+    progress.advance(combo_task_id, 1)
+
+    summary = _build_combo_summary(combo_records, combo, combo_idx, was_falsified)
+    per_combo_summaries.append(summary)
+
+    if viz is not None and live is not None and live_renderable_fn is not None:
+        viz.add_result(combo, summary)
+        live.update(live_renderable_fn())
+
+    return remaining
 
 
 def run_sweep(
@@ -189,25 +270,32 @@ def run_sweep(
     param_combos: list[dict[str, Any]],
     runner: SweepableRunner,
     *,
-    skip_on_failure: bool = False,
-    failure_metric: str = "safety_violations",
+    falsifier: bool = False,
+    falsifier_metric: str = "safety_violations",
     viz: SweepViz | None = None,
     batch_runner: BatchSweepableRunner | None = None,
+    # Legacy aliases
+    skip_on_failure: bool | None = None,
+    failure_metric: str | None = None,
 ) -> SweepRun:
     """Execute a scenario across all (seed, param_combo) pairs.
 
     Parameters
     ----------
-    skip_on_failure : bool
+    falsifier : bool
         When *True*, stop iterating seeds for a parameter combo as soon as
-        a failure is detected (the metric given by *failure_metric* is
+        a failure is detected (the metric given by *falsifier_metric* is
         non-zero) and move on to the next combo.
-    failure_metric : str
+    falsifier_metric : str
         The result key checked for failure (default ``"safety_violations"``).
     viz : SweepViz | None
         Optional live visualization.  When provided the sweep renders a
         colour-coded results table and scatter plot in the terminal.
     """
+    falsifier, falsifier_metric = _resolve_falsifier_kwargs(
+        falsifier, falsifier_metric, skip_on_failure, failure_metric,
+    )
+
     records: list[dict[str, Any]] = []
     per_combo_summaries: list[dict[str, Any]] = []
     skipped = 0
@@ -222,42 +310,18 @@ def run_sweep(
     with Live(_build_live_renderable(), console=_console, refresh_per_second=4,
               transient=True, vertical_overflow="visible") as live, \
             _quiet_stdout():
-        combo_task = progress.add_task(
-            "Combos", total=len(param_combos),
-        )
-        seed_task = progress.add_task(
-            "  Seeds", total=len(seeds),
-        )
+        combo_task = progress.add_task("Combos", total=len(param_combos))
+        seed_task = progress.add_task("  Seeds", total=len(seeds))
 
         for combo_idx, combo in enumerate(param_combos):
-            # Reset seed bar for this combo
-            progress.reset(seed_task, total=len(seeds))
-            combo_desc = ", ".join(f"{k}={v}" for k, v in combo.items())
-            if len(combo_desc) > 40:
-                combo_desc = combo_desc[:37] + "..."
-            progress.update(seed_task, description=f"  Seeds ({combo_desc})")
-
-            combo_records, was_skipped = _run_combo(
-                runner, seeds, combo, combo_idx, records,
-                skip_on_failure=skip_on_failure, failure_metric=failure_metric,
-                progress=progress, seed_task_id=seed_task,
-                batch_runner=batch_runner,
+            remaining = _process_combo(
+                runner, seeds, combo, combo_idx, records, per_combo_summaries,
+                falsifier=falsifier, falsifier_metric=falsifier_metric,
+                progress=progress, seed_task_id=seed_task, combo_task_id=combo_task,
+                batch_runner=batch_runner, viz=viz, live=live,
+                live_renderable_fn=_build_live_renderable,
             )
-
-            # Advance seed bar for skipped seeds
-            remaining = len(seeds) - len(combo_records)
-            if remaining > 0:
-                skipped += remaining
-                progress.advance(seed_task, remaining)
-
-            progress.advance(combo_task, 1)
-
-            summary = _build_combo_summary(combo_records, combo, combo_idx, was_skipped)
-            per_combo_summaries.append(summary)
-
-            if viz is not None:
-                viz.add_result(combo, summary)
-                live.update(_build_live_renderable())
+            skipped += remaining
 
     if skipped > 0:
         _console.print(
@@ -313,11 +377,14 @@ def run_optuna_sweep(
     objective_metric: str = "safety_violation_rate",
     direction: str = "minimize",
     *,
-    skip_on_failure: bool = False,
-    failure_metric: str = "safety_violations",
+    falsifier: bool = False,
+    falsifier_metric: str = "safety_violations",
     safety_constraint: "tuple[str, float] | None" = None,
     viz: SweepViz | None = None,
     batch_runner: BatchSweepableRunner | None = None,
+    # Legacy aliases
+    skip_on_failure: bool | None = None,
+    failure_metric: str | None = None,
 ) -> SweepRun:
     """Run an Optuna-driven parameter sweep.
 
@@ -326,10 +393,10 @@ def run_optuna_sweep(
 
     Parameters
     ----------
-    skip_on_failure : bool
+    falsifier : bool
         When *True*, stop iterating seeds on first failure and move to
         the next trial.
-    failure_metric : str
+    falsifier_metric : str
         The result key checked for failure (default ``"safety_violations"``).
     safety_constraint : tuple[str, float] | None
         Optional ``(metric, max_value)`` pair.  When set, any trial whose
@@ -340,6 +407,10 @@ def run_optuna_sweep(
 
     Requires ``pip install cbfkit[optuna]``.
     """
+    falsifier, falsifier_metric = _resolve_falsifier_kwargs(
+        falsifier, falsifier_metric, skip_on_failure, failure_metric,
+    )
+
     try:
         import optuna
     except ImportError as exc:
@@ -367,34 +438,16 @@ def run_optuna_sweep(
     def objective(trial) -> float:
         combo = {pname: _suggest_param(trial, pname, pspec)
                  for pname, pspec in parameters.items()}
-        combo_idx = trial.number
         param_combos.append(combo)
 
-        # Reset seed bar for this trial
-        progress.reset(seed_task, total=len(seeds))
-        combo_desc = ", ".join(f"{k}={v:.3g}" for k, v in combo.items()
-                               if isinstance(v, float))
-        if len(combo_desc) > 40:
-            combo_desc = combo_desc[:37] + "..."
-        progress.update(seed_task, description=f"  Seeds ({combo_desc})")
-
-        combo_records, was_skipped = _run_combo(
-            runner, seeds, combo, combo_idx, records,
-            skip_on_failure=skip_on_failure, failure_metric=failure_metric,
-            progress=progress, seed_task_id=seed_task,
-            batch_runner=batch_runner,
+        _process_combo(
+            runner, seeds, combo, trial.number, records, per_combo_summaries,
+            falsifier=falsifier, falsifier_metric=falsifier_metric,
+            progress=progress, seed_task_id=seed_task, combo_task_id=trial_task,
+            batch_runner=batch_runner, viz=None, live=None,
         )
 
-        # Advance for any skipped seeds
-        remaining = len(seeds) - len(combo_records)
-        if remaining > 0:
-            progress.advance(seed_task, remaining)
-
-        progress.advance(trial_task, 1)
-
-        summary = _build_combo_summary(combo_records, combo, combo_idx, was_skipped)
-        per_combo_summaries.append(summary)
-
+        summary = per_combo_summaries[-1]
         obj_val = summary.get(objective_metric, 0.0)
         if safety_constraint is not None:
             sc_metric, sc_max = safety_constraint

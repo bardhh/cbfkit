@@ -1,0 +1,18 @@
+# GPU falsifier sweep: find unsafe CBF parameter combos via JAX vmap
+# Stops iterating seeds as soon as a safety violation is found.
+# Requires CUDA-enabled JAX: pip install --upgrade "jax[cuda12]"
+# Run with: cbfkit-bench sweep configs/single_integrator/gpu/sweep_falsifier.yaml
+
+scenario: "monte_carlo_gpu_sweep"
+seeds: "0:9"
+
+sweep:
+  method: grid
+  falsifier: true
+  falsifier_metric: safety_violations
+  parameters:
+    alpha:
+      linspace: [0.1, 5.0, 6]
+
+output:
+  dir: "./results/single_integrator/gpu/sweep_falsifier"

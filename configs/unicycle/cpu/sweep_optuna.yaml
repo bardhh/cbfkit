@@ -1,0 +1,28 @@
+# CPU Optuna sweep: unicycle CBF Bayesian optimization
+# Requires: pip install cbfkit[optuna]
+# Run with: cbfkit-bench sweep configs/unicycle/cpu/sweep_optuna.yaml
+
+scenario: "unicycle_obstacle_avoidance_sweep"
+seeds: "0:3"
+
+sweep:
+  method: optuna
+  n_samples: 10
+  objective: time_to_goal
+  direction: minimize
+  safety_constraint:
+    metric: safety_violations
+    max: 0
+
+  parameters:
+    alpha:
+      range: [0.5, 15.0]
+    Kp_pos:
+      range: [0.5, 5.0]
+    Kp_theta:
+      range: [1.0, 15.0]
+    barrier_type:
+      values: ["linear_class_k", "cubic_class_k"]
+
+output:
+  dir: "./results/unicycle/cpu/sweep_optuna"

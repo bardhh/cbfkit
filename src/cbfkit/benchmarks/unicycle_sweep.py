@@ -12,6 +12,7 @@ from jax import random
 
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 from cbfkit.benchmarks.registry import register_sweepable_scenario
+from cbfkit.benchmarks.scenario_builders import resolve_ellipsoidal_obstacles
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
 from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
@@ -73,6 +74,8 @@ def _build_setup(
     Kp_theta: float = 5.0,
     barrier_type: str = "linear_class_k",
     control_limit: float = 100.0,
+    obstacles: list | None = None,
+    ellipsoids: list | None = None,
 ):
     """Build a MonteCarloSetup for unicycle obstacle avoidance."""
 
@@ -91,6 +94,9 @@ def _build_setup(
         )
     barrier_fn = _BARRIER_TYPES[barrier_type]
 
+    obs_list = obstacles if obstacles is not None else OBSTACLES
+    ell_list = ellipsoids if ellipsoids is not None else ELLIPSOIDS
+
     # Build barriers using rectify_relative_degree (handles high relative degree)
     barriers_list = [
         rectify_relative_degree(
@@ -100,7 +106,7 @@ def _build_setup(
             form="high-order",
             certificate_conditions=barrier_fn(alpha),
         )
-        for obs, ell in zip(OBSTACLES, ELLIPSOIDS)
+        for obs, ell in zip(obs_list, ell_list)
     ]
     barrier_packages = concatenate_certificates(*barriers_list)
 
@@ -193,6 +199,8 @@ def _unicycle_batch_runner(seeds: list[int], params: dict) -> list[dict]:
     Kp_pos = params.get("Kp_pos", 1.0)
     Kp_theta = params.get("Kp_theta", 5.0)
     barrier_type = params.get("barrier_type", "linear_class_k")
+    resolved = resolve_ellipsoidal_obstacles(params)
+    obs_kw = {} if resolved is None else {"obstacles": resolved[0], "ellipsoids": resolved[1]}
 
     setup = _build_setup(
         0,
@@ -200,6 +208,7 @@ def _unicycle_batch_runner(seeds: list[int], params: dict) -> list[dict]:
         Kp_pos=Kp_pos,
         Kp_theta=Kp_theta,
         barrier_type=barrier_type,
+        **obs_kw,
     )
 
     results_list = conduct_monte_carlo_gpu_multiseed(setup, n_trials=N_TRIALS, seeds=seeds)
@@ -217,6 +226,8 @@ def unicycle_sweep(seed: int, params: dict) -> dict:
     Kp_pos = params.get("Kp_pos", 1.0)
     Kp_theta = params.get("Kp_theta", 5.0)
     barrier_type = params.get("barrier_type", "linear_class_k")
+    resolved = resolve_ellipsoidal_obstacles(params)
+    obs_kw = {} if resolved is None else {"obstacles": resolved[0], "ellipsoids": resolved[1]}
 
     setup = _build_setup(
         seed,
@@ -224,6 +235,7 @@ def unicycle_sweep(seed: int, params: dict) -> dict:
         Kp_pos=Kp_pos,
         Kp_theta=Kp_theta,
         barrier_type=barrier_type,
+        **obs_kw,
     )
 
     results = conduct_monte_carlo_gpu(setup, n_trials=N_TRIALS, seed=seed)

@@ -1,0 +1,29 @@
+# GPU Optuna sweep: unicycle CBF Bayesian optimization via JAX vmap
+# Requires CUDA-enabled JAX: pip install --upgrade "jax[cuda12]"
+# Requires: pip install cbfkit[optuna]
+# Run with: cbfkit-bench sweep configs/unicycle/gpu/sweep_optuna.yaml
+
+scenario: "unicycle_obstacle_avoidance_sweep"
+seeds: "0:9"
+
+sweep:
+  method: optuna
+  n_samples: 30
+  objective: final_goal_distance
+  direction: minimize
+  safety_constraint:
+    metric: safety_violations
+    max: 0
+
+  parameters:
+    alpha:
+      range: [0.5, 15.0]
+    Kp_pos:
+      range: [0.5, 5.0]
+    Kp_theta:
+      range: [1.0, 15.0]
+    barrier_type:
+      values: ["linear_class_k", "cubic_class_k"]
+
+output:
+  dir: "./results/unicycle/gpu/sweep_optuna"

@@ -18,161 +18,18 @@ Usage::
     python tutorials/parameter_sweep_tutorial.py
 
     # Or use the CLI with YAML configs:
-    cbfkit-bench sweep configs/cpu/sweep_grid.yaml
-    cbfkit-bench sweep configs/cpu/sweep_optuna.yaml
+    cbfkit-bench sweep configs/single_integrator/cpu/sweep_grid.yaml
+    cbfkit-bench sweep configs/single_integrator/cpu/sweep_optuna.yaml
 """
 
-import json
-import time
 import tempfile
-from pathlib import Path
 
-import jax
-import jax.numpy as jnp
-from jax import random
-
-from cbfkit.benchmarks.registry import register_sweepable_scenario
+from cbfkit.benchmarks.single_integrator_sweep import tutorial_sweep  # noqa: F401 — registers scenario
 from cbfkit.benchmarks.sweep import (
     build_param_grid,
     run_sweep,
     write_sweep_artifacts,
 )
-from cbfkit.controllers.cbf_clf.cbf_clf_qp_generator import cbf_clf_qp_generator
-from cbfkit.controllers.cbf_clf.generate_constraints import (
-    generate_compute_vanilla_clf_constraints,
-    generate_compute_zeroing_cbf_constraints,
-)
-from cbfkit.integration import forward_euler
-from cbfkit.simulation.monte_carlo_gpu import MonteCarloSetup, conduct_monte_carlo_gpu
-from cbfkit.simulation.safety_verification import compute_safety_statistics
-from cbfkit.utils.user_types import CertificateCollection, ControllerData, PlannerData
-
-
-# ============================================================================
-# Step 1: Define your system
-# ============================================================================
-# A 2D single integrator: x_dot = u
-# Goal: reach [10, 10] while avoiding circular obstacles.
-
-
-def _dynamics(x):
-    """Single integrator: f(x) = 0, g(x) = I."""
-    return jnp.zeros(2), jnp.eye(2)
-
-
-def _make_cbf(center, radius, alpha):
-    """Circular obstacle barrier: h(x) = |x - c|^2 - r^2."""
-    return (
-        lambda _t, x: jnp.sum((x - center) ** 2) - radius**2,
-        lambda _t, x: 2 * (x - center),
-        lambda _t, _x: 2 * jnp.eye(2),
-        lambda _t, _x: 0.0,
-        lambda h, _a=alpha: _a * h,  # Class K: alpha * h
-    )
-
-
-def _default_sensor(t, x, *, sigma=None, key=None):
-    return x
-
-
-def _default_estimator(t, y, z, u, c):
-    return y, c if c is not None else jnp.zeros((len(y), len(y)))
-
-
-def _default_perturbation(x, u, f, g):
-    def p(key):
-        return jnp.zeros_like(x)
-    return p
-
-
-# ============================================================================
-# Step 2: Wrap your simulation in a sweepable scenario
-# ============================================================================
-#
-# The key idea: extract the parameters you want to tune into a `params` dict.
-# The function signature must be:
-#
-#     def my_scenario(seed: int, params: dict) -> dict
-#
-# Return a dict with at least these standard metric keys:
-#   - success (0 or 1)
-#   - safety_violations (0 or 1)
-#   - solver_failures (0 or 1)
-#   - avg_step_ms (float)
-# Plus any custom metrics you care about (e.g., violation_rate, min_barrier).
-
-
-N_TRIALS = 10  # Monte Carlo trajectories per evaluation (increase for production)
-
-
-@register_sweepable_scenario(
-    "tutorial_single_integrator_sweep",
-    sweepable_params=["alpha", "control_limit", "n_obstacles"],
-    description="Single integrator obstacle avoidance with sweepable CBF parameters.",
-)
-def tutorial_sweep(seed: int, params: dict) -> dict:
-    """Run Monte Carlo simulations with the given CBF parameters and return metrics."""
-
-    # --- Extract sweep parameters (with sensible defaults) ---
-    alpha = params.get("alpha", 1.0)
-    control_limit = params.get("control_limit", 5.0)
-    n_obstacles = int(params.get("n_obstacles", 5))
-
-    # --- Generate random obstacles from the seed ---
-    key = random.PRNGKey(seed)
-    key_c, key_r = random.split(key)
-    centers = random.uniform(key_c, (n_obstacles, 2), minval=2.0, maxval=8.0)
-    radii = random.uniform(key_r, (n_obstacles,), minval=0.5, maxval=1.0)
-
-    # --- Build CBF barriers with the swept alpha ---
-    barrier_tuples = [_make_cbf(centers[i], radii[i], alpha) for i in range(n_obstacles)]
-    barriers = CertificateCollection(*[list(x) for x in zip(*barrier_tuples)])
-
-    # --- Create controller with swept control limits ---
-    controller = cbf_clf_qp_generator(
-        generate_compute_zeroing_cbf_constraints,
-        generate_compute_vanilla_clf_constraints,
-    )(
-        control_limits=jnp.array([control_limit, control_limit]),
-        dynamics_func=_dynamics,
-        barriers=barriers,
-        relaxable_cbf=False,
-        relaxable_clf=True,
-    )
-
-    def nominal_controller(t, x, _k, _r):
-        return 2.0 * (jnp.array([10.0, 10.0]) - x), None
-
-    def initial_state_sampler(key):
-        return random.uniform(key, (2,), minval=-1.0, maxval=1.0)
-
-    # Prime controller data
-    prime_key = random.PRNGKey(42)
-    _, c_data = controller(0.0, jnp.zeros(2), jnp.zeros(2), prime_key, ControllerData())
-
-    setup = MonteCarloSetup(
-        dt=0.01, num_steps=200,
-        dynamics=_dynamics, integrator=forward_euler,
-        initial_state_sampler=initial_state_sampler,
-        nominal_controller=nominal_controller, controller=controller,
-        sensor=_default_sensor, estimator=_default_estimator,
-        perturbation=_default_perturbation, sigma=jnp.zeros(0),
-        controller_data=c_data, planner=None, planner_data=PlannerData(),
-    )
-
-    # --- Run Monte Carlo ---
-    results = conduct_monte_carlo_gpu(setup, n_trials=N_TRIALS, seed=seed)
-    stats = compute_safety_statistics(results)
-
-    return {
-        "success": 1,
-        "safety_violations": int(stats.violation_rate > 0),
-        "solver_failures": 0,
-        "avg_step_ms": results.wall_time_s / setup.num_steps * 1000.0,
-        "violation_rate": stats.violation_rate,
-        "min_barrier_value": stats.min_barrier_value,
-        "wall_time_s": results.wall_time_s,
-    }
 
 
 # ============================================================================
@@ -253,7 +110,7 @@ def demo_optuna_sweep():
 #
 # Create a YAML config and run with the CLI:
 #
-#   cbfkit-bench sweep configs/cpu/sweep_grid.yaml
+#   cbfkit-bench sweep configs/single_integrator/cpu/sweep_grid.yaml
 #
 # Then visualize:
 #

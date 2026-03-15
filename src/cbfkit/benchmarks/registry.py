@@ -2,6 +2,18 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "BatchSweepableRunner",
+    "BenchmarkRegistry",
+    "BenchmarkResult",
+    "BenchmarkScenario",
+    "ScenarioSpec",
+    "SweepableRunner",
+    "register_scenario",
+    "register_sweepable_scenario",
+    "registry",
+]
+
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
 

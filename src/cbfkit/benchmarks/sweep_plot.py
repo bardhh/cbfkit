@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__all__ = ["plot_sweep"]
+
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
