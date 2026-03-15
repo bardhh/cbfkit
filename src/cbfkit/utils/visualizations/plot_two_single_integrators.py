@@ -1,6 +1,6 @@
-# matplotlib.use("macosx")
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+
+from cbfkit.utils.animator import CBFAnimator
 
 
 #! PLOTTING
@@ -68,82 +68,17 @@ def animate(
     animation_filename="system_behavior.gif",
 ):
     """Animate the system behavior for two single integrators."""
+    animator = CBFAnimator(states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title)
 
-    def init():
-        trajectory1.set_data([], [])
-        # etrajectory1.set_data([], [])
-        trajectory2.set_data([], [])
-        # etrajectory2.set_data([], [])
-        return (trajectory1, trajectory2)
+    animator.add_goal(desired_state[0:2], radius=0.1, label="desired_state1")
+    animator.add_goal(desired_state[2:4], radius=0.1, label="desired_state2")
 
-    def update(frame):
-        trajectory1.set_data(states[:frame, 0], states[:frame, 1])
-        # etrajectory1.set_data(estimates[:frame, 0], estimates[:frame, 1])
-        trajectory2.set_data(states[:frame, 2], states[:frame, 3])
-        # etrajectory2.set_data(estimates[:frame, 2], estimates[:frame, 3])
-        _ = states[frame]
-        _ = estimates[frame]
-        return (
-            trajectory1,
-            # etrajectory1,
-            trajectory2,
-            # etrajectory2,
-        )
+    animator.add_trajectory(x_idx=0, y_idx=1, label="Trajectory1")
+    animator.add_trajectory(x_idx=2, y_idx=3, label="Trajectory2")
 
-    fig, ax = plt.subplots()
-
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-
-    desired_state_radius = 0.1
-    desired_state1 = desired_state[0:2]
-    desired_state2 = desired_state[2:4]
-    ax.plot(desired_state1[0], desired_state1[1], "ro", markersize=5, label="desired_state1")
-    ax.plot(desired_state2[0], desired_state2[1], "ro", markersize=5, label="desired_state2")
-
-    ax.add_patch(
-        plt.Circle(
-            desired_state1,
-            desired_state_radius,
-            color="r",
-            fill=False,
-            linestyle="--",
-            linewidth=1,
-        )
-    )
-
-    ax.add_patch(
-        plt.Circle(
-            desired_state2,
-            desired_state_radius,
-            color="r",
-            fill=False,
-            linestyle="--",
-            linewidth=1,
-        )
-    )
-
-    (trajectory1,) = ax.plot([], [], label="Trajectory1")
-    # (etrajectory1,) = ax.plot([], [], label="Estimated Trajectory1")
-    (trajectory2,) = ax.plot([], [], label="Trajectory2")
-    # (etrajectory2,) = ax.plot([], [], label="Estimated Trajectory2")
-
-    ax.set_xlim(x_lim[0], x_lim[1])
-    ax.set_ylim(y_lim[0], y_lim[1])
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    ax.set_title(title)
-    ax.legend(loc="best")
-    ax.grid()
-
-    ani = FuncAnimation(
-        fig, update, frames=len(states), init_func=init, blit=True, interval=dt * 100
-    )
-    # FFwriter = animation.FFMpegWriter(fps=30, extra_args=["-vcodec", "libx264"])
     if save_animation:
-        ani.save(animation_filename, writer="imagemagick", fps=15)
-        # ani.save(animation_filename, writer=FFwriter)
+        animator.save(animation_filename)
+    else:
+        animator.show()
 
-    plt.show()
-
-    return fig, ax
+    return animator.fig, animator.ax

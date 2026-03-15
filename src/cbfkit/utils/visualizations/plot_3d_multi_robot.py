@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FFMpegWriter, FuncAnimation
+from matplotlib.animation import FuncAnimation
 from matplotlib.gridspec import GridSpec
+
+from cbfkit.utils.animator import save_animation as _save_animation
 
 
 def plot_ellipse_3d(ax, center, radii, rotation, color="blue", alpha=0.2):
@@ -169,8 +171,7 @@ def animate_3d(
 
     # Save the animation if required
     if save_animation:
-        writer = FFMpegWriter(fps=15)
-        ani.save(animation_filename, writer=writer)
+        _save_animation(ani, animation_filename)
 
     # Show the plot
     plt.tight_layout()
@@ -456,12 +457,7 @@ def animate_3d_multi_robot(
 
     # Save the animation if required
     if save_animation:
-        print("plotting...")
-        if animation_filename.endswith(".gif"):
-            ani.save(animation_filename, writer="imagemagick", fps=15)
-        else:
-            writer = FFMpegWriter(fps=15)
-            ani.save(animation_filename, writer=writer)
+        _save_animation(ani, animation_filename)
 
     # Show the plot
     plt.tight_layout()

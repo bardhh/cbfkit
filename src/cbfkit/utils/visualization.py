@@ -187,10 +187,8 @@ def visualize_crowd(
 
     anim = animation.FuncAnimation(fig, animate, frames=len(states), interval=50, blit=True)
 
-    try:
-        anim.save(str(output_path), writer="ffmpeg", fps=20)
-    except Exception:
-        gif_path = output_path.with_suffix(".gif")
-        anim.save(str(gif_path), writer="pillow", fps=20)
+    from cbfkit.utils.animator import save_animation
+
+    save_animation(anim, str(output_path))
 
     plt.close()

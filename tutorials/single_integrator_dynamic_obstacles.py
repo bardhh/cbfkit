@@ -319,9 +319,9 @@ anim = animation.FuncAnimation(
 )
 
 # Save animation to file
-animation_path = os.path.abspath("trajectory_animation.mp4")
-anim.save(animation_path, writer="ffmpeg", fps=30)
-print(f"\nAnimation saved to: file://{animation_path}")
+from cbfkit.utils.animator import save_animation
+
+save_animation(anim, "trajectory_animation")
 
 # Show the final figure
 plt.show()

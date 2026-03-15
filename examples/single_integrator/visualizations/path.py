@@ -1,10 +1,5 @@
 """Trajectory plotting and animation with goal and obstacle visualization."""
-import matplotlib
-
-matplotlib.use("macosx")
-
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 
 
 #! PLOTTING
@@ -70,60 +65,21 @@ def animate(
     save_animation=False,
     animation_filename="system_behavior.gif",
 ):
-    def init():
-        trajectory.set_data([], [])
-        etrajectory.set_data([], [])
-        return (trajectory,)
+    from cbfkit.utils.animator import CBFAnimator
 
-    def update(frame):
-        trajectory.set_data(states[:frame, 0], states[:frame, 1])
-        etrajectory.set_data(estimates[:frame, 0], estimates[:frame, 1])
-        _ = states[frame]
-        _ = estimates[frame]
-        return (
-            trajectory,
-            etrajectory,
-        )
-
-    fig, ax = plt.subplots()
-
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-
-    desired_state_radius = 0.1
-    ax.plot(desired_state[0], desired_state[1], "ro", markersize=5, label="desired_state")
-
-    ax.add_patch(
-        plt.Circle(
-            desired_state,
-            desired_state_radius,
-            color="r",
-            fill=False,
-            linestyle="--",
-            linewidth=1,
-        )
+    animator = CBFAnimator(states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title)
+    animator.add_goal(desired_state[:2], radius=desired_state_radius)
+    animator.add_trajectory(
+        x_idx=0, y_idx=1, data=estimates,
+        color="tab:orange", label="Estimated Trajectory",
     )
-
-    (trajectory,) = ax.plot([], [], label="Trajectory")
-    (etrajectory,) = ax.plot([], [], label="Estimated Trajectory")
-
-    ax.set_xlim(x_lim[0], x_lim[1])
-    ax.set_ylim(y_lim[0], y_lim[1])
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    ax.set_title(title)
-    ax.legend(loc="best")
-    ax.grid()
-
-    ani = FuncAnimation(
-        fig, update, frames=len(states), init_func=init, blit=True, interval=dt * 100
+    animator.add_trajectory(
+        x_idx=0, y_idx=1,
+        color="tab:blue", label="Trajectory",
     )
 
     if save_animation:
-        ani.save(animation_filename, writer="imagemagick", fps=15)
-        import os
-        print(f"\nAnimation saved to: file://{os.path.abspath(animation_filename)}")
+        animator.save(animation_filename)
 
-    plt.show()
-
-    return fig, ax
+    animator.show()
+    return animator.fig, animator.ax

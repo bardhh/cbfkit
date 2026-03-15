@@ -25,6 +25,8 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from matplotlib.patches import Arrow, Circle
 
+from cbfkit.utils.animator import save_animation
+
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
@@ -273,15 +275,7 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
 
     anim = animation.FuncAnimation(fig, animate, frames=len(states), interval=50, blit=True)
 
-    try:
-        save_path = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.mp4")
-        anim.save(save_path, writer="ffmpeg", fps=20)
-        print(f"\nAnimation saved to: file://{save_path}")
-    except Exception as e:
-        print(f"MP4 save failed, trying GIF: {e}")
-        save_path = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.gif")
-        anim.save(save_path, writer="pillow", fps=15)
-        print(f"\nAnimation saved to: file://{save_path}")
+    save_animation(anim, "examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.mp4")
 
     plt.close()
 

@@ -1,6 +1,6 @@
-# matplotlib.use("macosx")
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+
+from cbfkit.utils.animator import CBFAnimator
 
 
 #! PLOTTING
@@ -35,62 +35,14 @@ def animate(
     num_robots=2,
 ):
     """Animate the system behavior for multiple single integrators."""
+    animator = CBFAnimator(states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title)
 
-    def init():
-        for i in range(num_robots):
-            trajectory[i].set_data([], [])
-        return trajectory
-
-    def update(frame):
-        for i in range(num_robots):
-            trajectory[i].set_data(states[:frame, 2 * i], states[:frame, 2 * i + 1])
-        _ = states[frame]
-        _ = estimates[frame]
-        return trajectory
-
-    fig, ax = plt.subplots()
-
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-
-    # for i in range(num_robots):
-    #     ax.plot(
-    #         desired_state[2 * i],
-    #         desired_state[2 * i + 1],
-    #         "ro",
-    #         markersize=5,
-    #         label="desired_state " + str(i + 1),
-    #     )
-    #     ax.add_patch(
-    #         plt.Circle(
-    #             desired_state[2 * i : 2 * i + 2],
-    #             desired_state_radius,
-    #             color="r",
-    #             fill=False,
-    #             linestyle="--",
-    #             linewidth=1,
-    #         )
-    #     )
-
-    trajectory = [0] * num_robots
     for i in range(num_robots):
-        (trajectory[i],) = ax.plot([], [])  # , label="Trajectory - robot " + str(i + 1))
-
-    ax.set_xlim(x_lim[0], x_lim[1])
-    ax.set_ylim(y_lim[0], y_lim[1])
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    ax.set_title(title)
-    ax.legend(loc="best")
-    ax.grid()
-
-    ani = FuncAnimation(
-        fig, update, frames=len(states), init_func=init, blit=True, interval=dt * 100
-    )
+        animator.add_trajectory(x_idx=2 * i, y_idx=2 * i + 1)
 
     if save_animation:
-        ani.save(animation_filename, writer="imagemagick", fps=15)
+        animator.save(animation_filename)
+    else:
+        animator.show()
 
-    plt.show()
-
-    return fig, ax
+    return animator.fig, animator.ax
