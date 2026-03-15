@@ -467,14 +467,10 @@ def create_animation(states, goal_state, num_humans, d_safe, dt, p_keys, p_value
 
     anim = animation.FuncAnimation(fig, animate, frames=len(states), interval=50, blit=True)
 
-    save_path = os.path.abspath("examples/differential_drive/human_aware_navigation/results/human_aware_animation.mp4")
-    try:
-        anim.save(save_path, writer="ffmpeg", fps=20)
-        print(f"\nAnimation saved to: file://{save_path}")
-    except Exception:
-        save_path_gif = save_path.replace("mp4", "gif")
-        anim.save(save_path_gif, writer="pillow", fps=20)
-        print(f"\nAnimation saved to: file://{save_path_gif}")
+    from cbfkit.utils.animator import save_animation
+
+    save_path = "examples/differential_drive/human_aware_navigation/results/human_aware_animation.mp4"
+    save_animation(anim, save_path)
 
     plt.close()
 

@@ -464,14 +464,10 @@ def create_multi_animation(results):
 
     anim = animation.FuncAnimation(fig, animate, frames=max_frames, interval=50, blit=True)
 
-    save_path = os.path.abspath("examples/differential_drive/human_aware_navigation/results/multi_scenario_animation.mp4")
-    try:
-        anim.save(save_path, writer="ffmpeg", fps=20)
-        print(f"\nAnimation saved to: file://{save_path}")
-    except Exception:
-        save_path_gif = save_path.replace("mp4", "gif")
-        anim.save(save_path_gif, writer="pillow", fps=20)
-        print(f"\nAnimation saved to: file://{save_path_gif}")
+    from cbfkit.utils.animator import save_animation
+
+    save_path = "examples/differential_drive/human_aware_navigation/results/multi_scenario_animation.mp4"
+    save_animation(anim, save_path)
 
     plt.close()
 

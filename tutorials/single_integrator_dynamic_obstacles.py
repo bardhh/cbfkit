@@ -219,109 +219,64 @@ x, u, z, p, dkeys, dvals, _, _ = simulator.execute(
 if os.getenv("CBFKIT_TEST_MODE"):
     sys.exit(0)
 
-import matplotlib.animation as animation
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
+import numpy as np
 
-# Extract trajectory (convert JAX arrays to numpy arrays)
-trajectory_x = x[:, 0].tolist()  # Convert to Python list
-trajectory_y = x[:, 1].tolist()
+from cbfkit.utils.animator import AnimationConfig, CBFAnimator
 
-# Obstacle trajectories
-trajectory_ox = x[:, 2].tolist()
-trajectory_oy = x[:, 3].tolist()
+# Convert states to numpy for CBFAnimator
+states_np = np.array(x)
 
-# Create a figure and axis for plotting the trajectory and obstacle
-fig, ax = plt.subplots(figsize=(6, 6))
+# Compute axis limits from agent and obstacle trajectories
+all_x = np.concatenate([states_np[:, 2 * i] for i in range(6)])
+all_y = np.concatenate([states_np[:, 2 * i + 1] for i in range(6)])
 
-# Add goal marker (add this before the circles)
-goal = plt.plot(-2, -2, "g*", markersize=15, label="Goal", zorder=4)
+animator = CBFAnimator(
+    states_np,
+    dt=1e-2,
+    x_lim=(float(all_x.min()) - 1, float(all_x.max()) + 1),
+    y_lim=(float(all_y.min()) - 1, float(all_y.max()) + 1),
+    title="Single Integrator Trajectory with Moving Obstacle",
+    config=AnimationConfig(blit=False, interval=20),
+)
+animator.add_goal((-2.0, -2.0), radius=0.25, color="g", label="Goal")
+animator.add_trajectory(x_idx=0, y_idx=1, color="b", label="Trajectory", linewidth=2)
 
+# Build to get axes for custom patches
+fig, ax = animator.build()
 
-# Visualization
+# Agent point marker
+(point,) = ax.plot([], [], "bo", markersize=6, label="Agent", zorder=3)
+
+# Obstacle circles (dynamic — updated per frame)
 circles = [
     patches.Circle(
-        (x[:, 2 * i + 2][0], x[:, 2 * i + 3][0]),
+        (states_np[0, 2 * i + 2], states_np[0, 2 * i + 3]),
         radius=0.5,
         edgecolor="r",
         facecolor=plt.cm.Set3(i / 5),
         alpha=0.5,
-        label=f"Obstacle {i+1}",
+        label=f"Obstacle {i + 1}",
         zorder=1,
     )
     for i in range(5)
 ]
 for circle in circles:
     ax.add_patch(circle)
-
-
-def init():
-    """Initialize animation objects."""
-    line.set_data([], [])
-    point.set_data([], [])
-    circle.center = (trajectory_ox[0], trajectory_oy[0])
-    return line, point, circle
-
-
-# Plot initial trajectory line
-(line,) = ax.plot([], [], "b-", linewidth=2, label="Trajectory", zorder=2)
-(point,) = ax.plot([], [], "bo", markersize=6, label="Agent", zorder=3)
-
-# Set plot limits
-ax.set_xlim(
-    min(min(trajectory_x), min(trajectory_ox)) - 1, max(max(trajectory_x), max(trajectory_ox)) + 1
-)
-ax.set_ylim(
-    min(min(trajectory_y), min(trajectory_oy)) - 1, max(max(trajectory_y), max(trajectory_oy)) + 1
-)
-ax.set_xlabel("X Position")
-ax.set_ylabel("Y Position")
-ax.set_title("Single Integrator Trajectory with Moving Obstacle")
-ax.grid(True)
 ax.legend()
 
 
-def init():
-    line.set_data([], [])
-    point.set_data([], [])
-    circle.center = (trajectory_ox[0], trajectory_oy[0])
-    return line, point, circle
-
-
-def update(frame):
-    """Update animation frame.
-
-    Args:
-        frame: Current animation frame number
-
-    Returns:
-        Updated plot objects
-    """
-    # Update agent trajectory
-    line.set_data(trajectory_x[:frame], trajectory_y[:frame])
-    point.set_data([trajectory_x[frame]], [trajectory_y[frame]])
-
-    # Update obstacle positions
+def custom_update(frame, _ax):
+    """Update agent point and moving obstacle circles each frame."""
+    point.set_data([states_np[frame, 0]], [states_np[frame, 1]])
     for i, circle in enumerate(circles):
-        circle.center = (x[:, 2 * i + 2][frame], x[:, 2 * i + 3][frame])
+        circle.center = (states_np[frame, 2 * i + 2], states_np[frame, 2 * i + 3])
+    return [point, *circles]
 
-    return (line, point, *circles)
 
-
-# Create the animation
-anim = animation.FuncAnimation(
-    fig,
-    update,
-    init_func=init,
-    frames=len(trajectory_x),
-    interval=20,
-    blit=True,
-)
-
-# Save animation to file
-from cbfkit.utils.animator import save_animation
-
-save_animation(anim, "trajectory_animation")
+animator.on_frame(custom_update)
+animator.save("trajectory_animation")
 
 # Show the final figure
 plt.show()
