@@ -219,6 +219,9 @@ plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 save = 1
 
 if plot:
+    # Set CBFKIT_VIS_BACKEND=plotly for interactive HTML, default is matplotlib
+    vis_backend = os.getenv("CBFKIT_VIS_BACKEND", "matplotlib")
+
     from cbfkit.utils.visualizations.plot_mppi_ellipsoid_environment import animate
 
     animate(
@@ -236,8 +239,6 @@ if plot:
         obstacles=obstacles,
         ellipsoids=ellipsoids,
         save_animation=save,
-        animation_filename=target_directory + "/" + model_name,  # + ".mp4",
+        animation_filename=target_directory + "/" + model_name,
+        backend=vis_backend,
     )
-
-x.block_until_ready()
-print("Simulation Finished Successfully")
