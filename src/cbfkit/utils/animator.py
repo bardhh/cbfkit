@@ -257,7 +257,7 @@ class CBFAnimator:
         y_lim: Tuple[float, float] = (-4, 4),
         title: str = "System Behavior",
         aspect: Optional[str] = None,
-        backend: str = "matplotlib",
+        backend: str = "plotly",
         config: Optional[AnimationConfig] = None,
     ):
         if backend not in ("matplotlib", "plotly"):
@@ -537,20 +537,26 @@ class CBFAnimator:
         if self._fig is None:
             self._build_matplotlib()
 
+        # Real-time: interval in ms matches the simulation timestep
+        interval_ms = self._dt * 1000
+
         self._anim = mpl_animation.FuncAnimation(
             self._fig,
             self._update_func,
             frames=len(self._states),
             init_func=self._init_func,
             blit=self._config.blit,
-            interval=self._config.interval,
+            interval=interval_ms,
         )
         return self._anim
 
     def _save_matplotlib(self, path: str, config: Optional[AnimationConfig] = None) -> str:
         if self._anim is None:
             self._animate_matplotlib()
-        return save_animation(self._anim, path, config or self._config)
+        # Use real-time fps derived from dt
+        save_cfg = AnimationConfig(**(config or self._config).__dict__)
+        save_cfg.fps = int(round(1.0 / self._dt))
+        return save_animation(self._anim, path, save_cfg)
 
     def _show_matplotlib(self):
         if self._anim is None:
@@ -569,6 +575,9 @@ class CBFAnimator:
         frame_indices = list(range(0, n_total, step))
         if frame_indices[-1] != n_total - 1:
             frame_indices.append(n_total - 1)
+
+        # Real-time: each frame covers step * dt seconds of simulation
+        frame_duration_ms = self._dt * step * 1000
 
         # --- layout shapes for static elements ---
         shapes: list = []
@@ -707,48 +716,58 @@ class CBFAnimator:
             )
 
         # --- assemble figure ---
-        width_px = int(cfg.figsize[0] * cfg.dpi)
-        height_px = int(cfg.figsize[1] * cfg.dpi)
-
-        scaleanchor = "x" if self._aspect == "equal" else None
+        # Force square plot area with constrained axes
+        plot_size = 600
 
         fig = go.Figure(
             data=base_traces,
             frames=frames,
             layout=go.Layout(
-                title=dict(text=self._title),
+                title=dict(
+                    text=self._title,
+                    x=0.5,
+                    xanchor="center",
+                    font=dict(size=16),
+                ),
                 xaxis=dict(
                     title="x [m]",
                     range=list(self._x_lim),
                     showgrid=True,
                     gridcolor="rgba(0,0,0,0.1)",
+                    constrain="domain",
                 ),
                 yaxis=dict(
                     title="y [m]",
                     range=list(self._y_lim),
                     showgrid=True,
                     gridcolor="rgba(0,0,0,0.1)",
-                    scaleanchor=scaleanchor,
+                    scaleanchor="x",
+                    scaleratio=1,
+                    constrain="domain",
                 ),
                 shapes=shapes,
-                width=width_px,
-                height=height_px,
+                width=plot_size + 90,
+                height=plot_size + 160,
+                margin=dict(l=60, r=30, t=60, b=100),
                 updatemenus=[
                     dict(
                         type="buttons",
                         showactive=False,
-                        y=0,
+                        y=-0.32,
                         x=0.5,
                         xanchor="center",
+                        yanchor="top",
+                        direction="left",
+                        pad=dict(t=0, r=10),
                         buttons=[
                             dict(
-                                label="Play",
+                                label="\u25b6 Play",
                                 method="animate",
                                 args=[
                                     None,
                                     dict(
                                         frame=dict(
-                                            duration=cfg.interval,
+                                            duration=frame_duration_ms,
                                             redraw=True,
                                         ),
                                         fromcurrent=True,
@@ -757,7 +776,7 @@ class CBFAnimator:
                                 ],
                             ),
                             dict(
-                                label="Pause",
+                                label="\u23f8 Pause",
                                 method="animate",
                                 args=[
                                     [None],
@@ -791,7 +810,8 @@ class CBFAnimator:
                         ],
                         x=0.1,
                         len=0.8,
-                        y=-0.05,
+                        y=-0.08,
+                        yanchor="top",
                         currentvalue=dict(
                             prefix="Time: ",
                             visible=True,
@@ -800,6 +820,16 @@ class CBFAnimator:
                         transition=dict(duration=0),
                     )
                 ],
+                legend=dict(
+                    x=1.0,
+                    y=1.0,
+                    xanchor="right",
+                    yanchor="top",
+                    bgcolor="rgba(255,255,255,0.8)",
+                    bordercolor="rgba(0,0,0,0.2)",
+                    borderwidth=1,
+                ),
+                template="plotly_white",
             ),
         )
 
@@ -898,9 +928,19 @@ class CBFAnimator:
 
 
 def _ellipse_svg_path(cx: float, cy: float, rx: float, ry: float) -> str:
-    """Return an SVG path string for an axis-aligned ellipse."""
+    """Return an SVG path string for an axis-aligned ellipse.
+
+    Uses four cubic Bezier segments (the standard circle-to-Bezier
+    approximation scaled to ``rx``, ``ry``).  Plotly layout shapes do
+    **not** support SVG arc (``A``) commands, so Bezier curves are required.
+    """
+    # Kappa: optimal handle length for a quarter-circle Bezier approximation
+    k = 0.5522847498
+    kx, ky = rx * k, ry * k
     return (
-        f"M {cx - rx},{cy} "
-        f"A {rx},{ry} 0 1,0 {cx + rx},{cy} "
-        f"A {rx},{ry} 0 1,0 {cx - rx},{cy} Z"
+        f"M {cx},{cy - ry} "
+        f"C {cx + kx},{cy - ry} {cx + rx},{cy - ky} {cx + rx},{cy} "
+        f"C {cx + rx},{cy + ky} {cx + kx},{cy + ry} {cx},{cy + ry} "
+        f"C {cx - kx},{cy + ry} {cx - rx},{cy + ky} {cx - rx},{cy} "
+        f"C {cx - rx},{cy - ky} {cx - kx},{cy - ry} {cx},{cy - ry} Z"
     )

@@ -81,10 +81,11 @@ def animate(
     title="System Behavior",
     save_animation=True,
     animation_filename="system_behavior.gif",
+    backend="plotly",
 ):
     from cbfkit.utils.animator import CBFAnimator
 
-    animator = CBFAnimator(states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title)
+    animator = CBFAnimator(states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title, backend=backend)
     animator.add_goal(desired_state[:2], radius=desired_state_radius)
     if obstacles and ellipsoids:
         animator.add_obstacles(obstacles, ellipsoid_radii=ellipsoids)
