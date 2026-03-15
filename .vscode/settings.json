@@ -9,5 +9,6 @@
     "source.organizeImports": "explicit"
   },
   "python.terminal.executeInFileDir": false,
-  "jupyter.notebookFileRoot": "${workspaceFolder}"
+  "jupyter.notebookFileRoot": "${workspaceFolder}",
+  "python-envs.defaultEnvManager": "ms-python.python:pyenv"
 }
