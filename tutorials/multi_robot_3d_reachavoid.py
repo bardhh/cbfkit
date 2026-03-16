@@ -222,7 +222,7 @@ mppi_args = {
     "robot_state_dim": STATE_DIM,
     "robot_control_dim": CONTROL_DIM,
     "prediction_horizon": 120,
-    "num_samples": 12500,
+    "num_samples": 5000,
     "plot_samples": 0,
     "time_step": DT,
     "use_GPU": False,
