@@ -12,10 +12,6 @@ from typing import Any, List, Optional
 
 import numpy as np
 
-# Re-export for any external callers
-from cbfkit.utils.animator import _get_fading_segments as get_fading_segments  # noqa: F401
-
-
 _PED_COLORS = ["red", "orange", "purple", "brown", "pink"]
 
 # Plotly tab10-equivalent colours
@@ -139,11 +135,12 @@ def _plot_ellipse_3d(ax, center, radii, rotation, color="blue", alpha=0.2):
     y = radii[1] * np.outer(np.sin(u), np.sin(v))
     z = radii[2] * np.outer(np.ones_like(u), np.cos(v))
 
-    for i in range(len(x)):
-        for j in range(len(x)):
-            [x[i, j], y[i, j], z[i, j]] = (
-                np.dot(rotation, [x[i, j], y[i, j], z[i, j]]) + center
-            )
+    pts = np.stack([x.ravel(), y.ravel(), z.ravel()], axis=0)  # (3, n*n)
+    pts = (rotation @ pts).T + center  # (n*n, 3)
+    n = len(u)
+    x = pts[:, 0].reshape(n, n)
+    y = pts[:, 1].reshape(n, n)
+    z = pts[:, 2].reshape(n, n)
 
     ax.plot_surface(x, y, z, color=color, rstride=4, cstride=4, alpha=alpha)
 
@@ -175,17 +172,15 @@ def _ellipsoid_mesh(center, radii, rotation, n=12):
     pts = np.stack([x.ravel(), y.ravel(), z.ravel()], axis=0)  # (3, n*n)
     pts = (rotation @ pts).T + center  # (n*n, 3)
 
-    # Build triangle indices for the grid
-    ii, jj, kk = [], [], []
-    for i in range(n - 1):
-        for j in range(n - 1):
-            p0 = i * n + j
-            p1 = p0 + 1
-            p2 = (i + 1) * n + j
-            p3 = p2 + 1
-            ii.extend([p0, p0])
-            jj.extend([p1, p2])
-            kk.extend([p2, p3])
+    # Build triangle indices for the grid (vectorized)
+    rows, cols = np.meshgrid(np.arange(n - 1), np.arange(n - 1), indexing="ij")
+    p0 = (rows * n + cols).ravel()
+    p1 = p0 + 1
+    p2 = p0 + n
+    p3 = p2 + 1
+    ii = np.concatenate([p0, p0]).tolist()
+    jj = np.concatenate([p1, p2]).tolist()
+    kk = np.concatenate([p2, p3]).tolist()
     return pts[:, 0], pts[:, 1], pts[:, 2], ii, jj, kk
 
 
@@ -204,16 +199,16 @@ def _compute_distance_metrics(states, desired_states, num_robots, sdim,
             states[:, idx:idx + 3] - desired_states[idx:idx + 3], axis=1,
         )
 
-    # Min inter-robot distances
+    # Min inter-robot distances (vectorized over robots)
     min_dists = None
     if include_min_dist:
         min_dists = np.zeros((N, num_robots))
         for t in range(N):
             positions = states[t, :].reshape(num_robots, sdim)
-            for i in range(num_robots):
-                d = np.linalg.norm(positions - positions[i], axis=1)
-                d[i] = np.inf
-                min_dists[t, i] = np.min(d)
+            diffs = positions[:, np.newaxis, :] - positions[np.newaxis, :, :]
+            dists = np.linalg.norm(diffs, axis=2)
+            np.fill_diagonal(dists, np.inf)
+            min_dists[t, :] = np.min(dists, axis=1)
 
     # Min obstacle distances
     obs_dists = None
@@ -245,7 +240,11 @@ def _visualize_3d_plotly(
     include_min_distance_to_obstacles_plot, threshold,
     goal_dists, min_dists, obs_dists,
 ):
-    from cbfkit.utils.animator import _require_plotly
+    from cbfkit.utils.animator import (
+        _compute_plotly_frame_step,
+        _plotly_animation_controls,
+        _require_plotly,
+    )
     _require_plotly()
 
     import plotly.graph_objects as go
@@ -255,18 +254,10 @@ def _visualize_3d_plotly(
     time = np.arange(N) * dt
     colors = [_PLOTLY_TAB10[i % len(_PLOTLY_TAB10)] for i in range(num_robots)]
 
-    # --- frame downsampling ---
     # 3D scenes are heavier to render; use a higher floor than 2D
-    max_frames = 200
-    _MIN_FRAME_MS = 80
-    min_step = max(1, int(np.ceil(_MIN_FRAME_MS / (dt * 1000))))
-    step = max(min_step, N // max_frames)
-    frame_indices = list(range(0, N, step))
-    if frame_indices[-1] != N - 1:
-        frame_indices.append(N - 1)
-    # Subtract estimated render overhead so wall-clock ≈ real-time
-    _RENDER_OVERHEAD_MS = 30
-    frame_duration_ms = max(1, dt * step * 1000 - _RENDER_OVERHEAD_MS)
+    frame_indices, frame_duration_ms = _compute_plotly_frame_step(
+        dt, N, max_frames=200, min_frame_ms=80,
+    )
 
     # --- subplot layout ---
     num_cols = 2
@@ -456,6 +447,9 @@ def _visualize_3d_plotly(
     fig.frames = frames
 
     # --- scene + axis layout ---
+    menus, sliders = _plotly_animation_controls(
+        frames, frame_duration_ms, button_y=-0.25,
+    )
     fig.update_layout(
         scene=dict(
             xaxis=dict(range=list(x_lim), title="X [m]"),
@@ -467,60 +461,8 @@ def _visualize_3d_plotly(
         height=500,
         margin=dict(l=30, r=30, t=60, b=100),
         template="plotly_white",
-        updatemenus=[
-            dict(
-                type="buttons",
-                showactive=False,
-                y=-0.25, x=0.5,
-                xanchor="center", yanchor="top",
-                direction="left",
-                buttons=[
-                    dict(
-                        label="\u25b6 Play",
-                        method="animate",
-                        args=[
-                            None,
-                            dict(
-                                frame=dict(duration=frame_duration_ms, redraw=True),
-                                fromcurrent=True,
-                                transition=dict(duration=0),
-                            ),
-                        ],
-                    ),
-                    dict(
-                        label="\u23f8 Pause",
-                        method="animate",
-                        args=[
-                            [None],
-                            dict(
-                                frame=dict(duration=0, redraw=False),
-                                mode="immediate",
-                                transition=dict(duration=0),
-                            ),
-                        ],
-                    ),
-                ],
-            )
-        ],
-        sliders=[
-            dict(
-                active=0,
-                steps=[
-                    dict(
-                        args=[[f.name], dict(frame=dict(duration=0, redraw=True),
-                                             mode="immediate",
-                                             transition=dict(duration=0))],
-                        label=f.name,
-                        method="animate",
-                    )
-                    for f in frames
-                ],
-                x=0.1, len=0.8,
-                y=-0.08, yanchor="top",
-                currentvalue=dict(prefix="Time: ", visible=True, xanchor="center"),
-                transition=dict(duration=0),
-            )
-        ],
+        updatemenus=menus,
+        sliders=sliders,
     )
 
     # 2D subplot axis labels
@@ -557,7 +499,7 @@ def _visualize_3d_plotly(
 def _visualize_3d_matplotlib(
     states, desired_states, desired_state_radius, num_robots,
     ellipse_centers, ellipse_radii, ellipse_rotations,
-    x_lim, y_lim, z_lim, dt, sdim, title, save_animation_flag,
+    x_lim, y_lim, z_lim, dt, sdim, title, save_animation,
     animation_filename, include_min_distance_plot,
     include_min_distance_to_obstacles_plot, threshold,
     goal_dists, min_dists, obs_dists,
@@ -700,7 +642,7 @@ def _visualize_3d_matplotlib(
 
     plt.tight_layout()
 
-    if save_animation_flag:
+    if save_animation:
         Path(animation_filename).parent.mkdir(parents=True, exist_ok=True)
         _save_animation(ani, animation_filename)
 
@@ -814,4 +756,4 @@ def visualize_3d_multi_robot(
     if backend == "plotly":
         return _visualize_3d_plotly(save_animation=save_animation, **common)
     else:
-        return _visualize_3d_matplotlib(save_animation_flag=save_animation, **common)
+        return _visualize_3d_matplotlib(save_animation=save_animation, **common)

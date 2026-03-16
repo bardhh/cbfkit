@@ -281,6 +281,95 @@ def _circle_shape(cx: float, cy: float, r: float, color: str,
 # Number of opacity buckets for Plotly fading-line approximation
 _PLOTLY_FADE_BUCKETS = 4
 
+# Scatter overlay opacity factor (relative to trajectory alpha)
+_SCATTER_ALPHA_FACTOR = 0.55
+
+
+def _compute_plotly_frame_step(dt: float, n_total: int, max_frames: int = 200,
+                               min_frame_ms: float = 40):
+    """Compute downsampled frame indices and duration for Plotly animations.
+
+    Returns ``(frame_indices, frame_duration_ms)``.
+    """
+    if dt <= 0:
+        raise ValueError(f"dt must be positive, got {dt}")
+    min_step = max(1, int(np.ceil(min_frame_ms / (dt * 1000))))
+    step = max(min_step, n_total // max_frames)
+    frame_indices = list(range(0, n_total, step))
+    if frame_indices[-1] != n_total - 1:
+        frame_indices.append(n_total - 1)
+    frame_duration_ms = dt * step * 1000
+    return frame_indices, frame_duration_ms
+
+
+def _plotly_animation_controls(frames, frame_duration_ms: float,
+                               button_y: float = -0.32,
+                               slider_y: float = -0.08):
+    """Build Plotly ``updatemenus`` (play/pause) and ``sliders`` dicts."""
+    updatemenus = [
+        dict(
+            type="buttons",
+            showactive=False,
+            y=button_y, x=0.5,
+            xanchor="center", yanchor="top",
+            direction="left",
+            pad=dict(t=0, r=10),
+            buttons=[
+                dict(
+                    label="\u25b6 Play",
+                    method="animate",
+                    args=[
+                        None,
+                        dict(
+                            frame=dict(duration=frame_duration_ms, redraw=True),
+                            fromcurrent=True,
+                            transition=dict(duration=0),
+                        ),
+                    ],
+                ),
+                dict(
+                    label="\u23f8 Pause",
+                    method="animate",
+                    args=[
+                        [None],
+                        dict(
+                            frame=dict(duration=0, redraw=False),
+                            mode="immediate",
+                            transition=dict(duration=0),
+                        ),
+                    ],
+                ),
+            ],
+        )
+    ]
+
+    sliders = [
+        dict(
+            active=0,
+            steps=[
+                dict(
+                    args=[
+                        [f.name],
+                        dict(
+                            frame=dict(duration=0, redraw=True),
+                            mode="immediate",
+                            transition=dict(duration=0),
+                        ),
+                    ],
+                    label=f.name,
+                    method="animate",
+                )
+                for f in frames
+            ],
+            x=0.1, len=0.8,
+            y=slider_y, yanchor="top",
+            currentvalue=dict(prefix="Time: ", visible=True, xanchor="center"),
+            transition=dict(duration=0),
+        )
+    ]
+
+    return updatemenus, sliders
+
 
 # ---------------------------------------------------------------------------
 # CBFAnimator
@@ -350,17 +439,14 @@ class CBFAnimator:
         self._show_time: bool = False
         self._frame_callbacks: List[Callable] = []
 
-        # Matplotlib objects (created by build / animate)
-        self._fig = None
-        self._ax = None
-        self._anim = None
+        # Built objects (created by build / animate)
+        self._fig = None          # matplotlib Figure or Plotly Figure
+        self._ax = None           # matplotlib Axes (None for Plotly)
+        self._anim = None         # matplotlib FuncAnimation (None for Plotly)
         self._traj_artists: List = []
         self._agent_artists: List = []
         self._prediction_artists: List = []
         self._time_text = None
-
-        # Plotly figure
-        self._plotly_fig = None
 
     # -- declarative element API (all return self for chaining) -------------
 
@@ -701,7 +787,7 @@ class CBFAnimator:
                     linestyle="None",
                     marker=".",
                     markersize=2,
-                    alpha=t["alpha"] * 0.55,
+                    alpha=t["alpha"] * _SCATTER_ALPHA_FACTOR,
                     color=t["color"],
                     zorder=t["zorder"] - 1,
                     label=t["label"],
@@ -918,17 +1004,9 @@ class CBFAnimator:
         """Build an animated Plotly figure from the declared elements."""
         cfg = self._config
         n_total = len(self._states)
-        # Plotly has ~30-50ms render overhead per frame. Ensure step is
-        # large enough that the requested frame duration is achievable.
-        _MIN_FRAME_MS = 40  # practical floor for smooth Plotly playback
-        min_step_for_realtime = max(1, int(np.ceil(_MIN_FRAME_MS / (self._dt * 1000))))
-        step = max(min_step_for_realtime, n_total // cfg.plotly_max_frames)
-        frame_indices = list(range(0, n_total, step))
-        if frame_indices[-1] != n_total - 1:
-            frame_indices.append(n_total - 1)
-
-        # Real-time: each frame covers step * dt seconds of simulation
-        frame_duration_ms = self._dt * step * 1000
+        frame_indices, frame_duration_ms = _compute_plotly_frame_step(
+            self._dt, n_total, max_frames=cfg.plotly_max_frames,
+        )
 
         # --- static layout shapes (goals + obstacles) ---
         static_shapes: list = []
@@ -995,7 +1073,7 @@ class CBFAnimator:
             css = _to_css_color(spec["color"])
             mode = "markers" if spec["style"] == "scatter" else "lines"
             marker_opts = (
-                dict(size=3, color=css, opacity=spec["alpha"] * 0.55)
+                dict(size=3, color=css, opacity=spec["alpha"] * _SCATTER_ALPHA_FACTOR)
                 if spec["style"] == "scatter"
                 else dict()
             )
@@ -1173,6 +1251,7 @@ class CBFAnimator:
 
         # --- assemble figure ---
         plot_size = 600
+        menus, sliders = _plotly_animation_controls(frames, frame_duration_ms)
 
         fig = go.Figure(
             data=base_traces,
@@ -1195,81 +1274,15 @@ class CBFAnimator:
                     range=list(self._y_lim),
                     showgrid=True,
                     gridcolor="rgba(0,0,0,0.1)",
-                    scaleanchor="x",
-                    scaleratio=1,
+                    **(dict(scaleanchor="x", scaleratio=1) if self._aspect == "equal" else {}),
                     constrain="domain",
                 ),
                 shapes=static_shapes,
                 width=plot_size + 90,
                 height=plot_size + 160,
                 margin=dict(l=60, r=30, t=60, b=100),
-                updatemenus=[
-                    dict(
-                        type="buttons",
-                        showactive=False,
-                        y=-0.32, x=0.5,
-                        xanchor="center", yanchor="top",
-                        direction="left",
-                        pad=dict(t=0, r=10),
-                        buttons=[
-                            dict(
-                                label="\u25b6 Play",
-                                method="animate",
-                                args=[
-                                    None,
-                                    dict(
-                                        frame=dict(
-                                            duration=frame_duration_ms,
-                                            redraw=True,
-                                        ),
-                                        fromcurrent=True,
-                                        transition=dict(duration=0),
-                                    ),
-                                ],
-                            ),
-                            dict(
-                                label="\u23f8 Pause",
-                                method="animate",
-                                args=[
-                                    [None],
-                                    dict(
-                                        frame=dict(duration=0, redraw=False),
-                                        mode="immediate",
-                                        transition=dict(duration=0),
-                                    ),
-                                ],
-                            ),
-                        ],
-                    )
-                ],
-                sliders=[
-                    dict(
-                        active=0,
-                        steps=[
-                            dict(
-                                args=[
-                                    [f.name],
-                                    dict(
-                                        frame=dict(duration=0, redraw=True),
-                                        mode="immediate",
-                                        transition=dict(duration=0),
-                                    ),
-                                ],
-                                label=f.name,
-                                method="animate",
-                            )
-                            for f in frames
-                        ],
-                        x=0.1, len=0.8,
-                        y=-0.08, yanchor="top",
-                        currentvalue=dict(
-                            prefix="Time: ",
-                            visible=True,
-                            xanchor="center",
-                        ),
-                        transition=dict(duration=0),
-                    )
-                ],
+                updatemenus=menus,
+                sliders=sliders,
                 legend=dict(
                     x=1.0, y=1.0,
                     xanchor="right", yanchor="top",
@@ -1281,24 +1294,24 @@ class CBFAnimator:
             ),
         )
 
-        self._plotly_fig = fig
+        self._fig = fig
         return fig
 
     def _save_plotly(self, path: str) -> str:
-        if self._plotly_fig is None:
+        if self._fig is None:
             self._build_plotly()
 
         output_path = Path(path).with_suffix(".html")
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        self._plotly_fig.write_html(str(output_path), auto_open=False)
+        self._fig.write_html(str(output_path), auto_open=False)
         abs_path = str(output_path.resolve())
         print(f"\nInteractive animation saved to: file://{abs_path}")
         return abs_path
 
     def _show_plotly(self):
-        if self._plotly_fig is None:
+        if self._fig is None:
             self._build_plotly()
-        self._plotly_fig.show()
+        self._fig.show()
 
     # ======================================================================
     # Public API -- dispatches to the active backend
@@ -1321,9 +1334,9 @@ class CBFAnimator:
         (which already contains the animation frames).
         """
         if self._backend == "plotly":
-            if self._plotly_fig is None:
+            if self._fig is None:
                 self._build_plotly()
-            return self._plotly_fig
+            return self._fig
         return self._animate_matplotlib()
 
     def save(self, path: str, config: Optional[AnimationConfig] = None) -> str:
@@ -1353,8 +1366,6 @@ class CBFAnimator:
     @property
     def fig(self):
         """The matplotlib Figure or Plotly Figure (available after :meth:`build`)."""
-        if self._backend == "plotly":
-            return self._plotly_fig
         return self._fig
 
     @property
@@ -1366,5 +1377,5 @@ class CBFAnimator:
     def animation(self):
         """The FuncAnimation or Plotly Figure (available after :meth:`animate`)."""
         if self._backend == "plotly":
-            return self._plotly_fig
+            return self._fig
         return self._anim

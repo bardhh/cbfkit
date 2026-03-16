@@ -61,13 +61,13 @@ class TestAnimationConfig:
 
 
 # ---------------------------------------------------------------------------
-# CBFAnimator – build
+# CBFAnimator – build (matplotlib)
 # ---------------------------------------------------------------------------
 
 
 class TestCBFAnimatorBuild:
     def test_build_creates_figure(self, simple_states):
-        a = CBFAnimator(simple_states, dt=0.1)
+        a = CBFAnimator(simple_states, dt=0.1, backend="matplotlib")
         fig, ax = a.build()
         assert fig is not None
         assert ax is not None
@@ -78,7 +78,7 @@ class TestCBFAnimatorBuild:
         plt.close(fig)
 
     def test_build_sets_limits_and_labels(self, simple_states):
-        a = CBFAnimator(simple_states, x_lim=(-5, 5), y_lim=(-3, 3), title="Test")
+        a = CBFAnimator(simple_states, x_lim=(-5, 5), y_lim=(-3, 3), title="Test", backend="matplotlib")
         fig, ax = a.build()
         assert ax.get_xlim() == (-5, 5)
         assert ax.get_ylim() == (-3, 3)
@@ -88,7 +88,7 @@ class TestCBFAnimatorBuild:
         plt.close(fig)
 
     def test_aspect_equal(self, simple_states):
-        a = CBFAnimator(simple_states, aspect="equal")
+        a = CBFAnimator(simple_states, aspect="equal", backend="matplotlib")
         fig, ax = a.build()
         # matplotlib normalizes "equal" to 1.0
         assert ax.get_aspect() in ("equal", 1.0)
@@ -97,7 +97,7 @@ class TestCBFAnimatorBuild:
         plt.close(fig)
 
     def test_add_goal(self, simple_states):
-        a = CBFAnimator(simple_states)
+        a = CBFAnimator(simple_states, backend="matplotlib")
         ret = a.add_goal([1.0, 2.0], radius=0.5, color="green")
         assert ret is a  # fluent API
         fig, ax = a.build()
@@ -109,7 +109,7 @@ class TestCBFAnimatorBuild:
         plt.close(fig)
 
     def test_add_obstacle_circle(self, simple_states):
-        a = CBFAnimator(simple_states)
+        a = CBFAnimator(simple_states, backend="matplotlib")
         a.add_obstacle([0, 0], radius=1.0)
         fig, ax = a.build()
         circles = [p for p in ax.patches if isinstance(p, matplotlib.patches.Circle)]
@@ -119,7 +119,7 @@ class TestCBFAnimatorBuild:
         plt.close(fig)
 
     def test_add_obstacle_ellipse(self, simple_states):
-        a = CBFAnimator(simple_states)
+        a = CBFAnimator(simple_states, backend="matplotlib")
         a.add_obstacle([0, 0], ellipse_radii=(1.0, 0.5))
         fig, ax = a.build()
         ellipses = [p for p in ax.patches if isinstance(p, matplotlib.patches.Ellipse)]
@@ -131,7 +131,7 @@ class TestCBFAnimatorBuild:
     def test_add_obstacles_bulk(self, simple_states):
         centers = [[0, 0], [1, 1], [2, 2]]
         radii = [0.5, 0.3, 0.4]
-        a = CBFAnimator(simple_states)
+        a = CBFAnimator(simple_states, backend="matplotlib")
         ret = a.add_obstacles(centers, radii=radii)
         assert ret is a
         assert len(a._obstacles) == 3
@@ -141,7 +141,7 @@ class TestCBFAnimatorBuild:
         plt.close(fig)
 
     def test_add_trajectory_line(self, simple_states):
-        a = CBFAnimator(simple_states)
+        a = CBFAnimator(simple_states, backend="matplotlib")
         ret = a.add_trajectory(x_idx=0, y_idx=1, label="Traj")
         assert ret is a
         fig, ax = a.build()
@@ -151,7 +151,7 @@ class TestCBFAnimatorBuild:
         plt.close(fig)
 
     def test_add_trajectory_scatter(self, simple_states, estimates):
-        a = CBFAnimator(simple_states)
+        a = CBFAnimator(simple_states, backend="matplotlib")
         a.add_trajectory(x_idx=0, y_idx=1, data=estimates, style="scatter", label="Est")
         fig, ax = a.build()
         assert len(a._traj_artists) == 1
@@ -160,7 +160,7 @@ class TestCBFAnimatorBuild:
         plt.close(fig)
 
     def test_show_time(self, simple_states):
-        a = CBFAnimator(simple_states, dt=0.1)
+        a = CBFAnimator(simple_states, dt=0.1, backend="matplotlib")
         ret = a.show_time()
         assert ret is a
         fig, ax = a.build()
@@ -171,13 +171,13 @@ class TestCBFAnimatorBuild:
 
 
 # ---------------------------------------------------------------------------
-# CBFAnimator – animate
+# CBFAnimator – animate (matplotlib)
 # ---------------------------------------------------------------------------
 
 
 class TestCBFAnimatorAnimate:
     def test_animate_returns_func_animation(self, simple_states):
-        a = CBFAnimator(simple_states, dt=0.1)
+        a = CBFAnimator(simple_states, dt=0.1, backend="matplotlib")
         a.add_trajectory(x_idx=0, y_idx=1)
         anim = a.animate()
         assert anim is not None
@@ -187,7 +187,7 @@ class TestCBFAnimatorAnimate:
         plt.close(a.fig)
 
     def test_update_sets_trajectory_data(self, simple_states):
-        a = CBFAnimator(simple_states, dt=0.1)
+        a = CBFAnimator(simple_states, dt=0.1, backend="matplotlib")
         a.add_trajectory(x_idx=0, y_idx=1)
         a.build()
         artists = a._update_func(10)
@@ -200,7 +200,7 @@ class TestCBFAnimatorAnimate:
         plt.close(a.fig)
 
     def test_update_with_time_text(self, simple_states):
-        a = CBFAnimator(simple_states, dt=0.5)
+        a = CBFAnimator(simple_states, dt=0.5, backend="matplotlib")
         a.add_trajectory(x_idx=0, y_idx=1)
         a.show_time()
         a.build()
@@ -217,7 +217,7 @@ class TestCBFAnimatorAnimate:
             calls.append(frame)
             return []
 
-        a = CBFAnimator(simple_states, dt=0.1)
+        a = CBFAnimator(simple_states, dt=0.1, backend="matplotlib")
         a.add_trajectory(x_idx=0, y_idx=1)
         a.on_frame(my_callback)
         a.build()
@@ -229,7 +229,7 @@ class TestCBFAnimatorAnimate:
         plt.close(a.fig)
 
     def test_multiple_trajectories(self, simple_states, estimates):
-        a = CBFAnimator(simple_states, dt=0.1)
+        a = CBFAnimator(simple_states, dt=0.1, backend="matplotlib")
         a.add_trajectory(x_idx=0, y_idx=1, label="True")
         a.add_trajectory(x_idx=0, y_idx=1, data=estimates, style="scatter", label="Est")
         a.build()
@@ -241,13 +241,13 @@ class TestCBFAnimatorAnimate:
 
 
 # ---------------------------------------------------------------------------
-# CBFAnimator – save
+# CBFAnimator – save (matplotlib)
 # ---------------------------------------------------------------------------
 
 
 class TestCBFAnimatorSave:
     def test_save_creates_file(self, simple_states, tmp_path):
-        a = CBFAnimator(simple_states, dt=0.1)
+        a = CBFAnimator(simple_states, dt=0.1, backend="matplotlib")
         a.add_trajectory(x_idx=0, y_idx=1)
         path = str(tmp_path / "test_anim.mp4")
         result = a.save(path)
@@ -259,7 +259,7 @@ class TestCBFAnimatorSave:
 
     def test_save_gif_fallback(self, simple_states, tmp_path):
         """Force GIF fallback by using a config and verifying some file is created."""
-        a = CBFAnimator(simple_states, dt=0.1, config=AnimationConfig(fps=5, dpi=50))
+        a = CBFAnimator(simple_states, dt=0.1, config=AnimationConfig(fps=5, dpi=50), backend="matplotlib")
         a.add_trajectory(x_idx=0, y_idx=1)
         path = str(tmp_path / "test_anim.mp4")
         result = a.save(path)
