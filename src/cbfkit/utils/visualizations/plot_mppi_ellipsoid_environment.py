@@ -1,6 +1,6 @@
-# matplotlib.use("macosx")
+"""MPPI trajectory animation in an ellipsoidal obstacle environment."""
+
 import matplotlib.pyplot as plt
-from matplotlib.animation import FFMpegWriter
 from matplotlib.patches import Ellipse
 
 
@@ -36,17 +36,6 @@ def plot_trajectory(
             linewidth=1,
         )
     )
-    # for x, y, r in zip(CX, CY, R):
-    #     ax.add_patch(
-    #         plt.Circle(
-    #             (x, y),
-    #             r,
-    #             color="k",
-    #             fill=True,
-    #             linestyle="-",
-    #             linewidth=1,
-    #         )
-    #     )
     for obs, ell in zip(obstacles, ellipsoids):
         ax.add_patch(
             Ellipse(
@@ -64,7 +53,6 @@ def plot_trajectory(
     ax.set_title(title)
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles[:2], labels[:2])
-    # ax.legend()
     ax.grid()
 
     if savefile is not None:
@@ -90,108 +78,85 @@ def animate(
     title="System Behavior",
     save_animation=True,
     animation_filename="system_behavior.gif",
+    backend="matplotlib",
 ):
-    """Animate the system behavior in an ellipsoidal environment."""
+    """Animate the system behavior in an ellipsoidal environment.
 
-    def init():
-        trajectory.set_data([], [])
-        etrajectory.set_data([], [])
-        return (trajectory,)
+    Parameters
+    ----------
+    backend : str
+        ``"matplotlib"`` for MP4/GIF with MPPI sampled trajectories, or
+        ``"plotly"`` for interactive HTML (trajectory + obstacles only).
+    """
+    import numpy as np
 
-    def update(frame, trajectory, etrajectory, mppi_sampled_trajectory, mppi_selected_trajectory):
-        trajectory.set_data(states[:frame, 0], states[:frame, 1])
-        etrajectory.set_data(estimates[:frame, 0], estimates[:frame, 1])
-        _, _, _, _ = states[frame]
-        _, _, _, _ = estimates[frame]
+    from cbfkit.utils.animator import AnimationConfig, CBFAnimator
 
-        if "sampled_x_traj" in controller_data_keys:
-            key = "sampled_x_traj"
-        else:
-            key = "robot_sampled_states"
+    states_np = np.asarray(states)
+    estimates_np = np.asarray(estimates)
 
-        robot_sampled_states = controller_data_items[controller_data_keys.index(key)][frame]
-        robot_selected_states = controller_data_items[controller_data_keys.index("x_traj")][frame]
-
-        # Sampled Trajectories
-        for i in range(mppi_args["plot_samples"]):
-            mppi_sampled_trajectory[i].set_data(
-                robot_sampled_states[mppi_args["robot_state_dim"] * i, :],
-                robot_sampled_states[mppi_args["robot_state_dim"] * i + 1, :],
-            )
-
-        # Selected Trajectory
-        mppi_selected_trajectory.set_data(robot_selected_states[0, :], robot_selected_states[1, :])
-
-        return trajectory, etrajectory, mppi_sampled_trajectory, mppi_selected_trajectory
-
-    plt.ion()
-    fig, ax = plt.subplots()
-
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-
-    desired_state_radius = 0.1
-    ax.plot(desired_state[0], desired_state[1], "ro", markersize=5, label="desired_state")
-    ax.add_patch(
-        plt.Circle(
-            desired_state,
-            desired_state_radius,
-            color="r",
-            fill=False,
-            linestyle="--",
-            linewidth=1,
-        )
+    animator = CBFAnimator(
+        states_np,
+        dt=dt,
+        x_lim=x_lim,
+        y_lim=y_lim,
+        title=title,
+        backend=backend,
+        config=AnimationConfig(blit=False) if backend == "matplotlib" else None,
     )
+    animator.add_goal(desired_state[:2], radius=desired_state_radius)
+    if obstacles and ellipsoids:
+        animator.add_obstacles(obstacles, ellipsoid_radii=ellipsoids)
+    animator.add_trajectory(x_idx=0, y_idx=1, label="Trajectory")
+    animator.add_trajectory(
+        x_idx=0,
+        y_idx=1,
+        data=estimates_np,
+        style="scatter",
+        label="Estimated Trajectory",
+    )
+    animator.show_time()
 
-    for obs, ell in zip(obstacles, ellipsoids):
-        ax.add_patch(
-            Ellipse(
-                (obs[0], obs[1]),
-                width=ell[0] * 2,
-                height=ell[1] * 2,
-                facecolor="k",
-            )
+    # MPPI overlay (matplotlib only — too many traces for Plotly)
+    if backend == "matplotlib":
+        fig, ax = animator.build()
+
+        sampled_lines = []
+        for _ in range(mppi_args["plot_samples"]):
+            (line,) = ax.plot([], [], "g", alpha=0.2)
+            sampled_lines.append(line)
+        (selected_line,) = ax.plot([], [], "b", linewidth=2, label="Selected Plan")
+
+        sampled_key = (
+            "sampled_x_traj"
+            if "sampled_x_traj" in controller_data_keys
+            else "robot_sampled_states"
         )
+        sampled_idx = controller_data_keys.index(sampled_key)
+        selected_idx = controller_data_keys.index("x_traj")
+        state_dim = mppi_args["robot_state_dim"]
 
-    (trajectory,) = ax.plot([], [], label="Trajectory")
-    (etrajectory,) = ax.plot([], [], label="Estimated Trajectory")
+        def mppi_overlay(frame, _ax):
+            if frame >= len(controller_data_items[sampled_idx]):
+                return []
+            sampled = controller_data_items[sampled_idx][frame]
+            selected = controller_data_items[selected_idx][frame]
 
-    mppi_sampled_trajectory = [0] * (mppi_args["plot_samples"])
-    for i in range(mppi_args["plot_samples"]):
-        (mppi_sampled_trajectory[i],) = ax.plot([], [], "g", alpha=0.2)
-    (mppi_selected_trajectory,) = ax.plot([], [], "b")
+            for i, line in enumerate(sampled_lines):
+                line.set_data(
+                    sampled[state_dim * i, :],
+                    sampled[state_dim * i + 1, :],
+                )
+            selected_line.set_data(selected[0, :], selected[1, :])
 
-    ax.set_xlim(x_lim[0], x_lim[1])
-    ax.set_ylim(y_lim[0], y_lim[1])
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    ax.set_title(title)
-    ax.legend()
-    ax.grid()
+            return sampled_lines + [selected_line]
 
-    metadata = dict(title="Movie Test", artist="Matplotlib", comment="Movie support!")
-    writer = FFMpegWriter(fps=int(1 / dt), metadata=metadata)
-    print(animation_filename)
-    with writer.saving(fig, animation_filename + ".mp4", 100):
-        for i in range(len(states)):
-            trajectory, etrajectory, mppi_sampled_trajectory, mppi_selected_trajectory = update(
-                i, trajectory, etrajectory, mppi_sampled_trajectory, mppi_selected_trajectory
-            )
-            fig.canvas.draw()
-            fig.canvas.flush_events()
-            writer.grab_frame()
+        animator.on_frame(mppi_overlay)
 
-    plt.ioff()
-    plt.savefig(animation_filename + ".eps")
-    plt.show()
+    if save_animation:
+        animator.save(animation_filename)
 
-    # ani = FuncAnimation(
-    #     fig, update, frames=len(states), init_func=init, blit=True, interval=dt * 100
-    # )
+    if backend == "matplotlib":
+        animator.show()
 
-    # if save_animation:
-    #     ani.save(animation_filename, writer="imagemagick", fps=15)
-
-    # plt.show()
-
-    return fig, ax
+    return animator.fig, animator.ax

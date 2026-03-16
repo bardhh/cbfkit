@@ -21,9 +21,8 @@ import matplotlib
 import numpy as np
 
 matplotlib.use("Agg")
-import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from matplotlib.patches import Arrow, Circle
+from matplotlib.patches import Circle
 
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
@@ -178,6 +177,8 @@ def run_simulation():
 
 def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt):
     """Creates animation and plots."""
+    from cbfkit.utils.animator import AnimationConfig, CBFAnimator
+
     print("Generating visualization...")
 
     # Convert JAX arrays to NumPy
@@ -209,79 +210,85 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
     plt.savefig("examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_trajectory.png")
     plt.close()
 
-    # --- Animation ---
+    # --- Animation via CBFAnimator ---
     print("Creating animation...")
-    fig, ax = plt.subplots(figsize=(12, 10))
-    ax.set_facecolor("#f8f9fa")
 
-    # Bounds
+    # Compute axis limits
     all_x = list(states[:, 0]) + [goal_state[0]]
     all_y = list(states[:, 1]) + [goal_state[1]]
     margin = 2.0
-    ax.set_xlim(min(all_x) - margin, max(all_x) + margin)
-    ax.set_ylim(min(all_y) - margin, max(all_y) + margin)
-    ax.set_aspect("equal")
-    ax.grid(True, alpha=0.3)
-    ax.set_title("Dynamic Obstacle Avoidance", fontsize=16)
 
-    # Static Elements
-    # Goal
-    goal_circle = Circle((goal_state[0], goal_state[1]), 0.3, color="gold", alpha=0.5, zorder=1)
+    animator = CBFAnimator(
+        states,
+        dt=dt,
+        x_lim=(min(all_x) - margin, max(all_x) + margin),
+        y_lim=(min(all_y) - margin, max(all_y) + margin),
+        title="Dynamic Obstacle Avoidance",
+        aspect="equal",
+        config=AnimationConfig(blit=False, figsize=(12, 10)),
+    )
+    animator.add_goal(
+        (float(goal_state[0]), float(goal_state[1])),
+        radius=0.3,
+        color="orange",
+        label="Goal",
+    )
+    animator.add_trajectory(x_idx=0, y_idx=1, color="b", label="Robot Trail", alpha=0.5, linewidth=1)
+    animator.show_time()
+
+    # Build to get axes for custom patches
+    fig, ax = animator.build()
+    ax.set_facecolor("#f8f9fa")
+
+    # Goal decorative circle
+    goal_circle = Circle(
+        (goal_state[0], goal_state[1]), 0.3, color="gold", alpha=0.5, zorder=1
+    )
     ax.add_patch(goal_circle)
-    ax.plot(goal_state[0], goal_state[1], "*", color="orange", markersize=15)
 
-    # Dynamic Elements
+    # Robot circle (dynamic)
     robot_circle = Circle((0, 0), 0.3, color="blue", zorder=5)
     ax.add_patch(robot_circle)
 
+    # Obstacle circles (dynamic)
     obs_circles = []
     for i in range(num_obstacles):
         c = Circle((0, 0), d_min, color="red", alpha=0.3, zorder=4)
         ax.add_patch(c)
         obs_circles.append(c)
 
-    (robot_trail,) = ax.plot([], [], "b-", alpha=0.5, linewidth=1)
-
-    time_text = ax.text(
+    # Distance text overlay
+    dist_text = ax.text(
         0.02,
-        0.95,
+        0.90,
         "",
         transform=ax.transAxes,
-        bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+        fontsize=11,
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.8),
     )
 
-    def animate(frame):
+    def custom_update(frame, _ax):
         t = frame * dt
         state = states[frame]
 
-        # Update Robot
+        # Update robot circle
         robot_circle.center = (state[0], state[1])
 
-        # Update Trail
-        robot_trail.set_data(states[:frame, 0], states[:frame, 1])
-
-        # Update Obstacles
+        # Update obstacle circles
         for i, c in enumerate(obs_circles):
             pos = get_obstacle_pos(t, i)
-            c.center = (pos[0], pos[1])
+            c.center = (float(pos[0]), float(pos[1]))
 
-        # Update Text
+        # Update distance text
         dist_to_goal = np.linalg.norm(state[:2] - goal_state[:2])
-        time_text.set_text(f"Time: {t:.1f}s\nGoal Dist: {dist_to_goal:.1f}m")
+        dist_text.set_text(f"Goal Dist: {dist_to_goal:.1f}m")
 
-        return [robot_circle, robot_trail, time_text] + obs_circles
+        return [robot_circle, dist_text] + obs_circles
 
-    anim = animation.FuncAnimation(fig, animate, frames=len(states), interval=50, blit=True)
-
-    try:
-        save_path = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.mp4")
-        anim.save(save_path, writer="ffmpeg", fps=20)
-        print(f"\nAnimation saved to: file://{save_path}")
-    except Exception as e:
-        print(f"MP4 save failed, trying GIF: {e}")
-        save_path = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.gif")
-        anim.save(save_path, writer="pillow", fps=15)
-        print(f"\nAnimation saved to: file://{save_path}")
+    animator.on_frame(custom_update)
+    animator.save(
+        "examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_animation.mp4"
+    )
 
     plt.close()
 

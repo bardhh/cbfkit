@@ -131,7 +131,9 @@ def animate(
     )
 
     if save_animation:
-        ani.save(animation_filename, writer="imagemagick", fps=15)
+        from cbfkit.utils.animator import save_animation as _save_animation
+
+        _save_animation(ani, animation_filename)
 
     plt.show()
 

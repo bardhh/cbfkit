@@ -16,6 +16,8 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from matplotlib.patches import Arrow, Circle
 
+from cbfkit.utils.animator import save_animation
+
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
@@ -619,21 +621,8 @@ def create_animation(states, goal_state, obstacles, d_min):
         fig, animate_frame, frames=len(states), interval=50, blit=False, repeat=True
     )
 
-    # Save with multiple format attempts
-    try:
-        print("Saving animation as MP4...")
-        filepath_mp4 = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/navigation_animation.mp4")
-        anim.save(filepath_mp4, writer="ffmpeg", fps=20, dpi=120, bitrate=1800)
-        print(f"\nAnimation saved to: file://{filepath_mp4}")
-    except Exception as e:
-        print(f"MP4 save failed: {e}")
-        try:
-            print("Saving as GIF...")
-            filepath_gif = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/navigation_animation.gif")
-            anim.save(filepath_gif, writer="pillow", fps=15, dpi=100)
-            print(f"\nAnimation saved to: file://{filepath_gif}")
-        except Exception as e2:
-            print(f"GIF save failed: {e2}")
+    # Save animation
+    save_animation(anim, "examples/differential_drive/obstacle_avoidance/results/navigation_animation.mp4")
 
     plt.close()
     return anim

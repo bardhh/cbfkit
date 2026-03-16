@@ -7,8 +7,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-from functools import partial
-
 import jax.numpy as jnp
 import numpy as np
 from jax import jit
@@ -33,19 +31,15 @@ TARGET_DIRECTORY = "./tutorials"
 MODEL_NAME = "multi_robot_3d_system"
 
 # Simulation Parameters
-NUM_ROBOTS = 2
+NUM_ROBOTS = 4
 DT = 0.05  # Time step
-TF = 15  # Final time
+TF = 20  # Final time
 N_STEPS = int(TF / DT) + 1
 STATE_DIM_PER_ROBOT = 6  # Each robot has a 6-dimensional state
 CONTROL_DIM_PER_ROBOT = 3  # Each robot has 3 control inputs
 STATE_DIM = STATE_DIM_PER_ROBOT * NUM_ROBOTS
 CONTROL_DIM = CONTROL_DIM_PER_ROBOT * NUM_ROBOTS
 ACTUATION_LIMITS = jnp.full((CONTROL_DIM,), 10)
-
-# Controller Parameters
-KP = 0.1  # Proportional gain
-KD = 0.1  # Derivative gain
 
 # Barrier Parameters
 D_MIN_SQUARED = 0.1  # Minimum distance squared between robots
@@ -116,27 +110,7 @@ control_matrix_str = np.array2string(control_matrix, separator=",", threshold=np
     "\n", ""
 )
 
-# ================================
-# Define Nominal Control Law (PD Controller)
-# ================================
-
-nominal_control_law = "["
-nominal_control_law += ",".join(
-    [
-        f"-k_p * (x[{STATE_DIM_PER_ROBOT * i}] - goal[{STATE_DIM_PER_ROBOT * i}]),"
-        f"-k_p * (x[{STATE_DIM_PER_ROBOT * i + 1}] - goal[{STATE_DIM_PER_ROBOT * i + 1}]),"
-        f"-k_p * (x[{STATE_DIM_PER_ROBOT * i + 2}] - goal[{STATE_DIM_PER_ROBOT * i + 2}])"
-        for i in range(NUM_ROBOTS)
-    ]
-)
-nominal_control_law += "]"
-
 params = {
-    "controller": {
-        "goal: float": goals,
-        "k_p: float": KP,
-        "k_d: float": KD,
-    },
     "barrier": {
         "D_MIN_SQUARED: float": D_MIN_SQUARED,
     },
@@ -188,8 +162,7 @@ generate_model.generate_model(
     drift_dynamics=drift_dynamics,
     control_matrix=control_matrix_str,
     barrier_funcs=state_constraint_funcs,
-    lyapunov_funcs=lyapunov_functions,
-    nominal_controller=nominal_control_law,
+    # lyapunov_funcs=lyapunov_functions,
     params=params,
 )
 
@@ -197,7 +170,7 @@ import importlib
 
 # Import the Generated Model
 import tutorials.multi_robot_3d_system as multi_robot_3d_system
-from tutorials.plot_helper.plot_3d_multi_robot import animate_3d_multi_robot
+from cbfkit.utils.visualization import visualize_3d_multi_robot
 
 # Create Barrier Functions with Linear Class K Function Derivative Conditions
 rectified_barrier_packages = []
@@ -218,30 +191,27 @@ for i in range(len(state_constraint_funcs)):
     rectified_barrier_packages.append(cbf_package)
 
 
-# Instantiate the Nominal Controller
-nominal_controller = multi_robot_3d_system.controllers.controller_1(goal=goals, k_p=KP, k_d=KD)
-
 barriers = concatenate_certificates(*rectified_barrier_packages)
 
 # Create Lyapunov Functions with Exponential Stability Derivative Conditions
-lyapunov = concatenate_certificates(
-    *[
-        getattr(
-            multi_robot_3d_system.certificate_functions.lyapunov_functions, f"clf{i + 1}_package"
-        )(
-            certificate_conditions=e_s(c=LYAPUNOV_C),
-            goal=goals,
-        )
-        for i in range(NUM_ROBOTS)
-    ]
-)
+# lyapunov = concatenate_certificates(
+#     *[
+#         getattr(
+#             multi_robot_3d_system.certificate_functions.lyapunov_functions, f"clf{i + 1}_package"
+#         )(
+#             certificate_conditions=e_s(c=LYAPUNOV_C),
+#             goal=goals,
+#         )
+#         for i in range(NUM_ROBOTS)
+#     ]
+# )
 
 # Define MPPI Planner Arguments
 mppi_args = {
     "robot_state_dim": STATE_DIM,
     "robot_control_dim": CONTROL_DIM,
     "prediction_horizon": 120,
-    "num_samples": 600,
+    "num_samples": 1000,
     "plot_samples": 30,
     "time_step": DT,
     "use_GPU": True,
@@ -263,10 +233,9 @@ mppi_local_planner = mppi_planner.vanilla_mppi(
 # Instantiate CBF-CLF-QP Control Law
 cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
     control_limits=ACTUATION_LIMITS,
-    nominal_input=nominal_controller,
     dynamics_func=multi_robot_3d_system.plant(),
     barriers=barriers,
-    lyapunovs=lyapunov,
+    # lyapunovs=lyapunov,
     relaxable_clf=True,
 )
 
@@ -283,7 +252,7 @@ results = sim.execute(
     dynamics=multi_robot_3d_system.plant(),
     integrator=integrator,
     planner=mppi_local_planner,
-    nominal_controller=nominal_controller,
+    # nominal_controller=nominal_controller,
     controller=cbf_clf_controller,
     sensor=sensor,
     estimator=estimator,
@@ -298,24 +267,29 @@ results = sim.execute(
 # Animate the Results
 # ================================
 
+# Obstacle at the origin (ellipsoid with identity rotation)
+obstacle_centers = [np.array([0.0, 0.0, 0.0])]
+obstacle_radii = [np.array([8.0, 8.0, 8.0])]
+obstacle_rotations = [np.eye(3)]
+
 animation_path = os.path.abspath(
     os.path.join(TARGET_DIRECTORY, MODEL_NAME, f"animation_{NUM_ROBOTS}_robots.gif")
 )
 
-animate_3d_multi_robot(
+visualize_3d_multi_robot(
     states=results.states,
     desired_states=goals,
     desired_state_radius=0.3,
     num_robots=NUM_ROBOTS,
     state_dimension_per_robot=STATE_DIM_PER_ROBOT,
-    x_lim=(-15, 15),
-    y_lim=(-15, 15),
-    z_lim=(-10, 10),
     dt=DT,
     title="Multi-Robot Trajectory",
     save_animation=True,
     animation_filename=animation_path,
     include_min_distance_plot=True,
+    ellipse_centers=obstacle_centers,
+    ellipse_radii=obstacle_radii,
+    ellipse_rotations=obstacle_rotations,
 )
 
 print(f"\nAnimation saved to: file://{animation_path}")

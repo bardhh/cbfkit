@@ -17,9 +17,8 @@ import matplotlib
 import numpy as np
 
 matplotlib.use("Agg")
-import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from matplotlib.patches import Arrow, Circle
+from matplotlib.patches import Circle
 
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
@@ -244,11 +243,9 @@ def run_simulation():
 
 
 def create_visualization(states, goal_state, d_min):
-    print("Creating Augmented System Animation...")
+    from cbfkit.utils.animator import AnimationConfig, CBFAnimator
 
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.set_aspect("equal")
-    ax.grid(True, alpha=0.3)
+    print("Creating Augmented System Animation...")
 
     # Extract trajectories
     # Robot: indices 0, 1
@@ -263,51 +260,52 @@ def create_visualization(states, goal_state, d_min):
     o2x = states[:, 6]
     o2y = states[:, 7]
 
-    # Set limits
+    # Compute axis limits
     all_x = np.concatenate([rx, o1x, o2x, [goal_state[0]]])
     all_y = np.concatenate([ry, o1y, o2y, [goal_state[1]]])
     margin = 1.0
-    ax.set_xlim(min(all_x) - margin, max(all_x) + margin)
-    ax.set_ylim(min(all_y) - margin, max(all_y) + margin)
 
-    # Elements
-    robot_patch = Circle((0, 0), 0.3, color="blue", label="Robot")
-    goal_patch = Circle((goal_state[0], goal_state[1]), 0.3, color="green", alpha=0.5, label="Goal")
+    animator = CBFAnimator(
+        states,
+        dt=0.05,
+        x_lim=(float(min(all_x)) - margin, float(max(all_x)) + margin),
+        y_lim=(float(min(all_y)) - margin, float(max(all_y)) + margin),
+        title="Augmented State Dynamic Avoidance",
+        aspect="equal",
+        config=AnimationConfig(blit=False, figsize=(10, 10)),
+    )
+    animator.add_goal(
+        (float(goal_state[0]), float(goal_state[1])),
+        radius=0.3,
+        color="g",
+        label="Goal",
+    )
+    animator.add_trajectory(x_idx=0, y_idx=1, color="b", label="Robot Trail", alpha=0.5)
 
-    obs1_patch = Circle((0, 0), d_min, color="red", alpha=0.3, label="Dynamic Obs 1")
-    obs2_patch = Circle((0, 0), d_min, color="orange", alpha=0.3, label="Dynamic Obs 2")
+    # Build to get axes for custom patches
+    fig, ax = animator.build()
 
+    # Robot circle (dynamic)
+    robot_patch = Circle((0, 0), 0.3, color="blue", label="Robot", zorder=5)
     ax.add_patch(robot_patch)
-    ax.add_patch(goal_patch)
+
+    # Obstacle circles (dynamic)
+    obs1_patch = Circle((0, 0), d_min, color="red", alpha=0.3, label="Dynamic Obs 1", zorder=4)
+    obs2_patch = Circle((0, 0), d_min, color="orange", alpha=0.3, label="Dynamic Obs 2", zorder=4)
     ax.add_patch(obs1_patch)
     ax.add_patch(obs2_patch)
-
-    (robot_trail,) = ax.plot([], [], "b-", alpha=0.5)
-
     ax.legend()
-    ax.set_title("Augmented State Dynamic Avoidance")
 
-    def animate(i):
-        # Update Robot
-        robot_patch.center = (rx[i], ry[i])
-        robot_trail.set_data(rx[:i], ry[:i])
+    def custom_update(frame, _ax):
+        robot_patch.center = (rx[frame], ry[frame])
+        obs1_patch.center = (o1x[frame], o1y[frame])
+        obs2_patch.center = (o2x[frame], o2y[frame])
+        return [robot_patch, obs1_patch, obs2_patch]
 
-        # Update Obstacles
-        obs1_patch.center = (o1x[i], o1y[i])
-        obs2_patch.center = (o2x[i], o2y[i])
-
-        return [robot_patch, robot_trail, obs1_patch, obs2_patch]
-
-    anim = animation.FuncAnimation(fig, animate, frames=len(states), interval=50, blit=True)
-
-    save_path = os.path.abspath("examples/differential_drive/obstacle_avoidance/results/augmented_dynamic_animation.mp4")
-    try:
-        anim.save(save_path, writer="ffmpeg", fps=20)
-        print(f"\nAnimation saved to: file://{save_path}")
-    except Exception:
-        save_path_gif = save_path.replace("mp4", "gif")
-        anim.save(save_path_gif, writer="pillow", fps=20)
-        print(f"\nAnimation saved to: file://{save_path_gif}")
+    animator.on_frame(custom_update)
+    animator.save(
+        "examples/differential_drive/obstacle_avoidance/results/augmented_dynamic_animation.mp4"
+    )
 
     plt.close()
 
