@@ -415,3 +415,15 @@ class TestImportGuard:
         monkeypatch.setattr(animator_module, "_HAS_PLOTLY", False)
         with pytest.raises(ImportError, match=r"cbfkit\[plotly\]"):
             animator_module._require_plotly()
+
+    def test_require_manim_raises_when_missing(self, monkeypatch):
+        monkeypatch.setattr(animator_module, "_HAS_MANIM", False)
+        with pytest.raises(ImportError, match=r"cbfkit\[manim\]"):
+            animator_module._require_manim()
+
+
+class TestManimBackend:
+    def test_manim_backend_accepted_but_not_implemented(self, simple_states):
+        """backend='manim' is a valid value but raises NotImplementedError for 2D."""
+        with pytest.raises(NotImplementedError, match="Manim 2D backend not yet implemented"):
+            CBFAnimator(simple_states, backend="manim")

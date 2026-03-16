@@ -290,6 +290,7 @@ visualize_3d_multi_robot(
     ellipse_centers=obstacle_centers,
     ellipse_radii=obstacle_radii,
     ellipse_rotations=obstacle_rotations,
+    # backend="manim"  # Uncomment for high-quality Manim rendering (pip install cbfkit[manim])
 )
 
 print(f"\nAnimation saved to: file://{animation_path}")

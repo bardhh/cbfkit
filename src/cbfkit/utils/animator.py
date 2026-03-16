@@ -4,11 +4,14 @@ Provides :class:`CBFAnimator` for building 2D trajectory animations with a
 declarative API, :class:`AnimationConfig` for centralised defaults, and
 :func:`save_animation` for robust file output with format fallback.
 
-Supports two backends:
+Supports three backends:
 
 * ``"matplotlib"`` — generates MP4 / GIF animations via ``FuncAnimation``.
 * ``"plotly"`` (default) — generates interactive HTML files with play/pause
   controls and a timeline slider.  Requires ``pip install cbfkit[plotly]``.
+* ``"manim"`` — high-quality 3D animations (MP4) via Manim.  Currently only
+  available for 3D multi-robot scenes via :func:`visualize_3d_multi_robot`.
+  Requires ``pip install cbfkit[manim]``.
 
 Example
 -------
@@ -61,6 +64,13 @@ try:
 except ImportError:
     _HAS_PLOTLY = False
 
+try:
+    import manim  # noqa: F401
+
+    _HAS_MANIM = True
+except ImportError:
+    _HAS_MANIM = False
+
 
 def _require_matplotlib():
     if not _HAS_MATPLOTLIB:
@@ -75,6 +85,14 @@ def _require_plotly():
         raise ImportError(
             "Optional dependency 'plotly' not found. "
             "Please install cbfkit[plotly] to use the Plotly backend."
+        )
+
+
+def _require_manim():
+    if not _HAS_MANIM:
+        raise ImportError(
+            "Optional dependency 'manim' not found. "
+            "Please install cbfkit[manim] to use the Manim backend."
         )
 
 
@@ -413,12 +431,16 @@ class CBFAnimator:
         backend: str = "plotly",
         config: Optional[AnimationConfig] = None,
     ):
-        if backend not in ("matplotlib", "plotly"):
-            raise ValueError(f"Unknown backend {backend!r}. Use 'matplotlib' or 'plotly'.")
+        if backend not in ("matplotlib", "plotly", "manim"):
+            raise ValueError(f"Unknown backend {backend!r}. Use 'matplotlib', 'plotly', or 'manim'.")
 
         self._backend = backend
         if backend == "matplotlib":
             _require_matplotlib()
+        elif backend == "manim":
+            _require_manim()
+            raise NotImplementedError("Manim 2D backend not yet implemented. "
+                                      "Use visualize_3d_multi_robot(backend='manim') for 3D scenes.")
         else:
             _require_plotly()
 
