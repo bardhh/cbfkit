@@ -3,8 +3,8 @@ Visualization Utilities for CBFKit Simulations.
 
 * 2D crowd/trajectory animations delegate to
   :class:`cbfkit.utils.animator.CBFAnimator`.
-* 3D multi-robot animations support both Plotly (interactive HTML, default)
-  and matplotlib (MP4/GIF) backends.
+* 3D multi-robot animations support Plotly (interactive HTML, default),
+  matplotlib (MP4/GIF), and Manim (high-quality MP4) backends.
 """
 
 from pathlib import Path
@@ -656,6 +656,71 @@ def _visualize_3d_matplotlib(
     return fig, tuple(axes)
 
 
+# ---- Manim 3D backend ----------------------------------------------------
+
+_MANIM_QUALITY_MAP = {
+    "low": "low_quality",
+    "medium": "medium_quality",
+    "high": "high_quality",
+    "production": "production_quality",
+}
+
+
+def _parse_manim_backend(backend: str) -> str:
+    """Parse ``"manim"`` or ``"manim-<quality>"`` and return a Manim quality string.
+
+    Valid forms: ``"manim"``, ``"manim-low"``, ``"manim-medium"``,
+    ``"manim-high"``, ``"manim-production"``.
+    """
+    if backend == "manim":
+        return "low_quality"
+    parts = backend.split("-", 1)
+    if len(parts) == 2 and parts[0] == "manim" and parts[1] in _MANIM_QUALITY_MAP:
+        return _MANIM_QUALITY_MAP[parts[1]]
+    valid = ", ".join(f'"manim-{k}"' for k in _MANIM_QUALITY_MAP)
+    raise ValueError(
+        f"Unknown Manim backend {backend!r}. Use \"manim\" or one of: {valid}."
+    )
+
+
+def _visualize_3d_manim(
+    states, desired_states, desired_state_radius, num_robots,
+    ellipse_centers, ellipse_radii, ellipse_rotations,
+    x_lim, y_lim, z_lim, dt, sdim, title, save_animation,
+    animation_filename, include_min_distance_plot,
+    include_min_distance_to_obstacles_plot, threshold,
+    goal_dists, min_dists, obs_dists,
+    quality="low_quality",
+):
+    from cbfkit.utils.animator import _require_manim
+    from cbfkit.utils.visualizations.manim_3d_multi_robot import render_multi_robot_3d
+
+    _require_manim()
+
+    save_path = animation_filename if save_animation else None
+
+    return render_multi_robot_3d(
+        states=states,
+        desired_states=desired_states,
+        num_robots=num_robots,
+        state_dimension_per_robot=sdim,
+        desired_state_radius=desired_state_radius,
+        x_lim=x_lim,
+        y_lim=y_lim,
+        z_lim=z_lim,
+        dt=dt,
+        title=title,
+        ellipse_centers=ellipse_centers,
+        ellipse_radii=ellipse_radii,
+        ellipse_rotations=ellipse_rotations,
+        save_path=save_path,
+        quality=quality,
+        goal_dists=goal_dists,
+        min_dists=min_dists if include_min_distance_plot else None,
+        obs_dists=obs_dists if include_min_distance_to_obstacles_plot else None,
+    )
+
+
 # ---- Public entry point ---------------------------------------------------
 
 def visualize_3d_multi_robot(
@@ -694,7 +759,9 @@ def visualize_3d_multi_robot(
     state_dimension_per_robot : int
         Columns per robot in *states* (default 3).
     backend : str
-        ``"plotly"`` (default) or ``"matplotlib"``.
+        ``"plotly"`` (default), ``"matplotlib"``, or ``"manim"``.
+        Manim accepts a quality suffix: ``"manim-low"`` (default),
+        ``"manim-medium"``, ``"manim-high"``, ``"manim-production"``.
     """
     states = np.asarray(states)
     desired_states = np.asarray(desired_states)
@@ -755,5 +822,8 @@ def visualize_3d_multi_robot(
 
     if backend == "plotly":
         return _visualize_3d_plotly(save_animation=save_animation, **common)
+    elif backend.startswith("manim"):
+        quality = _parse_manim_backend(backend)
+        return _visualize_3d_manim(save_animation=save_animation, quality=quality, **common)
     else:
         return _visualize_3d_matplotlib(save_animation=save_animation, **common)

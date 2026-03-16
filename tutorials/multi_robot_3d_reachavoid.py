@@ -43,9 +43,11 @@ ACTUATION_LIMITS = jnp.full((CONTROL_DIM,), 10)
 
 # Barrier Parameters
 D_MIN_SQUARED = 0.1  # Minimum distance squared between robots
+OBS_RADIUS = 8.0  # Obstacle sphere radius
+OBS_RADIUS_SQUARED = OBS_RADIUS**2  # Obstacle radius squared for barrier
 
 # Lyapunov Parameters
-LYAPUNOV_C = 0.5  # Exponential stability constant
+LYAPUNOV_C = 0.8  # Exponential stability constant
 
 # ================================
 # Initialize States and Goals
@@ -123,22 +125,23 @@ def stage_cost(x: jnp.ndarray, action: jnp.ndarray) -> float:
     cost = 0.0
     for i in range(NUM_ROBOTS):
         idx = STATE_DIM_PER_ROBOT * i
-        # Sum the squared distances for each robot (positions only)
-        cost += (
+        # Position error weighted higher to ensure goal convergence
+        cost += 20.0 * (
             (x[idx] - goals[idx]) ** 2
             + (x[idx + 1] - goals[idx + 1]) ** 2
             + (x[idx + 2] - goals[idx + 2]) ** 2
-            + (x[idx + 3] ** 2 + x[idx + 4] ** 2 + x[idx + 5] ** 2)
-        )
+        ) + (x[idx + 3] ** 2 + x[idx + 4] ** 2 + x[idx + 5] ** 2)
+    # Penalize control effort for smoother trajectories
+    cost += 0.1 * jnp.sum(action**2)
     return cost
 
 
 @jit
 def terminal_cost(x: jnp.ndarray, action: jnp.ndarray) -> float:
-    # Assuming terminal cost is the same as stage cost
     return 10.0 * stage_cost(x, action)
 
 
+# Inter-robot collision avoidance: ||x_i - x_j||^2 - d_min^2 >= 0
 state_constraint_funcs = [
     f"(x[{STATE_DIM_PER_ROBOT * i}] - x[{STATE_DIM_PER_ROBOT * j}])**2 + "
     f"(x[{STATE_DIM_PER_ROBOT * i + 1}] - x[{STATE_DIM_PER_ROBOT * j + 1}])**2 + "
@@ -147,13 +150,21 @@ state_constraint_funcs = [
     for j in range(i + 1, NUM_ROBOTS)
 ]
 
-
-lyapunov_functions = [
-    f"(x[{STATE_DIM_PER_ROBOT * i}] - goal[{STATE_DIM_PER_ROBOT * i}])**2 + "
-    f"(x[{STATE_DIM_PER_ROBOT * i + 1}] - goal[{STATE_DIM_PER_ROBOT * i + 1}])**2 + "
-    f"(x[{STATE_DIM_PER_ROBOT * i + 2}] - goal[{STATE_DIM_PER_ROBOT * i + 2}])**2"
+# Obstacle avoidance: ||x_i - obs_center||^2 - R^2 >= 0 (obstacle at origin)
+state_constraint_funcs += [
+    f"x[{STATE_DIM_PER_ROBOT * i}]**2 + "
+    f"x[{STATE_DIM_PER_ROBOT * i + 1}]**2 + "
+    f"x[{STATE_DIM_PER_ROBOT * i + 2}]**2 - {OBS_RADIUS_SQUARED} "
     for i in range(NUM_ROBOTS)
 ]
+
+
+# lyapunov_functions = [
+#     f"(x[{STATE_DIM_PER_ROBOT * i}] - goal[{STATE_DIM_PER_ROBOT * i}])**2 + "
+#     f"(x[{STATE_DIM_PER_ROBOT * i + 1}] - goal[{STATE_DIM_PER_ROBOT * i + 1}])**2 + "
+#     f"(x[{STATE_DIM_PER_ROBOT * i + 2}] - goal[{STATE_DIM_PER_ROBOT * i + 2}])**2"
+#     for i in range(NUM_ROBOTS)
+# ]
 
 
 generate_model.generate_model(
@@ -185,7 +196,7 @@ for i in range(len(state_constraint_funcs)):
         system_dynamics=multi_robot_3d_system.plant(),
         state_dim=STATE_DIM,
         form="exponential",
-    )(certificate_conditions=zeroing_barriers.linear_class_k(alpha=5.0))
+    )(certificate_conditions=zeroing_barriers.linear_class_k(alpha=10.0))
 
     # Store the rectified barrier package
     rectified_barrier_packages.append(cbf_package)
@@ -211,12 +222,12 @@ mppi_args = {
     "robot_state_dim": STATE_DIM,
     "robot_control_dim": CONTROL_DIM,
     "prediction_horizon": 120,
-    "num_samples": 1000,
-    "plot_samples": 30,
+    "num_samples": 12500,
+    "plot_samples": 0,
     "time_step": DT,
-    "use_GPU": True,
-    "costs_lambda": 0.05,
-    "cost_perturbation": 0.2,
+    "use_GPU": False,
+    "costs_lambda": 0.2,
+    "cost_perturbation": 1.5,
 }
 
 # Instantiate MPPI Control Law
@@ -269,7 +280,7 @@ results = sim.execute(
 
 # Obstacle at the origin (ellipsoid with identity rotation)
 obstacle_centers = [np.array([0.0, 0.0, 0.0])]
-obstacle_radii = [np.array([8.0, 8.0, 8.0])]
+obstacle_radii = [np.array([OBS_RADIUS, OBS_RADIUS, OBS_RADIUS])]
 obstacle_rotations = [np.eye(3)]
 
 animation_path = os.path.abspath(
@@ -290,6 +301,7 @@ visualize_3d_multi_robot(
     ellipse_centers=obstacle_centers,
     ellipse_radii=obstacle_radii,
     ellipse_rotations=obstacle_rotations,
+    backend="manim-low",  # Options: manim-low, manim-medium, manim-high, manim-production
 )
 
 print(f"\nAnimation saved to: file://{animation_path}")
