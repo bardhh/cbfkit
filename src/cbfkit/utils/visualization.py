@@ -692,24 +692,10 @@ def _visualize_3d_manim(
     goal_dists, min_dists, obs_dists,
     quality="low_quality",
 ):
-    import warnings
-
     from cbfkit.utils.animator import _require_manim
     from cbfkit.utils.visualizations.manim_3d_multi_robot import render_multi_robot_3d
 
     _require_manim()
-
-    if include_min_distance_plot:
-        warnings.warn(
-            "include_min_distance_plot is not supported by the Manim backend and will be ignored.",
-            stacklevel=3,
-        )
-    if include_min_distance_to_obstacles_plot:
-        warnings.warn(
-            "include_min_distance_to_obstacles_plot is not supported by the Manim backend "
-            "and will be ignored.",
-            stacklevel=3,
-        )
 
     save_path = animation_filename if save_animation else None
 
@@ -729,6 +715,9 @@ def _visualize_3d_manim(
         ellipse_rotations=ellipse_rotations,
         save_path=save_path,
         quality=quality,
+        goal_dists=goal_dists,
+        min_dists=min_dists if include_min_distance_plot else None,
+        obs_dists=obs_dists if include_min_distance_to_obstacles_plot else None,
     )
 
 

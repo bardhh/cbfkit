@@ -3,7 +3,8 @@ Manim backend for 3D multi-robot trajectory animation.
 
 Provides :class:`MultiRobot3DScene` and :func:`render_multi_robot_3d` for
 high-quality 3D animations with smooth camera motion, safety bubbles, and
-ellipsoidal obstacles.
+ellipsoidal obstacles.  Side panels show distance-to-goal, min inter-robot
+distance, and min obstacle distance per robot.
 
 Usage (standalone test with synthetic data):
     manim -pql src/cbfkit/utils/visualizations/manim_3d_multi_robot.py MultiRobot3DScene
@@ -21,14 +22,21 @@ from cbfkit.utils.animator import _require_manim
 
 try:
     from manim import (
+        DOWN,
         PI,
-        config,
+        RIGHT,
+        UP,
+        Axes,
         Dot3D,
+        Line,
         Sphere,
+        Text,
         ThreeDAxes,
         ThreeDScene,
         TracedPath,
+        VGroup,
         ValueTracker,
+        config,
         rate_functions,
     )
 
@@ -66,10 +74,70 @@ def _goal_sphere(center: np.ndarray, radius: float, color: str) -> "Sphere":
 
 
 # ---------------------------------------------------------------------------
+# Helper: build a 2D chart panel as a fixed-screen overlay
+# ---------------------------------------------------------------------------
+def _build_chart_panel(
+    title_text: str,
+    data: np.ndarray,
+    dt: float,
+    num_robots: int,
+    panel_width: float = 3.8,
+    panel_height: float = 2.0,
+):
+    """Build a 2D Axes with pre-drawn static line segments for each robot.
+
+    Returns ``(axes, title_mob, robot_lines)`` where ``robot_lines[i]`` is a
+    :class:`VGroup` of ``Line`` segments for robot *i* that will be revealed
+    progressively by an updater.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Shape ``(N, num_robots)`` — one column per robot.
+    """
+    N = len(data)
+    t_max = (N - 1) * dt
+    y_max = float(np.nanmax(data)) * 1.15
+    if y_max < 1e-6:
+        y_max = 1.0
+
+    axes = Axes(
+        x_range=[0, t_max, t_max / 4],
+        y_range=[0, y_max, y_max / 4],
+        x_length=panel_width,
+        y_length=panel_height,
+        axis_config={"include_ticks": True, "tick_size": 0.05, "stroke_width": 1.5},
+    )
+
+    title_mob = Text(title_text, font_size=18).next_to(axes, UP, buff=0.12)
+
+    # x-axis label
+    x_label = Text("t [s]", font_size=14).next_to(axes, DOWN, buff=0.15)
+
+    # Pre-build line segments per robot (initially invisible)
+    robot_lines: list[VGroup] = []
+    for r in range(num_robots):
+        color = _robot_color(r)
+        segs = VGroup()
+        for k in range(N - 1):
+            t0, t1 = k * dt, (k + 1) * dt
+            y0, y1 = float(data[k, r]), float(data[k + 1, r])
+            p0 = axes.c2p(t0, y0)
+            p1 = axes.c2p(t1, y1)
+            seg = Line(p0, p1, stroke_width=2, color=color)
+            seg.set_opacity(0)
+            segs.add(seg)
+        robot_lines.append(segs)
+
+    panel = VGroup(axes, title_mob, x_label, *robot_lines)
+    return axes, title_mob, x_label, robot_lines, panel
+
+
+# ---------------------------------------------------------------------------
 # Core Manim Scene
 # ---------------------------------------------------------------------------
 class MultiRobot3DScene(ThreeDScene):
-    """Render multi-robot 3D trajectories.
+    """Render multi-robot 3D trajectories with distance metric side panels.
 
     Pass data via class attributes before calling ``scene.render()``, or let
     the scene generate synthetic demo data when run standalone.
@@ -87,10 +155,14 @@ class MultiRobot3DScene(ThreeDScene):
     z_lim: tuple[float, float] = (-10, 10)
     dt: float = 0.05
     title: str = "Multi-Robot Trajectory"
-    # Static ellipsoidal obstacles: lists of centers, radii, rotation matrices
+    # Static ellipsoidal obstacles: lists of centres, radii, rotation matrices
     ellipse_centers: list[np.ndarray] | None = None
     ellipse_radii: list[np.ndarray] | None = None
     ellipse_rotations: list[np.ndarray] | None = None
+    # Pre-computed distance metrics (set by render_multi_robot_3d)
+    goal_dists: np.ndarray | None = None
+    min_dists: np.ndarray | None = None
+    obs_dists: np.ndarray | None = None
     # Scale factor to fit data into Manim's coordinate system (default ~7 units)
     _scale: float = 1.0
 
@@ -105,6 +177,12 @@ class MultiRobot3DScene(ThreeDScene):
         n_robots = self.num_robots
         sdim = self.state_dim_per_robot
         n_frames = len(states)
+
+        # --- Determine which side panels to show ---------------------------
+        has_goal = self.goal_dists is not None
+        has_min = self.min_dists is not None
+        has_obs = self.obs_dists is not None
+        n_panels = int(has_goal) + int(has_min) + int(has_obs)
 
         # Auto-scale: map the data range into roughly [-7, 7] Manim units
         all_pos = []
@@ -217,11 +295,63 @@ class MultiRobot3DScene(ThreeDScene):
             traced_paths.append(path)
             self.add(dot, bubble, path)
 
+        # --- Build side-panel charts (fixed to camera) ---------------------
+        panels_group = VGroup()
+        all_robot_lines: list[list[VGroup]] = []  # per-panel list of robot lines
+
+        panel_configs = []
+        if has_goal:
+            panel_configs.append(("Dist to Goal", self.goal_dists))
+        if has_min:
+            panel_configs.append(("Min Inter-Robot Dist", self.min_dists))
+        if has_obs:
+            panel_configs.append(("Min Obstacle Dist", self.obs_dists))
+
+        panel_height = min(2.0, 5.5 / max(n_panels, 1))
+        panel_gap = 0.4
+
+        for p_idx, (p_title, p_data) in enumerate(panel_configs):
+            _, _, _, robot_lines, panel = _build_chart_panel(
+                title_text=p_title,
+                data=p_data,
+                dt=self.dt,
+                num_robots=n_robots,
+                panel_width=3.8,
+                panel_height=panel_height,
+            )
+            all_robot_lines.append(robot_lines)
+            panels_group.add(panel)
+
+        # Stack panels vertically and position to the right
+        if n_panels > 0:
+            panels_group.arrange(DOWN, buff=panel_gap)
+            panels_group.to_edge(RIGHT, buff=0.1)
+            # Move up slightly to centre vertically
+            panels_group.shift(UP * 0.2)
+
+            # Charts are 2D screen-space overlays — fix to camera
+            self.add_fixed_in_frame_mobjects(panels_group)
+
+            # Build updaters for progressive line reveal
+            def _make_line_updater(robot_lines_for_panel, _n_frames):
+                def _updater(mob):
+                    frame = int(progress.get_value())
+                    frame = min(frame, _n_frames - 1)
+                    for rl in robot_lines_for_panel:
+                        for k, seg in enumerate(rl):
+                            seg.set_opacity(1.0 if k < frame else 0.0)
+
+                return _updater
+
+            for robot_lines in all_robot_lines:
+                # Attach updater to the first robot's line group (triggers for all)
+                dummy = robot_lines[0]
+                dummy.add_updater(_make_line_updater(robot_lines, n_frames))
+
         # --- Camera rotation during playback --------------------------------
         self.begin_ambient_camera_rotation(rate=0.08)
 
         # --- Animate progress tracker from 0 -> n_frames-1 ------------------
-        # Use ~10 s of playback regardless of sim length
         playback_seconds = min(15, max(5, n_frames * self.dt))
         self.play(
             progress.animate(run_time=playback_seconds, rate_func=rate_functions.linear).set_value(
@@ -261,6 +391,18 @@ class MultiRobot3DScene(ThreeDScene):
         self.ellipse_rotations = [np.eye(3)]
         self.safety_radius = 1.0
 
+        # Compute demo metrics
+        self.goal_dists = np.zeros((n_steps, n_robots))
+        for i in range(n_robots):
+            idx = sdim * i
+            self.goal_dists[:, i] = np.linalg.norm(
+                states[:, idx : idx + 3] - goals[idx : idx + 3], axis=1
+            )
+        self.min_dists = np.full((n_steps, n_robots), 20.0)  # placeholder
+        for t in range(n_steps):
+            d = np.linalg.norm(states[t, :3] - states[t, sdim : sdim + 3])
+            self.min_dists[t, :] = d
+
         return states, goals
 
 
@@ -284,6 +426,9 @@ def render_multi_robot_3d(
     ellipse_rotations: list[np.ndarray] | None = None,
     save_path: str | None = None,
     quality: str = "low_quality",
+    goal_dists: np.ndarray | None = None,
+    min_dists: np.ndarray | None = None,
+    obs_dists: np.ndarray | None = None,
 ) -> str:
     """Render a multi-robot 3D animation using Manim.
 
@@ -306,6 +451,12 @@ def render_multi_robot_3d(
     quality : str
         Manim quality flag: ``"low_quality"``, ``"medium_quality"``,
         ``"high_quality"``, or ``"production_quality"``.
+    goal_dists : np.ndarray, optional
+        ``(N, num_robots)`` distance-to-goal per robot per step.
+    min_dists : np.ndarray, optional
+        ``(N, num_robots)`` min inter-robot distance per robot per step.
+    obs_dists : np.ndarray, optional
+        ``(N, num_robots)`` min obstacle distance per robot per step.
 
     Returns
     -------
@@ -337,6 +488,9 @@ def render_multi_robot_3d(
     MultiRobot3DScene.ellipse_centers = ellipse_centers
     MultiRobot3DScene.ellipse_radii = ellipse_radii
     MultiRobot3DScene.ellipse_rotations = ellipse_rotations
+    MultiRobot3DScene.goal_dists = goal_dists
+    MultiRobot3DScene.min_dists = min_dists
+    MultiRobot3DScene.obs_dists = obs_dists
 
     scene = MultiRobot3DScene()
     scene.render()
