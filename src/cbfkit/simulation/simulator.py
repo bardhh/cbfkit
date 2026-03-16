@@ -43,134 +43,22 @@ from cbfkit.utils.user_types import (
     SimulationResults,
     State,
     StlTrajectoryCostCallable,
-    Time,
 )
 
 from .backend import stepper
 from .callbacks import LoggingCallback, ProgressCallback, SimulationCallback
+from .formatting import format_return_data
 from .simulator_jit import INTEGRATION_NAN_ERROR, simulator_jit
-from .ui import create_progress, print_error, print_jit_status, print_warning
+from .status import (
+    SOLVER_STATUS_MAP,
+    _check_simulation_status,
+    _default_estimator,
+    _default_perturbation,
+    _default_sensor,
+    _format_error_status,
+)
+from .ui import create_progress, print_jit_status
 from .utils import SimulationStepData
-
-
-SOLVER_STATUS_MAP = {
-    -99: "NO_STATUS_AVAILABLE",
-    -10: "INTEGRATION_NAN_ERROR",
-    -2: "NAN_INPUT_DETECTED",
-    -1: "NAN_DETECTED",
-    0: "UNSOLVED (Likely Infeasible)",
-    1: "SOLVED",
-    2: "MAX_ITER_REACHED",
-    3: "PRIMAL_INFEASIBLE",
-    4: "DUAL_INFEASIBLE",
-    5: "MAX_ITER_REACHED (UNSOLVED)",
-}
-
-
-def _format_error_status(status_code: Any) -> str:
-    """Formats a solver status code into a human-readable string."""
-    if isinstance(status_code, (int, float, jnp.ndarray, np.ndarray)):
-        # Handle scalar arrays or ints
-        try:
-            code = int(status_code)
-            if code in SOLVER_STATUS_MAP:
-                return f"{SOLVER_STATUS_MAP[code]} (Status: {code})"
-            else:
-                return f"Status: {code}"
-        except (ValueError, TypeError):
-            pass
-    return str(status_code)
-
-
-def _check_simulation_status(
-    controller_data_keys: List[str],
-    controller_data_values: List[Array],
-    planner_data_keys: List[str],
-    planner_data_values: List[Array],
-    nan_detected: bool = False,
-) -> None:
-    """Checks for simulation errors and prints warnings if found."""
-    # Explicit check for NaNs
-    if nan_detected:
-        print_error("Simulation failed due to NaNs in state trajectory.")
-
-    # Check controller errors
-    if "error" in controller_data_keys:
-        idx = controller_data_keys.index("error")
-        errors = controller_data_values[idx]
-        if jnp.any(errors):
-            # Find first error index
-            first_error_idx = int(jnp.argmax(errors).item())
-
-            # Try to get error data/status
-            status_msg = ""
-            if "error_data" in controller_data_keys:
-                idx_data = controller_data_keys.index("error_data")
-                error_data = controller_data_values[idx_data]
-                # Get status at the point of failure
-                status = error_data[first_error_idx].item()
-                status_msg = f" ({_format_error_status(status)})"
-
-            print_warning(
-                f"Simulation stopped early due to controller error at step {first_error_idx}{status_msg}."
-            )
-
-    # Check solver status telemetry from controller data.
-    # We check 'sub_data_solver_status' (explicit) or 'error_data' (legacy/implicit).
-    status_key = None
-    if "sub_data_solver_status" in controller_data_keys:
-        status_key = "sub_data_solver_status"
-    elif "error_data" in controller_data_keys:
-        status_key = "error_data"
-
-    if status_key:
-        idx_data = controller_data_keys.index(status_key)
-        status_codes = controller_data_values[idx_data]
-        # Status 2 and 5 indicate max-iteration termination in the QP solver.
-        # In the current controller policy these are failures (not accepted solutions).
-        max_iter_like_mask = (status_codes == 2) | (status_codes == 5)
-        if "error" in controller_data_keys:
-            idx_err = controller_data_keys.index("error")
-            errors = controller_data_values[idx_err]
-            max_iter_like_mask = max_iter_like_mask & (~errors)
-        if jnp.any(max_iter_like_mask):
-            count = int(jnp.sum(max_iter_like_mask).item())
-            print_warning(
-                f"Solver reached max iterations in {count} steps. "
-                "These steps are treated as controller failures and may produce NaN controls."
-            )
-
-    # Check planner errors
-    if "error" in planner_data_keys:
-        idx = planner_data_keys.index("error")
-        errors = planner_data_values[idx]
-        if jnp.any(errors):
-            first_error_idx = int(jnp.argmax(errors).item())
-            print_warning(
-                f"Simulation stopped early due to planner error at step {first_error_idx}."
-            )
-
-
-def _default_sensor(
-    t: Time,
-    x: Array,
-    *,
-    sigma: Optional[Array] = None,
-    key: Optional[Array] = None,
-    **kwargs: Any,
-) -> Array:
-    return x
-
-
-def _default_estimator(t, y, z, u, c):
-    return y, c if c is not None else jnp.zeros((len(y), len(y)))
-
-
-def _default_perturbation(x, u, f, g):
-    def p(key):
-        return jnp.zeros_like(x)
-
-    return p
 
 
 def simulator(
@@ -800,104 +688,3 @@ def execute(
     )
 
     return formatted_data
-
-
-def format_return_data(
-    data: Tuple[SimulationStepData, ...],
-) -> SimulationResults:
-    """Extracts simulation data into JAX arrays."""
-    if not data:
-        return SimulationResults(
-            jnp.array([]),
-            jnp.array([]),
-            jnp.array([]),
-            jnp.array([]),
-            [],
-            [],
-            [],
-            [],
-        )
-
-    # Optimization: Transpose tuple of NamedTuples to NamedTuple of tuples
-    # This avoids iterating over `data` multiple times and speeds up array stacking
-    transposed = SimulationStepData(*zip(*data))
-
-    states = jnp.stack(transposed.state)
-    controls = jnp.stack(transposed.control)
-    estimates = jnp.stack(transposed.estimate)
-    covariances = jnp.stack(transposed.covariance)
-
-    controller_data_keys = []
-    controller_data_values = []
-    planner_data_keys = []
-    planner_data_values = []
-
-    def process_keys_values(keys, values_tuple_of_lists):
-        processed_keys = []
-        processed_values = []
-
-        if not values_tuple_of_lists:
-            return processed_keys, processed_values
-
-        # zip(*tuple_of_lists) -> list of tuples (per key)
-        vals_by_key = list(zip(*values_tuple_of_lists))
-
-        if not vals_by_key:
-            return processed_keys, processed_values
-
-        for i, key in enumerate(keys):
-            vals = vals_by_key[i]
-
-            # Check consistency and stackability
-            first_valid = next((v for v in vals if v is not None), None)
-            if first_valid is None or isinstance(first_valid, (dict, str, list, tuple)):
-                continue
-
-            # Handle mixed None/Numeric (e.g., error_data appearing mid-simulation)
-            if any(v is None for v in vals):
-                if isinstance(first_valid, (int, float, jnp.ndarray, np.ndarray)):
-                    # Replace None with default
-                    default_val = -99
-                    # Check if float to use NaN instead
-                    is_float = False
-                    if hasattr(first_valid, "dtype"):
-                        is_float = jnp.issubdtype(first_valid.dtype, jnp.floating)
-                    elif isinstance(first_valid, float):
-                        is_float = True
-
-                    if is_float:
-                        default_val = jnp.nan
-
-                    vals = [v if v is not None else default_val for v in vals]
-                else:
-                    # Non-numeric mixed with None (unsupported)
-                    continue
-
-            try:
-                # jnp.stack is more efficient than jnp.array for stacking existing arrays
-                arr = jnp.stack(vals)
-                processed_keys.append(key)
-                processed_values.append(arr)
-            except ValueError:
-                # Skip fields that cannot be stacked
-                pass
-        return processed_keys, processed_values
-
-    if len(data) > 0:
-        controller_data_keys, controller_data_values = process_keys_values(
-            data[0].controller_keys, transposed.controller_values
-        )
-        planner_data_keys, planner_data_values = process_keys_values(
-            data[0].planner_keys, transposed.planner_values
-        )
-
-    return SimulationResults(
-        states,
-        controls,
-        estimates,
-        covariances,
-        controller_data_keys,
-        controller_data_values,
-        planner_data_keys,
-        planner_data_values,
-    )
