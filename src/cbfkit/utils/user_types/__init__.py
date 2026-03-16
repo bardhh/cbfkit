@@ -1,0 +1,67 @@
+"""User types module — re-exports all types for backward compatibility."""
+
+# Re-export typing/jax symbols that some modules import from here (legacy leaks)
+from typing import Optional  # noqa: F401
+from jax import Array  # noqa: F401
+
+from .callables import (  # noqa: F401
+    CbfClfQpConfig,
+    CbfClfQpData,
+    CbfClfQpGenerator,
+    ComputeCertificateConstraintFunctionGenerator,
+    ControllerCallable,
+    ControllerCallableReturns,
+    DynamicsCallable,
+    DynamicsCallableReturns,
+    EstimatorCallable,
+    GenerateComputeCertificateConstraintCallable,
+    GenerateComputeStageCostCallable,
+    GenerateComputeTerminalCostCallable,
+    IntegratorCallable,
+    MppiGenerator,
+    MppiParameters,
+    NominalControllerCallable,
+    PerturbationCallable,
+    PerturbationCallableReturns,
+    PlannerCallable,
+    PlannerCallableReturns,
+    QpSolverCallable,
+    SensorCallable,
+    SolverParams,
+    StageCostCallable,
+    StageCostCallableReturns,
+    StlTrajectoryCostCallable,
+    TerminalCostCallable,
+    TerminalCostCallableReturns,
+    TrajectoryCostCallable,
+    TrajectoryCostCallableReturns,
+    VectorFieldCallable,
+)
+from .certificates import (  # noqa: F401
+    BarrierTuple,
+    CertificateCallable,
+    CertificateCollection,
+    CertificateConditionsCallable,
+    CertificateHessianCallable,
+    CertificateInput,
+    CertificateInputStyle,
+    CertificateJacobianCallable,
+    CertificateLegacyTuple,
+    CertificatePartialCallable,
+    CertificateTuple,
+    EMPTY_CERTIFICATE_COLLECTION,
+    LyapunovTuple,
+    PredictiveBarrierCollectionCallable,
+)
+from .data import (  # noqa: F401
+    Control,
+    ControllerData,
+    Covariance,
+    Estimate,
+    Key,
+    NumSteps,
+    PlannerData,
+    SimulationResults,
+    State,
+    Time,
+)
