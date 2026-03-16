@@ -431,13 +431,16 @@ class CBFAnimator:
         backend: str = "plotly",
         config: Optional[AnimationConfig] = None,
     ):
-        if backend not in ("matplotlib", "plotly", "manim"):
-            raise ValueError(f"Unknown backend {backend!r}. Use 'matplotlib', 'plotly', or 'manim'.")
+        if backend not in ("matplotlib", "plotly") and not backend.startswith("manim"):
+            raise ValueError(
+                f"Unknown backend {backend!r}. "
+                "Use 'matplotlib', 'plotly', or 'manim' / 'manim-<quality>'."
+            )
 
         self._backend = backend
         if backend == "matplotlib":
             _require_matplotlib()
-        elif backend == "manim":
+        elif backend.startswith("manim"):
             _require_manim()
             raise NotImplementedError("Manim 2D backend not yet implemented. "
                                       "Use visualize_3d_multi_robot(backend='manim') for 3D scenes.")

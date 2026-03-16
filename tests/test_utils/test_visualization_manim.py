@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import cbfkit.utils.animator as animator_module
-from cbfkit.utils.visualization import visualize_3d_multi_robot
+from cbfkit.utils.visualization import _parse_manim_backend, visualize_3d_multi_robot
 
 
 def _make_synthetic_data(num_robots=2, sdim=3, n_steps=20):
@@ -23,6 +23,49 @@ def _make_synthetic_data(num_robots=2, sdim=3, n_steps=20):
         goals[idx + 1] = 1.0 * (i + 1)
         goals[idx + 2] = 1.0
     return states, goals
+
+
+class TestManimQualityParsing:
+    def test_bare_manim_defaults_to_low(self):
+        assert _parse_manim_backend("manim") == "low_quality"
+
+    @pytest.mark.parametrize("suffix,expected", [
+        ("low", "low_quality"),
+        ("medium", "medium_quality"),
+        ("high", "high_quality"),
+        ("production", "production_quality"),
+    ])
+    def test_quality_suffixes(self, suffix, expected):
+        assert _parse_manim_backend(f"manim-{suffix}") == expected
+
+    def test_invalid_suffix_raises(self):
+        with pytest.raises(ValueError, match="Unknown Manim backend"):
+            _parse_manim_backend("manim-ultra")
+
+    def test_quality_passed_to_render(self, monkeypatch):
+        """Ensure the quality kwarg reaches render_multi_robot_3d."""
+        if not animator_module._HAS_MANIM:
+            pytest.skip("manim not installed")
+
+        states, goals = _make_synthetic_data()
+        captured = {}
+
+        def mock_render(**kwargs):
+            captured.update(kwargs)
+            return "/tmp/mock.mp4"
+
+        monkeypatch.setattr(
+            "cbfkit.utils.visualizations.manim_3d_multi_robot.render_multi_robot_3d",
+            mock_render,
+        )
+        visualize_3d_multi_robot(
+            states=states,
+            desired_states=goals,
+            desired_state_radius=0.3,
+            num_robots=2,
+            backend="manim-high",
+        )
+        assert captured["quality"] == "high_quality"
 
 
 class TestManimBackendDispatch:

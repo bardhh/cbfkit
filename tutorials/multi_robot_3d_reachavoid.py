@@ -43,9 +43,11 @@ ACTUATION_LIMITS = jnp.full((CONTROL_DIM,), 10)
 
 # Barrier Parameters
 D_MIN_SQUARED = 0.1  # Minimum distance squared between robots
+OBS_RADIUS = 8.0  # Obstacle sphere radius
+OBS_RADIUS_SQUARED = OBS_RADIUS**2  # Obstacle radius squared for barrier
 
 # Lyapunov Parameters
-LYAPUNOV_C = 0.5  # Exponential stability constant
+# LYAPUNOV_C = 0.5  # Exponential stability constant
 
 # ================================
 # Initialize States and Goals
@@ -139,12 +141,21 @@ def terminal_cost(x: jnp.ndarray, action: jnp.ndarray) -> float:
     return 10.0 * stage_cost(x, action)
 
 
+# Inter-robot collision avoidance: ||x_i - x_j||^2 - d_min^2 >= 0
 state_constraint_funcs = [
     f"(x[{STATE_DIM_PER_ROBOT * i}] - x[{STATE_DIM_PER_ROBOT * j}])**2 + "
     f"(x[{STATE_DIM_PER_ROBOT * i + 1}] - x[{STATE_DIM_PER_ROBOT * j + 1}])**2 + "
     f"(x[{STATE_DIM_PER_ROBOT * i + 2}] - x[{STATE_DIM_PER_ROBOT * j + 2}])**2 - 0.25 "
     for i in range(NUM_ROBOTS)
     for j in range(i + 1, NUM_ROBOTS)
+]
+
+# Obstacle avoidance: ||x_i - obs_center||^2 - R^2 >= 0 (obstacle at origin)
+state_constraint_funcs += [
+    f"x[{STATE_DIM_PER_ROBOT * i}]**2 + "
+    f"x[{STATE_DIM_PER_ROBOT * i + 1}]**2 + "
+    f"x[{STATE_DIM_PER_ROBOT * i + 2}]**2 - {OBS_RADIUS_SQUARED} "
+    for i in range(NUM_ROBOTS)
 ]
 
 
@@ -210,8 +221,8 @@ barriers = concatenate_certificates(*rectified_barrier_packages)
 mppi_args = {
     "robot_state_dim": STATE_DIM,
     "robot_control_dim": CONTROL_DIM,
-    "prediction_horizon": 120,
-    "num_samples": 1000,
+    "prediction_horizon": 30,
+    "num_samples": 2000,
     "plot_samples": 30,
     "time_step": DT,
     "use_GPU": True,
@@ -269,7 +280,7 @@ results = sim.execute(
 
 # Obstacle at the origin (ellipsoid with identity rotation)
 obstacle_centers = [np.array([0.0, 0.0, 0.0])]
-obstacle_radii = [np.array([8.0, 8.0, 8.0])]
+obstacle_radii = [np.array([OBS_RADIUS, OBS_RADIUS, OBS_RADIUS])]
 obstacle_rotations = [np.eye(3)]
 
 animation_path = os.path.abspath(
@@ -290,7 +301,7 @@ visualize_3d_multi_robot(
     ellipse_centers=obstacle_centers,
     ellipse_radii=obstacle_radii,
     ellipse_rotations=obstacle_rotations,
-    # backend="manim"  # Uncomment for high-quality Manim rendering (pip install cbfkit[manim])
+    backend="manim-low",  # Options: manim-low, manim-medium, manim-high, manim-production
 )
 
 print(f"\nAnimation saved to: file://{animation_path}")

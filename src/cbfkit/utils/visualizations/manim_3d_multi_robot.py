@@ -147,7 +147,7 @@ class MultiRobot3DScene(ThreeDScene):
                 # Approximate ellipsoid as a Sphere scaled along each axis
                 avg_r = float(np.mean(radii)) * self._scale
                 obstacle = Sphere(center=sc, radius=avg_r)
-                obstacle.set_color("#333333").set_opacity(0.3)
+                obstacle.set_color("#aa0000").set_opacity(0.45)
                 # Stretch to match ellipsoid radii
                 sr = np.array(radii, dtype=float) * self._scale
                 if avg_r > 1e-8:
