@@ -180,9 +180,11 @@ def main():
         return [robot_patch, robot_line]
 
     ani = animation.FuncAnimation(fig, update, frames=len(states), blit=True, interval=100)
-    anim_path = os.path.abspath(os.path.join(results_dir, "cbfkit_demo.gif"))
-    ani.save(anim_path, writer="pillow", fps=10)
-    print(f"\nAnimation saved to: file://{anim_path}")
+    anim_path = os.path.join(results_dir, "cbfkit_demo.gif")
+
+    from cbfkit.utils.animator import save_animation
+
+    save_animation(ani, anim_path)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 """Unicycle reach-goal with risk-aware CBF-CLF control."""
+
 import os
 import sys
 
@@ -46,7 +47,7 @@ x, u, z, p, controller_keys, controller_values, planner_keys, planner_values = s
 bicycle_states = jnp.asarray(x)
 
 plot = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
-animate = 0  # Disabled - needs visualization refactoring
+animate = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
 save = 1
 
 if plot:

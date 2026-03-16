@@ -1,6 +1,7 @@
 """Acceleration-controlled unicycle reach-goal with vanilla CBF-CLF QP controller."""
-import sys
+
 import os
+import sys
 
 # Add the project root to the path so we can import examples
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
@@ -11,15 +12,10 @@ import jax.numpy as jnp
 
 import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
-from cbfkit.certificates import (
-    concatenate_certificates,
-    rectify_relative_degree,
-)
-from cbfkit.certificates.conditions.barrier_conditions import (
-    zeroing_barriers,
-)
-from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
 import examples.unicycle.common.ellipsoidal_obstacle as ellipsoidal_obstacle
+from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
 
 # Simulation parameters
 tf = 10.0 if not os.environ.get("CBFKIT_TEST_MODE") else 1.0

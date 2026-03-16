@@ -1,7 +1,7 @@
-# matplotlib.use("macosx")
+"""MPPI trajectory animation with circle obstacles."""
+
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FFMpegWriter
 
 
 class circle:
@@ -59,95 +59,84 @@ def animate(
     obstacle=None,
     obstacle_radius=None,
     goal_radius=None,
+    backend="matplotlib",
 ):
-    """Animate the system behavior using FFMpeg."""
+    """Animate the system behavior with MPPI trajectories.
 
-    def init(trajectory):
-        trajectory[0].set_data([], [])
-        plot_num_samples = mppi_args["plot_samples"]
-        for i in range(plot_num_samples):  # sampled trajectories
-            trajectory[i + 1].set_data([], [])
-        trajectory[-1].set_data([], [])
-        return trajectory
+    Parameters
+    ----------
+    backend : str
+        ``"matplotlib"`` for MP4/GIF with MPPI sampled trajectories, or
+        ``"plotly"`` for interactive HTML (trajectory only).
+    """
+    from cbfkit.utils.animator import AnimationConfig, CBFAnimator
 
-    def update(frame, trajectory, text):
-        # Robot trajectory until current time
-        text.set_text(f"time: {round(dt * frame,2)}")
-        trajectory[0].set_data(states[:frame, 0], states[:frame, 1])
-        _ = states[frame]
-        _ = estimates[frame]
+    states_np = np.asarray(states)
+    estimates_np = np.asarray(estimates)
 
-        if "sampled_x_traj" in controller_data_keys:
-            key = "sampled_x_traj"
-        else:
-            key = "robot_sampled_states"
+    animator = CBFAnimator(
+        states_np,
+        dt=dt,
+        x_lim=x_lim,
+        y_lim=y_lim,
+        title=title,
+        backend=backend,
+        config=AnimationConfig(blit=False) if backend == "matplotlib" else None,
+    )
 
-        robot_sampled_states = controller_data_items[frame][controller_data_keys.index(key)]
-        robot_selected_states = controller_data_items[frame][controller_data_keys.index("x_traj")]
-
-        # Sampled Trajectories
-        for i in range(mppi_args["plot_samples"]):
-            trajectory[i + 1].set_data(
-                robot_sampled_states[mppi_args["robot_state_dim"] * i, :],
-                robot_sampled_states[mppi_args["robot_state_dim"] * i + 1, :],
-            )
-
-        # Selected Trajectory
-        trajectory[-1].set_data(robot_selected_states[0, :], robot_selected_states[1, :])
-
-        return trajectory, text
-
-    plt.ion()
-    fig, ax = plt.subplots()
-
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-
-    # desired_state_radius = 0.1
-
-    for k in range(len(desired_state)):
-        ax.add_patch(
-            plt.Circle(
-                desired_state[k],
-                desired_state_radius,
-                color="r",
-                fill=False,
-                linestyle="--",
-                linewidth=1,
-            )
-        )
+    # Goals (desired_state may be a list of waypoints)
+    if hasattr(desired_state, "__len__") and np.ndim(desired_state) > 1:
+        for k, ds in enumerate(desired_state):
+            animator.add_goal(ds[:2], radius=desired_state_radius, label=f"Goal {k + 1}")
+    else:
+        animator.add_goal(desired_state[:2], radius=desired_state_radius)
 
     if obstacle is not None:
-        circle(ax, pos=obstacle, radius=obstacle_radius)
+        animator.add_obstacle(obstacle, radius=obstacle_radius)
 
-    text = ax.text(1, 9, f"time: {dt}")
-    trajectory = [0] * (1 + mppi_args["plot_samples"] + 1)
-    (trajectory[0],) = ax.plot([], [], "k")
-    for i in range(mppi_args["plot_samples"]):
-        (trajectory[i + 1],) = ax.plot([], [], "g", alpha=0.2)
-    (trajectory[-1],) = ax.plot([], [], "b")
+    animator.add_trajectory(x_idx=0, y_idx=1, color="k", label="Trajectory")
+    animator.show_time()
 
-    ax.set_xlim(x_lim[0], x_lim[1])
-    ax.set_ylim(y_lim[0], y_lim[1])
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    ax.set_title(title)
-    ax.legend(loc="best")
-    ax.grid()
+    # MPPI overlay (matplotlib only)
+    if backend == "matplotlib":
+        fig, ax = animator.build()
 
-    trajectory = init(trajectory)
+        sampled_lines = []
+        for _ in range(mppi_args["plot_samples"]):
+            (line,) = ax.plot([], [], "g", alpha=0.2)
+            sampled_lines.append(line)
+        (selected_line,) = ax.plot([], [], "b", linewidth=2)
 
-    metadata = dict(title="Movie Test", artist="Matplotlib", comment="Movie support!")
-    writer = FFMpegWriter(fps=int(1 / dt), metadata=metadata)
-    with writer.saving(fig, animation_filename + ".mp4", 100):
-        for i in range(len(states)):
-            trajectory, text = update(i, trajectory, text)
-            fig.canvas.draw()
-            fig.canvas.flush_events()
-            writer.grab_frame()
+        sampled_key = (
+            "sampled_x_traj"
+            if "sampled_x_traj" in controller_data_keys
+            else "robot_sampled_states"
+        )
+        state_dim = mppi_args["robot_state_dim"]
 
-    plt.ioff()
-    plt.savefig(animation_filename + ".eps")
-    plt.show()
+        def mppi_overlay(frame, _ax):
+            # Note: this file uses [frame][key] indexing (not [key][frame])
+            if frame >= len(controller_data_items):
+                return []
+            frame_data = controller_data_items[frame]
+            sampled = frame_data[controller_data_keys.index(sampled_key)]
+            selected = frame_data[controller_data_keys.index("x_traj")]
 
-    return fig, ax
+            for i, line in enumerate(sampled_lines):
+                line.set_data(
+                    sampled[state_dim * i, :],
+                    sampled[state_dim * i + 1, :],
+                )
+            selected_line.set_data(selected[0, :], selected[1, :])
+
+            return sampled_lines + [selected_line]
+
+        animator.on_frame(mppi_overlay)
+
+    if save_animation:
+        animator.save(animation_filename)
+
+    if backend == "matplotlib":
+        animator.show()
+
+    return animator.fig, animator.ax

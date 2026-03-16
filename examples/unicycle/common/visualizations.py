@@ -1,7 +1,6 @@
 """Trajectory plotting and animation for unicycle simulations."""
 # matplotlib.use("macosx")
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Ellipse
 
 
@@ -82,77 +81,28 @@ def animate(
     title="System Behavior",
     save_animation=True,
     animation_filename="system_behavior.gif",
+    backend="plotly",
 ):
-    def init():
-        trajectory.set_data([], [])
-        etrajectory.set_data([], [])
-        return (trajectory,)
+    from cbfkit.utils.animator import CBFAnimator
 
-    def update(frame):
-        trajectory.set_data(states[:frame, 0], states[:frame, 1])
-        etrajectory.set_data(estimates[:frame, 0], estimates[:frame, 1])
-        return (
-            trajectory,
-            etrajectory,
-        )
-
-    fig, ax = plt.subplots()
-
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-
-    desired_state_radius = 0.1
-    ax.plot(desired_state[0], desired_state[1], "ro", markersize=5, label="desired_state")
-    ax.add_patch(
-        plt.Circle(
-            desired_state,
-            desired_state_radius,
-            color="r",
-            fill=False,
-            linestyle="--",
-            linewidth=1,
-        )
+    animator = CBFAnimator(states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title, backend=backend)
+    animator.add_goal(desired_state[:2], radius=desired_state_radius)
+    if obstacles and ellipsoids:
+        animator.add_obstacles(obstacles, ellipsoid_radii=ellipsoids)
+    # Draw estimate as scatter points under the true trajectory
+    animator.add_trajectory(
+        x_idx=0, y_idx=1, data=estimates,
+        color="orange", label="Estimated Trajectory", style="scatter",
+        alpha=0.5, zorder=2,
     )
-
-    for obs, ell in zip(obstacles, ellipsoids):
-        ax.add_patch(
-            Ellipse(
-                (obs[0], obs[1]),
-                width=ell[0] * 2,
-                height=ell[1] * 2,
-                facecolor="k",
-            )
-        )
-
-    (trajectory,) = ax.plot([], [], color="blue", linewidth=2, label="Trajectory")
-    (etrajectory,) = ax.plot(
-        [],
-        [],
-        color="orange",
-        marker=".",
-        markersize=2,
-        linestyle="None",
-        alpha=0.5,
-        label="Estimated Trajectory",
-    )
-
-    ax.set_xlim(x_lim[0], x_lim[1])
-    ax.set_ylim(y_lim[0], y_lim[1])
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    ax.set_title(title)
-    ax.legend()
-    ax.grid()
-
-    ani = FuncAnimation(
-        fig, update, frames=len(states), init_func=init, blit=True, interval=dt * 100
+    animator.add_trajectory(
+        x_idx=0, y_idx=1,
+        color="blue", label="Trajectory",
+        zorder=3,
     )
 
     if save_animation:
-        ani.save(animation_filename, writer="imagemagick", fps=15)
-        import os
-        print(f"\nAnimation saved to: file://{os.path.abspath(animation_filename)}")
+        animator.save(animation_filename)
 
-    plt.show()
-
-    return fig, ax
+    animator.show()
+    return animator.fig, animator.ax

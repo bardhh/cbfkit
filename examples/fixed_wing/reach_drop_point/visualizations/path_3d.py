@@ -72,14 +72,9 @@ def animate(
     )  # , interval=dt * 20)
 
     if save_animation:
-        if animation_filename[-4:] != ".gif":
-            if animation_filename[-3] == ".":
-                animation_filename = animation_filename[:-4]
+        from cbfkit.utils.animator import save_animation as _save_animation
 
-            animation_filename += ".gif"
-        ani.save(animation_filename, writer="imagemagick", fps=15)
-        import os
-        print(f"\nAnimation saved to: file://{os.path.abspath(animation_filename)}")
+        _save_animation(ani, animation_filename)
 
     plt.show()
 
