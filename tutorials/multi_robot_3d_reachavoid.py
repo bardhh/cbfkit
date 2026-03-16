@@ -47,7 +47,7 @@ OBS_RADIUS = 8.0  # Obstacle sphere radius
 OBS_RADIUS_SQUARED = OBS_RADIUS**2  # Obstacle radius squared for barrier
 
 # Lyapunov Parameters
-# LYAPUNOV_C = 0.5  # Exponential stability constant
+LYAPUNOV_C = 0.8  # Exponential stability constant
 
 # ================================
 # Initialize States and Goals
@@ -125,19 +125,19 @@ def stage_cost(x: jnp.ndarray, action: jnp.ndarray) -> float:
     cost = 0.0
     for i in range(NUM_ROBOTS):
         idx = STATE_DIM_PER_ROBOT * i
-        # Sum the squared distances for each robot (positions only)
-        cost += (
+        # Position error weighted higher to ensure goal convergence
+        cost += 20.0 * (
             (x[idx] - goals[idx]) ** 2
             + (x[idx + 1] - goals[idx + 1]) ** 2
             + (x[idx + 2] - goals[idx + 2]) ** 2
-            + (x[idx + 3] ** 2 + x[idx + 4] ** 2 + x[idx + 5] ** 2)
-        )
+        ) + (x[idx + 3] ** 2 + x[idx + 4] ** 2 + x[idx + 5] ** 2)
+    # Penalize control effort for smoother trajectories
+    cost += 0.1 * jnp.sum(action**2)
     return cost
 
 
 @jit
 def terminal_cost(x: jnp.ndarray, action: jnp.ndarray) -> float:
-    # Assuming terminal cost is the same as stage cost
     return 10.0 * stage_cost(x, action)
 
 
@@ -159,12 +159,12 @@ state_constraint_funcs += [
 ]
 
 
-lyapunov_functions = [
-    f"(x[{STATE_DIM_PER_ROBOT * i}] - goal[{STATE_DIM_PER_ROBOT * i}])**2 + "
-    f"(x[{STATE_DIM_PER_ROBOT * i + 1}] - goal[{STATE_DIM_PER_ROBOT * i + 1}])**2 + "
-    f"(x[{STATE_DIM_PER_ROBOT * i + 2}] - goal[{STATE_DIM_PER_ROBOT * i + 2}])**2"
-    for i in range(NUM_ROBOTS)
-]
+# lyapunov_functions = [
+#     f"(x[{STATE_DIM_PER_ROBOT * i}] - goal[{STATE_DIM_PER_ROBOT * i}])**2 + "
+#     f"(x[{STATE_DIM_PER_ROBOT * i + 1}] - goal[{STATE_DIM_PER_ROBOT * i + 1}])**2 + "
+#     f"(x[{STATE_DIM_PER_ROBOT * i + 2}] - goal[{STATE_DIM_PER_ROBOT * i + 2}])**2"
+#     for i in range(NUM_ROBOTS)
+# ]
 
 
 generate_model.generate_model(
@@ -196,7 +196,7 @@ for i in range(len(state_constraint_funcs)):
         system_dynamics=multi_robot_3d_system.plant(),
         state_dim=STATE_DIM,
         form="exponential",
-    )(certificate_conditions=zeroing_barriers.linear_class_k(alpha=5.0))
+    )(certificate_conditions=zeroing_barriers.linear_class_k(alpha=10.0))
 
     # Store the rectified barrier package
     rectified_barrier_packages.append(cbf_package)
@@ -221,13 +221,13 @@ barriers = concatenate_certificates(*rectified_barrier_packages)
 mppi_args = {
     "robot_state_dim": STATE_DIM,
     "robot_control_dim": CONTROL_DIM,
-    "prediction_horizon": 30,
-    "num_samples": 2000,
-    "plot_samples": 30,
+    "prediction_horizon": 120,
+    "num_samples": 12500,
+    "plot_samples": 0,
     "time_step": DT,
-    "use_GPU": True,
-    "costs_lambda": 0.05,
-    "cost_perturbation": 0.2,
+    "use_GPU": False,
+    "costs_lambda": 0.2,
+    "cost_perturbation": 1.5,
 }
 
 # Instantiate MPPI Control Law
