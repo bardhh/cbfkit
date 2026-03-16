@@ -309,6 +309,10 @@ def simulator(
                     xs = jnp.concatenate(xs_list, axis=1)
                     planner_data = planner_data._replace(xs=xs)
 
+            # Strip sampled_x_traj before logging to avoid accumulating
+            # massive MPPI sample arrays (num_samples * state_dim * horizon per step)
+            planner_data_for_log = planner_data._replace(sampled_x_traj=None)
+
             # Use the list for step data to avoid JAX array overhead for logging
             step_data = SimulationStepData(
                 state=x,
@@ -317,8 +321,8 @@ def simulator(
                 covariance=c,
                 controller_keys=list(controller_data._asdict().keys()),
                 controller_values=list(controller_data._asdict().values()),
-                planner_keys=list(planner_data._asdict().keys()),
-                planner_values=list(planner_data._asdict().values()),
+                planner_keys=list(planner_data_for_log._asdict().keys()),
+                planner_values=list(planner_data_for_log._asdict().values()),
             )
 
             for cb in callbacks:
