@@ -1,18 +1,30 @@
-"""Backward-compatible shim — all functionality lives in :mod:`cbfkit.utils.animators`."""
+"""Optional dependency checks for animation backends."""
 
-from cbfkit.utils.animators import (  # noqa: F401
-    AnimationConfig,
-    CBFAnimator,
-    DEFAULT_CONFIG,
-    _HAS_MANIM,
-    _HAS_MATPLOTLIB,
-    _HAS_PLOTLY,
-    save_animation,
-)
+try:
+    import matplotlib.animation as mpl_animation  # noqa: F401
+    import matplotlib.pyplot as plt  # noqa: F401
+    from matplotlib.collections import LineCollection  # noqa: F401
+    from matplotlib.patches import Circle, Ellipse  # noqa: F401
+
+    _HAS_MATPLOTLIB = True
+except ImportError:
+    _HAS_MATPLOTLIB = False
+
+try:
+    import plotly.graph_objects as go  # noqa: F401
+
+    _HAS_PLOTLY = True
+except ImportError:
+    _HAS_PLOTLY = False
+
+try:
+    import manim  # noqa: F401
+
+    _HAS_MANIM = True
+except ImportError:
+    _HAS_MANIM = False
 
 
-# Define _require_* locally so monkeypatching this module's _HAS_* flags
-# (as existing tests do) continues to work correctly.
 def _require_matplotlib():
     if not _HAS_MATPLOTLIB:
         raise ImportError(
