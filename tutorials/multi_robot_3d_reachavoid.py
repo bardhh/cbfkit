@@ -33,7 +33,7 @@ MODEL_NAME = "multi_robot_3d_system"
 # Simulation Parameters
 NUM_ROBOTS = 4
 DT = 0.05  # Time step
-TF = 20  # Final time
+TF = 20 if not os.getenv("CBFKIT_TEST_MODE") else 2  # Final time
 N_STEPS = int(TF / DT) + 1
 STATE_DIM_PER_ROBOT = 6  # Each robot has a 6-dimensional state
 CONTROL_DIM_PER_ROBOT = 3  # Each robot has 3 control inputs
@@ -222,7 +222,7 @@ mppi_args = {
     "robot_state_dim": STATE_DIM,
     "robot_control_dim": CONTROL_DIM,
     "prediction_horizon": 120,
-    "num_samples": 5000,
+    "num_samples": 5000 if not os.getenv("CBFKIT_TEST_MODE") else 100,
     "plot_samples": 0,
     "time_step": DT,
     "use_GPU": False,
@@ -278,30 +278,31 @@ results = sim.execute(
 # Animate the Results
 # ================================
 
-# Obstacle at the origin (ellipsoid with identity rotation)
-obstacle_centers = [np.array([0.0, 0.0, 0.0])]
-obstacle_radii = [np.array([OBS_RADIUS, OBS_RADIUS, OBS_RADIUS])]
-obstacle_rotations = [np.eye(3)]
+if not os.getenv("CBFKIT_TEST_MODE"):
+    # Obstacle at the origin (ellipsoid with identity rotation)
+    obstacle_centers = [np.array([0.0, 0.0, 0.0])]
+    obstacle_radii = [np.array([OBS_RADIUS, OBS_RADIUS, OBS_RADIUS])]
+    obstacle_rotations = [np.eye(3)]
 
-animation_path = os.path.abspath(
-    os.path.join(TARGET_DIRECTORY, MODEL_NAME, f"animation_{NUM_ROBOTS}_robots.gif")
-)
+    animation_path = os.path.abspath(
+        os.path.join(TARGET_DIRECTORY, MODEL_NAME, f"animation_{NUM_ROBOTS}_robots.gif")
+    )
 
-visualize_3d_multi_robot(
-    states=results.states,
-    desired_states=goals,
-    desired_state_radius=0.3,
-    num_robots=NUM_ROBOTS,
-    state_dimension_per_robot=STATE_DIM_PER_ROBOT,
-    dt=DT,
-    title="Multi-Robot Trajectory",
-    save_animation=True,
-    animation_filename=animation_path,
-    include_min_distance_plot=True,
-    ellipse_centers=obstacle_centers,
-    ellipse_radii=obstacle_radii,
-    ellipse_rotations=obstacle_rotations,
-    backend="manim-low",  # Options: manim-low, manim-medium, manim-high, manim-production
-)
+    visualize_3d_multi_robot(
+        states=results.states,
+        desired_states=goals,
+        desired_state_radius=0.3,
+        num_robots=NUM_ROBOTS,
+        state_dimension_per_robot=STATE_DIM_PER_ROBOT,
+        dt=DT,
+        title="Multi-Robot Trajectory",
+        save_animation=True,
+        animation_filename=animation_path,
+        include_min_distance_plot=True,
+        ellipse_centers=obstacle_centers,
+        ellipse_radii=obstacle_radii,
+        ellipse_rotations=obstacle_rotations,
+        backend="manim-low",  # Options: manim-low, manim-medium, manim-high, manim-production
+    )
 
-print(f"\nAnimation saved to: file://{animation_path}")
+    print(f"\nAnimation saved to: file://{animation_path}")

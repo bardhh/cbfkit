@@ -93,7 +93,7 @@ def main():
 
     SAVE_FILE = f"{target_directory}/{model_name}/simulation_data"
     DT = 1e-2
-    TF = 10.0
+    TF = 10.0 if not os.getenv("CBFKIT_TEST_MODE") else 1.0
     N_STEPS = int(TF / DT) + 1
     INITIAL_STATE = jnp.array([1.5, 0.25])
     ACTUATION_LIMITS = jnp.array([100.0])

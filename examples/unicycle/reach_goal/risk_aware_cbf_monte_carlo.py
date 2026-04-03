@@ -60,11 +60,11 @@ controller = cbf_controller(
 )
 lyapunov_function = lyapunov_certificates.functions[0]
 
-tf = 2.0 if not os.environ.get("CBFKIT_TEST_MODE") else 0.1
+tf = 2.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.1
 dt = 0.01
 X_MAX = 5.0
 Y_MAX = 5.0
-N_TRIALS = 10 if not os.environ.get("CBFKIT_TEST_MODE") else 2
+N_TRIALS = 10 if not os.getenv("CBFKIT_TEST_MODE") else 2
 N_STEPS = int(tf / dt)
 N_STATES = len(desired_state)
 N_CONTROLS = approx_uniycle_nom_controller(0.0, desired_state, random.PRNGKey(0), None)[0].shape[0]
@@ -142,7 +142,7 @@ def execute_simulation(
 # Needed for multiprocessing
 if __name__ == "__main__":
     simulate = 1
-    plot = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
+    plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 
     if simulate:
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -207,9 +207,13 @@ if __name__ == "__main__":
         if lyapunov_trajectories is None or (
             len(lyapunov_trajectories) > 0 and lyapunov_trajectories[0].ndim != 1
         ):
-            lyapunov_trajectories = [compute_lyapunov_trajectory(states) for states in state_trajectories]
+            lyapunov_trajectories = [
+                compute_lyapunov_trajectory(states) for states in state_trajectories
+            ]
         if covariance_trace_trajectories is None:
-            covariance_trajectories = loaded_data.get("covariance_record", loaded_data.get("w_record"))
+            covariance_trajectories = loaded_data.get(
+                "covariance_record", loaded_data.get("w_record")
+            )
             if covariance_trajectories is not None:
                 covariance_trace_trajectories = [
                     compute_covariance_trace_trajectory(covariances)
@@ -265,7 +269,10 @@ if __name__ == "__main__":
 
         fig4, ax5 = plt.subplots()
         for ii in range(n_trials):
-            if covariance_trace_trajectories[ii] is not None and len(covariance_trace_trajectories[ii]) > 0:
+            if (
+                covariance_trace_trajectories[ii] is not None
+                and len(covariance_trace_trajectories[ii]) > 0
+            ):
                 ax5.plot(covariance_trace_trajectories[ii], alpha=0.5)
         ax5.set_title("Estimator Covariance Trace")
         ax5.set_xlabel("Step")

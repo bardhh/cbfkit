@@ -18,7 +18,7 @@ from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
 
 # Simulation parameters
-tf = 10.0 if not os.environ.get("CBFKIT_TEST_MODE") else 1.0
+tf = 10.0 if not os.getenv("CBFKIT_TEST_MODE") else 1.0
 dt = 0.01
 file_path = "examples/unicycle/reach_goal/results/"
 
@@ -103,8 +103,8 @@ x, u, z, p, dkeys, dvals, planner_data, planner_data_keys = sim.execute(
     },
 )
 
-plot = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
-animate = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
+plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
+animate = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 save = 1
 
 if plot:

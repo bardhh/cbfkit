@@ -186,7 +186,7 @@ def run_simulation():
     d_safe = 1.0
     num_humans = 2
     dt = 0.1
-    tf = 10.0
+    tf = 10.0 if not os.getenv("CBFKIT_TEST_MODE") else 1.0
 
     # Robot Dynamics
     robot_dyn = unicycle.plant(l=1.0)
@@ -216,7 +216,7 @@ def run_simulation():
 
     mppi_params = {
         "prediction_horizon": 10,  # 2 seconds
-        "num_samples": 2000,
+        "num_samples": 2000 if not os.getenv("CBFKIT_TEST_MODE") else 100,
         "time_step": dt,
         "use_GPU": True,
         "robot_state_dim": 4 + 4 * num_humans,  # Full augmented state
@@ -252,7 +252,9 @@ def run_simulation():
         b = rectify_relative_degree(
             function=h, system_dynamics=aug_dynamics, state_dim=len(z0), form="high-order"
         )(
-            certificate_conditions=zeroing_barriers.linear_class_k(10.0),  # Very low gain for minimal interference when far from obstacles
+            certificate_conditions=zeroing_barriers.linear_class_k(
+                10.0
+            ),  # Very low gain for minimal interference when far from obstacles
         )
         barriers.append(b)
 
@@ -469,7 +471,9 @@ def create_animation(states, goal_state, num_humans, d_safe, dt, p_keys, p_value
 
     from cbfkit.utils.animator import save_animation
 
-    save_path = "examples/differential_drive/human_aware_navigation/results/human_aware_animation.mp4"
+    save_path = (
+        "examples/differential_drive/human_aware_navigation/results/human_aware_animation.mp4"
+    )
     save_animation(anim, save_path)
 
     plt.close()
@@ -479,7 +483,8 @@ def main():
     os.makedirs("examples/differential_drive/results", exist_ok=True)
     x, u, goal, d_safe, num_humans, dt, p_keys, p_values = run_simulation()
     analyze_safety(x, num_humans, d_safe)
-    create_animation(x, goal, num_humans, d_safe, dt, p_keys, p_values)
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        create_animation(x, goal, num_humans, d_safe, dt, p_keys, p_values)
 
 
 if __name__ == "__main__":

@@ -288,7 +288,9 @@ def plot_results(states, controls, desired_state, obstacles, d_min_obstacle):
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    filename = "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_comprehensive.png"
+    filename = (
+        "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_comprehensive.png"
+    )
     print(f"Saving comprehensive plot to {filename}")
     plt.savefig(filename, dpi=150)
     plt.close()
@@ -500,7 +502,10 @@ def create_animation(
     )
 
     # Save animation
-    save_animation(anim, "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.mp4")
+    save_animation(
+        anim,
+        "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.mp4",
+    )
 
     plt.close()
     return anim
@@ -578,23 +583,23 @@ def main():
         d_min_obstacle,
     ) = run_simulation()
 
-    # Create visualizations
-    print("\nGenerating visualizations...")
-    plot_results(states, controls, desired_state, obstacles, d_min_obstacle)
-
-    # Create animation
-    create_animation(states, controls, desired_state, obstacles, d_min_obstacle, p_keys, p_values)
-
     # Analyze performance
     analyze_performance(
         states, controls, c_keys, c_values, desired_state, obstacles, d_min_obstacle
     )
 
-    print("\nResults saved to:")
-    print("📊 Comprehensive plot: single_robot_cbf_comprehensive.png")
-    print("📈 CBFKit data: single_robot_cbf_results.csv")
-    print("🎬 Animation: single_robot_cbf_animation.mp4 (or .gif)")
-    print("\n🎯 Successfully demonstrated single robot CBF navigation using CBFKit framework!")
+    # Create visualizations (skip in test mode)
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        print("\nGenerating visualizations...")
+        plot_results(states, controls, desired_state, obstacles, d_min_obstacle)
+        create_animation(
+            states, controls, desired_state, obstacles, d_min_obstacle, p_keys, p_values
+        )
+
+        print("\nResults saved to:")
+        print("  Comprehensive plot: single_robot_cbf_comprehensive.png")
+        print("  CBFKit data: single_robot_cbf_results.csv")
+        print("  Animation: single_robot_cbf_animation.mp4 (or .gif)")
 
 
 if __name__ == "__main__":

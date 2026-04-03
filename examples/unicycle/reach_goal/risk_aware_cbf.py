@@ -24,7 +24,7 @@ desired_state = jnp.array([4.0, 4.0, 0])
 # For start-to-goal without obstacles, use proportional controller
 controller = proportional_controller(dynamics=approx_unicycle_dynamics, Kp_pos=1, Kp_theta=0.01)
 
-tf = 10.0 if not os.environ.get("CBFKIT_TEST_MODE") else 1.0
+tf = 10.0 if not os.getenv("CBFKIT_TEST_MODE") else 1.0
 dt = 0.01
 
 x, u, z, p, controller_keys, controller_values, planner_keys, planner_values = sim.execute(
@@ -46,8 +46,8 @@ x, u, z, p, controller_keys, controller_values, planner_keys, planner_values = s
 
 bicycle_states = jnp.asarray(x)
 
-plot = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
-animate = 1 if not os.environ.get("CBFKIT_TEST_MODE") else 0
+plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
+animate = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 save = 1
 
 if plot:
