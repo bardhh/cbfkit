@@ -18,10 +18,10 @@ import cbfkit.simulation.simulator as sim
 
 # Importing modules from cbfkit
 from cbfkit.codegen.create_new_system import generate_model
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.cbf_clf.utils.lyapunov_conditions.exponential_stability import e_s
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates.conditions.lyapunov_conditions.exponential_stability import e_s
+from cbfkit.certificates import rectify_relative_degree
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import forward_euler as integrator

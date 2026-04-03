@@ -27,11 +27,11 @@ from cbfkit.controllers.cbf_clf.barrier_activated_cbf_clf_qp_control_laws import
     barrier_activated_cbf_clf_qp_controller as cbf_controller,
 )
 from cbfkit.controllers.cbf_clf.utils.barrier_activation import compute_activation_weights
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 
 # Fixed imports to match project structure
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates import rectify_relative_degree
 from cbfkit.estimators import naive as estimator
 from cbfkit.integration import runge_kutta_4 as integrator
 from cbfkit.sensors import perfect as sensor
@@ -131,9 +131,15 @@ def run_simulation():
 
     print("CBF Navigation with Barrier Activation")
 
-    dynamics, controller, nom_controller, init_state, goal_state, obstacles, d_min = (
-        create_scenario()
-    )
+    (
+        dynamics,
+        controller,
+        nom_controller,
+        init_state,
+        goal_state,
+        obstacles,
+        d_min,
+    ) = create_scenario()
 
     print("Running simulation...")
 
@@ -622,7 +628,9 @@ def create_animation(states, goal_state, obstacles, d_min):
     )
 
     # Save animation
-    save_animation(anim, "examples/differential_drive/obstacle_avoidance/results/navigation_animation.mp4")
+    save_animation(
+        anim, "examples/differential_drive/obstacle_avoidance/results/navigation_animation.mp4"
+    )
 
     plt.close()
     return anim

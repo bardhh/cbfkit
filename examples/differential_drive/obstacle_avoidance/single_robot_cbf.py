@@ -25,9 +25,9 @@ import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates import rectify_relative_degree
 from cbfkit.controllers.mppi.mppi_generator import mppi_generator
 from cbfkit.controllers.mppi.mppi_visualize import initialize_mppi_plots, update_mppi_plot
 from cbfkit.estimators import naive as estimator
