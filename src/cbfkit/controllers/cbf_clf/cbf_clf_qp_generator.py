@@ -273,8 +273,11 @@ def cbf_clf_qp_generator(
         else:
             n_lfs = 0
 
-        # Normalize slack variables to improve QP conditioning (Condition number ~ 1)
-        # delta_phys = delta_raw / sqrt(penalty). Cost: delta_raw^2. Constraint: ... + delta_raw/sqrt(penalty)
+        # Use direct penalty weights in P matrix (no variable scaling).
+        # Variable scaling (delta_raw = delta_phys / sqrt(penalty)) causes OSQP
+        # ill-conditioning: tiny constraint coefficients + huge bounds = large
+        # dynamic range that OSQP cannot handle reliably.
+        # Direct approach: P = diag([1, penalty_cbf, penalty_clf]), no transformation.
         scale_cbf = 1.0
         scale_clf = 1.0
         auto_p_mat = p_mat is None
@@ -286,49 +289,24 @@ def cbf_clf_qp_generator(
             penalty_cbf = slack_penalty_cbf
             penalty_clf = slack_penalty_clf
 
-            # Robust scaling. Clamp penalty to avoid tiny scale factors (leading to ill-conditioned A).
-            # If penalty > 1e6, scale factor saturates at 1e-3.
-            # Transfer excess penalty to P matrix diagonal: weight = penalty * scale^2
-            max_penalty = 1e6
-            eff_penalty_cbf = jnp.minimum(penalty_cbf, max_penalty)
-            eff_penalty_clf = jnp.minimum(penalty_clf, max_penalty)
-
-            scale_cbf = 1.0 / jnp.sqrt(eff_penalty_cbf + 1e-8)
-            scale_clf = 1.0 / jnp.sqrt(eff_penalty_clf + 1e-8)
-
-            # Clamp weight to avoid catastrophic ill-conditioning in P matrix.
-            # Even with robust scaling, extremely large penalties (>1e14) create huge condition numbers
-            # for float32 QPs, leading to solver failure (MAX_ITER_UNSOLVED).
-            # A max weight of 1e4 preserves 4 orders of magnitude relative to control cost (u^2),
-            # which is sufficient for "hard" constraints while retaining numerical solvability (float32).
-            # Note: With tol=1e-3 and float32 eps=1e-7, values > 1e4 cause residuals > tol purely due to precision loss.
-            MAX_WEIGHT = 1.0e4
-            weight_cbf = jnp.minimum(penalty_cbf * (scale_cbf**2), MAX_WEIGHT)
-            weight_clf = jnp.minimum(penalty_clf * (scale_clf**2), MAX_WEIGHT)
+            # Clamp penalty to avoid catastrophic P matrix condition numbers.
+            # OSQP with float64 can handle weights up to ~1e8 reliably.
+            MAX_WEIGHT = 1.0e8
+            weight_cbf = float(min(penalty_cbf, MAX_WEIGHT))
+            weight_clf = float(min(penalty_clf, MAX_WEIGHT))
 
             p_mat = jnp.diag(
                 jnp.hstack(
                     [
                         jnp.ones((n_con,)),
-                        weight_cbf * jnp.ones((n_bfs,)),  # Normalized weight
-                        weight_clf * jnp.ones((n_lfs,)),  # Normalized weight
+                        weight_cbf * jnp.ones((n_bfs,)),
+                        weight_clf * jnp.ones((n_lfs,)),
                     ]
                 )
             )
-            # Scale slack bounds (delta_raw = delta_phys * sqrt(penalty) = delta_phys / scale)
-            # control_limits is already [u_lim, slack_cbf_lim, slack_clf_lim]
-            limit_u = control_limits[:n_con]
-            limit_cbf = control_limits[n_con : n_con + n_bfs] / scale_cbf
-            limit_clf = control_limits[n_con + n_bfs :] / scale_clf
-            control_limits = jnp.hstack([limit_u, limit_cbf, limit_clf])
+            # No variable transformation: scale stays 1.0, control_limits unchanged.
 
-            # Populate scaling vector
-            if n_bfs > 0:
-                sol_scaling_vector = sol_scaling_vector.at[n_con : n_con + n_bfs].set(scale_cbf)
-            if n_lfs > 0:
-                sol_scaling_vector = sol_scaling_vector.at[n_con + n_bfs :].set(scale_clf)
-
-        # Pass scales to constraint generators to avoid post-hoc scaling in loop
+        # Pass scales to constraint generators (scale=1.0 means no transformation)
         if auto_p_mat:
             kwargs["scale_cbf"] = scale_cbf
             kwargs["scale_clf"] = scale_clf
@@ -533,7 +511,9 @@ def cbf_clf_qp_generator(
             if "solver_params" in controller_sub_data:
                 solver_params = controller_sub_data["solver_params"]
 
-            safe_nominal_u = jnp.clip(u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con])
+            safe_nominal_u = jnp.clip(
+                u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con]
+            )
 
             def _solve_with(p_local: Array, q_local: Array, g_local: Array, h_local: Array):
                 sol_local, status_local, new_params_local = solve_qp(
@@ -620,7 +600,9 @@ def cbf_clf_qp_generator(
                                 relax_clf=relaxable_clf,
                             ),
                             jdebug.callback(_log_nan_indices, mask_q, mask_g, mask_h),
-                        )[0],  # -2
+                        )[
+                            0
+                        ],  # -2
                         lambda: print_status_msg("NAN_DETECTED"),  # -1
                         lambda: print_status_msg("UNSOLVED"),  # 0
                         lambda: jdebug.print(
@@ -639,7 +621,9 @@ def cbf_clf_qp_generator(
                     jdebug.print("   -> Barrier Values (h): {h}", h=h_val)
                     lax.cond(
                         jnp.any(h_val < 0.0),
-                        lambda: jdebug.print("      (Warning: h < 0 detected. System is strictly unsafe.)"),
+                        lambda: jdebug.print(
+                            "      (Warning: h < 0 detected. System is strictly unsafe.)"
+                        ),
                         lambda: None,
                     )
 

@@ -23,6 +23,7 @@ class QpStatus(enum.IntEnum):
     DUAL_INFEASIBLE = 4
     MAX_ITER_UNSOLVED = 5  # status=0 AND iter_num >= maxiter
 
+
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="jaxopt")
     from jaxopt import OSQP, EqualityConstrainedQP
@@ -31,7 +32,7 @@ from cbfkit.utils.jit_monitor import JitMonitor
 
 # Instantiate QP solver objects
 MAX_ITER = 10000
-QP = OSQP(maxiter=MAX_ITER, tol=1e-6)
+QP = OSQP(maxiter=MAX_ITER, tol=1e-4)
 EC_QP = EqualityConstrainedQP()
 
 
@@ -206,9 +207,7 @@ def solve_with_state(
     -------
         (sol, success, params): Solution, success flag (bool), and solver parameters.
     """
-    sol, status, params = solve_with_details(
-        h_mat, f_vec, g_mat, h_vec, a_mat, b_vec, init_params
-    )
+    sol, status, params = solve_with_details(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec, init_params)
     # Only SOLVED is success. MAX_ITER_REACHED may return non-converged solution.
     success = status == QpStatus.SOLVED
     return sol, success, params
