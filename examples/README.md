@@ -2,18 +2,18 @@
 
 Ready-to-run scripts that demonstrate CBFKit using **pre-built systems** from `cbfkit.systems`. No code generation required — just install `cbfkit` and run.
 
-## Systems
+## Recommended Order
 
-| Directory | Description |
-|---|---|
-| `unicycle/` | Unicycle robot navigation with CBF, MPPI, stochastic CBF, and risk-aware controllers |
-| `single_integrator/` | Single integrator with various state estimation methods (EKF, UKF) |
-| `differential_drive/` | Differential-drive obstacle avoidance and human-aware navigation |
-| `fixed_wing/` | Fixed-wing aerial vehicle control |
-| `pedestrian/` | Robot navigation among pedestrians |
-| `van_der_pol/` | Van der Pol oscillator regulation |
-| `adaptive_cvar_cbf/` | Adaptive CVaR-CBF for risk-aware control |
-| `parameter_sweep/` | Parameter sweep and benchmarking utilities |
+| # | Directory | Description |
+|---|---|---|
+| 1 | `unicycle/` | Start here: CBF basics with reach-avoid, MPPI, stochastic and risk-aware controllers |
+| 2 | `single_integrator/` | State estimation (EKF, UKF) with risk-aware CBF control |
+| 3 | `differential_drive/` | Dynamic and static obstacle avoidance, barrier activation, human-aware navigation |
+| 4 | `pedestrian/` | Multi-agent navigation among pedestrians |
+| 5 | `fixed_wing/` | 3D fixed-wing aerial vehicle control with EKF |
+| 6 | `van_der_pol/` | Oscillator regulation with CBF-CLF constraints |
+| 7 | `adaptive_cvar_cbf/` | Adaptive CVaR-CBF for risk-aware control |
+| 8 | `parameter_sweep/` | Parameter sweep and benchmarking utilities |
 
 ## Quick Start
 
