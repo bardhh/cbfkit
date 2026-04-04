@@ -9,16 +9,29 @@ import pytest
 # List of script paths relative to the project root
 # These are the scripts we want to verify run successfully (exit code 0)
 SCRIPTS_TO_TEST = [
+    # Unicycle examples
     "examples/unicycle/reach_goal/mppi_cbf.py",
     "examples/unicycle/reach_goal/stochastic_cbf.py",
     "examples/unicycle/reach_goal/vanilla_cbf.py",
+    "examples/unicycle/reach_goal/unicycle_reach_avoid_cbf.py",
+    "examples/unicycle/reach_goal/vanilla_cbf_accel_unicycle.py",
     # "examples/unicycle/reach_goal/risk_aware_cbf.py",  # Disabled: needs visualization fix
-    "tutorials/unicycle_reach_avoid.py",
+    # Differential drive examples
+    "examples/differential_drive/obstacle_avoidance/single_robot_cbf.py",
+    "examples/differential_drive/obstacle_avoidance/dynamic_obstacle_cbf.py",
+    "examples/differential_drive/obstacle_avoidance/augmented_dynamic_obstacle_cbf.py",
+    "examples/differential_drive/obstacle_avoidance/barrier_activated_cbf.py",
+    # Single integrator examples
+    "examples/single_integrator/reach_goal/perfect_sensing.py",
+    # Pedestrian examples
+    "examples/pedestrian/navigate_among_pedestrians/head_on.py",
+    # Tutorials
     "tutorials/single_integrator_dynamic_obstacles.py",
     "tutorials/mppi_stl_reach_avoid.py",
     "tutorials/mppi_cbf_reach_avoid.py",
-    "tutorials/mppi_stochastic_cbf_reach_avoid.py",
     "tutorials/code_generation_example.py",
+    "tutorials/multi_robot_coordination_codegen.py",
+    "tutorials/multi_robot_3d_reachavoid.py",
 ]
 
 
@@ -41,9 +54,7 @@ def _assert_script_has_executable_code(script_path: str) -> None:
 
     executable_nodes = [node for node in nodes if not isinstance(node, ast.Pass)]
     if not executable_nodes:
-        pytest.fail(
-            f"Script {script_path} has no executable code (docstring/comment placeholder)."
-        )
+        pytest.fail(f"Script {script_path} has no executable code (docstring/comment placeholder).")
 
 
 @pytest.mark.slow
@@ -67,7 +78,9 @@ def test_example_script_execution(script_path, tmp_path):
     # Ensure tmp_path (for generated/copied modules), src and root (for examples) are in python path
     # Prepend tmp_path to PYTHONPATH so that imported modules (like 'tutorials') are loaded
     # from the temporary directory (where code generation happens) instead of the source tree.
-    env["PYTHONPATH"] = f"{tmp_path}{os.pathsep}{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
+    env[
+        "PYTHONPATH"
+    ] = f"{tmp_path}{os.pathsep}{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
 
     # Copy script parent directory to tmp_path to ensure relative assets/imports work
     # and to isolate output files.

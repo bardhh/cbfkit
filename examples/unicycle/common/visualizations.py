@@ -1,13 +1,9 @@
 """Trajectory plotting and animation for unicycle simulations."""
-# matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
 
-#! PLOTTING
 def plot_trajectory(
-    # fig,
-    # ax,
     states,
     desired_state,
     desired_state_radius=0.25,
@@ -33,17 +29,6 @@ def plot_trajectory(
             linewidth=1,
         )
     )
-    # for x, y, r in zip(CX, CY, R):
-    #     ax.add_patch(
-    #         plt.Circle(
-    #             (x, y),
-    #             r,
-    #             color="k",
-    #             fill=True,
-    #             linestyle="-",
-    #             linewidth=1,
-    #         )
-    #     )
     for obs, ell in zip(obstacles, ellipsoids):
         ax.add_patch(
             Ellipse(
@@ -62,12 +47,9 @@ def plot_trajectory(
     ax.legend()
     ax.grid()
 
-    # plt.show()
-
     return fig, ax
 
 
-#! ANIMATIONS
 def animate(
     states,
     estimates,
@@ -91,13 +73,20 @@ def animate(
         animator.add_obstacles(obstacles, ellipsoid_radii=ellipsoids)
     # Draw estimate as scatter points under the true trajectory
     animator.add_trajectory(
-        x_idx=0, y_idx=1, data=estimates,
-        color="orange", label="Estimated Trajectory", style="scatter",
-        alpha=0.5, zorder=2,
+        x_idx=0,
+        y_idx=1,
+        data=estimates,
+        color="orange",
+        label="Estimated Trajectory",
+        style="scatter",
+        alpha=0.5,
+        zorder=2,
     )
     animator.add_trajectory(
-        x_idx=0, y_idx=1,
-        color="blue", label="Trajectory",
+        x_idx=0,
+        y_idx=1,
+        color="blue",
+        label="Trajectory",
         zorder=3,
     )
 

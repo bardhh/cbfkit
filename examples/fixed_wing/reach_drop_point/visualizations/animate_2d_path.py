@@ -1,64 +1,28 @@
 """2D trajectory animation for fixed-wing UAV paths."""
 from typing import List
 
-# matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 from jax import Array
-from matplotlib.animation import FuncAnimation
-from matplotlib.patches import Ellipse
 
 
-#! PLOTTING
-def plot_trajectory(
-    states,
-    title=None,
-):
+def plot_trajectory(states, title=None):
+    """Plot state components (X, Y, Z) over time."""
     fig, axs = plt.subplots(1, 3, figsize=(12, 4))
 
     lbl = ["X", "Y", "Z"]
     for ii in range(3):
         axs[ii].plot(states[:, ii], label=lbl[ii])
+        axs[ii].set_xlabel("Step")
+        axs[ii].set_ylabel(lbl[ii])
+        axs[ii].legend()
+        axs[ii].grid()
 
-    # ax.set_xlim(x_lim)
-    # ax.set_ylim(y_lim)
-
-    # ax.plot(desired_state[0], desired_state[1], "ro", markersize=5, label="desired_state")
-    # ax.add_patch(
-    #     plt.Circle(
-    #         desired_state,
-    #         desired_state_radius,
-    #         color="r",
-    #         fill=False,
-    #         linestyle="--",
-    #         linewidth=1,
-    #     )
-    # )
-    # for x, y, r in zip(CX, CY, R):
-    #     ax.add_patch(
-    #         plt.Circle(
-    #             (x, y),
-    #             r,
-    #             color="k",
-    #             fill=True,
-    #             linestyle="-",
-    #             linewidth=1,
-    #         )
-    #     )
-
-    # ax.plot(states[:, 0], states[:, 1], label="Trajectory")
-
-    # ax.set_xlabel("x [m]")
-    # ax.set_ylabel("y [m]")
-    # axs.set_title(title)
-    # axs.legend(loc="upper left")
-    # axs.grid()
-
-    plt.show()
+    if title:
+        fig.suptitle(title)
 
     return fig, axs
 
 
-#! ANIMATIONS
 def animate(
     states,
     estimates,
@@ -73,80 +37,35 @@ def animate(
     save_animation=False,
     animation_filename="system_behavior.gif",
 ):
-    speedup = 7
+    from cbfkit.utils.animator import CBFAnimator
 
-    def init():
-        trajectory.set_data([], [])
-        etrajectory.set_data([], [])
-        return (trajectory,)
+    animator = CBFAnimator(states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title)
+    animator.add_goal(desired_state[:2], radius=desired_state_radius)
 
-    def update(frame):
-        frame = int(frame * speedup)
-        trajectory.set_data(states[:frame, 0], states[:frame, 1])
-        etrajectory.set_data(estimates[:frame, 0], estimates[:frame, 1])
-        _ = states[frame]
-        _ = estimates[frame]
-        return (
-            trajectory,
-            etrajectory,
-        )
-
-    fig, ax = plt.subplots()
-
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-
-    desired_state_radius = 0.1
-    ax.plot(desired_state[0], desired_state[1], "ro", markersize=5, label="desired_state")
+    # Add ellipsoidal obstacles
     for obstacle, r_ob in zip(obstacles, r_obs):
-        ax.add_patch(
-            Ellipse(
-                (float(obstacle[0]), float(obstacle[1])),
-                width=r_ob[0],
-                height=r_ob[1],
-                angle=0,
-                edgecolor="k",
-                facecolor="k",
-                # fill=True,
-                # linestyle="--",
-                # linewidth=1,
-            )
+        animator.add_obstacle(
+            (float(obstacle[0]), float(obstacle[1])),
+            ellipse_radii=(r_ob[0] / 2, r_ob[1] / 2),
+            color="k",
         )
 
-    ax.add_patch(
-        plt.Circle(
-            desired_state,
-            desired_state_radius,
-            color="r",
-            fill=False,
-            linestyle="--",
-            linewidth=1,
-        )
+    animator.add_trajectory(
+        x_idx=0,
+        y_idx=1,
+        data=estimates,
+        color="tab:orange",
+        label="Estimated Trajectory",
     )
-
-    (trajectory,) = ax.plot([], [], label="Trajectory")
-    (etrajectory,) = ax.plot([], [], label="Estimated Trajectory")
-
-    ax.set_xlim(x_lim[0], x_lim[1])
-    ax.set_ylim(y_lim[0], y_lim[1])
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    ax.set_title(title)
-    ax.legend(loc="best")
-    ax.grid()
-
-    ani = FuncAnimation(
-        fig,
-        update,
-        frames=int(len(states) / speedup),
-        init_func=init,
-        blit=True,  # , interval=dt * 20
+    animator.add_trajectory(
+        x_idx=0,
+        y_idx=1,
+        color="tab:blue",
+        label="Trajectory",
     )
 
     if save_animation:
-        from cbfkit.utils.animator import save_animation as _save_anim
-        _save_anim(ani, animation_filename)
+        animator.save(animation_filename)
 
-    plt.show()
-
-    return fig, ax
+    animator.show()
+    return animator.fig, animator.ax

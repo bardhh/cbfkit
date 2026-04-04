@@ -53,7 +53,7 @@ def nominal_controller(t, x, key, data=None):
 
 def main():
     dt = 0.1
-    tf = 20.0
+    tf = 20.0 if not os.getenv("CBFKIT_TEST_MODE") else 2.0
     num_steps = int(tf / dt)
 
     # System
@@ -149,42 +149,45 @@ def main():
     states = np.array(states)
     controls = np.array(controls)
 
-    results_dir = os.path.join(os.path.dirname(__file__), "results")
-    os.makedirs(results_dir, exist_ok=True)
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        results_dir = os.path.join(os.path.dirname(__file__), "results")
+        os.makedirs(results_dir, exist_ok=True)
 
-    fig, ax = plt.subplots(figsize=(8, 8))
-    ax.set_xlim(-2, 6)
-    ax.set_ylim(-2, 6)
-    ax.set_aspect("equal")
-    ax.grid(True)
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.set_xlim(-2, 6)
+        ax.set_ylim(-2, 6)
+        ax.set_aspect("equal")
+        ax.grid(True)
 
-    robot_patch = Circle((x0[0], x0[1]), radius, color="b", alpha=0.8)
-    ax.add_patch(robot_patch)
-    target_patch = Circle((4, 4), 0.2, color="g")
-    ax.add_patch(target_patch)
+        robot_patch = Circle((x0[0], x0[1]), radius, color="b", alpha=0.8)
+        ax.add_patch(robot_patch)
+        target_patch = Circle((4, 4), 0.2, color="g")
+        ax.add_patch(target_patch)
 
-    obs_patches = []
-    for obs in obstacles:
-        p = Circle((obs.x_curr[0].item(), obs.x_curr[1].item()), obs.radius, color="r", alpha=0.6)
-        ax.add_patch(p)
-        obs_patches.append(p)
+        obs_patches = []
+        for obs in obstacles:
+            p = Circle(
+                (obs.x_curr[0].item(), obs.x_curr[1].item()), obs.radius, color="r", alpha=0.6
+            )
+            ax.add_patch(p)
+            obs_patches.append(p)
 
-    (robot_line,) = ax.plot([], [], "b--")
+        (robot_line,) = ax.plot([], [], "b--")
 
-    def update(frame):
-        if frame >= len(states):
-            return []
-        pos = states[frame]
-        robot_patch.center = (pos[0], pos[1])
-        robot_line.set_data(states[: frame + 1, 0], states[: frame + 1, 1])
-        return [robot_patch, robot_line]
+        def update(frame):
+            if frame >= len(states):
+                return []
+            pos = states[frame]
+            robot_patch.center = (pos[0], pos[1])
+            robot_line.set_data(states[: frame + 1, 0], states[: frame + 1, 1])
+            return [robot_patch, robot_line]
 
-    ani = animation.FuncAnimation(fig, update, frames=len(states), blit=True, interval=100)
-    anim_path = os.path.join(results_dir, "cbfkit_demo.gif")
+        ani = animation.FuncAnimation(fig, update, frames=len(states), blit=True, interval=100)
+        anim_path = os.path.join(results_dir, "cbfkit_demo.gif")
 
-    from cbfkit.utils.animator import save_animation
+        from cbfkit.utils.animator import save_animation
 
-    save_animation(ani, anim_path)
+        save_animation(ani, anim_path)
 
 
 if __name__ == "__main__":

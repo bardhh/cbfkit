@@ -29,7 +29,7 @@ controller = unicycle.proportional_controller(
 )
 
 # Define time parameters
-tf = 5.0
+tf = 5.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
 dt = 0.01
 n_steps = int(tf / dt)
 
@@ -37,7 +37,7 @@ n_steps = int(tf / dt)
 simulate = 1
 
 # Plot or save
-plot = 1
+plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 save = 0
 
 if simulate:

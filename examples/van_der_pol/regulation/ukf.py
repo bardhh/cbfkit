@@ -30,7 +30,7 @@ plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 save = 1
 
 # Define time parameters
-tf = 5.0
+tf = 5.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
 dt = 0.01
 n_steps = int(tf / dt)
 

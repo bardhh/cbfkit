@@ -25,9 +25,9 @@ import cbfkit.simulation.simulator as sim
 import cbfkit.systems.unicycle.models.accel_unicycle as unicycle
 from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller as cbf_controller
-from cbfkit.controllers.cbf_clf.utils.barrier_conditions import zeroing_barriers
-from cbfkit.controllers.cbf_clf.utils.certificate_packager import concatenate_certificates
-from cbfkit.controllers.cbf_clf.utils.rectify_relative_degree import rectify_relative_degree
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.certificates import concatenate_certificates
+from cbfkit.certificates import rectify_relative_degree
 from cbfkit.controllers.mppi.mppi_generator import mppi_generator
 from cbfkit.controllers.mppi.mppi_visualize import initialize_mppi_plots, update_mppi_plot
 from cbfkit.estimators import naive as estimator
@@ -105,9 +105,9 @@ def create_robot_with_obstacles():
         "robot_state_dim": 4,
         "robot_control_dim": control_dim,
         "prediction_horizon": prediction_horizon,  # 5.0 seconds at dt=0.1
-        "num_samples": 5000,
+        "num_samples": 5000 if not os.getenv("CBFKIT_TEST_MODE") else 500,
         "time_step": 0.1,
-        "use_GPU": True,
+        "use_GPU": False,
         "costs_lambda": 0.1,
         "cost_perturbation": 0.1,
     }
@@ -288,7 +288,9 @@ def plot_results(states, controls, desired_state, obstacles, d_min_obstacle):
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    filename = "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_comprehensive.png"
+    filename = (
+        "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_comprehensive.png"
+    )
     print(f"Saving comprehensive plot to {filename}")
     plt.savefig(filename, dpi=150)
     plt.close()
@@ -500,7 +502,10 @@ def create_animation(
     )
 
     # Save animation
-    save_animation(anim, "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.mp4")
+    save_animation(
+        anim,
+        "examples/differential_drive/obstacle_avoidance/results/single_robot_cbf_animation.mp4",
+    )
 
     plt.close()
     return anim
@@ -578,23 +583,23 @@ def main():
         d_min_obstacle,
     ) = run_simulation()
 
-    # Create visualizations
-    print("\nGenerating visualizations...")
-    plot_results(states, controls, desired_state, obstacles, d_min_obstacle)
-
-    # Create animation
-    create_animation(states, controls, desired_state, obstacles, d_min_obstacle, p_keys, p_values)
-
     # Analyze performance
     analyze_performance(
         states, controls, c_keys, c_values, desired_state, obstacles, d_min_obstacle
     )
 
-    print("\nResults saved to:")
-    print("📊 Comprehensive plot: single_robot_cbf_comprehensive.png")
-    print("📈 CBFKit data: single_robot_cbf_results.csv")
-    print("🎬 Animation: single_robot_cbf_animation.mp4 (or .gif)")
-    print("\n🎯 Successfully demonstrated single robot CBF navigation using CBFKit framework!")
+    # Create visualizations (skip in test mode)
+    if not os.getenv("CBFKIT_TEST_MODE"):
+        print("\nGenerating visualizations...")
+        plot_results(states, controls, desired_state, obstacles, d_min_obstacle)
+        create_animation(
+            states, controls, desired_state, obstacles, d_min_obstacle, p_keys, p_values
+        )
+
+        print("\nResults saved to:")
+        print("  Comprehensive plot: single_robot_cbf_comprehensive.png")
+        print("  CBFKit data: single_robot_cbf_results.csv")
+        print("  Animation: single_robot_cbf_animation.mp4 (or .gif)")
 
 
 if __name__ == "__main__":

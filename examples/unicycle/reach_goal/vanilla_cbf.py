@@ -21,9 +21,9 @@ from cbfkit.utils.user_types import PlannerData
 from examples.unicycle.common.ellipsoidal_obstacle import cbf as ellipsoid_cbf
 from examples.unicycle.common.visualizations import animate, plot_trajectory
 
-plot = 1
+plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 should_animate = 0  # Renamed from animate
-save = 1
+save = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 
 # Simulation parameters
 tf = 10.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5

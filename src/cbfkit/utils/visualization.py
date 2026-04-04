@@ -7,11 +7,29 @@ Visualization Utilities for CBFKit Simulations.
   matplotlib (MP4/GIF), and Manim (high-quality MP4) backends.
 """
 
+import warnings
 from typing import Any, List, Optional
 
 import numpy as np
 
+try:
+    import matplotlib  # noqa: F401
+
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+
 _PED_COLORS = ["red", "orange", "purple", "brown", "pink"]
+
+
+def require_visualization():
+    """Raise ImportError if matplotlib is not available."""
+    if not HAS_MATPLOTLIB:
+        raise ImportError(
+            "Optional dependency 'matplotlib' not found. "
+            "Please install cbfkit[vis] to use visualization features."
+        )
+
 
 # Manim quality mapping
 _MANIM_QUALITY_MAP = {
@@ -61,7 +79,8 @@ def visualize_crowd(
     print(f"Generating Animation -> {save_path}...")
 
     anim = CBFAnimator(
-        states, dt=dt,
+        states,
+        dt=dt,
         title="Crowd Navigation",
         aspect="equal",
         backend=backend,
@@ -72,9 +91,14 @@ def visualize_crowd(
 
     # Robot
     anim.add_agent(
-        x_idx=0, y_idx=1,
-        body_radius=0.3, body_color="blue", body_alpha=0.8,
-        trail=True, trail_style="-", trail_alpha=0.5,
+        x_idx=0,
+        y_idx=1,
+        body_radius=0.3,
+        body_color="blue",
+        body_alpha=0.8,
+        trail=True,
+        trail_style="-",
+        trail_alpha=0.5,
         label="Robot",
     )
 
@@ -83,18 +107,27 @@ def visualize_crowd(
         idx = 4 + i * 4
         color = _PED_COLORS[i % len(_PED_COLORS)]
         anim.add_agent(
-            x_idx=idx, y_idx=idx + 1,
-            body_radius=0.25, body_color=color, body_alpha=0.8,
-            zone_radius=d_safe, zone_alpha=0.15,
-            trail=True, trail_style="--", trail_alpha=0.3,
+            x_idx=idx,
+            y_idx=idx + 1,
+            body_radius=0.25,
+            body_color=color,
+            body_alpha=0.8,
+            zone_radius=d_safe,
+            zone_alpha=0.15,
+            trail=True,
+            trail_style="--",
+            trail_alpha=0.3,
             label=f"Ped {i}",
         )
         anim.add_prediction(
             source="linear",
-            agent_x_idx=idx, agent_y_idx=idx + 1,
-            agent_vx_idx=idx + 2, agent_vy_idx=idx + 3,
+            agent_x_idx=idx,
+            agent_y_idx=idx + 1,
+            agent_vx_idx=idx + 2,
+            agent_vy_idx=idx + 3,
             horizon=20,
-            color=color, linestyle="dotted",
+            color=color,
+            linestyle="dotted",
         )
 
     # MPPI planned path overlay
@@ -103,8 +136,11 @@ def visualize_crowd(
         anim.add_prediction(
             source="data",
             trajectory_data=p_values[mppi_idx],
-            traj_x_row=0, traj_y_row=1,
-            color="green", linewidth=2.5, fade=True,
+            traj_x_row=0,
+            traj_y_row=1,
+            color="green",
+            linewidth=2.5,
+            fade=True,
             label="Planned Path",
         )
 
@@ -130,9 +166,7 @@ def _parse_manim_backend(backend: str) -> str:
     if len(parts) == 2 and parts[0] == "manim" and parts[1] in _MANIM_QUALITY_MAP:
         return _MANIM_QUALITY_MAP[parts[1]]
     valid = ", ".join(f'"manim-{k}"' for k in _MANIM_QUALITY_MAP)
-    raise ValueError(
-        f"Unknown Manim backend {backend!r}. Use \"manim\" or one of: {valid}."
-    )
+    raise ValueError(f'Unknown Manim backend {backend!r}. Use "manim" or one of: {valid}.')
 
 
 def visualize_3d_multi_robot(
@@ -214,33 +248,64 @@ def visualize_3d_multi_robot(
 
     # Pre-compute metrics shared by all backends
     goal_dists, min_dists, obs_dists = _compute_distance_metrics(
-        states, desired_states, num_robots, sdim,
-        ellipse_centers, ellipse_radii, ellipse_rotations,
-        include_min_distance_plot, include_min_distance_to_obstacles_plot,
+        states,
+        desired_states,
+        num_robots,
+        sdim,
+        ellipse_centers,
+        ellipse_radii,
+        ellipse_rotations,
+        include_min_distance_plot,
+        include_min_distance_to_obstacles_plot,
     )
 
     common = dict(
-        states=states, desired_states=desired_states,
-        desired_state_radius=desired_state_radius, num_robots=num_robots,
-        ellipse_centers=ellipse_centers, ellipse_radii=ellipse_radii,
+        states=states,
+        desired_states=desired_states,
+        desired_state_radius=desired_state_radius,
+        num_robots=num_robots,
+        ellipse_centers=ellipse_centers,
+        ellipse_radii=ellipse_radii,
         ellipse_rotations=ellipse_rotations,
-        x_lim=x_lim, y_lim=y_lim, z_lim=z_lim,
-        dt=dt, sdim=sdim, title=title,
+        x_lim=x_lim,
+        y_lim=y_lim,
+        z_lim=z_lim,
+        dt=dt,
+        sdim=sdim,
+        title=title,
         animation_filename=animation_filename,
         include_min_distance_plot=include_min_distance_plot,
         include_min_distance_to_obstacles_plot=include_min_distance_to_obstacles_plot,
         threshold=threshold,
-        goal_dists=goal_dists, min_dists=min_dists, obs_dists=obs_dists,
+        goal_dists=goal_dists,
+        min_dists=min_dists,
+        obs_dists=obs_dists,
     )
 
     if backend == "plotly":
         from cbfkit.utils.visualizations.plotly_3d_multi_robot import _visualize_3d_plotly
+
         return _visualize_3d_plotly(save_animation=save_animation, **common)
     elif backend.startswith("manim"):
         quality = _parse_manim_backend(backend)
         from cbfkit.utils.animators.deps import _require_manim
         from cbfkit.utils.visualizations.manim_3d_multi_robot import render_multi_robot_3d
+
         _require_manim()
+        if include_min_distance_plot:
+            warnings.warn(
+                "Manim backend does not support inline subplot panels. "
+                "include_min_distance_plot will be ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
+        if include_min_distance_to_obstacles_plot:
+            warnings.warn(
+                "Manim backend does not support inline subplot panels. "
+                "include_min_distance_to_obstacles_plot will be ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
         save_path = animation_filename if save_animation else None
         return render_multi_robot_3d(
             states=states,
@@ -248,8 +313,11 @@ def visualize_3d_multi_robot(
             num_robots=num_robots,
             state_dimension_per_robot=sdim,
             desired_state_radius=desired_state_radius,
-            x_lim=x_lim, y_lim=y_lim, z_lim=z_lim,
-            dt=dt, title=title,
+            x_lim=x_lim,
+            y_lim=y_lim,
+            z_lim=z_lim,
+            dt=dt,
+            title=title,
             ellipse_centers=ellipse_centers,
             ellipse_radii=ellipse_radii,
             ellipse_rotations=ellipse_rotations,
@@ -261,4 +329,5 @@ def visualize_3d_multi_robot(
         )
     else:
         from cbfkit.utils.visualizations.matplotlib_3d_multi_robot import _visualize_3d_matplotlib
+
         return _visualize_3d_matplotlib(save_animation=save_animation, **common)
