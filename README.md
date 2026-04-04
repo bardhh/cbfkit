@@ -19,6 +19,8 @@ Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx
 
 ## Quick Start
 
+Requires **Python 3.10--3.12**.
+
 ```bash
 git clone https://github.com/bardhh/cbfkit.git && cd cbfkit
 pip install -e ".[dev]"
@@ -94,21 +96,6 @@ Each component is a pure function with a specific signature:
 | Cost function | `(state, action)` | `cost` |
 
 Legacy controller signatures like `(t, x)` or `(t, x, u_nom)` are adapted automatically by the simulator via `cbfkit.controllers.setup_controller`.
-
-## Installation
-
-### Prerequisites
-- **Python 3.10 -- 3.12** (3.13+ is not yet supported)
-
-### From source
-
-```bash
-git clone https://github.com/bardhh/cbfkit.git
-cd cbfkit
-pip install -e ".[dev]"
-```
-
-> **Apple Silicon:** `kvxopt` is installed automatically in place of `cvxopt`.
 
 <details>
 <summary><strong>Docker</strong></summary>
