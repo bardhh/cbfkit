@@ -4,10 +4,14 @@ CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barr
 
 <p align="center">
   <img src="media/showcase/ped_mppi.gif" width="48%" alt="MPPI navigation among pedestrians">
-  <img src="media/showcase/pedestrian_head_on.gif" width="48%" alt="Pedestrian head-on navigation">
+  <img src="media/showcase/pedestrian_head_on.gif" width="48%" alt="CBF safety with head-on encounter">
 </p>
 <p align="center">
-  <em>MPPI navigation among pedestrians &nbsp;&nbsp;|&nbsp;&nbsp; CBF safety with head-on encounter</em>
+  <img src="media/showcase/mppi_rollouts.gif" width="48%" alt="MPPI trajectory sampling">
+  <img src="media/showcase/ekf_estimation.gif" width="48%" alt="EKF state estimation">
+</p>
+<p align="center">
+  <em>MPPI among pedestrians &nbsp;|&nbsp; CBF head-on safety &nbsp;|&nbsp; MPPI rollout sampling &nbsp;|&nbsp; EKF state estimation</em>
 </p>
 
 Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx = (f(x) + g(x)u)dt + \sigma(x)dw$
