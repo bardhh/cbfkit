@@ -47,21 +47,18 @@ def create_scenario():
     dynamics.v_max = 3.0
     dynamics.goal_tol = 0.2
 
-    d_min = 0.7  # Safety distance
-    init_state = jnp.array([0.5, 0.5, 0.0, 0.0])
-    goal_state = jnp.array([11.0, 7.5, 0.0, 0.0])
+    d_min = 0.5  # Safety distance (ellipsoid semi-axis)
+    init_state = jnp.array([0.0, 0.0, 0.0, 0.0])
+    goal_state = jnp.array([10.0, 6.0, 0.0, 0.0])
 
-    # Obstacles
+    # Obstacles — spread out to allow feasible paths
     obstacles = [
-        (2.0, 0.0, 0.0),
-        (2.0, 2.0, 0.0),
-        (4.0, 0.8, 0.0),
-        (4.0, 2.8, 0.0),
-        (8.0, 5.5, 0.0),
-        (9.5, 6.5, 0.0),
-        (3.0, 5.0, 0.0),
-        (3.5, 6.5, 0.0),
-        # (10.8, 5.5, 0.0),
+        (2.0, 1.0, 0.0),
+        (3.5, 3.0, 0.0),
+        (5.0, 1.5, 0.0),
+        (6.5, 4.0, 0.0),
+        (8.0, 2.5, 0.0),
+        (4.0, 5.5, 0.0),
     ]
 
     print(
@@ -102,9 +99,8 @@ def create_scenario():
             system_dynamics=dynamics,
             state_dim=4,
             form="exponential",
-            roots=jnp.array([-1.0, -1.0]),
         )(
-            certificate_conditions=zeroing_barriers.linear_class_k(10.0),
+            certificate_conditions=zeroing_barriers.linear_class_k(5.0),
         )
         barriers.append(barrier)
 
