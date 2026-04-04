@@ -9,9 +9,12 @@ import os
 import sys
 from pathlib import Path
 
-import jax.numpy as jnp
+# Add project root to path for examples imports
+root_path = str(Path(__file__).resolve().parent.parent.parent.parent)
+if root_path not in sys.path:
+    sys.path.insert(0, root_path)
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import jax.numpy as jnp
 from jax import Array, jit, lax
 
 import cbfkit.controllers.mppi as mppi_planner
@@ -108,6 +111,7 @@ controller = cbf_controller(
     dynamics_func=unicycle_dynamics,
     barriers=barrier_packages,
     sigma=sigma,
+    relaxable_cbf=True,
 )
 
 
@@ -140,7 +144,6 @@ def terminal_cost(state_and_time: Array, action: Array) -> Array:
     """MPPI terminal cost."""
     x_e, y_e = state_and_time[0], state_and_time[1]
     cost = 10.0 * ((x_e - desired_state[0]) ** 2 + (y_e - desired_state[1]) ** 2)
-    return cost  # comment this line to also include collision avoidance cost in terminal cost term
 
     def body(i, inputs):
         cost = inputs
@@ -158,12 +161,10 @@ def terminal_cost(state_and_time: Array, action: Array) -> Array:
 mppi_args = {
     "robot_state_dim": 4,
     "robot_control_dim": 2,
-    "prediction_horizon": 80,  # 150,
-    "num_samples": 1000
-    if not os.getenv("CBFKIT_TEST_MODE")
-    else 100,  # Reduced from 20000 to prevent memory issues with JIT data logging
+    "prediction_horizon": 100,
+    "num_samples": 5000 if not os.getenv("CBFKIT_TEST_MODE") else 100,
     "plot_samples": 30,
-    "time_step": dt * 2.0,
+    "time_step": dt,
     "use_GPU": False,
     "costs_lambda": 0.03,
     "cost_perturbation": 0.1,
