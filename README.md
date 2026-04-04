@@ -23,7 +23,7 @@ Requires **Python 3.10--3.12**.
 
 ```bash
 git clone https://github.com/bardhh/cbfkit.git && cd cbfkit
-pip install -e ".[dev]"
+pip install -e .
 python examples/unicycle/reach_goal/unicycle_reach_avoid_cbf.py
 ```
 

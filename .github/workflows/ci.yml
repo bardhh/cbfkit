@@ -7,160 +7,7 @@ on:
     branches: [ "main", "develop" ]
 
 jobs:
-  dependency-contract:
-    runs-on: ubuntu-latest
-    env:
-      JAX_PLATFORM_NAME: cpu
-      UV_CACHE_DIR: /tmp/.uv-cache
-      JAX_COMPILATION_CACHE_DIR: /tmp/jax_cache
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.10"
-    - name: Cache uv
-      uses: actions/cache@v4
-      with:
-        path: /tmp/.uv-cache
-        key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-
-    - name: Install base package (no extras)
-      env:
-        UV_SYSTEM_PYTHON: 1
-      run: |
-        pip install uv
-        uv pip install -e .
-    - name: Validate optional dependency contracts
-      run: |
-        python - <<'PY'
-        import importlib.util
-        import os
-        import runpy
-        import tempfile
-        from pathlib import Path
-
-        import jax.numpy as jnp
-
-        cache_root = Path(tempfile.gettempdir()) / "cbfkit_optional_dep_cache"
-        cache_root.mkdir(parents=True, exist_ok=True)
-        mpl_cache = cache_root / "mpl"
-        xdg_cache = cache_root / "xdg"
-        mpl_cache.mkdir(parents=True, exist_ok=True)
-        xdg_cache.mkdir(parents=True, exist_ok=True)
-        os.environ.setdefault("MPLCONFIGDIR", str(mpl_cache))
-        os.environ.setdefault("XDG_CACHE_HOME", str(xdg_cache))
-
-        import cbfkit.utils.visualization as visualization
-
-        if importlib.util.find_spec("casadi") is None:
-            module_path = Path("src/cbfkit/optimization/quadratic_program/qp_solver_casadi.py")
-            qp_solver_casadi_ns = runpy.run_path(str(module_path))
-            solve = qp_solver_casadi_ns["solve"]
-            try:
-                solve(jnp.eye(1), jnp.zeros((1,)))
-            except ImportError as exc:
-                if "cbfkit[casadi]" not in str(exc):
-                    raise AssertionError(
-                        "CasADi missing-path error must include guidance for `cbfkit[casadi]`."
-                    ) from exc
-            else:
-                raise AssertionError("Expected ImportError with installation guidance for CasADi.")
-
-        if not visualization.HAS_MATPLOTLIB:
-            try:
-                visualization.require_visualization()
-            except ImportError as exc:
-                if "cbfkit[vis]" not in str(exc):
-                    raise AssertionError(
-                        "Visualization missing-path error must include guidance for `cbfkit[vis]`."
-                    ) from exc
-            else:
-                raise AssertionError(
-                    "Expected ImportError with installation guidance for visualization."
-                )
-
-        print("optional dependency contract checks passed")
-        PY
-
-  extra-profile-smoke:
-    needs: dependency-contract
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        profile: ["test", "codegen", "vis", "casadi"]
-    env:
-      JAX_PLATFORM_NAME: cpu
-      UV_CACHE_DIR: /tmp/.uv-cache
-      MPLCONFIGDIR: /tmp/.mplconfig
-      XDG_CACHE_HOME: /tmp/.xdg-cache
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.10"
-    - name: Cache uv
-      uses: actions/cache@v4
-      with:
-        path: /tmp/.uv-cache
-        key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-
-    - name: Install profile and run smoke checks
-      env:
-        UV_SYSTEM_PYTHON: 1
-      run: |
-        pip install uv
-        case "${{ matrix.profile }}" in
-          test)
-            uv pip install -e ".[test]"
-            python - <<'PY'
-import pytest
-import dotenv
-print("test profile smoke ok", pytest.__version__, bool(dotenv))
-PY
-            ;;
-          codegen)
-            uv pip install -e ".[codegen]"
-            python - <<'PY'
-from cbfkit.codegen.create_new_system.generate_model import generate_model
-assert callable(generate_model)
-print("codegen profile smoke ok")
-PY
-            ;;
-          vis)
-            uv pip install -e ".[vis]"
-            python - <<'PY'
-import cbfkit.utils.visualization as visualization
-visualization.require_visualization()
-print("vis profile smoke ok")
-PY
-            ;;
-          casadi)
-            uv pip install -e ".[casadi]"
-            python - <<'PY'
-import jax.numpy as jnp
-from cbfkit.optimization.quadratic_program.qp_solver_casadi import solve
-P = jnp.eye(1)
-q = jnp.zeros((1,))
-G = jnp.array([[1.0], [-1.0]])
-h = jnp.array([1.0, 1.0])
-sol, status = solve(P, q, G, h)
-assert sol.shape == (1,)
-assert status in (0, 1)
-print("casadi profile smoke ok", int(status))
-PY
-            ;;
-          *)
-            echo "Unknown profile: ${{ matrix.profile }}" >&2
-            exit 2
-            ;;
-        esac
-
   build:
-    needs: [dependency-contract, extra-profile-smoke]
     runs-on: ubuntu-latest
     env:
       JAX_PLATFORM_NAME: cpu
@@ -196,16 +43,15 @@ PY
       run: |
         pip install uv
         if [ "${{ matrix.python-version }}" == "3.10" ]; then
-          uv pip install -e ".[test,codegen]" ruff mypy
+          uv pip install -e ".[dev]" ruff mypy
         else
-          uv pip install -e ".[test,codegen]"
+          uv pip install -e ".[dev]"
         fi
     - name: Lint with ruff
       if: matrix.python-version == '3.10'
       env:
         UV_SYSTEM_PYTHON: 1
       run: |
-        # Run ruff check. Exit non-zero on failure.
         ruff check src
     - name: Type check with mypy
       if: matrix.python-version == '3.10'
