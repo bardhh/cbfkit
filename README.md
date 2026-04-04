@@ -11,7 +11,8 @@ CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barr
   <img src="media/showcase/ekf_estimation.gif" width="48%" alt="EKF state estimation">
 </p>
 <p align="center">
-  <em>MPPI among pedestrians &nbsp;|&nbsp; CBF head-on safety &nbsp;|&nbsp; MPPI rollout sampling &nbsp;|&nbsp; EKF state estimation</em>
+  <em>MPPI among pedestrians &nbsp;|&nbsp; CBF head-on safety</em><br>
+  <em>MPPI rollout sampling &nbsp;|&nbsp; EKF state estimation</em>
 </p>
 
 Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx = (f(x) + g(x)u)dt + \sigma(x)dw$
@@ -19,13 +20,18 @@ Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx
 ## Quick Start
 
 ```bash
-pip install "cbfkit[vis]"
+git clone https://github.com/bardhh/cbfkit.git && cd cbfkit
+pip install ".[vis]"
+python examples/unicycle/reach_goal/unicycle_reach_avoid_cbf.py
 ```
+
+**Minimal example** — unicycle navigating to a goal while avoiding an obstacle with a CBF safety filter:
 
 ```python
 import jax.numpy as jnp
+from jax import jit
 from cbfkit.simulation import simulator
-from cbfkit.systems.unicycle.models.accel_unicycle.dynamics import accel_unicycle_dynamics
+from cbfkit.systems.unicycle.models.olfatisaber2002approximate.dynamics import approx_unicycle_dynamics
 from cbfkit.certificates import concatenate_certificates, rectify_relative_degree
 from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
@@ -34,34 +40,44 @@ from cbfkit.integration import runge_kutta_4
 from cbfkit.sensors import perfect
 from cbfkit.estimators import naive
 
-# Dynamics and barrier
-dynamics = accel_unicycle_dynamics()
+dynamics = approx_unicycle_dynamics(lam=1.0)  # state: [x, y, theta]
+
+# Nominal controller — drives toward goal
+@jit
+def nominal_controller(t, state, key, data):
+    x, y, th = state
+    xg, yg = 4.0, 0.0
+    heading = jnp.arctan2(yg - y, xg - x)
+    return jnp.array([
+        jnp.linalg.norm(jnp.array([x - xg, y - yg])),                         # speed
+        jnp.arctan2(jnp.sin(heading - th), jnp.cos(heading - th)),             # steering
+    ]), {}
+
+# CBF barrier — obstacle at (2, 0.5) with radius 0.5
 cbf_factory, _, _ = ellipsoidal_barrier_factory(
     system_position_indices=(0, 1), obstacle_position_indices=(0, 1), ellipsoid_axis_indices=(0, 1),
 )
 barrier = rectify_relative_degree(
-    function=cbf_factory(jnp.array([1.0, 2.0, 0.0]), jnp.array([0.5, 0.5])),
-    system_dynamics=dynamics, state_dim=4, form="exponential",
-)(certificate_conditions=linear_class_k(5.0))
+    function=cbf_factory(jnp.array([2.0, 0.5, 0.0]), jnp.array([0.5, 0.5])),
+    system_dynamics=dynamics, state_dim=3, form="exponential",
+)(certificate_conditions=linear_class_k(10.0))
 
-# Controller and simulation
+# Safety-filtered simulation
 controller = vanilla_cbf_clf_qp_controller(
-    control_limits=jnp.array([1.0, jnp.pi]),
+    control_limits=jnp.array([5.0, jnp.pi]),
     dynamics_func=dynamics,
     barriers=concatenate_certificates(barrier),
 )
 results = simulator.execute(
-    x0=jnp.array([0.0, 0.0, 0.0, jnp.pi / 4]),
-    dt=0.01, num_steps=500, dynamics=dynamics, integrator=runge_kutta_4,
-    controller=controller, sensor=perfect, estimator=naive,
+    x0=jnp.array([0.0, 0.0, 0.0]), dt=0.01, num_steps=500,
+    dynamics=dynamics, integrator=runge_kutta_4,
+    nominal_controller=nominal_controller, controller=controller,
+    sensor=perfect, estimator=naive,
 )
+print(f"Final position: ({results.states[-1, 0]:.2f}, {results.states[-1, 1]:.2f})")
 ```
 
 ## Simulation Architecture
-
-```
-Planner  -->  Nominal Controller  -->  Safety Controller (CBF-CLF-QP)  -->  Plant  -->  Integrator  -->  Sensor  -->  Estimator
-```
 
 ![cbfkit_architecture](https://github.com/user-attachments/assets/9ca32a8d-4fb5-420d-8742-cb6545a65889)
 
