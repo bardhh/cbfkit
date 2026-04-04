@@ -21,7 +21,7 @@ Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx
 
 ```bash
 git clone https://github.com/bardhh/cbfkit.git && cd cbfkit
-pip install ".[vis]"
+pip install -e ".[dev]"
 python examples/unicycle/reach_goal/unicycle_reach_avoid_cbf.py
 ```
 
@@ -105,9 +105,7 @@ Legacy controller signatures like `(t, x)` or `(t, x, u_nom)` are adapted automa
 ```bash
 git clone https://github.com/bardhh/cbfkit.git
 cd cbfkit
-pip install .                  # minimal install
-pip install ".[codegen,vis]"   # code generation + visualization
-pip install -e ".[dev]"        # editable dev install with all extras
+pip install -e ".[dev]"
 ```
 
 > **Apple Silicon:** `kvxopt` is installed automatically in place of `cvxopt`.
@@ -153,7 +151,7 @@ See [`examples/README.md`](examples/README.md) for the full list with recommende
 | `mppi_stl_reach_avoid.py` | MPPI with STL specifications |
 | `single_integrator_dynamic_obstacles.py` | Dynamic obstacle avoidance |
 
-> Most tutorials require `pip install "cbfkit[codegen]"`.
+> Tutorials require the `codegen` dependencies (included in the default install).
 
 ## ROS2
 
