@@ -42,12 +42,12 @@ def create_scenario():
 
     # Robot setup
     dynamics = unicycle.plant(l=1.0)
-    dynamics.a_max = 100.0
-    dynamics.omega_max = 100.0
+    dynamics.a_max = 5.0
+    dynamics.omega_max = 5.0
     dynamics.v_max = 3.0
     dynamics.goal_tol = 0.2
 
-    d_min = 0.5  # Safety distance
+    d_min = 0.7  # Safety distance
     init_state = jnp.array([0.5, 0.5, 0.0, 0.0])
     goal_state = jnp.array([11.0, 7.5, 0.0, 0.0])
 
@@ -102,8 +102,9 @@ def create_scenario():
             system_dynamics=dynamics,
             state_dim=4,
             form="exponential",
+            roots=jnp.array([-1.0, -1.0]),
         )(
-            certificate_conditions=zeroing_barriers.linear_class_k(5.0),
+            certificate_conditions=zeroing_barriers.linear_class_k(10.0),
         )
         barriers.append(barrier)
 
@@ -114,13 +115,13 @@ def create_scenario():
     # We assume the controller signature matches cbf_clf_qp_generator's output
     # plus extra args like obstacle_positions
     controller = cbf_controller(
-        control_limits=jnp.array([100.0, 100.0]),
-        # nominal_input=nom_controller, # We'll let simulator handle nominal
+        control_limits=jnp.array([5.0, 5.0]),
         dynamics_func=dynamics,
         barriers=barrier_package,
         obstacle_positions=obstacle_positions,
-        k_closest=3,
-        activation_radius=2.0,
+        k_closest=4,
+        activation_radius=3.0,
+        relaxable_cbf=True,
     )
 
     return dynamics, controller, nom_controller, init_state, goal_state, obstacles, d_min

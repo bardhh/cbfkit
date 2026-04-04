@@ -13,8 +13,7 @@ Ready-to-run scripts that demonstrate CBFKit using **pre-built systems** from `c
 | `pedestrian/` | Robot navigation among pedestrians |
 | `van_der_pol/` | Van der Pol oscillator regulation |
 | `adaptive_cvar_cbf/` | Adaptive CVaR-CBF for risk-aware control |
-| `benchmarking/` | Parameter sweep and benchmarking utilities |
-| `diagnostics/` | Diagnostic and debugging tools |
+| `parameter_sweep/` | Parameter sweep and benchmarking utilities |
 
 ## Quick Start
 
@@ -26,7 +25,7 @@ python examples/unicycle/reach_goal/unicycle_reach_avoid_cbf.py
 python examples/unicycle/reach_goal/mppi_cbf.py
 
 # Parameter sweep for tuning CBF controllers
-python examples/benchmarking/parameter_sweep.py
+python examples/parameter_sweep/parameter_sweep.py
 ```
 
 ## Looking to build your own system?

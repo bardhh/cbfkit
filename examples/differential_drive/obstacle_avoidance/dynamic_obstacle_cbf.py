@@ -105,7 +105,7 @@ def run_simulation():
     )
 
     # Create the base proportional controller
-    base_nom = proportional_controller(dynamics, Kp_pos=2.0, Kp_theta=2.0)
+    base_nom = proportional_controller(dynamics, Kp_pos=3.0, Kp_theta=3.0)
 
     # Wrap it to handle the signature required by sim.execute/controller
     # The vanilla controller passes u_nom computed by nominal_controller
@@ -128,8 +128,9 @@ def run_simulation():
             system_dynamics=dynamics,
             state_dim=4,
             form="exponential",
+            roots=jnp.array([-1.0, -1.0]),
         )(
-            certificate_conditions=zeroing_barriers.linear_class_k(2.0),
+            certificate_conditions=zeroing_barriers.linear_class_k(5.0),
         )
 
         barriers.append(barrier_rectified)
@@ -142,7 +143,7 @@ def run_simulation():
         control_limits=jnp.array([dynamics.a_max, dynamics.omega_max]),
         dynamics_func=dynamics,
         barriers=barrier_package,
-        # We don't use 'obstacle_positions' arg here as barriers handle it internally
+        relaxable_cbf=True,
     )
 
     # 6. Simulation
@@ -207,7 +208,9 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
     ax.grid(True)
     ax.set_aspect("equal")
 
-    plt.savefig("examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_trajectory.png")
+    plt.savefig(
+        "examples/differential_drive/obstacle_avoidance/results/dynamic_obstacle_trajectory.png"
+    )
     plt.close()
 
     # --- Animation via CBFAnimator ---
@@ -225,6 +228,7 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
         y_lim=(min(all_y) - margin, max(all_y) + margin),
         title="Dynamic Obstacle Avoidance",
         aspect="equal",
+        backend="matplotlib",
         config=AnimationConfig(blit=False, figsize=(12, 10)),
     )
     animator.add_goal(
@@ -233,7 +237,9 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
         color="orange",
         label="Goal",
     )
-    animator.add_trajectory(x_idx=0, y_idx=1, color="b", label="Robot Trail", alpha=0.5, linewidth=1)
+    animator.add_trajectory(
+        x_idx=0, y_idx=1, color="b", label="Robot Trail", alpha=0.5, linewidth=1
+    )
     animator.show_time()
 
     # Build to get axes for custom patches
@@ -241,9 +247,7 @@ def create_visualization(states, controls, goal_state, d_min, num_obstacles, dt)
     ax.set_facecolor("#f8f9fa")
 
     # Goal decorative circle
-    goal_circle = Circle(
-        (goal_state[0], goal_state[1]), 0.3, color="gold", alpha=0.5, zorder=1
-    )
+    goal_circle = Circle((goal_state[0], goal_state[1]), 0.3, color="gold", alpha=0.5, zorder=1)
     ax.add_patch(goal_circle)
 
     # Robot circle (dynamic)

@@ -105,9 +105,9 @@ def create_robot_with_obstacles():
         "robot_state_dim": 4,
         "robot_control_dim": control_dim,
         "prediction_horizon": prediction_horizon,  # 5.0 seconds at dt=0.1
-        "num_samples": 5000,
+        "num_samples": 5000 if not os.getenv("CBFKIT_TEST_MODE") else 500,
         "time_step": 0.1,
-        "use_GPU": True,
+        "use_GPU": False,
         "costs_lambda": 0.1,
         "cost_perturbation": 0.1,
     }

@@ -130,9 +130,9 @@ def run_simulation():
     # 1. Define Systems
     # Robot
     robot_dyn = unicycle.plant(l=1.0)
-    robot_dyn.a_max = 10.0
-    robot_dyn.omega_max = 10.0
-    robot_dyn.v_max = 10.0
+    robot_dyn.a_max = 5.0
+    robot_dyn.omega_max = 5.0
+    robot_dyn.v_max = 3.0
 
     # Obstacles
     # Obs 1: Circular path around (5, 4)
@@ -162,7 +162,7 @@ def run_simulation():
         proportional_controller,
     )
 
-    base_nom = proportional_controller(robot_dyn, Kp_pos=2.0, Kp_theta=2.0)
+    base_nom = proportional_controller(robot_dyn, Kp_pos=3.0, Kp_theta=3.0)
 
     def nom_controller(t, z, key=None, data=None):
         # Extract robot state (first 4 elements)
@@ -184,8 +184,9 @@ def run_simulation():
         system_dynamics=aug_dynamics,
         state_dim=8,  # Full augmented dimension
         form="exponential",
+        roots=jnp.array([-1.0, -1.0]),
     )(
-        certificate_conditions=zeroing_barriers.linear_class_k(1.0),
+        certificate_conditions=zeroing_barriers.linear_class_k(5.0),
     )
     barriers.append(b1)
 
@@ -194,9 +195,13 @@ def run_simulation():
     # Obs 2 pos indices: 6, 7
     h2 = create_augmented_barrier(0, 6, d_min)
     b2 = rectify_relative_degree(
-        function=h2, system_dynamics=aug_dynamics, state_dim=8, form="exponential"
+        function=h2,
+        system_dynamics=aug_dynamics,
+        state_dim=8,
+        form="exponential",
+        roots=jnp.array([-1.0, -1.0]),
     )(
-        certificate_conditions=zeroing_barriers.linear_class_k(1.0),
+        certificate_conditions=zeroing_barriers.linear_class_k(5.0),
     )
     barriers.append(b2)
 
@@ -206,8 +211,9 @@ def run_simulation():
     print("Initializing Controller...")
     controller = cbf_controller(
         control_limits=jnp.array([robot_dyn.a_max, robot_dyn.omega_max]),
-        dynamics_func=aug_dynamics,  # Controller uses augmented dynamics!
+        dynamics_func=aug_dynamics,
         barriers=barrier_package,
+        relaxable_cbf=True,
     )
 
     # 5. Simulation
@@ -272,6 +278,7 @@ def create_visualization(states, goal_state, d_min):
         y_lim=(float(min(all_y)) - margin, float(max(all_y)) + margin),
         title="Augmented State Dynamic Avoidance",
         aspect="equal",
+        backend="matplotlib",
         config=AnimationConfig(blit=False, figsize=(10, 10)),
     )
     animator.add_goal(
