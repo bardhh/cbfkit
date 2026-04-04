@@ -3,11 +3,11 @@
 CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barrier Functions (CBFs). Built on JAX for automatic differentiation and JIT compilation, it provides formal safety guarantees for robotic systems operating in deterministic, disturbed, and stochastic environments. It also includes an efficient JAX implementation of Model Predictive Path Integral (MPPI) control with reach-avoid specifications.
 
 <p align="center">
-  <img src="media/showcase/unicycle_reach_avoid.gif" width="48%" alt="Unicycle reach-avoid with CBF safety">
+  <img src="media/showcase/dynamic_cbf.gif" width="48%" alt="CBF safety with moving pedestrian">
   <img src="media/showcase/pedestrian_head_on.gif" width="48%" alt="Pedestrian head-on navigation">
 </p>
 <p align="center">
-  <em>Unicycle CBF obstacle avoidance &nbsp;&nbsp;|&nbsp;&nbsp; Pedestrian navigation among humans</em>
+  <em>CBF safety with dynamic obstacle &nbsp;&nbsp;|&nbsp;&nbsp; Multi-agent pedestrian navigation</em>
 </p>
 
 Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx = (f(x) + g(x)u)dt + \sigma(x)dw$
