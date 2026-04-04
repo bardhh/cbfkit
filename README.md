@@ -5,10 +5,10 @@ CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barr
 <p align="center">
   <img src="media/showcase/mppi_cbf.gif" width="32%" alt="MPPI planner with CBF safety filter">
   <img src="media/showcase/pedestrian_head_on.gif" width="32%" alt="Pedestrian head-on navigation">
-  <img src="media/showcase/multi_robot_3d.gif" width="32%" alt="Multi-robot 3D coordination">
+  <img src="media/showcase/diff_drive_cbf.gif" width="32%" alt="Barrier-activated CBF navigation">
 </p>
 <p align="center">
-  <em>MPPI + CBF safety filter &nbsp;|&nbsp; Pedestrian navigation &nbsp;|&nbsp; Multi-robot 3D coordination</em>
+  <em>MPPI + CBF safety filter &nbsp;|&nbsp; Pedestrian navigation &nbsp;|&nbsp; Barrier-activated obstacle avoidance</em>
 </p>
 
 Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx = (f(x) + g(x)u)dt + \sigma(x)dw$
