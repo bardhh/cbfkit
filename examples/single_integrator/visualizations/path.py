@@ -53,5 +53,4 @@ def animate(
     if save_animation:
         animator.save(animation_filename)
 
-    animator.show()
     return animator.fig, animator.ax

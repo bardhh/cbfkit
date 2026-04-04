@@ -28,7 +28,9 @@ from cbfkit.systems.single_integrator.certificates.lyapunov_function_catalog imp
 from cbfkit.utils.user_types import PlannerData, CertificateCollection
 from examples.single_integrator.common.config import ekf_state_estimation as setup
 from examples.single_integrator.common.lyapunov_functions import fxts_lyapunov_conditions
+
 # from examples.van_der_pol.visualizations.path import animate
+
 
 # Local definition of fxts_lyapunov to return CertificateCollection
 def fxts_lyapunov(
@@ -56,7 +58,7 @@ def fxts_lyapunov(
         jacobians=pos_data[1],
         hessians=pos_data[2],
         partials=pos_data[3],
-        conditions=cond_data[0]
+        conditions=cond_data[0],
     )
 
 
@@ -78,20 +80,26 @@ def animate(
     animator = CBFAnimator(states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title)
     animator.add_goal(desired_state[:2], radius=desired_state_radius)
     animator.add_trajectory(
-        x_idx=0, y_idx=1, data=estimates,
-        color="tab:orange", label="Estimated Trajectory", style="scatter",
+        x_idx=0,
+        y_idx=1,
+        data=estimates,
+        color="tab:orange",
+        label="Estimated Trajectory",
+        style="scatter",
         zorder=2,
     )
     animator.add_trajectory(
-        x_idx=0, y_idx=1,
-        color="tab:blue", label="Trajectory",
+        x_idx=0,
+        y_idx=1,
+        color="tab:blue",
+        label="Trajectory",
         zorder=3,
     )
 
     if save_animation:
         animator.save(animation_filename)
+        print(f"  Animation saved: {animation_filename}")
 
-    animator.show()
     return animator.fig, animator.ax
 
 
@@ -277,9 +285,11 @@ if __name__ == "__main__":
     with open(setup.pkl_file, "wb") as file:
         pickle.dump(save_data, file)
 
-    # Visualizations
+    # Visualizations — save animations to files instead of opening browser
     if setup.VISUALIZE:
-        # Use local animate
+        results_dir = "examples/single_integrator/reach_goal/results"
+        os.makedirs(results_dir, exist_ok=True)
+        print(f"\nSaving animations to {results_dir}/")
         for trial_no in range(setup.n_trials):
             animate(
                 states=states[trial_no],
@@ -289,7 +299,7 @@ if __name__ == "__main__":
                 x_lim=(-2, 2),
                 y_lim=(-2, 2),
                 dt=setup.dt,
-                title="System Behavior",
-                save_animation=False,
-                animation_filename="examples/single_integrator/reach_goal/results/ekf_estimation",
+                title=f"EKF Trial {trial_no + 1}",
+                save_animation=True,
+                animation_filename=f"{results_dir}/ekf_trial_{trial_no + 1}",
             )
