@@ -37,7 +37,13 @@ EC_QP = EqualityConstrainedQP()
 
 
 class QpSolution(NamedTuple):
-    """Return type for QP solvers."""
+    """Return type for QP solvers.
+
+    .. deprecated::
+        Prefer :class:`~cbfkit.optimization.quadratic_program.solver_registry.QpSolution`
+        from ``get_solver()``.  This NamedTuple is kept for backward compatibility
+        with code that unpacks ``(primal, status, params)``.
+    """
 
     primal: Array
     status: int

@@ -33,8 +33,9 @@ import jax.debug as jdebug
 from jax import Array, jit, lax, tree_util
 
 from cbfkit.certificates import concatenate_certificates
-from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
-    solve_with_details as solve_qp,
+from cbfkit.optimization.quadratic_program.solver_registry import (
+    QpSolution,
+    get_solver,
 )
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
@@ -50,6 +51,7 @@ from cbfkit.utils.user_types import (
     DynamicsCallable,
     GenerateComputeCertificateConstraintCallable,
     Key,
+    QpSolverCallable,
     State,
 )
 
@@ -144,6 +146,7 @@ def cbf_clf_qp_generator(
         lyapunovs: Optional[CertificateInput] = EMPTY_CERTIFICATE_COLLECTION,
         p_mat: Optional[Union[Array, None]] = None,
         *,
+        solver: Optional[QpSolverCallable] = None,
         relaxable_clf: bool = True,
         relaxable_cbf: bool = False,
         tunable_class_k: bool = False,
@@ -164,6 +167,9 @@ def cbf_clf_qp_generator(
             lyapunovs (CertificateInput): collection of lyapunov functions,
                 gradients, hessians, dV/dt,  conditions. Can be a single collection, a list of them, or a legacy tuple.
             p_mat (Optional[Union[Array, None]] = None): objective function matrix (quadratic term)
+            solver (Optional[QpSolverCallable]): QP solver callable from
+                ``get_solver()``.  Defaults to ``get_solver("jaxopt")`` when
+                ``None``.  Must be JIT-compatible (currently only jaxopt).
             relaxable_clf (bool): whether to treat CLF as a soft constraint (default: True).
             relaxable_cbf (bool): whether to treat CBF as a soft constraint (default: False).
             tunable_class_k (bool): whether to tune the Class K function parameter (default: False).
@@ -177,6 +183,20 @@ def cbf_clf_qp_generator(
         -------
             ControllerCallable: function for computing control input based on CBF-CLF-QP
         """
+        # Resolve solver — default to jaxopt
+        solve_qp: QpSolverCallable
+        if solver is not None:
+            if not getattr(solver, "jit_compatible", False):
+                solver_name = getattr(solver, "solver_name", "unknown")
+                raise ValueError(
+                    f"Solver {solver_name!r} is not JIT-compatible. "
+                    f"The CBF-CLF-QP controller is JIT-compiled and requires a "
+                    f"JIT-compatible solver. Use get_solver('jaxopt', ...) instead."
+                )
+            solve_qp = solver
+        else:
+            solve_qp = get_solver("jaxopt")
+
         # Update kwargs to ensure downstream functions see the configuration
         kwargs.update(
             {

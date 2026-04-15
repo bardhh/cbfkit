@@ -1,6 +1,18 @@
 """Callable type definitions and configuration types for CBFKit."""
 
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, TypeAlias, TypedDict, Union, TYPE_CHECKING
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    TypeAlias,
+    TypedDict,
+    Union,
+    TYPE_CHECKING,
+)
 
 from jax import Array
 
@@ -80,9 +92,14 @@ IntegratorCallable = Callable[[State, VectorFieldCallable, float], State]
 
 
 # QP Solver Callables
+#
+# The unified solver signature accepts an optional ``init_params`` for
+# warm-starting and returns a ``QpSolution`` (which supports tuple
+# unpacking as ``(primal, status, params)``).  Backends that do not
+# support warm-starting accept and ignore the argument.
 QpSolverCallable = Callable[
-    [Array, Array, Union[Array, None], Union[Array, None], Union[Array, None], Union[Array, None]],
-    Tuple[Array, Dict[str, Any]],
+    ...,
+    Any,  # QpSolution — typed as Any to avoid circular import
 ]
 
 
