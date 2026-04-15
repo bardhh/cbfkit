@@ -2,7 +2,7 @@
 
 import contextlib
 import os
-from typing import Tuple, Union
+from typing import Any, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -93,6 +93,28 @@ def solve(
         success = solver.stats()["success"]
 
     return success * jnp.array(solution["x"]).reshape((n,)), success
+
+
+def solve_with_details(
+    h_mat: Array,
+    f_vec: Array,
+    g_mat: Union[Array, None] = None,
+    h_vec: Union[Array, None] = None,
+    a_mat: Union[Array, None] = None,
+    b_vec: Union[Array, None] = None,
+    init_params: Any = None,
+):
+    """Solve a QP using CasADi/qpOASES, returning a unified :class:`QpSolution`.
+
+    ``init_params`` is accepted for interface compatibility but ignored
+    (CasADi does not support warm-starting).
+    """
+    from cbfkit.optimization.quadratic_program.solver_registry import QpSolution
+
+    primal, success = solve(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
+    if not success:
+        primal = jnp.zeros(len(f_vec))
+    return QpSolution(primal=primal, status=1 if success else 0, params=None)
 
 
 if __name__ == "__main__":

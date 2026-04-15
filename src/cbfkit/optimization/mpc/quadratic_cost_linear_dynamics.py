@@ -1,9 +1,12 @@
-from typing import Callable, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 
 import jax.numpy as jnp
 from jax import Array, jit
 
-from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import solve as solve_qp
+from cbfkit.optimization.quadratic_program.solver_registry import get_solver
+from cbfkit.utils.user_types.callables import QpSolverCallable
+
+_DEFAULT_SOLVER = get_solver("jaxopt")
 
 
 def generate_mpc_solver_quadratic_cost_linear_dynamics(
@@ -13,10 +16,12 @@ def generate_mpc_solver_quadratic_cost_linear_dynamics(
     R: Array,
     Qn: Array,
     N: int,
+    solver: Optional[QpSolverCallable] = None,
 ) -> Callable:
     n = Qn.shape[0]
     m = B.shape[1]
     mpc_to_qp = generate_mpc_to_qp(A, B, Q, R, Qn, N)
+    solve_qp = solver if solver is not None else get_solver("jaxopt")
 
     @jit
     def solve(concatenated_x_xr: Array) -> Tuple[Array, Array]:
@@ -31,7 +36,8 @@ def generate_mpc_solver_quadratic_cost_linear_dynamics(
         """
         # Convert Discrete-Time, LTI MPC problem into QP and solve
         h_mat, f_vec, g_mat, h_vec, a_mat, b_vec = mpc_to_qp(concatenated_x_xr)
-        sol, status = solve_qp(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
+        qp_result = solve_qp(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
+        sol = qp_result.primal
 
         # if not status:
         #     raise ValueError("Infeasible MPC!")
@@ -216,8 +222,9 @@ def quadratic_mpc_solver(
     m = B.shape[1]
     # Convert Discrete-Time, LTI MPC problem into QP and solve
     H, f, A, b, G, h = mpc_to_qp(x0, xr, A, B, Q, R, QN, N)
-    sol, status = solve_qp(H, f, A, b, G, h)
-    if not status:
+    qp_result = _DEFAULT_SOLVER(H, f, A, b, G, h)
+    sol = qp_result.primal
+    if qp_result.status != 1:
         print("MPC Infeasible.")
 
     # Extract optimal state and control trajectories
