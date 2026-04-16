@@ -1,7 +1,9 @@
-from typing import Any, Callable, Dict, Tuple
+"""Robust CLF constraints: LfV + LgV*u + robustness_term(dV/dx) <= -gamma(V)."""
+
+from typing import Any, Callable, Tuple
 
 import jax.numpy as jnp
-from jax import Array, jit, lax
+from jax import Array
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
@@ -13,14 +15,9 @@ from cbfkit.utils.user_types import (
 )
 
 from ..utils.robustness_terms import robustness_sup_norm, robustness_two_norm
-from .generating_functions import (
-    generate_compute_certificate_values_vmap as generate_compute_certificate_values,
-)
-from .unpack import unpack_for_clf
+from ._constraint_core import build_clf_constraint_generator
 
 
-####################################################################################################
-### VANILLA CLF: LfV + LgV*u <= conditions #########################################################
 def generate_compute_robust_clf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
@@ -28,48 +25,26 @@ def generate_compute_robust_clf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
-    n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
-        control_limits, lyapunovs, barriers, **kwargs
-    )
-
-    # Check for robustness term
     if "disturbance_norm_bound" not in kwargs:
         raise ValueError("kwargs missing disturbance_norm_bound (float)!")
-
     if "disturbance_norm" not in kwargs:
         raise ValueError("kwargs missing disturbance_norm (int) (e.g., 2-norm, sup-norm)!")
 
     disturbance_norm = kwargs["disturbance_norm"]
-    disturbance_norm_bound = jnp.array(kwargs["disturbance_norm_bound"])
+    bound = jnp.array(kwargs["disturbance_norm_bound"])
 
     if disturbance_norm == 2:
-        robustness_term = robustness_two_norm(disturbance_norm_bound)
-
+        robustness_term = robustness_two_norm(bound)
     elif disturbance_norm == jnp.inf:
-        robustness_term = robustness_sup_norm(disturbance_norm_bound)
+        robustness_term = robustness_sup_norm(bound)
 
-    @jit
-    def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
-        """Computes CBF and CLF constraints."""
-        nonlocal a_clf, b_clf
-        data: CbfClfQpData = {}
-        dyn_f, dyn_g = dyn_func(x)
-
-        if n_lfs > 0:
-            lf_x, lj_x, _, dlf_t, lc_x = compute_lyapunov_values(t, x)
-
-            a_clf = a_clf.at[:, :n_con].set(jnp.matmul(lj_x, dyn_g))
-            b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) + robustness_term(lj_x) + lc_x)
-            if relaxable:
-                a_clf = a_clf.at[:, -n_lfs:].set(-lc_x)
-                b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f))
-
-            complete = lax.cond(jnp.all(lf_x < 0), lambda _fake: True, lambda _fake: False, 0)
-
-            data["lfs"] = lf_x
-            data["complete"] = complete
-
-        return a_clf, b_clf, data
-
-    return compute_clf_constraints
+    return build_clf_constraint_generator(
+        control_limits,
+        dyn_func,
+        barriers,
+        lyapunovs,
+        extra_b_term_fn=lambda lj_x, _lh, _x: robustness_term(lj_x),
+        additive_relaxation=False,
+        strict_completion=True,
+        **kwargs,
+    )
