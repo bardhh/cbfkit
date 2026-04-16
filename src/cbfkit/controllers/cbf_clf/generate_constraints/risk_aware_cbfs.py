@@ -21,6 +21,7 @@ from cbfkit.utils.user_types import (
     Time,
 )
 
+from ._constraint_core import batched_hessian_trace
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
@@ -106,17 +107,7 @@ def generate_compute_estimate_feedback_ra_cbf_constraints(
             lf_x, lj_x, lh_x, dlf_t, lc_x = compute_lyapunov_values(t, x)
             assert ra_params.varsigma is not None
             product_varsigma_and_k = jnp.matmul(ra_params.varsigma(x), k_mat)
-            traces = jnp.array(
-                [
-                    0.5
-                    * jnp.trace(
-                        jnp.matmul(
-                            jnp.matmul(product_varsigma_and_k.T, lh_ii), product_varsigma_and_k
-                        )
-                    )
-                    for lh_ii in lh_x
-                ]
-            )
+            traces = batched_hessian_trace(product_varsigma_and_k, lh_x)
             assert ra_params.lambda_h is not None
             assert ra_params.epsilon is not None
             estimate_feedback_term = (
