@@ -1,25 +1,7 @@
-import jax.numpy as jnp
-
 from cbfkit.utils.matrix_vector_operations import block_diag_matrix, hat, normalize, vee
+from cbfkit.utils.real_functions import tanh_sigmoid as tanh_sigmoid_func
 
 __all__ = ["normalize", "hat", "vee", "block_diag_matrix", "tanh_sigmoid_func"]
-
-
-def tanh_sigmoid_func(x: float, xbar: float):
-    """Compute the value of the hyperbolic tangent sigmoid function.
-
-    Args:
-        x (float): argument to sigmoid.
-        xbar (float): maximum value of argument.
-
-    Returns
-    -------
-        float: Result of the smooth saturation function.
-    """
-    k = 100
-    return x * (1 / 2 + 1 / 2 * jnp.tanh(k * x)) + (xbar - x) * (
-        1 / 2 + 1 / 2 * jnp.tanh(k * (x - xbar))
-    )
 
 
 if __name__ == "__main__":
