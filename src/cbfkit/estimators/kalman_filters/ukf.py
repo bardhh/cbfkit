@@ -56,22 +56,6 @@ def ct_ukf_dtmeas(
     return step_ukf
 
 
-def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
-    """Initialization for the continuous-time EKF with discrete-time measurements.
-
-    Arguments:
-        y (Array): measurement of state
-        R (Array): measurement noise covariance matrix (proxy for initial covariance)
-
-
-    Returns
-    -------
-        z0 (Array): initial estimate of state
-        P0 (Array): initial covariance of state estimate
-    """
-    return y, R
-
-
 def predict_ct_dtmeas(
     Q: Array, dynamics: DynamicsCallable, dt: float
 ) -> Callable[[Time, Array, Array, Array], Tuple[Array, Array, Array]]:
