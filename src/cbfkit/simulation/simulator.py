@@ -126,17 +126,11 @@ def simulator(
         for cb in callbacks:
             cb.on_start(total_steps=num_steps, dt=dt)
 
-        # Simulate remaining timesteps
-        xs_list = [x.reshape(-1, 1)]
-        # If planner_data already has history, we should respect it, but here we assume
-        # the simulation controls the history accumulation for the current run.
-        # If planner_data.xs was passed in, we might need to prepend it to xs_list.
-        if planner_data.xs is not None:
-            # This converts existing history to a list of (state_dim, 1) arrays
-            # This might be slow for long history, but it's a one-time cost at start.
-            # However, efficient simulation usually starts from fresh or continues.
-            # Let's just use the list for new steps.
-            pass
+        # Pre-allocate trajectory buffer (avoids O(N^2) concatenation in loop)
+        needs_trajectory = stl_trajectory_cost is not None or planner is not None
+        if needs_trajectory:
+            xs_buf = jnp.zeros((x.shape[0], num_steps + 1))
+            xs_buf = xs_buf.at[:, 0].set(x)
 
         for s in range(num_steps):
             x_ret, u_ret, z_ret, c_ret, controller_data, planner_data = step(
@@ -156,33 +150,10 @@ def simulator(
             # Clamp state if NaN (use previous x)
             x = x if nan_detected else x_ret
 
-            # Efficient accumulation
-            xs_list.append(x.reshape(-1, 1))
-
-            # Update planner_data.xs ONLY if needed (e.g. for STL or if planner requires it)
-            # We check if stl_trajectory_cost is provided or if planner is active.
-            # To avoid O(N^2) at every step, we only stack if strictly necessary.
-            # But if the planner interface *requires* .xs to be the full trajectory array every step,
-            # we are bound by that interface.
-            # Assuming we can optimize:
-            if stl_trajectory_cost is not None:
-                # We must pay the cost if STL cost depends on full trajectory
-                xs = jnp.concatenate(xs_list, axis=1)
-                planner_data = planner_data._replace(xs=xs)
-            elif planner_data.xs is not None:
-                # If planner_data.xs is being maintained, we might need to update it.
-                # But if stl_trajectory_cost is None, maybe we can defer?
-                # Current behavior was to ALWAYS update. Let's optimize to only update
-                # if we suspect the planner needs it (which is hard to know without inspection).
-                # For safety/compatibility, we can maintain the behavior but use concatenate which is slightly better?
-                # No, concatenate on list is O(N). Doing it N times is O(N^2).
-                # We will simply NOT update planner_data.xs every step unless forced.
-                # BUT, the `step` function might have used `planner_data.xs`.
-                # The `step` function takes `planner_data`. If `planner` inside `step` reads `xs`, it needs it.
-                # If `planner` is None, `step` doesn't use `xs`.
-                if planner is not None:
-                    xs = jnp.concatenate(xs_list, axis=1)
-                    planner_data = planner_data._replace(xs=xs)
+            # O(1) trajectory update via pre-allocated buffer
+            if needs_trajectory:
+                xs_buf = xs_buf.at[:, s + 1].set(x)
+                planner_data = planner_data._replace(xs=xs_buf[:, : s + 2])
 
             # Strip sampled_x_traj before logging to avoid accumulating
             # massive MPPI sample arrays (num_samples * state_dim * horizon per step)
@@ -194,10 +165,10 @@ def simulator(
                 control=u,
                 estimate=z,
                 covariance=c,
-                controller_keys=list(controller_data._asdict().keys()),
-                controller_values=list(controller_data._asdict().values()),
-                planner_keys=list(planner_data_for_log._asdict().keys()),
-                planner_values=list(planner_data_for_log._asdict().values()),
+                controller_keys=list(ControllerData._fields),
+                controller_values=list(controller_data),
+                planner_keys=list(PlannerData._fields),
+                planner_values=list(planner_data_for_log),
             )
 
             for cb in callbacks:
