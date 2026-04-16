@@ -7,6 +7,29 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
+# Resolve cvxopt vs kvxopt once at import time (ARM vs x86)
+_cvxopt_available = True
+_cvxopt_error = None
+try:
+    _mach = platform.machine().lower()
+    if "arm" in _mach or "aarch" in _mach:
+        from kvxopt import matrix as _matrix, solvers as _solvers  # type: ignore[reportMissingImports]
+    else:
+        from cvxopt import matrix as _matrix, solvers as _solvers
+except ImportError as _e:
+    _cvxopt_available = False
+    _cvxopt_error = _e
+    _matrix = None  # type: ignore[assignment]
+    _solvers = None  # type: ignore[assignment]
+
+
+def _ensure_cvxopt():
+    if not _cvxopt_available:
+        raise ImportError(
+            "To use the cvxopt solver, please install the 'cvxopt' extra: "
+            "pip install 'cbfkit[cvxopt]'"
+        ) from _cvxopt_error
+
 
 def solve(
     p_mat: Array,
@@ -19,29 +42,19 @@ def solve(
     """Solve a quadratic program using the cvxopt solver.
 
     Args:
-        h_mat: quadratic cost matrix
-        f_vec: linear cost vector
-        g_mat: linear inequality constraint matrix
-        b_vec: linear inequality constraint vector
-        g_mat: linear equality constraint matrix
-        h_vec: linear equality constraint vector
+        p_mat: quadratic cost matrix (n_vars, n_vars)
+        q_vec: linear cost vector (n_vars,)
+        g_mat: inequality constraint matrix (n_ineq, n_vars)
+        h_vec: inequality constraint bounds (n_ineq,)
+        a_mat: equality constraint matrix (n_eq, n_vars)
+        b_vec: equality constraint bounds (n_eq,)
 
     Returns
     -------
-        sol['x']: Solution to the QP
+        (sol, success): Solution array and boolean success flag.
     """
-    try:
-        mach = platform.machine().lower()
-        if "arm" in mach or "aarch" in mach:
-            # pylint: disable=E0401
-            from kvxopt import matrix, solvers  # type: ignore[reportMissingImports]
-        else:
-            from cvxopt import matrix, solvers
-    except ImportError as e:
-        raise ImportError(
-            "To use the cvxopt solver, please install the 'cvxopt' extra: "
-            "pip install 'cbfkit[cvxopt]'"
-        ) from e
+    _ensure_cvxopt()
+    matrix, solvers = _matrix, _solvers
 
     # Use the cvxopt library to solve the quadratic program
     p_mat = matrix(np.array(p_mat, dtype=float))

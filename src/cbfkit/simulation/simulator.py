@@ -1,20 +1,7 @@
-"""simulator.
+"""Simulation engine for controlled dynamical systems.
 
-This module contains the functions responsible for simulating the trajectories
-of (controlled) dynamical systems over
-
-Functions
----------
--function(a): description
-
-Notes
------
-Various notes here
-
-Examples
---------
->>> import title
->>> run code
+Provides ``execute()`` to run a full simulation pipeline:
+Planner -> Nominal Controller -> Safety Controller (CBF-CLF-QP) -> Plant Dynamics -> Integrator -> Sensor -> Estimator.
 """
 
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
@@ -399,9 +386,7 @@ def execute(
         # If dynamics evaluation fails completely (e.g. wrong x0 dimension), re-raise wrapped error
         if isinstance(e, ValueError):
             raise e
-        raise ValueError(
-            f"Failed to evaluate dynamics function on initial state: {e}"
-        ) from e
+        raise ValueError(f"Failed to evaluate dynamics function on initial state: {e}") from e
 
     if controller is not None:
         controller = setup_controller(controller)
@@ -422,9 +407,7 @@ def execute(
             planner_data = PlannerData(x_traj=goal_arr)
         elif isinstance(planner_data, dict):
             if planner_data.get("x_traj") is not None:
-                raise ValueError(
-                    "Cannot specify both 'goal' and 'planner_data[\"x_traj\"]'."
-                )
+                raise ValueError("Cannot specify both 'goal' and 'planner_data[\"x_traj\"]'.")
             planner_data["x_traj"] = goal_arr
             # Convert to NamedTuple later
         elif isinstance(planner_data, PlannerData):
