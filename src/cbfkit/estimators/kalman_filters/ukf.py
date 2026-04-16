@@ -1,5 +1,6 @@
 from typing import Callable, Optional, Tuple, Union, cast
 
+import jax
 import jax.numpy as jnp
 from jax import Array
 
@@ -54,6 +55,7 @@ def ct_ukf_dtmeas(
 
     return step_ukf
 
+
 def initialize(y: Array, R: Array) -> Tuple[Array, Array]:
     """Initialization for the continuous-time EKF with discrete-time measurements.
 
@@ -105,13 +107,13 @@ def predict_ct_dtmeas(
         """
         s, wa, wc = sigma_points(z, P)
 
-        # Predict x from sigma points.
-        sk = jnp.zeros(s.shape)
-        for ii, ss in enumerate(s):
+        # Propagate sigma points through dynamics (vectorized)
+        def _propagate_one(ss):
             f, g = dynamics(ss)
-            # Wrap pre-computed derivative in a callable for the integrator interface
             val = f + jnp.matmul(g, u)
-            sk = sk.at[ii, :].set(integrate(ss, lambda _: val, dt))
+            return integrate(ss, lambda _: val, dt)
+
+        sk = jax.vmap(_propagate_one)(s)
 
         # Compute predicted state estimate
         zk = jnp.dot(wa, sk)
