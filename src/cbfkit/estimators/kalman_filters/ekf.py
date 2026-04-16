@@ -58,10 +58,9 @@ def ct_ekf_dtmeas(
             K_new (Array): updated Kalman gain matrix
         """
         if z is None or u is None or P is None:
-            z_init, P_init = initialize(y, R)
-            # Initialize K as zeros with appropriate shape
-            K_init = jnp.zeros((z_init.shape[0], y.shape[0]))
-            return z_init, P_init, K_init
+            # Initialize estimate and covariance from first measurement
+            K_init = jnp.zeros((y.shape[0], y.shape[0]))
+            return y, R, K_init
 
         # The 't' passed to predict needs to be a JAX-compatible type.
         # Since 't' itself is already Time (Union[float, Array]), we pass it directly.
