@@ -7,6 +7,7 @@ only the variant-specific math (extra b-vector terms).
 
 from typing import Any, Callable, Optional, Tuple
 
+import jax
 import jax.numpy as jnp
 from jax import Array, jit, lax
 
@@ -27,6 +28,26 @@ from .unpack import unpack_for_cbf, unpack_for_clf
 # Callable computing variant-specific addition to b_vec.
 # Signature: (jacobians, hessians_or_none, state) -> scalar_or_array
 ExtraBTermFn = Callable[[Array, Optional[Array], Array], Any]
+
+
+def batched_hessian_trace(s: Array, hessians: Array) -> Array:
+    """Compute 0.5 * Tr[s^T H_i s] for each Hessian H_i using vmap.
+
+    Replaces the Python list comprehension pattern that forces XLA to
+    unroll and trace each iteration separately.
+
+    Args:
+        s: noise covariance matrix from sigma(x).
+        hessians: stacked Hessian matrices (n_certs, n, n).
+
+    Returns:
+        Array of trace values, shape (n_certs,).
+    """
+
+    def _single_trace(h_i):
+        return 0.5 * jnp.trace(jnp.matmul(jnp.matmul(s.T, h_i), s))
+
+    return jax.vmap(_single_trace)(hessians)
 
 
 def build_cbf_constraint_generator(

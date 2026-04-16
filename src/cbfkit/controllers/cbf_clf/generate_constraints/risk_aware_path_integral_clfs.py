@@ -13,6 +13,7 @@ from cbfkit.utils.user_types import (
     Time,
 )
 
+from ._constraint_core import batched_hessian_trace
 from .generating_functions import (
     generate_compute_certificate_values_vmap as generate_compute_certificate_values,
 )
@@ -73,9 +74,7 @@ def generate_compute_ra_pi_clf_constraints(
             # Ensure array types for addition
             w_vals = ra_params.integrator_states + ra_params.gamma + r_buffer
             lc_x = jnp.stack([lc(w_vals[ii]) for ii, lc in enumerate(conditions)])
-            traces = jnp.array(
-                [0.5 * jnp.trace(jnp.matmul(jnp.matmul(sigma.T, lh_ii), sigma)) for lh_ii in lh_x]
-            )
+            traces = batched_hessian_trace(sigma, lh_x)
 
             # Configure constraint matrix and vector (a * u <= b)
             a_clf = a_clf.at[:, :n_con].set(jnp.matmul(lj_x, dyn_g))

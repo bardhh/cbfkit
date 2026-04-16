@@ -14,17 +14,14 @@ from cbfkit.utils.user_types import (
     Time,
 )
 
-from ._constraint_core import build_clf_constraint_generator
+from ._constraint_core import batched_hessian_trace, build_clf_constraint_generator
 
 
 def _make_stochastic_clf_term(sigma):
     """Create extra b-term for stochastic CLF (negative trace of noise-weighted Hessian)."""
 
     def term(_lj_x, lh_x, x):
-        s = sigma(x)
-        return -jnp.array(
-            [0.5 * jnp.trace(jnp.matmul(jnp.matmul(s.T, lh_ii), s)) for lh_ii in lh_x]
-        )
+        return -batched_hessian_trace(sigma(x), lh_x)
 
     return term
 
