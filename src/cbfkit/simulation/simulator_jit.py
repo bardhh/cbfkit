@@ -11,6 +11,7 @@ INTEGRATION_NAN_ERROR = -10
 
 from cbfkit.utils.jit_monitor import JitMonitor
 from cbfkit.simulation.integration_utils import integrate_with_cached_dynamics
+from cbfkit.simulation.utils import resolve_nominal_control
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
@@ -81,39 +82,18 @@ def _make_scan_step(
         # 5. Nominal Controller
         # Logic: Check if planner provided u_traj or x_traj
 
-        # Check for u_traj (Control Trajectory)
-        # We assume if 'u_traj' field exists and is not None, we might use it.
-        # We rely on the structure being static (determined by initial_planner_data).
-
-        use_planner_u = False
-        if planner is not None:
-            # If planner exists, u_planner is valid.
-            if planner_data.u_traj is not None:
-                use_planner_u = True
-
-        if use_planner_u:
-            u_nom = u_planner
-        else:
-            # Check x_traj
-            use_x_traj = False
-            if planner_data.x_traj is not None:
-                use_x_traj = True
-
-            if use_x_traj:
-                traj = planner_data.x_traj
-                # Calculate index
-                idx = jnp.round(t / dt).astype(int)
-                idx = jnp.clip(idx, 0, traj.shape[1] - 1)
-                x_des = traj[:, idx]
-
-                key, nom_key = random.split(key)
-                u_nom, _ = nominal_controller(t, z, nom_key, x_des)
-            else:
-                if nominal_controller is not None:
-                    key, nom_key = random.split(key)
-                    u_nom, _ = nominal_controller(t, z, nom_key, None)
-                else:
-                    u_nom = jnp.zeros((g.shape[1],))
+        # 5. Resolve nominal control from planner output
+        u_nom, key = resolve_nominal_control(
+            t,
+            z,
+            dt,
+            key,
+            g,
+            nominal_controller,
+            planner_data,
+            u_planner,
+            has_planner=(planner is not None),
+        )
 
         # 6. Controller (CBF/CLF filter)
         key, ctrl_key = random.split(key)
@@ -210,10 +190,7 @@ def _make_scan_step(
         # Output (trajectory)
         # Strip solver_params from logged data to save memory
         log_controller_data = controller_data
-        if (
-            controller_data.sub_data is not None
-            and "solver_params" in controller_data.sub_data
-        ):
+        if controller_data.sub_data is not None and "solver_params" in controller_data.sub_data:
             # Create a shallow copy and remove the key to avoid affecting carry
             log_sub_data = controller_data.sub_data.copy()
             del log_sub_data["solver_params"]

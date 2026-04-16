@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from jax import Array, random
 
 from cbfkit.simulation.integration_utils import integrate_with_cached_dynamics
-from cbfkit.simulation.utils import SimulationStepData
+from cbfkit.simulation.utils import SimulationStepData, resolve_nominal_control
 from cbfkit.utils.user_types import (
     Control,
     ControllerCallable,
@@ -110,21 +110,20 @@ def stepper(
                     planner_data,
                 )
         else:
+            u_planner = jnp.zeros(g.shape[1])
             planner_data = planner_data._replace(u_traj=None)
 
-        if (planner is not None) and (planner_data.u_traj is not None):
-            u = u_planner
-        elif planner_data.x_traj is not None:
-            timestep_idx = jnp.round(t / dt).astype(int)
-            timestep_idx = jnp.clip(timestep_idx, 0, planner_data.x_traj.shape[1] - 1)
-            key, nom_key = random.split(key)  # type: ignore
-            u, _ = nominal_controller(t, z, nom_key, planner_data.x_traj[:, timestep_idx])
-        else:
-            if nominal_controller is None:
-                u = jnp.zeros((g.shape[1],))
-            else:
-                key, nom_key = random.split(key)  # type: ignore
-                u, _ = nominal_controller(t, z, nom_key, None)
+        u, key = resolve_nominal_control(
+            t,
+            z,
+            dt,
+            key,
+            g,
+            nominal_controller,
+            planner_data,
+            u_planner,
+            has_planner=(planner is not None),
+        )
 
         key, ctrl_key = random.split(key)  # type: ignore
         if controller is not None:
