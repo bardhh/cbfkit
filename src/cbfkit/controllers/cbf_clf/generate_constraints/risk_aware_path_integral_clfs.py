@@ -33,6 +33,7 @@ def generate_compute_ra_pi_clf_constraints(
     n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs
     )
+    scale_clf = kwargs.get("scale_clf", 1.0)
 
     # Check for Risk-Aware Params object
     if "ra_clf_params" in kwargs:
@@ -80,7 +81,7 @@ def generate_compute_ra_pi_clf_constraints(
             a_clf = a_clf.at[:, :n_con].set(jnp.matmul(lj_x, dyn_g))
             b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) - traces + lc_x)
             if relaxable:
-                a_clf = a_clf.at[:, -n_lfs:].set(-jnp.ones((n_lfs,)))
+                a_clf = a_clf.at[:, -n_lfs:].set(-scale_clf * jnp.eye(n_lfs))
                 b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) - traces + lc_x)
 
             # Check whether goal set reached
