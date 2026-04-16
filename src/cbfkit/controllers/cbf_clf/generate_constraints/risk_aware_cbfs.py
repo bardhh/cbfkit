@@ -1,3 +1,10 @@
+"""Risk-aware CBF constraints.
+
+generate_compute_ra_cbf_constraints: placeholder (theory in development).
+generate_compute_estimate_feedback_ra_cbf_constraints: estimate-feedback variant.
+"""
+
+import warnings
 from typing import Any, Callable, Dict, Tuple
 
 import jax.numpy as jnp
@@ -20,7 +27,6 @@ from .generating_functions import (
 from .unpack import unpack_for_cbf
 
 
-####################################################################################################
 def generate_compute_ra_cbf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
@@ -28,66 +34,35 @@ def generate_compute_ra_cbf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    """Placeholder.
+    """Risk-aware CBF constraint generator.
 
-    Theory still in development.
+    .. warning::
+        Not yet implemented — theory still in development.
+        Returns zero constraints (no safety filtering).
+        Use ``generate_compute_estimate_feedback_ra_cbf_constraints`` instead.
     """
-    compute_barrier_values = generate_compute_certificate_values(barriers)
+    warnings.warn(
+        "generate_compute_ra_cbf_constraints is not yet implemented "
+        "(theory in development). The returned constraints are zero "
+        "and provide NO safety filtering. Use "
+        "generate_compute_estimate_feedback_ra_cbf_constraints instead.",
+        stacklevel=2,
+    )
 
     n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
 
-    # Check for Risk-Aware Params object
-    if "ra_cbf_params" in kwargs:
-        ra_params: RiskAwareParams = kwargs["ra_cbf_params"]  # type: ignore[assignment]
-        assert ra_params.t_max is not None
-        assert ra_params.eta is not None
-        assert ra_params.p_bound is not None
-        float(
-            jnp.sqrt(2 * ra_params.t_max)
-            * ra_params.eta
-            * scipy.special.erfinv(2 * ra_params.p_bound - 1)
-        )
-    else:
-        ra_params = RiskAwareParams(sigma=lambda x: jnp.zeros((x.shape[0], 1)))
-
     @jit
     def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
-        """Computes CBF and CLF constraints."""
-        nonlocal a_cbf, b_cbf
         data: CbfClfQpData = {}
-        dyn_f, dyn_g = dyn_func(x)
-        assert ra_params.sigma is not None
-        sigma = ra_params.sigma(x)
-
-        if n_bfs > 0:
-            bf_x, bj_x, bh_x, dbf_t, bc_x = compute_barrier_values(t, x)
-            jnp.array(
-                [0.5 * jnp.trace(jnp.matmul(jnp.matmul(sigma.T, bh_ii), sigma)) for bh_ii in bh_x]
-            )
-
-            # # Configure constraint matrix and vector (a * u <= b)
-            # a_cbf = a_cbf.at[:, :n_con].set(jnp.matmul(bj_x, dyn_g))
-            # b_cbf = b_cbf.at[:].set(-dbf_t - jnp.matmul(bj_x, dyn_f) - traces + bc_x)
-            # if tunable:
-            #     a_cbf = a_cbf.at[:, n_con:n_bfs].set(-bc_x)
-            #     b_cbf = b_cbf.at[:].set(-dbf_t - jnp.matmul(bj_x, dyn_f) - traces)
-            # elif relaxable:
-            #     a_cbf = a_cbf.at[:, n_con:n_con+n_bfs].set(-1.0)
-
-            # violated = lax.cond(jnp.any(bf_x > 1), lambda _fake: True, lambda _fake: False, 0)
-
-            # data["bfs"] = bf_x
-            # data["violated"] = violated
-
         return a_cbf, b_cbf, data
 
     return compute_cbf_constraints
 
 
 ####################################################################################################
-### RISK-AWARE CLF: LfV + LgV*u + 0.5*Tr[sigma.T * d2V/dx2 * sigma] <= c(Vr) #######################
+### RISK-AWARE ESTIMATE-FEEDBACK CBF ################################################################
 def generate_compute_estimate_feedback_ra_cbf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
