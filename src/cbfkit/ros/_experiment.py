@@ -6,13 +6,9 @@ from jax import Array
 from cbfkit.utils.logger import write_log
 from cbfkit.utils.user_types import (
     Control,
-    ControllerCallable,
     Covariance,
     Estimate,
     EstimatorCallable,
-    SensorCallable,
-    State,
-    Time,
 )
 
 
@@ -100,17 +96,22 @@ def experiment(
     return extract_and_log_data(filepath, experiment_data)
 
 
-
 def extract_and_log_data(filepath: Optional[str], data):
     """Extract logged arrays and optional metadata from experiment output."""
-    if filepath is not None:
-        # write_log(filepath)
-        pass
+    if filepath is not None and len(data) > 0:
+        keys = data[0][3]
+        values_list = [step[4] for step in data]
+        log_data = [dict(zip(keys, vals)) for vals in values_list]
+        write_log(filepath, log_data)
 
     controls = jnp.array([sim_data[0] for sim_data in data])
     estimates = jnp.array([sim_data[1] for sim_data in data])
     covariances = jnp.array([sim_data[2] for sim_data in data])
-    data_keys = data[0][1]
-    data_values = [sim_data[2] for sim_data in data]
+    if len(data) > 0:
+        data_keys = data[0][3]
+        data_values = [sim_data[4] for sim_data in data]
+    else:
+        data_keys = []
+        data_values = []
 
     return controls, estimates, covariances, data_keys, data_values  # type: ignore[return-value]
