@@ -327,8 +327,6 @@ class AdaptiveCVaRBarrierSolver:
                 if isinstance(obs_state, ca.MX)
                 else np.linalg.norm(obs_state[2:4])
             )
-            # v_obs_est = 1.0 (hardcoded in original)
-            w = w / 1.0
 
             if isinstance(dot, ca.MX):
                 theta = (1.0 / rate) * ca.log(1.0 + ca.exp(-rate * dot))
