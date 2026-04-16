@@ -1,7 +1,9 @@
-from typing import Any, Callable, Dict, Tuple
+"""Stochastic CLF constraints: LfV + LgV*u + 0.5*Tr[sigma.T * d2V/dx2 * sigma] <= -gamma(V)."""
+
+from typing import Any, Callable, Tuple
 
 import jax.numpy as jnp
-from jax import Array, jit, lax
+from jax import Array
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
@@ -12,13 +14,21 @@ from cbfkit.utils.user_types import (
     Time,
 )
 
-from .generating_functions import (
-    generate_compute_certificate_values_vmap as generate_compute_certificate_values,
-)
-from .unpack import unpack_for_clf
+from ._constraint_core import build_clf_constraint_generator
 
 
-####################################################################################################
+def _make_stochastic_clf_term(sigma):
+    """Create extra b-term for stochastic CLF (negative trace of noise-weighted Hessian)."""
+
+    def term(_lj_x, lh_x, x):
+        s = sigma(x)
+        return -jnp.array(
+            [0.5 * jnp.trace(jnp.matmul(jnp.matmul(s.T, lh_ii), s)) for lh_ii in lh_x]
+        )
+
+    return term
+
+
 def generate_compute_stochastic_clf_constraints(
     control_limits: Array,
     dyn_func: DynamicsCallable,
@@ -26,47 +36,20 @@ def generate_compute_stochastic_clf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    """Placeholder.
-
-    Theory still in development.
-    """
-    compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
-    n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
-        control_limits, lyapunovs, barriers, **kwargs
-    )
-
-    # Check for sigma function
     if "sigma" not in kwargs:
-        raise ValueError("kwargs missing ra_params object!")
+        raise ValueError("kwargs missing sigma (Callable[[Array], Array])!")
     sigma = kwargs["sigma"]
     if not callable(sigma):
         raise ValueError("sigma must be of type Callable[[Array], Array]!")
 
-    @jit
-    def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
-        """Computes CBF and CLF constraints."""
-        nonlocal a_clf, b_clf
-        data: CbfClfQpData = {}
-        dyn_f, dyn_g = dyn_func(x)
-        s = sigma(x)
-
-        if n_lfs > 0:
-            lf_x, lj_x, lh_x, dlf_t, lc_x = compute_lyapunov_values(t, x)
-            traces = jnp.array(
-                [0.5 * jnp.trace(jnp.matmul(jnp.matmul(s.T, lh_ii), s)) for lh_ii in lh_x]
-            )
-
-            a_clf = a_clf.at[:, :n_con].set(jnp.matmul(lj_x, dyn_g))
-            b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f) - traces + lc_x)
-            if relaxable:
-                a_clf = a_clf.at[:, -n_lfs:].set(-lc_x)
-                b_clf = b_clf.at[:].set(-dlf_t - jnp.matmul(lj_x, dyn_f))
-
-            complete = lax.cond(jnp.all(lf_x < 0), lambda _fake: True, lambda _fake: False, 0)
-
-            data["lfs"] = lf_x
-            data["complete"] = complete
-
-        return a_clf, b_clf, data
-
-    return compute_clf_constraints
+    return build_clf_constraint_generator(
+        control_limits,
+        dyn_func,
+        barriers,
+        lyapunovs,
+        compute_hessians=True,
+        extra_b_term_fn=_make_stochastic_clf_term(sigma),
+        additive_relaxation=False,
+        strict_completion=True,
+        **kwargs,
+    )
