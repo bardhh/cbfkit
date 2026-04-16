@@ -1,20 +1,7 @@
-"""simulator.
+"""Simulation engine for controlled dynamical systems.
 
-This module contains the functions responsible for simulating the trajectories
-of (controlled) dynamical systems over
-
-Functions
----------
--function(a): description
-
-Notes
------
-Various notes here
-
-Examples
---------
->>> import title
->>> run code
+Provides ``execute()`` to run a full simulation pipeline:
+Planner -> Nominal Controller -> Safety Controller (CBF-CLF-QP) -> Plant Dynamics -> Integrator -> Sensor -> Estimator.
 """
 
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
@@ -139,17 +126,11 @@ def simulator(
         for cb in callbacks:
             cb.on_start(total_steps=num_steps, dt=dt)
 
-        # Simulate remaining timesteps
-        xs_list = [x.reshape(-1, 1)]
-        # If planner_data already has history, we should respect it, but here we assume
-        # the simulation controls the history accumulation for the current run.
-        # If planner_data.xs was passed in, we might need to prepend it to xs_list.
-        if planner_data.xs is not None:
-            # This converts existing history to a list of (state_dim, 1) arrays
-            # This might be slow for long history, but it's a one-time cost at start.
-            # However, efficient simulation usually starts from fresh or continues.
-            # Let's just use the list for new steps.
-            pass
+        # Pre-allocate trajectory buffer (avoids O(N^2) concatenation in loop)
+        needs_trajectory = stl_trajectory_cost is not None or planner is not None
+        if needs_trajectory:
+            xs_buf = jnp.zeros((x.shape[0], num_steps + 1))
+            xs_buf = xs_buf.at[:, 0].set(x)
 
         for s in range(num_steps):
             x_ret, u_ret, z_ret, c_ret, controller_data, planner_data = step(
@@ -169,33 +150,10 @@ def simulator(
             # Clamp state if NaN (use previous x)
             x = x if nan_detected else x_ret
 
-            # Efficient accumulation
-            xs_list.append(x.reshape(-1, 1))
-
-            # Update planner_data.xs ONLY if needed (e.g. for STL or if planner requires it)
-            # We check if stl_trajectory_cost is provided or if planner is active.
-            # To avoid O(N^2) at every step, we only stack if strictly necessary.
-            # But if the planner interface *requires* .xs to be the full trajectory array every step,
-            # we are bound by that interface.
-            # Assuming we can optimize:
-            if stl_trajectory_cost is not None:
-                # We must pay the cost if STL cost depends on full trajectory
-                xs = jnp.concatenate(xs_list, axis=1)
-                planner_data = planner_data._replace(xs=xs)
-            elif planner_data.xs is not None:
-                # If planner_data.xs is being maintained, we might need to update it.
-                # But if stl_trajectory_cost is None, maybe we can defer?
-                # Current behavior was to ALWAYS update. Let's optimize to only update
-                # if we suspect the planner needs it (which is hard to know without inspection).
-                # For safety/compatibility, we can maintain the behavior but use concatenate which is slightly better?
-                # No, concatenate on list is O(N). Doing it N times is O(N^2).
-                # We will simply NOT update planner_data.xs every step unless forced.
-                # BUT, the `step` function might have used `planner_data.xs`.
-                # The `step` function takes `planner_data`. If `planner` inside `step` reads `xs`, it needs it.
-                # If `planner` is None, `step` doesn't use `xs`.
-                if planner is not None:
-                    xs = jnp.concatenate(xs_list, axis=1)
-                    planner_data = planner_data._replace(xs=xs)
+            # O(1) trajectory update via pre-allocated buffer
+            if needs_trajectory:
+                xs_buf = xs_buf.at[:, s + 1].set(x)
+                planner_data = planner_data._replace(xs=xs_buf[:, : s + 2])
 
             # Strip sampled_x_traj before logging to avoid accumulating
             # massive MPPI sample arrays (num_samples * state_dim * horizon per step)
@@ -207,10 +165,10 @@ def simulator(
                 control=u,
                 estimate=z,
                 covariance=c,
-                controller_keys=list(controller_data._asdict().keys()),
-                controller_values=list(controller_data._asdict().values()),
-                planner_keys=list(planner_data_for_log._asdict().keys()),
-                planner_values=list(planner_data_for_log._asdict().values()),
+                controller_keys=list(ControllerData._fields),
+                controller_values=list(controller_data),
+                planner_keys=list(PlannerData._fields),
+                planner_values=list(planner_data_for_log),
             )
 
             for cb in callbacks:
@@ -325,8 +283,8 @@ def execute(
             - planner_keys (List[str]): Names of logged planner data fields.
             - planner_values (List[Array]): Logged planner data values.
     """
-    # Validate initial state shape and dynamics consistency
-    # This prevents obscure broadcasting errors deep in the simulation loop.
+    # Validate dynamics output — single call, reused for all checks
+    x0 = jnp.atleast_1d(jnp.asarray(x0))
     try:
         f_check, g_check = dynamics(x0)
     except Exception as e:
@@ -346,8 +304,25 @@ def execute(
             msg += "\nTip: Pass a 1D array for 'x0' (e.g., use x0.ravel() or x0.flatten())."
         elif x0.shape[0] < f_check.shape[0]:
             msg += f"\nTip: System expects {f_check.shape[0]} states, but got {x0.shape[0]}."
-
         raise ValueError(msg)
+
+    if f_check.ndim != 1:
+        msg = (
+            f"Dynamics function returned `f` with shape {f_check.shape}. "
+            "Expected 1D array (shape (n,)).\n"
+        )
+        if f_check.ndim == 2 and f_check.shape[1] == 1:
+            msg += (
+                "It appears `f` is a column vector (n, 1). "
+                "Please squeeze it to (n,) (e.g., using jnp.squeeze or .flatten())."
+            )
+        raise ValueError(msg)
+
+    if g_check.ndim != 2:
+        raise ValueError(
+            f"Dynamics function returned `g` with shape {g_check.shape}. "
+            "Expected 2D array (shape (n, m))."
+        )
 
     # Setup callbacks
     callbacks: List[SimulationCallback] = []
@@ -371,38 +346,6 @@ def execute(
 
         key = random.PRNGKey(seed)  # type: ignore
 
-    # Atlas: Validate dynamics output shapes to catch common (N, 1) vs (N,) errors early
-    try:
-        # Ensure x0 is a JAX array for this check
-        x0_arr = jnp.array(x0)
-        f_check, g_check = dynamics(x0_arr)
-
-        if f_check.ndim != 1:
-            msg = (
-                f"Dynamics function returned `f` with shape {f_check.shape}. "
-                "Expected 1D array (shape (n,)).\n"
-            )
-            if f_check.ndim == 2 and f_check.shape[1] == 1:
-                msg += (
-                    "It appears `f` is a column vector (n, 1). "
-                    "Please squeeze it to (n,) (e.g., using jnp.squeeze or .flatten())."
-                )
-            raise ValueError(msg)
-
-        if g_check.ndim != 2:
-            raise ValueError(
-                f"Dynamics function returned `g` with shape {g_check.shape}. "
-                "Expected 2D array (shape (n, m))."
-            )
-
-    except Exception as e:
-        # If dynamics evaluation fails completely (e.g. wrong x0 dimension), re-raise wrapped error
-        if isinstance(e, ValueError):
-            raise e
-        raise ValueError(
-            f"Failed to evaluate dynamics function on initial state: {e}"
-        ) from e
-
     if controller is not None:
         controller = setup_controller(controller)
 
@@ -422,9 +365,7 @@ def execute(
             planner_data = PlannerData(x_traj=goal_arr)
         elif isinstance(planner_data, dict):
             if planner_data.get("x_traj") is not None:
-                raise ValueError(
-                    "Cannot specify both 'goal' and 'planner_data[\"x_traj\"]'."
-                )
+                raise ValueError("Cannot specify both 'goal' and 'planner_data[\"x_traj\"]'.")
             planner_data["x_traj"] = goal_arr
             # Convert to NamedTuple later
         elif isinstance(planner_data, PlannerData):
@@ -482,8 +423,7 @@ def execute(
             p_data = p_data._replace(sampled_x_traj=None)
 
         if controller is not None:
-            f_dummy, g_dummy = dynamics(x0)
-            u_nom_dummy = jnp.zeros((g_dummy.shape[1],))
+            u_nom_dummy = jnp.zeros((g_check.shape[1],))
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
         # Ensure error_data is initialized to enable NaN reporting in JIT loop.

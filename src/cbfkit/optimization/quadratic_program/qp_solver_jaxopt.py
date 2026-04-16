@@ -137,12 +137,12 @@ def solve_with_details(
     """Solve a quadratic program using the jaxopt solver, returning full details.
 
     Args:
-        h_mat: quadratic cost matrix
-        f_vec: linear cost vector
-        g_mat: linear inequality constraint matrix
-        b_vec: linear inequality constraint vector
-        g_mat: linear equality constraint matrix
-        h_vec: linear equality constraint vector
+        h_mat: quadratic cost matrix (n_vars, n_vars)
+        f_vec: linear cost vector (n_vars,)
+        g_mat: inequality constraint matrix (n_ineq, n_vars)
+        h_vec: inequality constraint bounds (n_ineq,)
+        a_mat: equality constraint matrix (n_eq, n_vars)
+        b_vec: equality constraint bounds (n_eq,)
         init_params: Optional initial parameters for warm-starting.
 
     Returns
@@ -201,12 +201,12 @@ def solve_with_state(
     Note: Returns status as a boolean success flag (True if status == 1).
 
     Args:
-        h_mat: quadratic cost matrix
-        f_vec: linear cost vector
-        g_mat: linear inequality constraint matrix
-        b_vec: linear inequality constraint vector
-        g_mat: linear equality constraint matrix
-        h_vec: linear equality constraint vector
+        h_mat: quadratic cost matrix (n_vars, n_vars)
+        f_vec: linear cost vector (n_vars,)
+        g_mat: inequality constraint matrix (n_ineq, n_vars)
+        h_vec: inequality constraint bounds (n_ineq,)
+        a_mat: equality constraint matrix (n_eq, n_vars)
+        b_vec: equality constraint bounds (n_eq,)
         init_params: Optional initial parameters for warm-starting.
 
     Returns
@@ -231,16 +231,16 @@ def solve(
     """Solve a quadratic program using the jaxopt solver.
 
     Args:
-        h_mat: quadratic cost matrix
-        f_vec: linear cost vector
-        g_mat: linear inequality constraint matrix
-        b_vec: linear inequality constraint vector
-        g_mat: linear equality constraint matrix
-        h_vec: linear equality constraint vector
+        h_mat: quadratic cost matrix (n_vars, n_vars)
+        f_vec: linear cost vector (n_vars,)
+        g_mat: inequality constraint matrix (n_ineq, n_vars)
+        h_vec: inequality constraint bounds (n_ineq,)
+        a_mat: equality constraint matrix (n_eq, n_vars)
+        b_vec: equality constraint bounds (n_eq,)
 
     Returns
     -------
-        sol['x']: Solution to the QP
+        (sol, success): Solution array and boolean success flag.
     """
     sol, success, _ = solve_with_state(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
     return sol, success
