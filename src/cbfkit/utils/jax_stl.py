@@ -129,7 +129,6 @@ def accumulate_min(arr):
 @jit
 def jax_finally(lower_time_bound, upper_time_bound, robustness, time_stamps):
     """Process mtl finally."""
-    len(robustness)
 
     def process_valid_bounds(_):
         def inf_case(_):
@@ -173,7 +172,6 @@ def jax_finally(lower_time_bound, upper_time_bound, robustness, time_stamps):
 # #@jit
 def jax_global(lower_time_bound, upper_time_bound, robustness, time_stamps):
     """Process mtl global."""
-    len(robustness)
 
     def process_valid_bounds(_):
         def inf_case(_):

@@ -12,23 +12,7 @@ from typing import Any, List, Optional
 
 import numpy as np
 
-try:
-    import matplotlib  # noqa: F401
-
-    HAS_MATPLOTLIB = True
-except ImportError:
-    HAS_MATPLOTLIB = False
-
 _PED_COLORS = ["red", "orange", "purple", "brown", "pink"]
-
-
-def require_visualization():
-    """Raise ImportError if matplotlib is not available."""
-    if not HAS_MATPLOTLIB:
-        raise ImportError(
-            "Optional dependency 'matplotlib' not found. "
-            "Please install cbfkit[vis] to use visualization features."
-        )
 
 
 # Manim quality mapping

@@ -37,6 +37,8 @@ def generate_compute_robust_cbf_constraints(
         robustness_term = robustness_two_norm(bound)
     elif disturbance_norm == jnp.inf:
         robustness_term = robustness_sup_norm(bound)
+    else:
+        raise ValueError(f"Unsupported disturbance_norm: {disturbance_norm}. Use 2 or jnp.inf.")
 
     return build_cbf_constraint_generator(
         control_limits,

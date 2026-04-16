@@ -61,7 +61,7 @@ def simulator(
     perturbation: Optional[PerturbationCallable],
     sigma: Optional[Array],
     key: Array,
-    callbacks: List[SimulationCallback] = [],
+    callbacks: Optional[List[SimulationCallback]] = None,
     stl_trajectory_cost: Optional[StlTrajectoryCostCallable] = None,
 ) -> Callable[
     [Array, Optional[ControllerData], Optional[PlannerData]],
@@ -86,6 +86,8 @@ def simulator(
         sigma_val = jnp.zeros(0)  # Dummy sigma
     else:
         sigma_val = sigma
+
+    _callbacks = callbacks if callbacks is not None else []
 
     assert sensor_func is not None
     assert estimator_func is not None
@@ -123,7 +125,7 @@ def simulator(
         c = None  # Initialize covariance
 
         # Initialize callbacks
-        for cb in callbacks:
+        for cb in _callbacks:
             cb.on_start(total_steps=num_steps, dt=dt)
 
         # Pre-allocate trajectory buffer (avoids O(N^2) concatenation in loop)
@@ -171,14 +173,14 @@ def simulator(
                 planner_values=list(planner_data_for_log),
             )
 
-            for cb in callbacks:
+            for cb in _callbacks:
                 cb.on_step(step_idx=s, time=dt * s, data=step_data)
 
             yield step_data
 
             if controller_data.complete:
                 msg = "GOAL REACHED!"
-                for cb in callbacks:
+                for cb in _callbacks:
                     cb.on_end(success=True, message=msg)
                 break
 
@@ -189,18 +191,18 @@ def simulator(
                     else "Unknown error"
                 )
                 msg = f"CONTROLLER ERROR: {err_msg}"
-                for cb in callbacks:
+                for cb in _callbacks:
                     cb.on_end(success=False, message=msg)
                 break
 
             if planner_data.error:
                 msg = "PLANNER ERROR"
-                for cb in callbacks:
+                for cb in _callbacks:
                     cb.on_end(success=False, message=msg)
                 break
         else:
             # Loop finished naturally
-            for cb in callbacks:
+            for cb in _callbacks:
                 cb.on_end(success=True, message="")
 
     return simulate_iter
