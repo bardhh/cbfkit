@@ -60,19 +60,11 @@ class MonteCarloGPUResults(NamedTuple):
     n_trials: int
 
 
-def _default_sensor(t, x, *, sigma=None, key=None):
-    return x
-
-
-def _default_estimator(t, y, z, u, c):
-    return y, c if c is not None else jnp.zeros((len(y), len(y)))
-
-
-def _default_perturbation(x, u, f, g):
-    def p(key):
-        return jnp.zeros_like(x)
-
-    return p
+from cbfkit.simulation.status import (
+    _default_sensor,
+    _default_estimator,
+    _default_perturbation,
+)
 
 
 def conduct_monte_carlo_gpu(
@@ -143,9 +135,7 @@ def conduct_monte_carlo_gpu(
             setup.planner_data,
         )
 
-        _final_carry, trajectory = lax.scan(
-            scan_step, carry_init, jnp.arange(setup.num_steps)
-        )
+        _final_carry, trajectory = lax.scan(scan_step, carry_init, jnp.arange(setup.num_steps))
         return trajectory
 
     # JIT-compile the vmapped function
@@ -204,9 +194,7 @@ def conduct_monte_carlo_gpu_multiseed(
     for seed in seeds:
         master_key = random.PRNGKey(seed)
         all_keys_list.append(random.split(master_key, n_trials))
-        all_sampler_keys_list.append(
-            random.split(random.fold_in(master_key, 1), n_trials)
-        )
+        all_sampler_keys_list.append(random.split(random.fold_in(master_key, 1), n_trials))
 
     all_keys = jnp.concatenate(all_keys_list, axis=0)  # (total, 2)
     all_sampler_keys = jnp.concatenate(all_sampler_keys_list, axis=0)
@@ -242,12 +230,16 @@ def conduct_monte_carlo_gpu_multiseed(
         u0 = jnp.zeros((control_dim,))
         z0 = x0
         carry_init = (
-            key, 0.0, x0, u0, z0, c0,
-            setup.controller_data, setup.planner_data,
+            key,
+            0.0,
+            x0,
+            u0,
+            z0,
+            c0,
+            setup.controller_data,
+            setup.planner_data,
         )
-        _final_carry, trajectory = lax.scan(
-            scan_step, carry_init, jnp.arange(setup.num_steps)
-        )
+        _final_carry, trajectory = lax.scan(scan_step, carry_init, jnp.arange(setup.num_steps))
         return trajectory
 
     batched_fn = jax.jit(jax.vmap(single_trajectory, in_axes=(0, 0)))
@@ -269,13 +261,15 @@ def conduct_monte_carlo_gpu_multiseed(
     results = []
     for i in range(n_seeds):
         sl = slice(i * n_trials, (i + 1) * n_trials)
-        results.append(MonteCarloGPUResults(
-            states=xs[sl],
-            controls=us[sl],
-            controller_datas=jax.tree.map(lambda a: a[sl], c_datas),
-            planner_datas=jax.tree.map(lambda a: a[sl], p_datas),
-            wall_time_s=per_seed_time,
-            n_trials=n_trials,
-        ))
+        results.append(
+            MonteCarloGPUResults(
+                states=xs[sl],
+                controls=us[sl],
+                controller_datas=jax.tree.map(lambda a: a[sl], c_datas),
+                planner_datas=jax.tree.map(lambda a: a[sl], p_datas),
+                wall_time_s=per_seed_time,
+                n_trials=n_trials,
+            )
+        )
 
     return results
