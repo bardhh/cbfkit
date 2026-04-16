@@ -283,8 +283,8 @@ def execute(
             - planner_keys (List[str]): Names of logged planner data fields.
             - planner_values (List[Array]): Logged planner data values.
     """
-    # Validate initial state shape and dynamics consistency
-    # This prevents obscure broadcasting errors deep in the simulation loop.
+    # Validate dynamics output — single call, reused for all checks
+    x0 = jnp.atleast_1d(jnp.asarray(x0))
     try:
         f_check, g_check = dynamics(x0)
     except Exception as e:
@@ -304,8 +304,25 @@ def execute(
             msg += "\nTip: Pass a 1D array for 'x0' (e.g., use x0.ravel() or x0.flatten())."
         elif x0.shape[0] < f_check.shape[0]:
             msg += f"\nTip: System expects {f_check.shape[0]} states, but got {x0.shape[0]}."
-
         raise ValueError(msg)
+
+    if f_check.ndim != 1:
+        msg = (
+            f"Dynamics function returned `f` with shape {f_check.shape}. "
+            "Expected 1D array (shape (n,)).\n"
+        )
+        if f_check.ndim == 2 and f_check.shape[1] == 1:
+            msg += (
+                "It appears `f` is a column vector (n, 1). "
+                "Please squeeze it to (n,) (e.g., using jnp.squeeze or .flatten())."
+            )
+        raise ValueError(msg)
+
+    if g_check.ndim != 2:
+        raise ValueError(
+            f"Dynamics function returned `g` with shape {g_check.shape}. "
+            "Expected 2D array (shape (n, m))."
+        )
 
     # Setup callbacks
     callbacks: List[SimulationCallback] = []
@@ -328,36 +345,6 @@ def execute(
                 pass
 
         key = random.PRNGKey(seed)  # type: ignore
-
-    # Atlas: Validate dynamics output shapes to catch common (N, 1) vs (N,) errors early
-    try:
-        # Ensure x0 is a JAX array for this check
-        x0_arr = jnp.array(x0)
-        f_check, g_check = dynamics(x0_arr)
-
-        if f_check.ndim != 1:
-            msg = (
-                f"Dynamics function returned `f` with shape {f_check.shape}. "
-                "Expected 1D array (shape (n,)).\n"
-            )
-            if f_check.ndim == 2 and f_check.shape[1] == 1:
-                msg += (
-                    "It appears `f` is a column vector (n, 1). "
-                    "Please squeeze it to (n,) (e.g., using jnp.squeeze or .flatten())."
-                )
-            raise ValueError(msg)
-
-        if g_check.ndim != 2:
-            raise ValueError(
-                f"Dynamics function returned `g` with shape {g_check.shape}. "
-                "Expected 2D array (shape (n, m))."
-            )
-
-    except Exception as e:
-        # If dynamics evaluation fails completely (e.g. wrong x0 dimension), re-raise wrapped error
-        if isinstance(e, ValueError):
-            raise e
-        raise ValueError(f"Failed to evaluate dynamics function on initial state: {e}") from e
 
     if controller is not None:
         controller = setup_controller(controller)
@@ -436,8 +423,7 @@ def execute(
             p_data = p_data._replace(sampled_x_traj=None)
 
         if controller is not None:
-            f_dummy, g_dummy = dynamics(x0)
-            u_nom_dummy = jnp.zeros((g_dummy.shape[1],))
+            u_nom_dummy = jnp.zeros((g_check.shape[1],))
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
         # Ensure error_data is initialized to enable NaN reporting in JIT loop.
