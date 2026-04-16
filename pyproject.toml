@@ -49,6 +49,10 @@ manim = [
 optuna = [
     "optuna>=3.0",
 ]
+neural = [
+    "flax>=0.8",
+    "optax>=0.2",
+]
 dev = [
     "pytest>=8.0.2",
     "pytest-cov",
