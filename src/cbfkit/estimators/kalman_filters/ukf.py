@@ -46,7 +46,7 @@ def ct_ukf_dtmeas(
             P_new (Array): updated Kalman covariance matrix
         """
         if z is None or u is None or P is None:
-            return initialize(y, R)
+            return y, R
 
         x_predicted, P_predicted, s_predicted = predict(t, z, u, P)
         x_new, P_new = update(x_predicted, y, P_predicted)
