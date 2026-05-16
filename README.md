@@ -79,6 +79,101 @@ results = simulator.execute(
 print(f"Final position: ({results.states[-1, 0]:.2f}, {results.states[-1, 1]:.2f})")
 ```
 
+## Showcase
+
+A two-track tour of what CBFKit can do. The **Highlights** are the 30-second skim — the **Gallery** below shows breadth.
+
+### Highlights
+
+#### Safe RL with Gymnasium
+
+Drop-in CBF safety filter for any continuous Gymnasium environment. Wraps the env so every action from your RL policy gets safety-projected by a CBF-QP before reaching the simulator — works with PPO, SAC, or any off-the-shelf algorithm, no policy retraining required.
+
+<p align="center"><img src="media/showcase/safe_rl_gymnasium.gif" width="85%" alt="Safe RL: naive vs CBF-filtered policy"></p>
+
+```bash
+python examples/gymnasium/safe_single_integrator.py
+```
+
+#### Neural CBF — learn barriers from data
+
+Skip the math: learn the barrier function from samples. A small neural network learns h(x) from labeled safe/unsafe states, then plugs straight into CBFKit's CBF-QP controller. Useful when obstacles are hard to describe analytically — point clouds, learned occupancy maps, scanned environments.
+
+<p align="center"><img src="media/showcase/neural_cbf.gif" width="65%" alt="Neural CBF: agent avoiding a learned obstacle"></p>
+
+```bash
+python examples/neural_cbf/neural_cbf_obstacle_avoidance.py
+```
+
+#### 1000× faster QP solver
+
+A custom fast QP solver built for CBF-CLF problems. Drop-in replacement for the JAXopt and CVXOPT solvers shipped with CBFKit; benchmark shows ~1000× speedup on typical CBF-QP problem sizes thanks to JAX JIT and problem-structure exploitation. Selected at runtime via `solver="fast"` on any CBF-QP controller.
+
+<p align="center"><img src="media/showcase/fast_qp_benchmark.png" width="75%" alt="QP solver wall-time comparison"></p>
+
+```bash
+python benchmarks/qp_solver_comparison.py
+```
+
+#### Multi-robot 3D coordination
+
+Cinematic 3D simulation rendering with Manim. Multi-robot reach-avoid in 3D, rendered via CBFKit's Manim backend. Shows the visualization stack scales from quick matplotlib plots to publication-quality 3D animations.
+
+<p align="center"><img src="media/showcase/multi_robot_3d.gif" width="70%" alt="Manim 3D render of multi-robot reach-avoid"></p>
+
+```bash
+python tutorials/multi_robot_3d_reachavoid.py
+```
+
+### Gallery
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="media/showcase/risk_aware_cvar.gif" width="100%" alt="Ellipsoidal-obstacle CBF"><br>
+      <sub><b>Ellipsoidal-obstacle CBF</b><br>Unicycle reach-goal with linear class-K</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="media/showcase/stochastic_cbf.gif" width="100%" alt="Stochastic CBF"><br>
+      <sub><b>Stochastic CBF (SDE)</b><br>Safety under Brownian disturbance</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="media/showcase/robust_cbf.gif" width="100%" alt="Robust CBF"><br>
+      <sub><b>Robust CBF</b><br>Worst-case bounded disturbance</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="media/showcase/mppi_rollouts.gif" width="100%" alt="MPPI rollouts"><br>
+      <sub><b>MPPI rollout sampling</b><br>Sampling-based planning</sub>
+    </td>
+    <td align="center">
+      <img src="media/showcase/mppi_stl.gif" width="100%" alt="MPPI reach-avoid"><br>
+      <sub><b>MPPI reach-avoid</b><br>Sampling-based planning with goal + obstacle cost</sub>
+    </td>
+    <td align="center">
+      <img src="media/showcase/multi_robot_2d.gif" width="100%" alt="Multi-robot 2D coordination"><br>
+      <sub><b>Multi-robot 2D</b><br>Coordination via shared CBFs</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="media/showcase/fixed_wing_3d.gif" width="100%" alt="Fixed-wing aerial 3D"><br>
+      <sub><b>Fixed-wing aerial 3D</b><br>UAV reach-drop-point in 3D</sub>
+    </td>
+    <td align="center">
+      <img src="media/showcase/pedestrian_head_on.gif" width="100%" alt="Pedestrian head-on"><br>
+      <sub><b>Pedestrian head-on</b><br>Dynamic-agent avoidance</sub>
+    </td>
+    <td align="center">
+      <img src="media/showcase/ekf_estimation.gif" width="100%" alt="EKF state estimation"><br>
+      <sub><b>EKF state estimation</b><br>CBF over noisy estimates</sub>
+    </td>
+  </tr>
+</table>
+
+*Also available: code generation for custom systems (`tutorials/code_generation_tutorial.ipynb`), ROS2 node generation, risk-aware CVaR-CBF, adaptive CVaR-CBF, parameter sweeps, and quadrotor attitude control.*
+
 ## Simulation Architecture
 
 ![cbfkit_architecture](https://github.com/user-attachments/assets/9ca32a8d-4fb5-420d-8742-cb6545a65889)
