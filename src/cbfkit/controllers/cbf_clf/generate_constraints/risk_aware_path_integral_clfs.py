@@ -44,7 +44,9 @@ def generate_compute_ra_pi_clf_constraints(
         assert ra_params.p_bound is not None
         assert ra_params.gamma is not None
         r_buffer = float(
-            ra_params.eta * jnp.sqrt(2 * ra_params.t_max) * scipy.special.erfinv(ra_params.p_bound)
+            ra_params.eta
+            * jnp.sqrt(2 * ra_params.t_max)
+            * scipy.special.erfinv(2 * ra_params.p_bound - 1)
         )
     else:
         ra_params = RiskAwareParams(

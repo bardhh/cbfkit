@@ -109,12 +109,19 @@ def convert_string(input_string):
     return result_string
 
 
+_JAX_PATTERN = re.compile(
+    r"(?<![\w.])(" + "|".join(re.escape(f) for f in JAX_EXPRESSIONS) + r")(?!\w)"
+)
+
+
 def jaxify_expression(expr: str) -> str:
-    """Helper to replace math functions with jnp versions."""
-    for func in JAX_EXPRESSIONS:
-        expr = expr.replace(func, "jnp." + func)
-    expr = expr.replace("arcjnp.", "jnp.arc")  # Fix arcsin/arccos
-    return expr
+    """Replace bare math function names with ``jnp.`` equivalents.
+
+    Uses word-boundary matching so identifiers containing a math-function
+    substring (e.g. ``cosine``, ``expense``) and already-prefixed names
+    (``np.cos``, ``jnp.cos``) are left alone.
+    """
+    return _JAX_PATTERN.sub(lambda m: "jnp." + m.group(0), expr)
 
 
 def generate_model(

@@ -54,6 +54,13 @@ def resolve_nominal_control(
         return u_planner, key
 
     if planner_data.x_traj is not None:
+        if nominal_controller is None:
+            raise ValueError(
+                "A state trajectory (planner_data.x_traj or goal=) was provided, but "
+                "no nominal_controller was supplied to track it. Either pass a "
+                "nominal_controller that converts the desired state into a control "
+                "input, or provide a control trajectory (u_traj) directly."
+            )
         idx = jnp.round(t / dt).astype(int)
         idx = jnp.clip(idx, 0, planner_data.x_traj.shape[1] - 1)
         x_des = planner_data.x_traj[:, idx]

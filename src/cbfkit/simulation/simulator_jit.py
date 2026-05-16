@@ -79,9 +79,6 @@ def _make_scan_step(
         else:
             u_planner = jnp.zeros((g.shape[1],))
 
-        # 5. Nominal Controller
-        # Logic: Check if planner provided u_traj or x_traj
-
         # 5. Resolve nominal control from planner output
         u_nom, key = resolve_nominal_control(
             t,

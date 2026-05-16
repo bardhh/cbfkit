@@ -4,6 +4,7 @@ Provides ``execute()`` to run a full simulation pipeline:
 Planner -> Nominal Controller -> Safety Controller (CBF-CLF-QP) -> Plant Dynamics -> Integrator -> Sensor -> Estimator.
 """
 
+import warnings
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 import os
 import time
@@ -72,6 +73,8 @@ def simulator(
     ...
     """
     # Handle defaults for Optional callables
+    if callbacks is None:
+        callbacks = []
     sensor_func: SensorCallable = sensor if sensor is not None else _default_sensor
     estimator_func: EstimatorCallable = estimator if estimator is not None else _default_estimator
     perturbation_func: PerturbationCallable = (
@@ -506,7 +509,14 @@ def execute(
                                     val_np[sk] = list(zip(*sv))
                                 else:
                                     val_np[sk] = list(np.array(sv))
-                            except Exception:
+                            except Exception as exc:
+                                warnings.warn(
+                                    f"Could not convert sub-data field "
+                                    f"{prefix}.{k}.{sk!r} to numpy ({exc}); "
+                                    f"logging Nones for this field.",
+                                    RuntimeWarning,
+                                    stacklevel=2,
+                                )
                                 val_np[sk] = [None] * num_steps
                         # zip now works on lists of values
                         vals = [dict(zip(val_np.keys(), t)) for t in zip(*val_np.values())]

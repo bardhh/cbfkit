@@ -4,7 +4,6 @@ generate_compute_ra_cbf_constraints: placeholder (theory in development).
 generate_compute_estimate_feedback_ra_cbf_constraints: estimate-feedback variant.
 """
 
-import warnings
 from typing import Any, Callable, Dict, Tuple
 
 import jax.numpy as jnp
@@ -35,29 +34,36 @@ def generate_compute_ra_cbf_constraints(
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
-    """Risk-aware CBF constraint generator.
+    """Placeholder for the risk-aware CBF constraint generator.
 
-    .. warning::
-        Not yet implemented — theory still in development.
-        Returns zero constraints (no safety filtering).
-        Use ``generate_compute_estimate_feedback_ra_cbf_constraints`` instead.
+    The risk-aware CBF constraint assembly is not yet implemented (theory still in
+    development). Constructing this generator is allowed when no barriers are provided
+    so that the paired CLF-only path keeps working, but invoking it with barriers
+    raises ``NotImplementedError`` rather than silently returning zeroed constraints
+    (which would advertise a safety guarantee that is not enforced).
+
+    For risk-aware safety with barriers, use
+    ``generate_compute_ra_path_integral_cbf_constraints`` from
+    ``risk_aware_path_integral_cbfs.py``.
     """
-    warnings.warn(
-        "generate_compute_ra_cbf_constraints is not yet implemented "
-        "(theory in development). The returned constraints are zero "
-        "and provide NO safety filtering. Use "
-        "generate_compute_estimate_feedback_ra_cbf_constraints instead.",
-        stacklevel=2,
-    )
-
-    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
+    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, _tunable, _relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
 
+    if n_bfs > 0:
+        raise NotImplementedError(
+            "Risk-aware CBF constraint assembly is not implemented "
+            "(generate_compute_ra_cbf_constraints). The constraint matrix would be "
+            "returned as zeros, silently providing no safety. "
+            "Use generate_compute_ra_path_integral_cbf_constraints for risk-aware "
+            "safety with barriers, or omit barriers to use the risk-aware CLF only."
+        )
+
     @jit
     def compute_cbf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
-        data: CbfClfQpData = {}
-        return a_cbf, b_cbf, data
+        """Returns empty CBF constraints (no barriers configured)."""
+        del t, x  # unused
+        return a_cbf, b_cbf, {}
 
     return compute_cbf_constraints
 
