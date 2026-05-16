@@ -1,5 +1,6 @@
 """Simulation data formatting utilities."""
 
+import warnings
 from typing import Tuple
 
 import jax.numpy as jnp
@@ -78,8 +79,15 @@ def format_return_data(
                 arr = jnp.stack(vals)
                 processed_keys.append(key)
                 processed_values.append(arr)
-            except ValueError:
-                pass
+            except ValueError as exc:
+                # Field had inconsistent shapes across timesteps; drop it but warn
+                # so users don't see a silent KeyError when they look it up later.
+                warnings.warn(
+                    f"Field {key!r} dropped from SimulationResults: "
+                    f"inconsistent shapes across timesteps ({exc}).",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
         return processed_keys, processed_values
 
     if len(data) > 0:

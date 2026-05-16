@@ -236,7 +236,6 @@ def cbf_clf_qp_generator(
                 f"but got {control_limits}."
             )
 
-        complete = False
         n_con = len(control_limits)
 
         def verified_dynamics_func(x: State) -> Tuple[Array, Array]:
@@ -437,8 +436,6 @@ def cbf_clf_qp_generator(
             Returns:
                 ControllerCallableReturns: tuple consisting of control solution (Array) and auxiliary data (Dict)
             """
-            nonlocal complete
-
             # Ensure u_nom is 1D to prevent broadcasting errors (e.g., (N,) + (N,1) -> (N,N))
             # and to handle scalar inputs for 1D systems.
             u_nom = u_nom.ravel()
@@ -461,8 +458,7 @@ def cbf_clf_qp_generator(
             # Keep vectors 1D to avoid JAX broadcasting overhead in solver (prevents (N,1) vs (N,) mismatch)
             q_vec = jnp.matmul(-2 * p_mat, u_nom)
             g_mat_c, h_vec_c, sub_data = compute_cbf_clf_constraints(t, x)
-            if "complete" in sub_data:
-                complete = sub_data["complete"]
+            complete = sub_data.get("complete", False)
 
             # Stack input and certificate function constraints
             # Scaling of slack columns is now handled within compute_cbf_clf_constraints (via kwargs)

@@ -162,7 +162,9 @@ def update_dtmeas(
         H = dhdx(z)
         K = jnp.matmul(jnp.matmul(P, H.T), jnp.linalg.inv(jnp.matmul(jnp.matmul(H, P), H.T) + R))
         z_new = z + jnp.matmul(K, y - h(z))
-        P_new = jnp.matmul(jnp.eye(P.shape[0]) - jnp.matmul(K, H), P)
+        # Joseph form: numerically stable, preserves positive-definiteness of P
+        IKH = jnp.eye(P.shape[0]) - jnp.matmul(K, H)
+        P_new = jnp.matmul(jnp.matmul(IKH, P), IKH.T) + jnp.matmul(jnp.matmul(K, R), K.T)
 
         return z_new, P_new
 
