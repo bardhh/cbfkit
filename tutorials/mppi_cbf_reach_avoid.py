@@ -142,13 +142,17 @@ mppi_local_planner = mppi_planner.vanilla_mppi(
 # alternatively, instantiate a fixed waypoint planner
 target_setpoint = single_waypoint_planner.vanilla_waypoint(target_state=goal)
 
-# Instantiate CBF-CLF-QP control law
+# Instantiate CBF-CLF-QP control law.
+# relaxable_cbf=True so OSQP can return a feasible u when the MPPI plan grazes
+# the obstacle boundary; without it the hard CBF + aggressive CLF deadlocks the
+# solver into MAX_ITER and the trajectory NaNs out partway through.
 cbf_clf_controller = cbf_clf_controllers.vanilla_cbf_clf_qp_controller(
     control_limits=ACTUATION_LIMITS,
     dynamics_func=dynamics,
     barriers=barriers,
     lyapunovs=lyapunov,
     relaxable_clf=True,
+    relaxable_cbf=True,
 )
 
 # Run the simulation
