@@ -232,7 +232,7 @@ def execute(
     planner_data: Optional[Union[PlannerData, Dict[str, Any]]] = None,
     initial_covariance: Optional[Covariance] = None,
     stl_trajectory_cost: Optional[StlTrajectoryCostCallable] = None,
-    use_jit: bool = False,
+    use_jit: Union[bool, str] = "auto",
     jit_progress: bool = False,
     jit_progress_interval: int = 50,
 ) -> SimulationResults:
@@ -269,8 +269,10 @@ def execute(
         initial_covariance (Optional[Covariance], optional): Initial estimator covariance.
         Defaults to None.
         stl_trajectory_cost (Optional[Any], optional): STL cost object. Defaults to None.
-        use_jit (bool, optional): If True, uses `jax.jit` for faster execution.
-            JIT compilation requires that all callables are JIT-compatible. Defaults to False.
+        use_jit (Union[bool, str], optional): Controls JIT compilation.
+            ``"auto"`` (default): use JIT unless features that require the eager path
+            are detected (``stl_trajectory_cost``). ``True``: force JIT. ``False``:
+            force eager Python loop.
         jit_progress (bool, optional): Show a host-side progress bar during JIT execution.
             Disabled by default to avoid overhead; requires `verbose=True` to display.
         jit_progress_interval (int, optional): Number of steps between progress updates when
@@ -385,6 +387,16 @@ def execute(
 
     if jit_progress and jit_progress_interval <= 0:
         raise ValueError("jit_progress_interval must be positive when jit_progress is enabled.")
+
+    # Resolve use_jit="auto"
+    if use_jit == "auto":
+        # STL trajectory cost requires the eager path (dynamic trajectory slicing)
+        jit_blocked = stl_trajectory_cost is not None
+        use_jit = not jit_blocked
+        if verbose and use_jit:
+            print_jit_status("Auto-selected JIT execution path.")
+        elif verbose and jit_blocked:
+            print_jit_status("Auto-selected eager path (stl_trajectory_cost requires it).")
 
     if use_jit:
         # JIT Execution Path

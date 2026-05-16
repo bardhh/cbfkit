@@ -1,8 +1,8 @@
-
 import jax.numpy as jnp
 import pytest
 from cbfkit.simulation import simulator
 from cbfkit.utils.user_types import PlannerData
+
 
 def test_goal_sets_xtraj():
     """Test that passing 'goal' correctly populates planner_data.x_traj."""
@@ -40,7 +40,7 @@ def test_goal_sets_xtraj():
         assert jnp.allclose(ref.flatten(), goal_arr)
         return jnp.zeros(1), {}
 
-    # 1. Test with goal only
+    # 1. Test with goal only (eager path: mock controller uses Python assert)
     simulator.execute(
         x0=jnp.zeros(2),
         dt=0.1,
@@ -48,8 +48,10 @@ def test_goal_sets_xtraj():
         dynamics=dynamics,
         integrator=integrator,
         nominal_controller=nominal_controller,
-        goal=goal_arr
+        goal=goal_arr,
+        use_jit=False,
     )
+
 
 def test_goal_with_empty_planner_data():
     """Test goal works when planner_data is provided but empty."""
@@ -73,7 +75,8 @@ def test_goal_with_empty_planner_data():
         integrator=integrator,
         nominal_controller=nominal_controller,
         goal=goal_arr,
-        planner_data=PlannerData() # Empty
+        planner_data=PlannerData(),  # Empty
+        use_jit=False,
     )
 
     # Also test with dict
@@ -85,16 +88,21 @@ def test_goal_with_empty_planner_data():
         integrator=integrator,
         nominal_controller=nominal_controller,
         goal=goal_arr,
-        planner_data={} # Empty dict
+        planner_data={},  # Empty dict
+        use_jit=False,
     )
+
 
 def test_goal_conflict_raises_error():
     """Test that providing both goal and x_traj raises ValueError."""
     goal_arr = jnp.array([1.0])
     traj = jnp.array([[2.0]])
 
-    def dynamics(x): return jnp.zeros_like(x), jnp.zeros((x.shape[0], 1))
-    def integrator(x, f, dt): return x
+    def dynamics(x):
+        return jnp.zeros_like(x), jnp.zeros((x.shape[0], 1))
+
+    def integrator(x, f, dt):
+        return x
 
     # Case 1: PlannerData object
     with pytest.raises(ValueError, match="Cannot specify both 'goal' and 'planner_data.x_traj'"):
@@ -105,7 +113,7 @@ def test_goal_conflict_raises_error():
             dynamics=dynamics,
             integrator=integrator,
             goal=goal_arr,
-            planner_data=PlannerData(x_traj=traj)
+            planner_data=PlannerData(x_traj=traj),
         )
 
     # Case 2: Dict
@@ -117,5 +125,5 @@ def test_goal_conflict_raises_error():
             dynamics=dynamics,
             integrator=integrator,
             goal=goal_arr,
-            planner_data={"x_traj": traj}
+            planner_data={"x_traj": traj},
         )
