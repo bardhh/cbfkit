@@ -166,9 +166,13 @@ class SingleIntegratorObstaclesEnv(gymnasium.Env):
             return None
 
 
+_ENV_ID = "CBFKit/SafeSingleIntegratorObstacles-v0"
+
+
 def register_envs():
-    """Register CBFKit Gymnasium environments."""
-    gymnasium.register(
-        id="CBFKit/SafeSingleIntegratorObstacles-v0",
-        entry_point="cbfkit.envs.gymnasium:SingleIntegratorObstaclesEnv",
-    )
+    """Register CBFKit Gymnasium environments (idempotent)."""
+    if _ENV_ID not in gymnasium.registry:
+        gymnasium.register(
+            id=_ENV_ID,
+            entry_point="cbfkit.envs.gymnasium:SingleIntegratorObstaclesEnv",
+        )

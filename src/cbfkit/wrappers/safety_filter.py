@@ -15,6 +15,38 @@ from cbfkit.utils.user_types import (
 )
 
 
+def _normalize_barriers(barriers) -> Optional[CertificateCollection]:
+    """Normalize CertificateInput to CertificateCollection for barrier_values().
+
+    Handles:
+    - CertificateCollection (NamedTuple with .functions) -> as-is
+    - List/tuple of CertificateCollection -> concatenate
+    - Legacy 5-tuple ([funcs], [jacs], [hess], [partials], [conds]) -> wrap
+    - None or EMPTY -> None
+    """
+    if barriers is None or barriers == EMPTY_CERTIFICATE_COLLECTION:
+        return None
+    # Already a CertificateCollection NamedTuple
+    if isinstance(barriers, tuple) and hasattr(barriers, "functions"):
+        return barriers
+    # List of CertificateCollections
+    if isinstance(barriers, list):
+        from cbfkit.certificates import concatenate_certificates
+
+        return concatenate_certificates(*barriers)
+    # Tuple: could be tuple of CertificateCollections or legacy 5-tuple
+    if isinstance(barriers, tuple):
+        if len(barriers) > 0 and hasattr(barriers[0], "functions"):
+            # Tuple of CertificateCollections
+            from cbfkit.certificates import concatenate_certificates
+
+            return concatenate_certificates(*barriers)
+        if len(barriers) == 5 and isinstance(barriers[0], list):
+            # Legacy 5-tuple: ([funcs], [jacs], [hess], [partials], [conds])
+            return CertificateCollection(*barriers)
+    return None
+
+
 class SafetyFilter:
     """CBF-based safety filter that wraps a ControllerCallable.
 
@@ -108,16 +140,7 @@ class SafetyFilter:
         )
 
         # Normalize barriers to CertificateCollection for barrier_values()
-        normalized_barriers = None
-        if barriers is not None and barriers != EMPTY_CERTIFICATE_COLLECTION:
-            if isinstance(barriers, tuple) and hasattr(barriers, "functions"):
-                normalized_barriers = barriers
-            elif isinstance(barriers, (list, tuple)):
-                from cbfkit.certificates import concatenate_certificates
-
-                normalized_barriers = concatenate_certificates(*barriers)
-            else:
-                normalized_barriers = barriers
+        normalized_barriers = _normalize_barriers(barriers)
 
         return cls(
             controller=controller,
@@ -161,11 +184,12 @@ class SafetyFilter:
 
         intervened = bool(not jnp.allclose(u_nom, u_applied, atol=1e-4))
 
-        # Extract barrier values from controller sub_data or recompute
+        # Extract barrier values from controller sub_data or recompute.
+        # Always provide barrier diagnostics when possible, especially on failure.
         barrier_values = None
         if updated_data.sub_data and "bfs" in updated_data.sub_data:
             barrier_values = updated_data.sub_data["bfs"]
-        elif self._barriers is not None and not solver_failed:
+        elif self._barriers is not None:
             barrier_values = self.barrier_values(state)
 
         info = {
