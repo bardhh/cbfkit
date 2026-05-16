@@ -53,6 +53,9 @@ neural = [
     "flax>=0.8",
     "optax>=0.2",
 ]
+gymnasium = [
+    "gymnasium>=1.0",
+]
 dev = [
     "pytest>=8.0.2",
     "pytest-cov",
@@ -60,6 +63,7 @@ dev = [
     "mypy>=1.8.0,<2.0",
     "jupyter>=1.0.0,<2.0",
     "ruff>=0.3.4",
+    "gymnasium>=1.0",
 ]
 
 [build-system]
