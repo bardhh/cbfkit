@@ -81,8 +81,6 @@ print(f"Final position: ({results.states[-1, 0]:.2f}, {results.states[-1, 1]:.2f
 
 ## Showcase
 
-A two-track tour of what CBFKit can do. The **Highlights** are the 30-second skim — the **Gallery** below shows breadth.
-
 ### Highlights
 
 #### Safe RL with Gymnasium
