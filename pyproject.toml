@@ -60,7 +60,7 @@ dev = [
     "pytest>=8.0.2",
     "pytest-cov",
     "python-dotenv>=1.2.1",
-    "mypy>=1.8.0,<2.0",
+    "mypy>=1.8.0,<3.0",
     "jupyter>=1.0.0,<2.0",
     "ruff>=0.3.4",
     "gymnasium>=1.0",
