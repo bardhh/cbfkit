@@ -168,31 +168,21 @@ def casadi_solver() -> QpSolverCallable:
 # ---------------------------------------------------------------------------
 
 
-from typing import NamedTuple
+def fast_solver(max_iter: int = 25, tol: float = 1e-6) -> QpSolverCallable:
+    """Fast PDIPM solver for small CBF-CLF problems.
 
-
-class _FastSolverState(NamedTuple):
-    """Minimal state compatible with cbf_clf_qp_generator's params unpacking.
-
-    Uses NamedTuple so JAX can traverse it with tree_map/stop_gradient.
-    """
-
-    dual: Array
-    iter_num: int = 0
-
-
-def fast_solver(max_iter: int = 50, tol: float = 1e-6) -> QpSolverCallable:
-    """Create a fast QP solver for small CBF-CLF problems.
-
-    Uses dual coordinate descent — ~1000x faster than OSQP for typical
-    CBF-QP sizes (2-8 variables, 5-20 constraints).  JIT-compatible
-    and warm-startable.
+    Mehrotra predictor-corrector — robust on ill-conditioned QPs with slack
+    penalties up to ~1e8.  Typical convergence: 10-15 iterations.
+    JIT-compatible and warm-startable.
 
     Args:
-        max_iter: Maximum coordinate descent sweeps (default 50).
-        tol: Convergence tolerance.
+        max_iter: Maximum PDIPM iterations (default 25).
+        tol: Combined residual tolerance for status=1.
     """
-    from cbfkit.optimization.quadratic_program.qp_solver_fast import solve_qp_fast
+    from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
+        PdipmState,
+        solve_qp_pdipm,
+    )
 
     def solve_with_details(
         h_mat: Array,
@@ -207,17 +197,17 @@ def fast_solver(max_iter: int = 50, tol: float = 1e-6) -> QpSolverCallable:
             x = jnp.linalg.solve(h_mat, -f_vec)
             return QpSolution(primal=x, status=1, params=None)
 
-        # Extract warm-start dual from previous params
-        warm = None
+        # Extract warm-start state from previous QpSolution.params
+        warm: Optional[PdipmState] = None
         if init_params is not None:
             if isinstance(init_params, tuple) and len(init_params) == 2:
-                # Came from previous QpSolution.params = (sol_placeholder, state)
                 _, state = init_params
-                warm = state.dual if hasattr(state, "dual") else None
-            elif hasattr(init_params, "dual"):
-                warm = init_params.dual
+                if isinstance(state, PdipmState):
+                    warm = state
+            elif isinstance(init_params, PdipmState):
+                warm = init_params
 
-        sol, status, dual = solve_qp_fast(
+        sol, status, state = solve_qp_pdipm(
             h_mat,
             f_vec,
             g_mat,
@@ -226,9 +216,6 @@ def fast_solver(max_iter: int = 50, tol: float = 1e-6) -> QpSolverCallable:
             max_iter=max_iter,
             tol=tol,
         )
-        # Pack params as (placeholder, state) to match cbf_clf_qp_generator's
-        # expected unpacking: _, state = params; iter_num = state.iter_num
-        state = _FastSolverState(dual=dual, iter_num=max_iter)
         return QpSolution(primal=sol, status=status, params=(sol, state))
 
     solve_with_details.jit_compatible = True
