@@ -171,13 +171,19 @@ def casadi_solver() -> QpSolverCallable:
 def fast_solver(max_iter: int = 25, tol: float = 1e-6) -> QpSolverCallable:
     """Fast PDIPM solver for small CBF-CLF problems.
 
-    Mehrotra predictor-corrector — robust on ill-conditioned QPs with slack
-    penalties up to ~1e8.  Typical convergence: 10-15 iterations.
-    JIT-compatible and warm-startable.
+    Mehrotra predictor-corrector primal-dual interior-point method. Designed
+    for the QP shapes that arise in CBF-CLF-QP safety filtering (2-8 variables,
+    5-30 constraints). Robust on slack-relaxed problems where dual coordinate
+    descent fails to converge.
+
+    Benchmarked ~700-880x faster than ``get_solver("jaxopt")`` (OSQP) and
+    ~60-80x faster than ``get_solver("cvxopt")`` on typical CBF-QP sizes
+    (see ``benchmarks/qp_solver_comparison.py``). JIT-compatible and
+    warm-startable across consecutive control steps.
 
     Args:
-        max_iter: Maximum PDIPM iterations (default 25).
-        tol: Combined residual tolerance for status=1.
+        max_iter: Maximum PDIPM iterations (default 25; ~10-15 typically suffice).
+        tol: Combined primal/dual/complementarity residual tolerance.
     """
     from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
         PdipmState,

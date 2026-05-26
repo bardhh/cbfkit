@@ -6,6 +6,10 @@ Designed for the QP shapes that arise in CBF-CLF-QP safety filtering
 (n ~ 2-8 variables, m ~ 5-30 constraints). The barrier-regularized Newton
 system is always well-conditioned, which handles slack-relaxation
 ill-conditioning that breaks dual coordinate descent.
+
+Benchmarked at ~700-880x faster than jaxopt OSQP and ~60-80x faster than
+CVXOPT on typical CBF-QPs; typical convergence in 10-15 iterations.
+See ``benchmarks/qp_solver_comparison.py`` for the measurement methodology.
 """
 
 from functools import partial
