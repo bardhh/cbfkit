@@ -168,31 +168,27 @@ def casadi_solver() -> QpSolverCallable:
 # ---------------------------------------------------------------------------
 
 
-from typing import NamedTuple
+def fast_solver(max_iter: int = 25, tol: float = 1e-6) -> QpSolverCallable:
+    """Fast PDIPM solver for small CBF-CLF problems.
 
+    Mehrotra predictor-corrector primal-dual interior-point method. Designed
+    for the QP shapes that arise in CBF-CLF-QP safety filtering (2-8 variables,
+    5-30 constraints). Robust on slack-relaxed problems where dual coordinate
+    descent fails to converge.
 
-class _FastSolverState(NamedTuple):
-    """Minimal state compatible with cbf_clf_qp_generator's params unpacking.
-
-    Uses NamedTuple so JAX can traverse it with tree_map/stop_gradient.
-    """
-
-    dual: Array
-    iter_num: int = 0
-
-
-def fast_solver(max_iter: int = 50, tol: float = 1e-6) -> QpSolverCallable:
-    """Create a fast QP solver for small CBF-CLF problems.
-
-    Uses dual coordinate descent — ~1000x faster than OSQP for typical
-    CBF-QP sizes (2-8 variables, 5-20 constraints).  JIT-compatible
-    and warm-startable.
+    Benchmarked ~700-880x faster than ``get_solver("jaxopt")`` (OSQP) and
+    ~60-80x faster than ``get_solver("cvxopt")`` on typical CBF-QP sizes
+    (see ``benchmarks/qp_solver_comparison.py``). JIT-compatible and
+    warm-startable across consecutive control steps.
 
     Args:
-        max_iter: Maximum coordinate descent sweeps (default 50).
-        tol: Convergence tolerance.
+        max_iter: Maximum PDIPM iterations (default 25; ~10-15 typically suffice).
+        tol: Combined primal/dual/complementarity residual tolerance.
     """
-    from cbfkit.optimization.quadratic_program.qp_solver_fast import solve_qp_fast
+    from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
+        PdipmState,
+        solve_qp_pdipm,
+    )
 
     def solve_with_details(
         h_mat: Array,
@@ -207,17 +203,17 @@ def fast_solver(max_iter: int = 50, tol: float = 1e-6) -> QpSolverCallable:
             x = jnp.linalg.solve(h_mat, -f_vec)
             return QpSolution(primal=x, status=1, params=None)
 
-        # Extract warm-start dual from previous params
-        warm = None
+        # Extract warm-start state from previous QpSolution.params
+        warm: Optional[PdipmState] = None
         if init_params is not None:
             if isinstance(init_params, tuple) and len(init_params) == 2:
-                # Came from previous QpSolution.params = (sol_placeholder, state)
                 _, state = init_params
-                warm = state.dual if hasattr(state, "dual") else None
-            elif hasattr(init_params, "dual"):
-                warm = init_params.dual
+                if isinstance(state, PdipmState):
+                    warm = state
+            elif isinstance(init_params, PdipmState):
+                warm = init_params
 
-        sol, status, dual = solve_qp_fast(
+        sol, status, state = solve_qp_pdipm(
             h_mat,
             f_vec,
             g_mat,
@@ -226,9 +222,6 @@ def fast_solver(max_iter: int = 50, tol: float = 1e-6) -> QpSolverCallable:
             max_iter=max_iter,
             tol=tol,
         )
-        # Pack params as (placeholder, state) to match cbf_clf_qp_generator's
-        # expected unpacking: _, state = params; iter_num = state.iter_num
-        state = _FastSolverState(dual=dual, iter_num=max_iter)
         return QpSolution(primal=sol, status=status, params=(sol, state))
 
     solve_with_details.jit_compatible = True
@@ -258,7 +251,28 @@ def get_solver(name: str = "jaxopt", **kwargs) -> QpSolverCallable:
 
     Raises:
         KeyError: If *name* is not a registered solver.
+
+    Environment override:
+        When ``CBFKIT_QP_SOLVER`` is set, a request for the default solver
+        (``name="jaxopt"``) is rerouted to the named solver. Used by the
+        integration test suite to run every example/tutorial under both
+        ``jaxopt`` and ``fast`` without modifying the scripts themselves.
+        Explicit non-default requests (e.g. ``get_solver("cvxopt")``) are
+        not affected.
     """
+    import os
+
+    if name == "jaxopt":
+        override = os.environ.get("CBFKIT_QP_SOLVER", "").strip().lower()
+        if override and override != "jaxopt":
+            name = override
+            # Silently drop kwargs incompatible with the override target
+            # (e.g. cvxopt/casadi factories accept no kwargs).
+            try:
+                return _SOLVER_FACTORIES[name](**kwargs)
+            except TypeError:
+                return _SOLVER_FACTORIES[name]()
+
     if name not in _SOLVER_FACTORIES:
         available = ", ".join(sorted(_SOLVER_FACTORIES))
         raise KeyError(f"Unknown QP solver {name!r}. Available: {available}")

@@ -103,9 +103,17 @@ Skip the math: learn the barrier function from samples. A small neural network l
 python examples/neural_cbf/neural_cbf_obstacle_avoidance.py
 ```
 
-#### 1000× faster QP solver
+#### ~700-880× faster QP solver
 
-A custom fast QP solver built for CBF-CLF problems. Drop-in replacement for the JAXopt and CVXOPT solvers shipped with CBFKit; benchmark shows ~1000× speedup on typical CBF-QP problem sizes thanks to JAX JIT and problem-structure exploitation. Selected at runtime via `solver="fast"` on any CBF-QP controller.
+A Mehrotra predictor-corrector primal-dual interior-point QP solver built for CBF-CLF problems. Drop-in replacement for the JAXopt and CVXOPT solvers shipped with CBFKit. Robust on ill-conditioned, slack-relaxed CBF-CLF-QPs that confuse simpler solvers — converges in 10–15 Newton iterations regardless of the slack penalty magnitude. Selected at runtime via `solver=get_solver("fast")` on any CBF-QP controller.
+
+Measured on random PD QPs (50 reps after warmup) on the sizes typical of CBF-CLF safety filtering:
+
+| Size (n×m) | vs JAXopt OSQP | vs CVXOPT |
+|------------|---------------:|----------:|
+| 2×5        | **880×**       | 81×       |
+| 4×10       | **785×**       | 73×       |
+| 8×20       | **696×**       | 64×       |
 
 <p align="center"><img src="media/showcase/fast_qp_benchmark.png" width="75%" alt="QP solver wall-time comparison"></p>
 

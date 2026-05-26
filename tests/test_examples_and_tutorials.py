@@ -11,20 +11,30 @@ import pytest
 SCRIPTS_TO_TEST = [
     # Unicycle examples
     "examples/unicycle/reach_goal/mppi_cbf.py",
+    "examples/unicycle/reach_goal/mppi_stochastic_cbf.py",
     "examples/unicycle/reach_goal/stochastic_cbf.py",
     "examples/unicycle/reach_goal/vanilla_cbf.py",
     "examples/unicycle/reach_goal/unicycle_reach_avoid_cbf.py",
     "examples/unicycle/reach_goal/vanilla_cbf_accel_unicycle.py",
+    "examples/unicycle/reach_goal/risk_aware_cbf_monte_carlo.py",
     # "examples/unicycle/reach_goal/risk_aware_cbf.py",  # Disabled: needs visualization fix
     # Differential drive examples
     "examples/differential_drive/obstacle_avoidance/single_robot_cbf.py",
     "examples/differential_drive/obstacle_avoidance/dynamic_obstacle_cbf.py",
     "examples/differential_drive/obstacle_avoidance/augmented_dynamic_obstacle_cbf.py",
     "examples/differential_drive/obstacle_avoidance/barrier_activated_cbf.py",
+    "examples/differential_drive/human_aware_navigation/mppi_cbf.py",
+    "examples/differential_drive/human_aware_navigation/multi_scenario_comparison.py",
     # Single integrator examples
     "examples/single_integrator/reach_goal/perfect_sensing.py",
+    "examples/single_integrator/reach_goal/ekf.py",
+    "examples/single_integrator/reach_goal/ukf.py",
     # Pedestrian examples
     "examples/pedestrian/navigate_among_pedestrians/head_on.py",
+    # Fixed-wing examples
+    "examples/fixed_wing/reach_drop_point/ekf.py",
+    # Neural CBF examples
+    "examples/neural_cbf/neural_cbf_obstacle_avoidance.py",
     # Tutorials
     "tutorials/single_integrator_dynamic_obstacles.py",
     "tutorials/mppi_stl_reach_avoid.py",
@@ -58,9 +68,15 @@ def _assert_script_has_executable_code(script_path: str) -> None:
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("solver", ["jaxopt", "fast"])
 @pytest.mark.parametrize("script_path", SCRIPTS_TO_TEST)
-def test_example_script_execution(script_path, tmp_path):
-    """Runs the specified example script as a subprocess and asserts it exits with code 0."""
+def test_example_script_execution(script_path, solver, tmp_path):
+    """Runs the specified example script as a subprocess and asserts it exits with code 0.
+
+    Parametrized over solvers: each script must pass under both the default
+    jaxopt OSQP and the fast PDIPM backend. The subprocess reads
+    CBFKIT_QP_SOLVER from its environment; get_solver() honors it.
+    """
     # Check if file exists
     if not os.path.exists(script_path):
         pytest.fail(f"Script not found: {script_path}")
@@ -75,6 +91,7 @@ def test_example_script_execution(script_path, tmp_path):
     # in CI/sandboxed environments where no visible accelerator is present.
     env["JAX_PLATFORM_NAME"] = "cpu"
     env["JAX_PLATFORMS"] = "cpu"
+    env["CBFKIT_QP_SOLVER"] = solver
     # Ensure tmp_path (for generated/copied modules), src and root (for examples) are in python path
     # Prepend tmp_path to PYTHONPATH so that imported modules (like 'tutorials') are loaded
     # from the temporary directory (where code generation happens) instead of the source tree.
