@@ -260,3 +260,46 @@ class TestWarmStart:
         x, status, _ = solve_qp_pdipm(P, q, G, h, warm_start=bad_seed, max_iter=25)
         assert int(status) == 1
         assert jnp.allclose(x, jnp.array([2.0, 4.0]), atol=1e-4)
+
+
+class TestMppiRegression:
+    """The QP that broke coord descent on mppi_cbf_reach_avoid step 0 MUST solve now."""
+
+    def _load_fixture(self):
+        import numpy as np
+        import os
+
+        path = os.path.join(os.path.dirname(__file__), "fixtures", "mppi_failing_qp.npz")
+        data = np.load(path)
+        return (
+            jnp.asarray(data["P"]),
+            jnp.asarray(data["q"]),
+            jnp.asarray(data["G"]),
+            jnp.asarray(data["h"]),
+        )
+
+    def test_pdipm_solves_dumped_mppi_qp(self):
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import solve_qp_pdipm
+
+        P, q, G, h = self._load_fixture()
+        x, status, _ = solve_qp_pdipm(P, q, G, h, max_iter=25)
+        assert int(status) == 1, f"PDIPM failed to converge: status={int(status)}"
+        # Constraint feasibility within numerical tolerance
+        viol = float(jnp.max(G @ x - h))
+        assert viol < 1e-4, f"constraint violation: {viol}"
+
+    def test_pdipm_objective_matches_osqp_on_mppi_qp(self):
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import solve_qp_pdipm
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=DeprecationWarning, module="jaxopt")
+            from jaxopt import OSQP
+        P, q, G, h = self._load_fixture()
+        x_pdipm, _, _ = solve_qp_pdipm(P, q, G, h, max_iter=25)
+        osqp = OSQP(maxiter=20000, tol=1e-7)
+        sol_osqp, _ = osqp.run(params_obj=(P, q), params_ineq=(G, h))
+        obj_pdipm = float(0.5 * x_pdipm @ P @ x_pdipm + q @ x_pdipm)
+        obj_osqp = float(0.5 * sol_osqp.primal @ P @ sol_osqp.primal + q @ sol_osqp.primal)
+        rel_err = abs(obj_pdipm - obj_osqp) / max(abs(obj_osqp), 1e-6)
+        assert rel_err < 1e-3, f"obj mismatch: pdipm={obj_pdipm} osqp={obj_osqp}"
