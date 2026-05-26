@@ -110,3 +110,29 @@ class TestPdipmIteration:
         x1, s1, lam1 = _pdipm_iteration(P, q, G, h, x, s, lam)
         r1 = residual_norm(x1, s1, lam1)
         assert r1 < r0, f"residual did not decrease: {r0} -> {r1}"
+
+
+class TestSolveQpPdipm:
+    def test_unconstrained_minimum(self):
+        """min 0.5 x^T x - 2x_0 - 4x_1  => x = [2, 4] (ignoring constraints)."""
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import solve_qp_pdipm
+
+        P = jnp.eye(2)
+        q = jnp.array([-2.0, -4.0])
+        G = jnp.array([[1, 0], [-1, 0], [0, 1], [0, -1.0]])
+        h = jnp.array([100.0, 100.0, 100.0, 100.0])  # loose
+        x, status, _ = solve_qp_pdipm(P, q, G, h, max_iter=25)
+        assert int(status) == 1
+        assert jnp.allclose(x, jnp.array([2.0, 4.0]), atol=1e-4), x
+
+    def test_box_constrained_corner(self):
+        """min 0.5 x^T x - 10 x_0 - 10 x_1 s.t. |x_i| <= 1 => x = [1, 1]."""
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import solve_qp_pdipm
+
+        P = jnp.eye(2)
+        q = jnp.array([-10.0, -10.0])
+        G = jnp.array([[1, 0], [-1, 0], [0, 1], [0, -1.0]])
+        h = jnp.array([1.0, 1.0, 1.0, 1.0])
+        x, status, _ = solve_qp_pdipm(P, q, G, h, max_iter=25)
+        assert int(status) == 1
+        assert jnp.allclose(x, jnp.array([1.0, 1.0]), atol=1e-4), x

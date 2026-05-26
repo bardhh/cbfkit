@@ -119,3 +119,59 @@ def _pdipm_iteration(
     s_new = s + alpha * ds
     lam_new = lam + alpha * dlam
     return x_new, s_new, lam_new
+
+
+@partial(jax.jit, static_argnames=("max_iter",))
+def solve_qp_pdipm(
+    P: Array,
+    q: Array,
+    G: Array,
+    h: Array,
+    warm_start: Optional[PdipmState] = None,
+    max_iter: int = 25,
+    tol: float = 1e-6,
+) -> Tuple[Array, Array, PdipmState]:
+    """Mehrotra predictor-corrector PDIPM for min 0.5 x^T P x + q^T x s.t. G x <= h.
+
+    The outer loop always runs exactly ``max_iter`` iterations (no early
+    termination) so the JIT-compiled function has fixed shape. Quadratic
+    convergence near the optimum means residuals saturate to machine
+    precision in the last few iters at near-zero cost.
+
+    Returns:
+        (x, status, state) where status is:
+            1 if final combined residual < tol (solved)
+            2 otherwise (max_iter exhausted without meeting tol)
+        state is a PdipmState usable as warm_start on subsequent calls.
+        Note: state.iter_num is always max_iter (the iteration budget
+        consumed), not the iteration at which convergence was first achieved.
+    """
+    n = P.shape[0]
+    m = G.shape[0]
+
+    # --- Initialization ---
+    if warm_start is None:
+        x0 = jnp.zeros(n)
+        s0 = jnp.maximum(h - G @ x0, 1.0)
+        lam0 = jnp.ones(m)
+    else:
+        x0 = warm_start.x
+        s0 = jnp.maximum(warm_start.s, 1e-2)
+        lam0 = jnp.maximum(warm_start.dual, 1e-2)
+
+    # --- Outer loop (fixed iterations) ---
+    def body(_, carry):
+        x_, s_, lam_ = carry
+        return _pdipm_iteration(P, q, G, h, x_, s_, lam_)
+
+    x_final, s_final, lam_final = lax.fori_loop(0, max_iter, body, (x0, s0, lam0))
+
+    # --- Status: solved if final residual norm below tol ---
+    r_d = P @ x_final + G.T @ lam_final + q
+    r_p = G @ x_final + s_final - h
+    mu = jnp.sum(s_final * lam_final) / m
+    res_norm = jnp.max(jnp.abs(r_d)) + jnp.max(jnp.abs(r_p)) + mu
+    status = jnp.where(res_norm < tol, jnp.int32(1), jnp.int32(2))
+
+    state = PdipmState(x=x_final, s=s_final, dual=lam_final, iter_num=max_iter)
+    return x_final, status, state
