@@ -70,3 +70,43 @@ class TestNewtonReduced:
         H = P + G.T @ (D[:, None] * G) + 1e-10 * jnp.eye(2)
         residual = H @ dx - rhs
         assert float(jnp.max(jnp.abs(residual))) < 1e-8
+
+
+class TestPdipmIteration:
+    def _make_simple_qp(self):
+        """Returns P, q, G, h for: min 0.5 x^T x  s.t. -1 <= x_i <= 1, x in R^2."""
+        P = jnp.eye(2)
+        q = jnp.array([0.5, -0.5])  # unconstrained opt at [-0.5, 0.5]
+        G = jnp.array([[1, 0], [-1, 0], [0, 1], [0, -1.0]])
+        h = jnp.array([1.0, 1.0, 1.0, 1.0])
+        return P, q, G, h
+
+    def test_iteration_keeps_strict_interior(self):
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import _pdipm_iteration
+
+        P, q, G, h = self._make_simple_qp()
+        x = jnp.zeros(2)
+        s = jnp.ones(4)
+        lam = jnp.ones(4)
+        x_new, s_new, lam_new = _pdipm_iteration(P, q, G, h, x, s, lam)
+        assert float(jnp.min(s_new)) > 0.0, f"slack went non-positive: {s_new}"
+        assert float(jnp.min(lam_new)) > 0.0, f"dual went non-positive: {lam_new}"
+
+    def test_iteration_reduces_residual(self):
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import _pdipm_iteration
+
+        P, q, G, h = self._make_simple_qp()
+        x = jnp.zeros(2)
+        s = jnp.ones(4)
+        lam = jnp.ones(4)
+
+        def residual_norm(x_, s_, lam_):
+            r_d = P @ x_ + G.T @ lam_ + q
+            r_p = G @ x_ + s_ - h
+            r_c = (s_ * lam_).sum() / s_.shape[0]
+            return float(jnp.linalg.norm(r_d)) + float(jnp.linalg.norm(r_p)) + r_c
+
+        r0 = residual_norm(x, s, lam)
+        x1, s1, lam1 = _pdipm_iteration(P, q, G, h, x, s, lam)
+        r1 = residual_norm(x1, s1, lam1)
+        assert r1 < r0, f"residual did not decrease: {r0} -> {r1}"
