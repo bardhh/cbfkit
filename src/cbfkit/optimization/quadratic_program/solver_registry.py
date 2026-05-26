@@ -245,7 +245,28 @@ def get_solver(name: str = "jaxopt", **kwargs) -> QpSolverCallable:
 
     Raises:
         KeyError: If *name* is not a registered solver.
+
+    Environment override:
+        When ``CBFKIT_QP_SOLVER`` is set, a request for the default solver
+        (``name="jaxopt"``) is rerouted to the named solver. Used by the
+        integration test suite to run every example/tutorial under both
+        ``jaxopt`` and ``fast`` without modifying the scripts themselves.
+        Explicit non-default requests (e.g. ``get_solver("cvxopt")``) are
+        not affected.
     """
+    import os
+
+    if name == "jaxopt":
+        override = os.environ.get("CBFKIT_QP_SOLVER", "").strip().lower()
+        if override and override != "jaxopt":
+            name = override
+            # Silently drop kwargs incompatible with the override target
+            # (e.g. cvxopt/casadi factories accept no kwargs).
+            try:
+                return _SOLVER_FACTORIES[name](**kwargs)
+            except TypeError:
+                return _SOLVER_FACTORIES[name]()
+
     if name not in _SOLVER_FACTORIES:
         available = ", ".join(sorted(_SOLVER_FACTORIES))
         raise KeyError(f"Unknown QP solver {name!r}. Available: {available}")
