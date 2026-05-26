@@ -121,6 +121,24 @@ def _pdipm_iteration(
     return x_new, s_new, lam_new
 
 
+def _combined_residual(
+    P: Array,
+    q: Array,
+    G: Array,
+    h: Array,
+    x: Array,
+    s: Array,
+    lam: Array,
+) -> Array:
+    """Scalar residual used both for in-loop freeze-on-converge and for the
+    post-loop status check: ||r_d||_inf + ||r_p||_inf + mu.
+    """
+    r_d = P @ x + G.T @ lam + q
+    r_p = G @ x + s - h
+    mu = jnp.sum(s * lam) / G.shape[0]
+    return jnp.max(jnp.abs(r_d)) + jnp.max(jnp.abs(r_p)) + mu
+
+
 @partial(jax.jit, static_argnames=("max_iter",))
 def solve_qp_pdipm(
     P: Array,
@@ -133,10 +151,13 @@ def solve_qp_pdipm(
 ) -> Tuple[Array, Array, PdipmState]:
     """Mehrotra predictor-corrector PDIPM for min 0.5 x^T P x + q^T x s.t. G x <= h.
 
-    The outer loop always runs exactly ``max_iter`` iterations (no early
-    termination) so the JIT-compiled function has fixed shape. Quadratic
-    convergence near the optimum means residuals saturate to machine
-    precision in the last few iters at near-zero cost.
+    The JIT-compiled ``fori_loop`` always traces ``max_iter`` iterations
+    (fixed-shape compilation). The body uses a freeze-on-converge guard:
+    once the combined residual drops below ``tol``, the iterate is held
+    fixed for the remaining iterations rather than stepping further. This
+    prevents a degenerate (s ≈ 0, lam ≈ 0) post-convergence state from
+    propagating NaN through ``lam/s`` divisions in subsequent iterations.
+    The total flop count is still ``max_iter`` Newton solves per call.
 
     Returns:
         (x, status, state) where status is:
@@ -159,18 +180,23 @@ def solve_qp_pdipm(
         s0 = jnp.maximum(warm_start.s, 1e-2)
         lam0 = jnp.maximum(warm_start.dual, 1e-2)
 
-    # --- Outer loop (fixed iterations) ---
+    # --- Outer loop (fixed iterations, freeze-on-converge) ---
     def body(_, carry):
         x_, s_, lam_ = carry
-        return _pdipm_iteration(P, q, G, h, x_, s_, lam_)
+        already_converged = _combined_residual(P, q, G, h, x_, s_, lam_) < tol
+        x_new, s_new, lam_new = _pdipm_iteration(P, q, G, h, x_, s_, lam_)
+        # If already converged, keep current (good) state rather than stepping.
+        # Both branches of jnp.where are traced; the step is cheap relative to
+        # the cost of NaN propagation if we let lam/s explode after convergence.
+        x_out = jnp.where(already_converged, x_, x_new)
+        s_out = jnp.where(already_converged, s_, s_new)
+        lam_out = jnp.where(already_converged, lam_, lam_new)
+        return x_out, s_out, lam_out
 
     x_final, s_final, lam_final = lax.fori_loop(0, max_iter, body, (x0, s0, lam0))
 
     # --- Status: solved if final residual norm below tol ---
-    r_d = P @ x_final + G.T @ lam_final + q
-    r_p = G @ x_final + s_final - h
-    mu = jnp.sum(s_final * lam_final) / m
-    res_norm = jnp.max(jnp.abs(r_d)) + jnp.max(jnp.abs(r_p)) + mu
+    res_norm = _combined_residual(P, q, G, h, x_final, s_final, lam_final)
     status = jnp.where(res_norm < tol, jnp.int32(1), jnp.int32(2))
 
     state = PdipmState(x=x_final, s=s_final, dual=lam_final, iter_num=max_iter)
