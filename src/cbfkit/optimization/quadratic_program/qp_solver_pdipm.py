@@ -81,7 +81,11 @@ def _pdipm_iteration(
     r_c_aff = s * lam
 
     # --- Predictor (affine) step ---
-    rhs_aff = -(r_d - G.T @ ((lam * r_p - r_c_aff) / s))
+    # Reduced Newton RHS after eliminating ds, dlam from the KKT system:
+    # (P + G^T diag(lam/s) G) dx = -r_d + G^T lam - G^T diag(lam/s) r_p
+    #                            = -(r_d + G^T ((lam*r_p - s*lam) / s))
+    # which simplifies via r_c_aff = s*lam to -(r_d + G^T ((lam*r_p - r_c_aff)/s)).
+    rhs_aff = -(r_d + G.T @ ((lam * r_p - r_c_aff) / s))
     dx_aff = _solve_newton_reduced(P, G, s, lam, rhs_aff)
     ds_aff = -r_p - G @ dx_aff
     dlam_aff = -(r_c_aff + lam * ds_aff) / s
@@ -101,7 +105,7 @@ def _pdipm_iteration(
 
     # --- Corrector ---
     r_c = s * lam + ds_aff * dlam_aff - sigma * mu
-    rhs = -(r_d - G.T @ ((lam * r_p - r_c) / s))
+    rhs = -(r_d + G.T @ ((lam * r_p - r_c) / s))
     dx = _solve_newton_reduced(P, G, s, lam, rhs)
     ds = -r_p - G @ dx
     dlam = -(r_c + lam * ds) / s
