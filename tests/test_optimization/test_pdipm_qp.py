@@ -205,3 +205,58 @@ class TestPdipmCorrectness:
             h = jnp.abs(random.normal(k4, (m,))) + 0.5
             x, _, _ = solve_qp_pdipm(P, q, G, h, max_iter=25)
             assert float(jnp.max(G @ x - h)) < 1e-3
+
+
+class TestWarmStart:
+    def test_warm_start_reduces_iters_to_convergence(self):
+        """Warm-started solve from prior optimum converges with extremely loose iter budget."""
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
+            PdipmState,
+            solve_qp_pdipm,
+        )
+
+        P = jnp.diag(jnp.array([1.0, 1.0, 2000.0]))
+        q = jnp.array([-1.0, 0.0, 0.0])
+        G = jnp.array([[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [-0.8, -0.2, -1.0]])
+        h = jnp.array([1.0, 1.0, 1.0, 1.0, 0.1])
+
+        # Cold solve
+        _, status_cold, state = solve_qp_pdipm(P, q, G, h, max_iter=25)
+        assert int(status_cold) == 1
+
+        # Perturb q slightly; warm-start with tight budget should still converge.
+        q2 = q + jnp.array([0.01, 0.0, 0.0])
+        _, status_warm, _ = solve_qp_pdipm(P, q2, G, h, warm_start=state, max_iter=8)
+        assert int(status_warm) == 1, "warm start failed to converge in 8 iters"
+
+    def test_max_iter_returns_status_2(self):
+        """Pathologically tight budget should return status=2."""
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import solve_qp_pdipm
+
+        P = jnp.diag(jnp.array([1.0, 1.0, 2000.0]))
+        q = jnp.array([-1.0, 0.0, 0.0])
+        G = jnp.array([[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [-0.8, -0.2, -1.0]])
+        h = jnp.array([1.0, 1.0, 1.0, 1.0, 0.1])
+        _, status, _ = solve_qp_pdipm(P, q, G, h, max_iter=2)
+        assert int(status) == 2
+
+    def test_warm_start_zero_seed_still_works(self):
+        """Warm-start with non-interior seed gets clamped and still converges."""
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
+            PdipmState,
+            solve_qp_pdipm,
+        )
+
+        P = jnp.eye(2)
+        q = jnp.array([-2.0, -4.0])
+        G = jnp.array([[1, 0], [-1, 0], [0, 1], [0, -1.0]])
+        h = jnp.array([100.0, 100.0, 100.0, 100.0])
+        bad_seed = PdipmState(
+            x=jnp.zeros(2),
+            s=jnp.zeros(4),  # non-interior!
+            dual=jnp.zeros(4),  # non-interior!
+            iter_num=0,
+        )
+        x, status, _ = solve_qp_pdipm(P, q, G, h, warm_start=bad_seed, max_iter=25)
+        assert int(status) == 1
+        assert jnp.allclose(x, jnp.array([2.0, 4.0]), atol=1e-4)

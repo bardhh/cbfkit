@@ -177,7 +177,13 @@ def solve_qp_pdipm(
         lam0 = jnp.ones(m)
     else:
         x0 = warm_start.x
-        s0 = jnp.maximum(warm_start.s, 1e-2)
+        # Where the seed slack is positive, clamp to a 1e-2 interior floor.
+        # Where the seed gave us a non-positive (useless) slack, fall back to
+        # the cold-start natural slack to stay strictly feasible.
+        s_natural = jnp.maximum(h - G @ x0, 1.0)
+        s0 = jnp.where(warm_start.s > 0, jnp.maximum(warm_start.s, 1e-2), s_natural)
+        # No "natural dual" analog: lam is unbounded above; a small positive
+        # clamp suffices to keep the barrier well-defined.
         lam0 = jnp.maximum(warm_start.dual, 1e-2)
 
     # --- Outer loop (fixed iterations, freeze-on-converge) ---
