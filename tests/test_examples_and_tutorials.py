@@ -11,20 +11,30 @@ import pytest
 SCRIPTS_TO_TEST = [
     # Unicycle examples
     "examples/unicycle/reach_goal/mppi_cbf.py",
+    "examples/unicycle/reach_goal/mppi_stochastic_cbf.py",
     "examples/unicycle/reach_goal/stochastic_cbf.py",
     "examples/unicycle/reach_goal/vanilla_cbf.py",
     "examples/unicycle/reach_goal/unicycle_reach_avoid_cbf.py",
     "examples/unicycle/reach_goal/vanilla_cbf_accel_unicycle.py",
+    "examples/unicycle/reach_goal/risk_aware_cbf_monte_carlo.py",
     # "examples/unicycle/reach_goal/risk_aware_cbf.py",  # Disabled: needs visualization fix
     # Differential drive examples
     "examples/differential_drive/obstacle_avoidance/single_robot_cbf.py",
     "examples/differential_drive/obstacle_avoidance/dynamic_obstacle_cbf.py",
     "examples/differential_drive/obstacle_avoidance/augmented_dynamic_obstacle_cbf.py",
     "examples/differential_drive/obstacle_avoidance/barrier_activated_cbf.py",
+    "examples/differential_drive/human_aware_navigation/mppi_cbf.py",
+    "examples/differential_drive/human_aware_navigation/multi_scenario_comparison.py",
     # Single integrator examples
     "examples/single_integrator/reach_goal/perfect_sensing.py",
+    "examples/single_integrator/reach_goal/ekf.py",
+    "examples/single_integrator/reach_goal/ukf.py",
     # Pedestrian examples
     "examples/pedestrian/navigate_among_pedestrians/head_on.py",
+    # Fixed-wing examples
+    "examples/fixed_wing/reach_drop_point/ekf.py",
+    # Neural CBF examples
+    "examples/neural_cbf/neural_cbf_obstacle_avoidance.py",
     # Tutorials
     "tutorials/single_integrator_dynamic_obstacles.py",
     "tutorials/mppi_stl_reach_avoid.py",
