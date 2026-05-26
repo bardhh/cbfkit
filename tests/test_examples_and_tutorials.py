@@ -58,9 +58,15 @@ def _assert_script_has_executable_code(script_path: str) -> None:
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("solver", ["jaxopt", "fast"])
 @pytest.mark.parametrize("script_path", SCRIPTS_TO_TEST)
-def test_example_script_execution(script_path, tmp_path):
-    """Runs the specified example script as a subprocess and asserts it exits with code 0."""
+def test_example_script_execution(script_path, solver, tmp_path):
+    """Runs the specified example script as a subprocess and asserts it exits with code 0.
+
+    Parametrized over solvers: each script must pass under both the default
+    jaxopt OSQP and the fast PDIPM backend. The subprocess reads
+    CBFKIT_QP_SOLVER from its environment; get_solver() honors it.
+    """
     # Check if file exists
     if not os.path.exists(script_path):
         pytest.fail(f"Script not found: {script_path}")
@@ -75,6 +81,7 @@ def test_example_script_execution(script_path, tmp_path):
     # in CI/sandboxed environments where no visible accelerator is present.
     env["JAX_PLATFORM_NAME"] = "cpu"
     env["JAX_PLATFORMS"] = "cpu"
+    env["CBFKIT_QP_SOLVER"] = solver
     # Ensure tmp_path (for generated/copied modules), src and root (for examples) are in python path
     # Prepend tmp_path to PYTHONPATH so that imported modules (like 'tutorials') are loaded
     # from the temporary directory (where code generation happens) instead of the source tree.
