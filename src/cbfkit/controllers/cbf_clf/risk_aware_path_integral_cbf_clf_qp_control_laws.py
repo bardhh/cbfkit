@@ -2,6 +2,24 @@
 risk_aware_path_integral_cbf_clf_qp_controller.py
 ================
 
+.. deprecated::
+    **NON-FUNCTIONAL STUB — the path integral never accumulates.**
+
+    The underlying constraint builder
+    ``generate_constraints/risk_aware_path_integral_cbfs.py`` resets
+    ``integrator_states`` to zero on every call (line 52: ``ra_params.integrator_states =
+    jnp.zeros((n_bfs,))``).  The ``lax.cond`` on line 62 that was intended to *accumulate*
+    the drift only runs once and then the attribute is overwritten, so ``I_L`` is always 0.
+    This is an architectural limitation: the constraint builder receives only ``(t, x)``
+    and cannot thread mutable carry through a JIT/scan loop.
+
+    **Use** ``accumulating_risk_aware_cbf_controller`` from
+    ``cbfkit.controllers.cbf_clf.accumulating_risk_aware_cbf`` instead.  It carries
+    ``I_L`` correctly in ``ControllerData.sub_data["I_L"]`` and is JIT/scan-safe.
+
+    This module is kept for backward compatibility only.  Its runtime behaviour is
+    unchanged so that existing tests continue to pass.
+
 Defines the controller function for a risk-aware path integral (RA-PI) CBF-CLF-QP control law
 for stochastic, continuous-time, control-affine, nonlinear dynamical systems.
 

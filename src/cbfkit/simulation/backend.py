@@ -162,6 +162,7 @@ def stepper(
             f=f,
             g=g,
             perturbation_value=p_val,
+            perturbation_is_increment=getattr(perturbation, "is_increment", False),
         )
 
         u_ret = u

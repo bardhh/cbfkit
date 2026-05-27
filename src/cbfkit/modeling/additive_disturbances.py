@@ -37,7 +37,6 @@ def generate_stochastic_perturbation(
         return generate_compute(sigma_x)
 
     def generate_compute(sigma_x: Array) -> PerturbationCallableReturns:
-
         def compute(subkey: Key) -> Array:
             """Sample one discrete-time stochastic perturbation."""
             nonlocal dt
@@ -47,6 +46,12 @@ def generate_stochastic_perturbation(
 
         return compute
 
+    # Flag this perturbation as a discrete Brownian *increment* (Sigma*sqrt(dt)*w), so the
+    # integrator adds it once (Euler-Maruyama) instead of treating it as a drift rate and
+    # multiplying by dt. NOTE: this flag rides on the callable; do not wrap/compose this
+    # perturbation (jit/partial/decorators) before passing it to the simulator, or the flag
+    # is lost and the noise silently reverts to the (incorrect) dt-scaled rate path.
+    stochastic_perturbation.is_increment = True  # type: ignore[attr-defined]
     return stochastic_perturbation
 
 
@@ -80,7 +85,6 @@ def generate_bounded_perturbation(
         return generate_compute(perturb)
 
     def generate_compute(perturbation_x: Array) -> PerturbationCallableReturns:
-
         @jit
         def compute(_subkey: Key) -> Array:
             """Return the bounded perturbation value."""
@@ -125,7 +129,6 @@ def generate_affine_perturbation(
         return generate_compute(perturb)
 
     def generate_compute(perturbation_x: Array) -> PerturbationCallableReturns:
-
         @jit
         def compute(_subkey: Key) -> Array:
             """Return the affine perturbation value."""

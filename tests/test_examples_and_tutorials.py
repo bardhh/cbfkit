@@ -42,6 +42,8 @@ SCRIPTS_TO_TEST = [
     "tutorials/code_generation_example.py",
     "tutorials/multi_robot_coordination_codegen.py",
     "tutorials/multi_robot_3d_reachavoid.py",
+    # Risk-aware comparison
+    "examples/single_integrator/risk_aware_comparison/run_comparison.py",
 ]
 
 
@@ -125,3 +127,22 @@ def test_example_script_execution(script_path, solver, tmp_path):
             f"STDOUT:\n{e.stdout}\n"
             f"STDERR:\n{e.stderr}"
         )
+
+
+def test_risk_aware_comparison_ordering():
+    """ACC 2026 Fig. 1: the four controllers separate in the expected p_fail order.
+
+    Asserts the Fig. 1 ordering -- nominal > RA-CBF-CT > RA-CBF-DT >= S-CBF -- using a small,
+    fixed-seed rollout count (exact magnitudes require the full 1000-rollout run). The CT
+    variant rides near the boundary and fails at ~rho_d; the more-conservative DT margin and
+    the supermartingale S-CBF stay safer."""
+    from examples.single_integrator.risk_aware_comparison.run_comparison import run_all
+
+    res = run_all(n_trials=64, seed=0)  # fixed seed => deterministic CI
+    p = {k: v[0] for k, v in res.items()}
+    assert p["nominal"] > 0.9, p  # unfiltered outward drive almost always exits
+    assert 0.03 < p["ra_cbf_ct"] < 0.30, p  # RA-CBF-CT rides near boundary, ~rho_d
+    assert p["ra_cbf_dt"] < p["ra_cbf_ct"], p  # DT margin is more conservative than CT
+    assert p["s_cbf"] <= p["ra_cbf_dt"] + 1e-9, p  # S-CBF is the safest controller (Fig. 1)
+    for cbf in ("s_cbf", "ra_cbf_dt", "ra_cbf_ct"):
+        assert p[cbf] < p["nominal"], p
