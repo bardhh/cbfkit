@@ -124,6 +124,7 @@ def _make_scan_step(
                 f=f,
                 g=g,
                 perturbation_value=p_val,
+                perturbation_is_increment=getattr(perturbation, "is_increment", False),
             )
             return key_int, x_next
 
