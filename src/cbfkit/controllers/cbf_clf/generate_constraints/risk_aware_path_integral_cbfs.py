@@ -1,5 +1,26 @@
 """
+risk_aware_path_integral_cbfs.py
+=================================
 
+.. deprecated::
+    **NON-FUNCTIONAL STUB — the path integral never accumulates.**
+
+    Line 52 unconditionally overwrites ``ra_params.integrator_states`` with zeros::
+
+        ra_params.integrator_states = jnp.zeros((n_bfs,))
+
+    The ``lax.cond`` on line 62 that was meant to reset-on-t==0 only runs once at
+    construction time (the attribute is then shadowed by the assignment above), so
+    ``integrator_states`` is permanently 0.  The root cause is architectural: this
+    function receives only ``(t, x)`` and cannot accumulate mutable state across calls
+    inside a JIT/scan loop without a proper carry mechanism.
+
+    **Use** ``accumulating_risk_aware_cbf_controller`` from
+    ``cbfkit.controllers.cbf_clf.accumulating_risk_aware_cbf`` instead.  It carries
+    ``I_L`` correctly in ``ControllerData.sub_data["I_L"]`` and is JIT/scan-safe.
+
+    This module is kept for backward compatibility only.  Its runtime behaviour is
+    unchanged so that existing tests continue to pass.
 """
 
 from typing import Any, Callable, Dict, Tuple
