@@ -219,8 +219,8 @@ if animate:
         title="System Behavior (MPPI + CBF)",
         obstacles=obstacles,
         ellipsoids=ellipsoids,
-        save_animation=False,
-        animation_filename=file_path + "bh_mppi_cbf_control",
+        save_animation=save,
+        animation_filename=file_path + "mppi_rollouts.gif",
     )
 
 final_pos = x[-1, :2]

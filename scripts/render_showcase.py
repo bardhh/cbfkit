@@ -1023,5 +1023,507 @@ def render_fixed_wing_3d() -> str:
     return str(out)
 
 
+@register("van_der_pol_clf")
+def render_van_der_pol_clf() -> str:
+    """Van der Pol: Lyapunov-based regulation of a nonlinear oscillator to the origin."""
+    import jax.numpy as jnp
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from jax import jit
+    from matplotlib.animation import FuncAnimation, PillowWriter
+
+    import cbfkit.simulation.simulator as sim
+    from cbfkit.estimators import naive as estimator
+    from cbfkit.integration import runge_kutta_4 as integrator
+    from cbfkit.sensors import perfect as sensor
+    from cbfkit.systems import van_der_pol
+    from cbfkit.utils.user_types import ControllerData
+
+    epsilon = 0.2
+    dyn = van_der_pol.reverse_van_der_pol_oscillator(epsilon=epsilon)
+
+    # Lyapunov-based regulation law. The plant's input matrix g = [0, 1/x2] is singular,
+    # so the control is formed as u = x2 * (...) to cancel the 1/x2 amplification — which is
+    # exactly why the packaged closed-form FxTS law cannot be dropped onto this model directly.
+    def regulation_controller(eps, k1=4.0, k2=4.0):
+        @jit
+        def controller(_t, x, _key, _xd=None):
+            x1, x2 = x
+            u = x2 * ((k1 - 1.0) * x1 - k2 * x2 + eps * (1.0 - x1**2) * x2)
+            return jnp.array([u]), ControllerData()
+
+        return controller
+
+    x0 = jnp.array([2.0, 2.0])
+    dt, tf = 1e-3, 5.0
+    n = int(tf / dt)
+    res = sim.execute(
+        x0=x0,
+        dt=dt,
+        num_steps=n,
+        dynamics=dyn,
+        integrator=integrator,
+        nominal_controller=regulation_controller(epsilon),
+        sensor=sensor,
+        estimator=estimator,
+        use_jit=True,
+    )
+    states = np.asarray(res["states"])
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    # Open-loop Van der Pol vector field: shows the nonlinearity the Lyapunov law tames.
+    gx = np.linspace(-3.0, 3.0, 22)
+    GX, GY = np.meshgrid(gx, gx)
+    FX = -GY
+    FY = GX - epsilon * (1.0 - GX**2) * GY
+    mag = np.hypot(FX, FY) + 1e-9
+    ax.quiver(GX, GY, FX / mag, FY / mag, color="gray", alpha=0.35, width=0.003)
+    ax.add_patch(plt.Circle((0, 0), 0.1, color="green", alpha=0.3))
+    ax.plot(0, 0, "g*", markersize=18, label="Origin (goal)")
+    (line,) = ax.plot([], [], "b-", lw=2)
+    dot = ax.scatter([], [], s=80, color="blue", zorder=5)
+    ax.set_xlim(-3, 3)
+    ax.set_ylim(-3, 3)
+    ax.set_aspect("equal")
+    ax.set_xlabel("$x_1$")
+    ax.set_ylabel("$x_2$")
+    ax.set_title("Van der Pol — Lyapunov regulation to the origin", fontsize=10)
+    ax.legend(loc="upper right", fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    def update(i):
+        line.set_data(states[: i + 1, 0], states[: i + 1, 1])
+        dot.set_offsets([[states[i, 0], states[i, 1]]])
+        return line, dot
+
+    stride = max(1, len(states) // 70)
+    anim = FuncAnimation(fig, update, frames=range(0, len(states), stride), interval=100, blit=True)
+    out = OUT / "van_der_pol_clf.gif"
+    anim.save(out, writer=PillowWriter(fps=10))
+    plt.close(fig)
+    return str(out)
+
+
+@register("mpc_double_integrator")
+def render_mpc_double_integrator() -> str:
+    """Classical receding-horizon MPC: LTI double-integrator tracking to a goal.
+
+    Honest framing: this solver carries only equality (dynamics) constraints, so it is
+    reference tracking, not a safety filter. Driven as a standalone receding-horizon loop.
+    """
+    import jax.numpy as jnp
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.animation import FuncAnimation, PillowWriter
+
+    from cbfkit.optimization.mpc.quadratic_cost_linear_dynamics import (
+        generate_mpc_solver_quadratic_cost_linear_dynamics,
+    )
+
+    dt = 0.1
+    # Discrete-time double integrator: state [px, py, vx, vy], control [ax, ay].
+    A = jnp.array(
+        [[1.0, 0.0, dt, 0.0], [0.0, 1.0, 0.0, dt], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+    )
+    B = jnp.array([[0.0, 0.0], [0.0, 0.0], [dt, 0.0], [0.0, dt]])
+    Q = jnp.diag(jnp.array([10.0, 10.0, 1.0, 1.0]))
+    R = 0.1 * jnp.eye(2)
+    Qn = 50.0 * Q
+    N = 20
+    solve = generate_mpc_solver_quadratic_cost_linear_dynamics(A, B, Q, R, Qn, N)
+
+    goal = jnp.array([4.0, 4.0, 0.0, 0.0])
+    ref_horizon = jnp.tile(goal, (N, 1))  # (N, 4) constant reference over the horizon
+    x = jnp.array([0.0, 0.0, 0.0, 0.0])
+    n_steps = 40
+
+    xs = [np.asarray(x)]
+    preds = []
+    for _ in range(n_steps):
+        concatenated_x_xr = jnp.vstack([x.reshape(1, -1), ref_horizon])  # (N+1, 4)
+        x_opt, u_opt = solve(concatenated_x_xr)  # x_opt (4, N+1), u_opt (2, N)
+        u = u_opt[:, 0]
+        x = A @ x + B @ u
+        xs.append(np.asarray(x))
+        preds.append(np.asarray(x_opt.T))  # (N+1, 4) predicted state horizon
+    xs = np.array(xs)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.plot(float(goal[0]), float(goal[1]), "g*", markersize=18, label="Goal")
+    (realized,) = ax.plot([], [], "b-", lw=2, label="Realized")
+    (pred,) = ax.plot(
+        [], [], color="orange", ls="--", lw=1.5, alpha=0.85, label="Predicted horizon"
+    )
+    dot = ax.scatter([], [], s=80, color="blue", zorder=5)
+    ax.set_xlim(-0.5, 4.5)
+    ax.set_ylim(-0.5, 4.5)
+    ax.set_aspect("equal")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_title("Model Predictive Control — receding-horizon LTI tracking", fontsize=10)
+    ax.legend(loc="lower right", fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    def update(i):
+        realized.set_data(xs[: i + 1, 0], xs[: i + 1, 1])
+        dot.set_offsets([[xs[i, 0], xs[i, 1]]])
+        p = preds[min(i, len(preds) - 1)]
+        pred.set_data(p[:, 0], p[:, 1])
+        return realized, pred, dot
+
+    anim = FuncAnimation(fig, update, frames=len(xs), interval=100, blit=True)
+    out = OUT / "mpc_double_integrator.gif"
+    anim.save(out, writer=PillowWriter(fps=10))
+    plt.close(fig)
+    return str(out)
+
+
+@register("quadrotor_6dof")
+def render_quadrotor_6dof() -> str:
+    """6-DOF quadrotor: geometric SE(3) tracking + live CBF altitude-envelope value.
+
+    Honest framing: we drive the quadrotor through 3D space with the geometric
+    controller (Lee-Leok-McClamroch) and display the altitude-CBF barrier value
+    h(z) alongside, demonstrating the available CBF certificate without claiming
+    an active barrier-projection filter (which the geometric controller doesn't
+    natively expose).
+    """
+    import jax.numpy as jnp
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.animation import FuncAnimation, PillowWriter
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers 3D projection
+
+    import cbfkit.simulation.simulator as sim
+    from cbfkit.estimators import naive as estimator
+    from cbfkit.integration import runge_kutta_4 as integrator
+    from cbfkit.sensors import perfect as sensor
+    from cbfkit.systems.quadrotor_6dof.certificates.barrier_functions import h_alt
+    from cbfkit.systems.quadrotor_6dof.controllers.geometric import geometric_controller
+    from cbfkit.systems.quadrotor_6dof.models.quadrotor_6dof_dynamics import (
+        quadrotor_6dof_dynamics,
+    )
+
+    # Mass/inertia must be consistent between plant and controller: geometric_controller's
+    # default gains are tuned for m≈4.34 kg, while quadrotor_6dof_dynamics defaults to
+    # m=0.25 kg. Mismatch -> instant integration NaN. Use the heavier plant.
+    m, jx, jy, jz = 4.34, 0.0820, 0.0845, 0.1377
+    three_tuple = quadrotor_6dof_dynamics(m=m, jx=jx, jy=jy, jz=jz)
+
+    def dyn(x):
+        f, g, _s = three_tuple(x)
+        return f, g
+
+    desired = jnp.array([2.0, 1.5, 3.0])  # target (pn, pe, h)
+    dt = 0.01
+    tf = 6.0
+    n = int(tf / dt)
+
+    # state layout: [pn, pe, h, u, v, w, phi, theta, psi, p, q, r]
+    x0 = jnp.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+    nominal = geometric_controller(
+        dynamics=dyn, desired_state=desired, dt=dt, m=m, jx=jx, jy=jy, jz=jz
+    )
+
+    res = sim.execute(
+        x0=x0,
+        dt=dt,
+        num_steps=n,
+        dynamics=dyn,
+        integrator=integrator,
+        nominal_controller=nominal,
+        sensor=sensor,
+        estimator=estimator,
+        use_jit=True,
+    )
+    states = np.asarray(res["states"])  # (n+1, 12)
+
+    # Altitude-CBF barrier value h_alt(z, alt_limit). z = hstack([x, t]).
+    # alt_limit must comfortably exceed our setpoint altitude (3 m) — pick 5 m.
+    alt_limit = 5.0
+    n_states_full = states.shape[0]
+    ts = np.linspace(0.0, tf, n_states_full)
+    h_vals = np.array(
+        [
+            float(h_alt(jnp.hstack([jnp.asarray(states[i]), jnp.asarray(ts[i])]), alt_limit))
+            for i in range(n_states_full)
+        ]
+    )
+
+    # Subsample frames for a compact GIF.
+    stride = max(1, n_states_full // 80)
+    idx = np.arange(0, n_states_full, stride)
+    pn, pe, h_alt_traj = states[idx, 0], states[idx, 1], states[idx, 2]
+
+    fig = plt.figure(figsize=(10, 5))
+    ax3d = fig.add_subplot(1, 2, 1, projection="3d")
+    ax_h = fig.add_subplot(1, 2, 2)
+
+    ax3d.scatter(
+        [float(desired[0])],
+        [float(desired[1])],
+        [float(desired[2])],
+        color="green",
+        s=120,
+        marker="*",
+        label="Goal",
+        zorder=10,
+    )
+    (line3d,) = ax3d.plot([], [], [], "b-", lw=2, label="Quadrotor")
+    dot3d = ax3d.scatter([], [], [], s=60, color="blue", zorder=11)
+    pad = 0.5
+    ax3d.set_xlim(min(pn.min(), float(desired[0])) - pad, max(pn.max(), float(desired[0])) + pad)
+    ax3d.set_ylim(min(pe.min(), float(desired[1])) - pad, max(pe.max(), float(desired[1])) + pad)
+    ax3d.set_zlim(0, alt_limit + 0.5)
+    ax3d.set_xlabel("pn [m]")
+    ax3d.set_ylabel("pe [m]")
+    ax3d.set_zlabel("h [m]")
+    ax3d.set_title("Quadrotor 6-DOF — geometric SE(3) tracking", fontsize=10)
+    ax3d.legend(loc="upper right", fontsize=8)
+    ax3d.view_init(elev=22, azim=-60)
+
+    # h(z) trace: stays >0 ⇒ altitude envelope satisfied.
+    ax_h.plot(ts, h_vals, color="purple", lw=1.5)
+    (h_dot,) = ax_h.plot([], [], "o", color="purple", markersize=7)
+    ax_h.axhline(0.0, color="red", ls="--", lw=1, alpha=0.7, label="Safety boundary h=0")
+    ax_h.set_xlim(0, tf)
+    ax_h.set_ylim(min(0.0, float(h_vals.min())) - 0.1, max(1.0, float(h_vals.max())) + 0.1)
+    ax_h.set_xlabel("t [s]")
+    ax_h.set_ylabel("$h_{\\rm alt}(z)$")
+    ax_h.set_title("Altitude-CBF barrier value (positive ⇒ safe)", fontsize=10)
+    ax_h.legend(loc="lower right", fontsize=8)
+    ax_h.grid(True, alpha=0.3)
+
+    def update(i):
+        line3d.set_data(pn[: i + 1], pe[: i + 1])
+        line3d.set_3d_properties(h_alt_traj[: i + 1])
+        dot3d._offsets3d = ([pn[i]], [pe[i]], [h_alt_traj[i]])
+        # Map subsampled index back to full-resolution h_vals index for the dot.
+        full_i = idx[i]
+        h_dot.set_data([ts[full_i]], [h_vals[full_i]])
+        return line3d, dot3d, h_dot
+
+    anim = FuncAnimation(fig, update, frames=len(idx), interval=100, blit=False)
+    out = OUT / "quadrotor_6dof.gif"
+    anim.save(out, writer=PillowWriter(fps=10))
+    plt.close(fig)
+    return str(out)
+
+
+@register("monte_carlo_safety")
+def render_monte_carlo_safety() -> str:
+    """GPU/vmap Monte Carlo safety funnel: N stochastic single-integrator rollouts kept
+    safe around an obstacle by a CBF-QP filter, with a live empirical violation-rate counter.
+
+    Each of the N trials gets its own initial state (Gaussian funnel-mouth) and its own
+    Brownian process noise (Euler-Maruyama), all executed as one ``jax.vmap`` kernel via
+    ``conduct_monte_carlo_gpu``. The empirical risk = fraction of trials that have entered
+    the obstacle by the current frame; the CBF holds it at ~0.
+    """
+    import contextlib
+    import os
+
+    import jax.numpy as jnp
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from jax import random
+    from matplotlib.animation import FuncAnimation, PillowWriter
+    from matplotlib.collections import LineCollection
+
+    from cbfkit.controllers.cbf_clf.cbf_clf_qp_generator import cbf_clf_qp_generator
+    from cbfkit.controllers.cbf_clf.generate_constraints import (
+        generate_compute_vanilla_clf_constraints,
+        generate_compute_zeroing_cbf_constraints,
+    )
+    from cbfkit.integration import forward_euler
+    from cbfkit.modeling.additive_disturbances import generate_stochastic_perturbation
+    from cbfkit.simulation.monte_carlo_gpu import MonteCarloSetup, conduct_monte_carlo_gpu
+    from cbfkit.utils.user_types import CertificateCollection, ControllerData, PlannerData
+
+    # --- Scenario (verified-clean: low alpha keeps the jaxopt QP stable under vmap) ---
+    GOAL = jnp.array([4.0, 4.0])
+    OBS = jnp.array([2.0, 2.0])
+    R = 0.6
+    ALPHA = 1.0
+    NOISE = 0.4
+    DT, NSTEPS, N_TRIALS = 0.05, 100, 200
+
+    def dynamics(x):
+        return jnp.zeros(2), jnp.eye(2)
+
+    # h(x) = ||x - c||^2 - r^2, relative-degree-1 zeroing barrier (single integrator).
+    f_h = lambda _t, x: jnp.sum((x - OBS) ** 2) - R**2  # noqa: E731
+    j_h = lambda _t, x: 2.0 * (x - OBS)  # noqa: E731
+    h_h = lambda _t, _x: 2.0 * jnp.eye(2)  # noqa: E731
+    p_h = lambda _t, _x: 0.0  # noqa: E731
+    a_h = lambda h: ALPHA * h  # noqa: E731
+    barriers = CertificateCollection([f_h], [j_h], [h_h], [p_h], [a_h])
+
+    controller = cbf_clf_qp_generator(
+        generate_compute_zeroing_cbf_constraints,
+        generate_compute_vanilla_clf_constraints,
+    )(
+        control_limits=jnp.array([8.0, 8.0]),
+        dynamics_func=dynamics,
+        barriers=barriers,
+        relaxable_cbf=False,
+        relaxable_clf=True,
+    )
+
+    def nominal_controller(t, x, _key, _ref):
+        return 2.0 * (GOAL - x), None
+
+    def initial_state_sampler(key):
+        return jnp.array([0.0, 0.0]) + 0.18 * random.normal(key, (2,))
+
+    def _sensor(t, x, *, sigma=None, key=None):
+        return x
+
+    def _estimator(t, y, z, u, c):
+        return y, (c if c is not None else jnp.zeros((len(y), len(y))))
+
+    # Pass the perturbation UNWRAPPED so its `.is_increment` flag survives (Euler-Maruyama).
+    perturbation = generate_stochastic_perturbation(sigma=lambda x: NOISE * jnp.eye(2), dt=DT)
+
+    _, c_data = controller(0.0, jnp.zeros(2), jnp.zeros(2), random.PRNGKey(0), ControllerData())
+    setup = MonteCarloSetup(
+        dt=DT,
+        num_steps=NSTEPS,
+        dynamics=dynamics,
+        integrator=forward_euler,
+        initial_state_sampler=initial_state_sampler,
+        nominal_controller=nominal_controller,
+        controller=controller,
+        sensor=_sensor,
+        estimator=_estimator,
+        perturbation=perturbation,
+        sigma=jnp.zeros(0),
+        controller_data=c_data,
+        planner=None,
+        planner_data=PlannerData(),
+    )
+
+    # The CBF-QP controller emits batched jax.debug.print spam under vmap (every branch of
+    # its status lax.switch fires); silence it at the fd level around the kernel run.
+    @contextlib.contextmanager
+    def _silence_fds():
+        saved = os.dup(1), os.dup(2)
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
+        try:
+            yield
+        finally:
+            os.dup2(saved[0], 1)
+            os.dup2(saved[1], 2)
+            os.close(devnull)
+            os.close(saved[0])
+            os.close(saved[1])
+
+    print(f"[monte_carlo_safety] running {N_TRIALS} vmap'd stochastic rollouts...")
+    with _silence_fds():
+        results = conduct_monte_carlo_gpu(setup, n_trials=N_TRIALS, seed=0)
+    states = np.asarray(results.states)  # (N_TRIALS, NSTEPS, 2)
+    print(f"[monte_carlo_safety] kernel wall time: {results.wall_time_s:.2f}s")
+
+    # Geometric safety check (independent of the controller's internal barrier bookkeeping).
+    dist = np.linalg.norm(states - np.asarray(OBS), axis=-1)  # (N, NSTEPS)
+    inside = dist < R  # (N, NSTEPS)
+    ever_inside = inside.any(axis=1)  # (N,)
+    # Cumulative empirical violation rate up to each step.
+    cum_viol_rate = np.array([float(inside[:, : k + 1].any(axis=1).mean()) for k in range(NSTEPS)])
+    overall_rate = float(ever_inside.mean())
+    print(
+        f"[monte_carlo_safety] overall empirical violation rate: {overall_rate:.3f} "
+        f"(min dist to obstacle center {dist.min():.3f}, R={R})"
+    )
+
+    # Draw a representative subset to keep the GIF small (the full 200-line translucent tangle
+    # bloats the palette), but ALWAYS include every breaching trial so the red paths shown stay
+    # consistent with the empirical-risk counter, which is computed over ALL N_TRIALS.
+    from matplotlib.lines import Line2D
+
+    N_DRAW = 60
+    rng = np.random.default_rng(0)
+    viol_idx = np.flatnonzero(ever_inside)
+    safe_idx = np.flatnonzero(~ever_inside)
+    n_safe_draw = min(len(safe_idx), max(0, N_DRAW - len(viol_idx)))
+    safe_draw = rng.choice(safe_idx, size=n_safe_draw, replace=False)
+    draw_idx = np.concatenate([safe_draw, viol_idx]).astype(int)
+    draw_states = states[draw_idx]  # (N_DRAW, NSTEPS, 2)
+    draw_colors = ["tab:red" if ever_inside[i] else "tab:blue" for i in draw_idx]
+
+    fig, ax = plt.subplots(figsize=(5.0, 5.0))
+    ax.add_patch(plt.Circle((float(OBS[0]), float(OBS[1])), R, color="red", alpha=0.3, zorder=1))
+    ax.add_patch(
+        plt.Circle((float(OBS[0]), float(OBS[1])), R, fill=False, color="red", lw=1.5, zorder=2)
+    )
+    ax.plot(float(GOAL[0]), float(GOAL[1]), "g*", markersize=18, zorder=6)
+    ax.plot(0.0, 0.0, "ks", markersize=6, zorder=6)
+
+    lc = LineCollection([], colors=draw_colors, linewidths=0.5, alpha=0.3, zorder=3)
+    ax.add_collection(lc)
+    dots = ax.scatter(
+        draw_states[:, 0, 0], draw_states[:, 0, 1], s=6, c=draw_colors, alpha=0.7, zorder=4
+    )
+    txt = ax.text(
+        0.03,
+        0.97,
+        "",
+        transform=ax.transAxes,
+        va="top",
+        ha="left",
+        fontsize=9,
+        family="monospace",
+        bbox=dict(boxstyle="round", facecolor="white", alpha=0.85),
+    )
+
+    legend_handles = [
+        Line2D([0], [0], color="tab:blue", lw=1.5, label="safe rollout"),
+        Line2D(
+            [0], [0], marker="*", color="w", markerfacecolor="g", markersize=12, lw=0, label="Goal"
+        ),
+        Line2D(
+            [0], [0], marker="s", color="w", markerfacecolor="k", markersize=7, lw=0, label="Start"
+        ),
+    ]
+    if len(viol_idx) > 0:
+        legend_handles.insert(1, Line2D([0], [0], color="tab:red", lw=1.5, label="breached"))
+
+    ax.set_xlim(-1.0, 5.0)
+    ax.set_ylim(-1.0, 5.0)
+    ax.set_aspect("equal")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_title(
+        f"Monte Carlo safety verification — {N_TRIALS} stochastic CBF rollouts", fontsize=9
+    )
+    ax.legend(handles=legend_handles, loc="lower right", fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+    stride = max(1, NSTEPS // 30)
+    frame_idx = list(range(0, NSTEPS, stride))
+
+    def update(k):
+        lc.set_segments([draw_states[i, : k + 1, :] for i in range(len(draw_idx))])
+        dots.set_offsets(draw_states[:, k, :])
+        rate = cum_viol_rate[k]
+        n_viol = int(round(rate * N_TRIALS))
+        txt.set_text(
+            f"step {k + 1:3d}/{NSTEPS}\n"
+            f"trials         {N_TRIALS}\n"
+            f"violations     {n_viol}\n"
+            f"empirical risk {rate * 100:4.1f}%"
+        )
+        return lc, dots, txt
+
+    anim = FuncAnimation(fig, update, frames=frame_idx, interval=100, blit=False)
+    out = OUT / "monte_carlo_safety.gif"
+    anim.save(out, writer=PillowWriter(fps=10), dpi=80)
+    plt.close(fig)
+    return str(out)
+
+
 if __name__ == "__main__":
     sys.exit(main())
