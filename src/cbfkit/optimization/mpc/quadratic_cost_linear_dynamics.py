@@ -116,8 +116,13 @@ def generate_mpc_to_qp(
 
         p_bar = jnp.hstack(
             [
-                -Q1a @ concatenated_x_xr[1:, :n_states].T.flatten(),
-                -Q2a @ concatenated_x_xr[-1, :n_states].T.flatten(),
+                # Reference must be time-major ([state@t0, state@t1, ...]) to match the
+                # kron(I_N, Q) cost block and the time-major decision-vector layout.
+                # A prior `.T` here made it state-major, scrambling per-dimension weights.
+                # Factor of 2: the solver minimizes xᵀHx + fᵀx (no ½), so tracking cost
+                # (x−r)ᵀQ(x−r) ⇒ f = −2Qr; without it the optimum collapses to r/2.
+                -2.0 * Q1a @ concatenated_x_xr[1:, :n_states].flatten(),
+                -2.0 * Q2a @ concatenated_x_xr[-1, :n_states].flatten(),
                 jnp.zeros(horizon * n_inputs),
             ]
         )

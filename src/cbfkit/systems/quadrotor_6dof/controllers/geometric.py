@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from jax import Array, jit
 
 from cbfkit.utils.lqr import compute_lqr_gain
-from cbfkit.utils.matrix_vector_operations import hat, normalize, vee
+from cbfkit.utils.matrix_vector_operations import normalize, vee
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerCallableReturns,
@@ -12,47 +12,20 @@ from cbfkit.utils.user_types import (
     DynamicsCallable,
 )
 
-from ..certificates.lyapunov_functions import V_pv as V
 from ..models.quadrotor_6dof_dynamics import g_accel as g
 from ..utils.rotations import rotation_body_frame_to_inertial_frame
-
-
-def _extract_drift(dynamics_output: Tuple[Array, ...]) -> Array:
-    """Extract drift vector from dynamics outputs supporting 2- or 3-tuples.
-
-    Some dynamics call sites return ``(f, g)`` while older/stochastic variants
-    return ``(f, g, s)``. Geometric control only uses the drift component.
-    """
-    if len(dynamics_output) == 2:
-        f_val, _ = dynamics_output
-        return f_val
-    if len(dynamics_output) == 3:
-        f_val, _, _ = dynamics_output
-        return f_val
-    raise ValueError(
-        "Expected dynamics callable to return (f, g) or (f, g, s). "
-        f"Received tuple of length {len(dynamics_output)}."
-    )
 
 
 def geometric_controller(
     dynamics: DynamicsCallable,
     desired_state: Array,
     dt: float,
-    # m: float = 0.5,
-    # jx: float = 0.25,
-    # jy: float = 0.25,
-    # jz: float = 0.1,
-    # kx: float = 1.0,
-    # kv: float = 2.05,
-    # kr: float = 0.35,
-    # ko: float = 0.15,
     m: float = 4.34,
     jx: float = 0.0820,
     jy: float = 0.0845,
     jz: float = 0.1377,
-    kx: float = 16.0,
-    kv: float = 5.6,
+    kx: float = 8.0,
+    kv: float = 8.0,
     kr: float = 8.81,
     ko: float = 2.54,
 ) -> ControllerCallable:
@@ -84,18 +57,16 @@ def geometric_controller(
     j_vec = jnp.array([jx, jy, jz])
     _b1_d = jnp.array([1.0, 0.0, 0.0])
 
-    # # Flatness-based control -- LQR
-    # get_desired_pos_vel_acc = lqr_control(desired_state, dt)
-
-    # Flatness-based control -- FxTS
-    tg = 10.0
-    c1, e1, e2 = 0.5, 0.5, 1.5
-    c2 = 1 / ((e2 - 1) * (tg - 1 / (c1 * (1 - e1))))
-
-    def fV(x):
-        return -c1 * V(x, desired_state) ** e1 - c2 * V(x, desired_state) ** e2
-
-    get_desired_pos_vel_acc = lyapunov_control(desired_state, dt, fV)
+    # The packaged body->inertial matrix is orthogonal but *improper* (det = -1): its
+    # third row is the standard ZYX rotation's third row negated, encoding the model's
+    # "body z-down, inertial h-up" convention. Geometric SE(3) tracking requires a
+    # proper rotation, so we left-multiply by S = diag(1, 1, -1) to flip that row back.
+    # The result is a true SO(3) matrix expressed in the z-down ("NED") inertial frame
+    # y = S @ p -- exactly the frame the plant's own velocity/gravity terms live in.
+    # (Left-multiplying S negates the 3rd row and preserves Rdot = R @ hat([p, q, r]);
+    # a right-multiply would silently remap the body rates to [-p, -q, r] and diverge.)
+    S = jnp.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
+    pos_d = jnp.matmul(S, desired_state[:3])
 
     @jit
     def controller(
@@ -116,74 +87,32 @@ def geometric_controller(
             u (Array): computed control inputs
             data (dict): requisite dictionary return
         """
-        nonlocal _b1_d, e3, j_vec
+        # Proper SO(3) rotation, body frame -> z-down ("NED") inertial frame.
+        rotation = jnp.matmul(S, rotation_body_frame_to_inertial_frame(x))
 
-        _, _, _, _, _, _, _, theta, psi, _, _, _ = x
-        # dynamics returns (f, g), we unpack the first element which is f?
-        # The original code was: dynamics(x)[0]. This seems to imply dynamics(x)
-        # returns a tuple/list and the first element is f.
-        # Assuming dynamics(x) -> (f, g) or similar.
-        # And unpacking f: _, _, _, _, _, _, phi_dot, theta_dot, psi_dot, _, _, _ = f
-        f_val = _extract_drift(dynamics(x))
-        _, _, _, _, _, _, phi_dot, theta_dot, psi_dot, _, _, _ = f_val
+        # Translational tracking errors in the z-down inertial frame (vel_d = 0).
+        e_pos = jnp.matmul(S, x[:3]) - pos_d
+        e_vel = jnp.matmul(rotation, x[3:6])
 
-        # Get rotation matrix
-        body_to_inertial_rotation = rotation_body_frame_to_inertial_frame(x)
-
-        # Compute desired position, velocity, acceleration
-        pos_d, vel_d, acc_d = get_desired_pos_vel_acc(t, x)
-        vel_d = jnp.zeros((3,))
-        acc_d = jnp.zeros((3,))
-
-        # Define tracking errors
-        e_pos = x[:3] - pos_d
-        e_vel = jnp.matmul(body_to_inertial_rotation, x[3:6]) - vel_d
-
-        # Compute desired attitude and attitude tracking error
-        b3_d = -normalize(-kx * e_pos - kv * e_vel + m * g * e3 + m * acc_d)
+        # Desired thrust direction (Lee et al. 2010, NED form: gravity acts along +e3).
+        thrust_vec = -kx * e_pos - kv * e_vel - m * g * e3
+        b3_d = -normalize(thrust_vec)
         b2_d = normalize(jnp.cross(b3_d, _b1_d))
         b1_d = normalize(jnp.cross(b2_d, b3_d))
         rot_d = jnp.array([b1_d, b2_d, b3_d]).T
-        e_rot = (
-            1
-            / 2
-            * vee(
-                jnp.matmul(rot_d.T, body_to_inertial_rotation)
-                - jnp.matmul(body_to_inertial_rotation.T, rot_d)
-            )
-        )
 
-        # Compute angular velocity tracking error
-        wx_b = phi_dot * jnp.sin(theta) * jnp.sin(psi) + theta_dot * jnp.cos(psi)
-        wy_b = phi_dot * jnp.sin(theta) * jnp.cos(psi) - theta_dot * jnp.sin(psi)
-        wz_b = phi_dot * jnp.cos(theta) + psi_dot
-        omega = jnp.array([wx_b, wy_b, wz_b])
+        # Attitude error on SO(3): the vee map is only valid because `rotation` is proper.
+        e_rot = 1 / 2 * vee(jnp.matmul(rot_d.T, rotation) - jnp.matmul(rotation.T, rot_d))
 
-        # Compute rotation tracking error
-        omega_d = jnp.zeros((3,))
-        omega_d_dot = jnp.zeros((3,))
-        e_ome = omega - jnp.matmul(body_to_inertial_rotation.T, jnp.matmul(rot_d, omega_d))
+        # Body angular velocity [p, q, r] is part of the state; omega_d = 0 for a setpoint.
+        omega = x[9:12]
+        e_ome = omega
 
-        # Compute force input
-        f = -jnp.dot(
-            -kx * e_pos - kv * e_vel + m * g * e3 + m * acc_d,
-            jnp.matmul(body_to_inertial_rotation, e3),
-        )
+        # Thrust magnitude: project the desired force onto the body-down axis.
+        f = -jnp.dot(thrust_vec, jnp.matmul(rotation, e3))
 
-        # Compute moment inputs
-        #! need to double check this
-        moments = (
-            -kr * e_rot
-            - ko * e_ome
-            + jnp.cross(omega, j_vec * omega)
-            - j_vec
-            * (
-                jnp.matmul(
-                    jnp.matmul(hat(omega), body_to_inertial_rotation.T), jnp.matmul(rot_d, omega_d)
-                )
-                - jnp.matmul(body_to_inertial_rotation.T, jnp.matmul(rot_d, omega_d_dot))
-            )
-        )
+        # Moment inputs (omega_d = omega_d_dot = 0 for setpoint regulation).
+        moments = -kr * e_rot - ko * e_ome + jnp.cross(omega, j_vec * omega)
 
         inputs = jnp.hstack([f, moments])
 

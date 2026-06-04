@@ -104,7 +104,8 @@ if plot:
         x_lim=(-5, 5),
         y_lim=(-5, 5),
         dt=dt,
-        title="System Behavior",
+        title="EKF State Estimation",
         save_animation=save,
         animation_filename="examples/unicycle/reach_goal/results/ekf_estimation.gif",
+        backend="matplotlib",
     )
