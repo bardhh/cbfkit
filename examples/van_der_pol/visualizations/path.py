@@ -67,15 +67,22 @@ def animate(
 ):
     from cbfkit.utils.animator import CBFAnimator
 
-    animator = CBFAnimator(states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title)
+    animator = CBFAnimator(
+        states, dt=dt, x_lim=x_lim, y_lim=y_lim, title=title, backend="matplotlib"
+    )
     animator.add_goal(desired_state[:2], radius=desired_state_radius)
     animator.add_trajectory(
-        x_idx=0, y_idx=1, data=estimates,
-        color="tab:orange", label="Estimated Trajectory",
+        x_idx=0,
+        y_idx=1,
+        data=estimates,
+        color="tab:orange",
+        label="Estimated Trajectory",
     )
     animator.add_trajectory(
-        x_idx=0, y_idx=1,
-        color="tab:blue", label="Trajectory",
+        x_idx=0,
+        y_idx=1,
+        color="tab:blue",
+        label="Trajectory",
     )
 
     if save_animation:

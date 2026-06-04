@@ -137,15 +137,15 @@ python tutorials/multi_robot_3d_reachavoid.py
   <tr>
     <td align="center" width="33%">
       <img src="media/showcase/risk_aware_cvar.gif" width="100%" alt="Ellipsoidal-obstacle CBF"><br>
-      <sub><b>Ellipsoidal-obstacle CBF</b> <a href="scripts/render_showcase.py" title="Source: render_risk_aware_cvar">🔗</a><br>Unicycle reach-goal with linear class-K</sub>
+      <sub><b>Ellipsoidal-obstacle CBF</b> <a href="examples/unicycle/reach_goal/ellipsoidal_obstacle_cbf.py" title="Source: examples/unicycle/reach_goal/ellipsoidal_obstacle_cbf.py">🔗</a><br>Unicycle reach-goal with linear class-K</sub>
     </td>
     <td align="center" width="33%">
       <img src="media/showcase/stochastic_cbf.gif" width="100%" alt="Stochastic CBF"><br>
-      <sub><b>Stochastic CBF (SDE)</b> <a href="scripts/render_showcase.py" title="Source: render_stochastic_cbf">🔗</a><br>Safety under Brownian disturbance</sub>
+      <sub><b>Stochastic CBF (SDE)</b> <a href="examples/unicycle/reach_goal/stochastic_cbf.py" title="Source: examples/unicycle/reach_goal/stochastic_cbf.py">🔗</a><br>Safety under Brownian disturbance</sub>
     </td>
     <td align="center" width="33%">
       <img src="media/showcase/robust_cbf.gif" width="100%" alt="Robust CBF"><br>
-      <sub><b>Robust CBF</b> <a href="scripts/render_showcase.py" title="Source: render_robust_cbf">🔗</a><br>Worst-case bounded disturbance</sub>
+      <sub><b>Robust CBF</b> <a href="examples/unicycle/reach_goal/robust_cbf.py" title="Source: examples/unicycle/reach_goal/robust_cbf.py">🔗</a><br>Worst-case bounded disturbance</sub>
     </td>
   </tr>
   <tr>
@@ -155,17 +155,17 @@ python tutorials/multi_robot_3d_reachavoid.py
     </td>
     <td align="center">
       <img src="media/showcase/mppi_stl.gif" width="100%" alt="MPPI reach-avoid"><br>
-      <sub><b>MPPI reach-avoid</b> <a href="scripts/render_showcase.py" title="Source: render_mppi_stl">🔗</a><br>Sampling-based planning with goal + obstacle cost</sub>
+      <sub><b>MPPI reach-avoid</b> <a href="examples/single_integrator/mppi_reach_avoid.py" title="Source: examples/single_integrator/mppi_reach_avoid.py">🔗</a><br>Sampling-based planning with goal + obstacle cost</sub>
     </td>
     <td align="center">
       <img src="media/showcase/multi_robot_2d.gif" width="100%" alt="Multi-robot 2D coordination"><br>
-      <sub><b>Multi-robot 2D</b> <a href="scripts/render_showcase.py" title="Source: render_multi_robot_2d">🔗</a><br>Coordination via shared CBFs</sub>
+      <sub><b>Multi-robot 2D</b> <a href="examples/single_integrator/multi_robot_coordination.py" title="Source: examples/single_integrator/multi_robot_coordination.py">🔗</a><br>Coordination via shared CBFs</sub>
     </td>
   </tr>
   <tr>
     <td align="center">
       <img src="media/showcase/fixed_wing_3d.gif" width="100%" alt="Fixed-wing aerial 3D"><br>
-      <sub><b>Fixed-wing aerial 3D</b> <a href="scripts/render_showcase.py" title="Source: render_fixed_wing_3d">🔗</a><br>UAV reach-drop-point in 3D</sub>
+      <sub><b>Fixed-wing aerial 3D</b> <a href="examples/fixed_wing/reach_drop_point/ekf.py" title="Source: examples/fixed_wing/reach_drop_point/ekf.py">🔗</a><br>UAV reach-drop-point in 3D</sub>
     </td>
     <td align="center">
       <img src="media/showcase/pedestrian_head_on.gif" width="100%" alt="Pedestrian head-on"><br>
@@ -179,21 +179,21 @@ python tutorials/multi_robot_3d_reachavoid.py
   <tr>
     <td align="center" width="33%">
       <img src="media/showcase/van_der_pol_clf.gif" width="100%" alt="Van der Pol CLF"><br>
-      <sub><b>Van der Pol (CLF)</b> <a href="scripts/render_showcase.py" title="Source: render_van_der_pol_clf">🔗</a><br>Nonlinear regulation to the origin</sub>
+      <sub><b>Van der Pol (CLF)</b> <a href="examples/van_der_pol/regulation/perfect_sensing.py" title="Source: examples/van_der_pol/regulation/perfect_sensing.py">🔗</a><br>Nonlinear regulation to the origin</sub>
     </td>
     <td align="center" width="33%">
       <img src="media/showcase/mpc_double_integrator.gif" width="100%" alt="Model Predictive Control"><br>
-      <sub><b>Model Predictive Control</b> <a href="scripts/render_showcase.py" title="Source: render_mpc_double_integrator">🔗</a><br>Receding-horizon LTI tracking</sub>
+      <sub><b>Model Predictive Control</b> <a href="examples/double_integrator/mpc_tracking.py" title="Source: examples/double_integrator/mpc_tracking.py">🔗</a><br>Receding-horizon LTI tracking</sub>
     </td>
     <td align="center" width="33%">
       <img src="media/showcase/quadrotor_6dof.gif" width="100%" alt="Quadrotor 6-DOF geometric tracking"><br>
-      <sub><b>Quadrotor 6-DOF</b> <a href="scripts/render_showcase.py" title="Source: render_quadrotor_6dof">🔗</a><br>Geometric SE(3) tracking + altitude CBF</sub>
+      <sub><b>Quadrotor 6-DOF</b> <a href="examples/quadrotor_6dof/geometric_tracking.py" title="Source: examples/quadrotor_6dof/geometric_tracking.py">🔗</a><br>Geometric SE(3) tracking + altitude CBF</sub>
     </td>
   </tr>
   <tr>
     <td align="center" colspan="3">
       <img src="media/showcase/monte_carlo_safety.gif" width="45%" alt="Monte Carlo safety verification"><br>
-      <sub><b>Monte Carlo safety verification</b> <a href="scripts/render_showcase.py" title="Source: render_monte_carlo_safety">🔗</a><br>200 stochastic CBF rollouts (<code>jax.vmap</code>), live empirical risk</sub>
+      <sub><b>Monte Carlo safety verification</b> <a href="examples/single_integrator/monte_carlo_safety.py" title="Source: examples/single_integrator/monte_carlo_safety.py">🔗</a><br>200 stochastic CBF rollouts (<code>jax.vmap</code>), live empirical risk</sub>
     </td>
   </tr>
 </table>

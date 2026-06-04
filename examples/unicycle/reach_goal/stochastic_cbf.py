@@ -23,7 +23,7 @@ from examples.unicycle.common.visualizations import animate, plot_trajectory
 
 plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 should_animate = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
-save = 0
+save = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
 
 # Simulation parameters
 tf = 10.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
@@ -129,5 +129,6 @@ if should_animate:  # Changed from if animate:
         obstacles=obstacles,
         ellipsoids=ellipsoids,
         save_animation=save,
-        animation_filename=file_path + "stochastic_cbf_control.mp4",
+        animation_filename=file_path + "stochastic_cbf_control.gif",
+        backend="matplotlib",
     )
