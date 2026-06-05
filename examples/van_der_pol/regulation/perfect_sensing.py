@@ -28,7 +28,7 @@ from examples.van_der_pol.visualizations.path import animate
 tf = 5.0 if not os.getenv("CBFKIT_TEST_MODE") else 0.5
 n_steps = int(tf / setup.dt)
 plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0
-save = 0
+save = 1
 
 # Controlled reverse-time Van der Pol dynamics
 dynamics = van_der_pol.reverse_van_der_pol_oscillator(epsilon=setup.epsilon, sigma=setup.Q)
