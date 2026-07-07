@@ -153,6 +153,11 @@ class AdaptiveCVaRBarrierSolver:
         return u_opt, log_data
 
     def _solve_one_iter(self, x, u_nom, robot_pmf, robot_wu, robot_wx, obs_pmfs, obs_wu, obs_wx):
+        if ca is None:
+            raise ImportError(
+                "The adaptive CVaR-CBF controller requires CasADi. "
+                "Install it with `pip install cbfkit[casadi]`."
+            )
         u = ca.MX.sym("u", self.m, 1)
         n_zeta = len(self.obstacles)  # + len(all_robots) - 1 (assuming single robot for now)
         n_eta = n_zeta * self.S

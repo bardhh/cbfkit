@@ -57,9 +57,12 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
         if backend == "matplotlib":
             _require_matplotlib()
         elif backend.startswith("manim"):
-            _require_manim()
-            raise NotImplementedError("Manim 2D backend not yet implemented. "
-                                      "Use visualize_3d_multi_robot(backend='manim') for 3D scenes.")
+            # The 2D Manim backend is unimplemented whether or not Manim is
+            # installed, so surface that before requiring the optional dependency.
+            raise NotImplementedError(
+                "Manim 2D backend not yet implemented. "
+                "Use visualize_3d_multi_robot(backend='manim') for 3D scenes."
+            )
         else:
             _require_plotly()
 
@@ -81,9 +84,9 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
         self._frame_callbacks: List[Callable] = []
 
         # Built objects (created by build / animate)
-        self._fig = None          # matplotlib Figure or Plotly Figure
-        self._ax = None           # matplotlib Axes (None for Plotly)
-        self._anim = None         # matplotlib FuncAnimation (None for Plotly)
+        self._fig = None  # matplotlib Figure or Plotly Figure
+        self._ax = None  # matplotlib Axes (None for Plotly)
+        self._anim = None  # matplotlib FuncAnimation (None for Plotly)
         self._traj_artists: List = []
         self._agent_artists: List = []
         self._prediction_artists: List = []
@@ -99,9 +102,7 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
         label: str = "Goal",
     ) -> "CBFAnimator":
         """Add a goal marker (filled dot + dashed circle)."""
-        self._goals.append(
-            {"position": position, "radius": radius, "color": color, "label": label}
-        )
+        self._goals.append({"position": position, "radius": radius, "color": color, "label": label})
         return self
 
     def add_obstacle(
@@ -381,7 +382,10 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
             if traj_data is not None and frame < len(traj_data):
                 traj = np.asarray(traj_data[frame])
                 if traj.ndim >= 2 and traj.shape[0] > max(spec["traj_x_row"], spec["traj_y_row"]):
-                    return traj[spec["traj_x_row"], :].tolist(), traj[spec["traj_y_row"], :].tolist()
+                    return (
+                        traj[spec["traj_x_row"], :].tolist(),
+                        traj[spec["traj_y_row"], :].tolist(),
+                    )
             return [], []
         return [], []
 

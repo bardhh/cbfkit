@@ -10,11 +10,26 @@ authors = [
     {name = "Hideki Okamoto"}
 ]
 license = "BSD-3-Clause"
+keywords = [
+    "control-barrier-functions",
+    "safe-control",
+    "safe-reinforcement-learning",
+    "robotics",
+    "jax",
+    "optimal-control",
+    "model-predictive-control",
+    "autonomous-systems",
+]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
 ]
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -25,12 +40,7 @@ dependencies = [
     "tqdm>=4.60",
     "pyyaml>=6.0",
     "matplotlib>=3.8.2,<4.0",
-    "plotly>=5.18,<7.0",
-    "black>=23.12.1,<27.0",
     "jinja2>=3.0.0",
-    "casadi>=3.6.4,<4.0",
-    "cvxopt>=1.3.2,<2.0; platform_machine != 'aarch64' and platform_machine != 'arm64'",
-    "kvxopt>=1.3.2.0,<2.0; platform_machine == 'aarch64' or platform_machine == 'arm64'",
     "scipy>=1.9,<2.0",
 ]
 
@@ -38,32 +48,56 @@ dependencies = [
 [project.scripts]
 cbfkit-bench = "cbfkit.cli.bench:main"
 [project.urls]
+Homepage = "https://github.com/bardhh/cbfkit"
 Repository = "https://github.com/bardhh/cbfkit"
 Documentation = "https://github.com/bardhh/cbfkit#readme"
 Issues = "https://github.com/bardhh/cbfkit/issues"
+Changelog = "https://github.com/bardhh/cbfkit/releases"
+"Paper (arXiv)" = "https://arxiv.org/abs/2404.07158"
 
 [project.optional-dependencies]
-manim = [
-    "manim>=0.18,<1.0",
+# --- Single-purpose extras ---
+manim = ["manim>=0.18,<1.0"]
+optuna = ["optuna>=3.0"]
+neural = ["flax>=0.8", "optax>=0.2"]
+gymnasium = ["gymnasium>=1.0"]
+plotly = ["plotly>=5.18,<7.0"]
+casadi = ["casadi>=3.6.4,<4.0"]
+cvxopt = [
+    "cvxopt>=1.3.2,<2.0; platform_machine != 'aarch64' and platform_machine != 'arm64'",
+    "kvxopt>=1.3.2.0,<2.0; platform_machine == 'aarch64' or platform_machine == 'arm64'",
 ]
-optuna = [
-    "optuna>=3.0",
+# Black formats the code emitted by the codegen pipeline (run_black in
+# codegen/create_new_system/generate_model.py). jinja2 itself is a core dep,
+# so code generation works out of the box; this extra only adds the formatter.
+codegen = ["black>=23.12.1,<27.0"]
+
+# --- Convenience umbrella extras ---
+solvers = ["cbfkit[casadi]", "cbfkit[cvxopt]"]
+vis = ["cbfkit[plotly]"]
+# Everything installable without system-level dependencies. Excludes `manim`,
+# which additionally requires ffmpeg and a LaTeX toolchain.
+all = [
+    "cbfkit[optuna]",
+    "cbfkit[neural]",
+    "cbfkit[gymnasium]",
+    "cbfkit[plotly]",
+    "cbfkit[casadi]",
+    "cbfkit[cvxopt]",
+    "cbfkit[codegen]",
 ]
-neural = [
-    "flax>=0.8",
-    "optax>=0.2",
-]
-gymnasium = [
-    "gymnasium>=1.0",
-]
+
 dev = [
+    "cbfkit[all]",
     "pytest>=8.0.2",
     "pytest-cov",
     "python-dotenv>=1.2.1",
     "mypy>=1.8.0,<2.0",
     "jupyter>=1.0.0,<2.0",
     "ruff>=0.3.4",
-    "gymnasium>=1.0",
+    "black>=23.12.1,<27.0",
+    "build>=1.0",
+    "twine>=5.0",
 ]
 
 [build-system]

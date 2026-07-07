@@ -32,7 +32,8 @@ try:
     from jinja2 import Environment, FileSystemLoader
 except ImportError as exc:
     raise ImportError(
-        "Code generation requires 'jinja2'. Please install it with: pip install cbfkit[codegen]"
+        "Code generation requires 'jinja2', which normally ships with cbfkit. "
+        "Reinstall the package with: pip install cbfkit"
     ) from exc
 
 op_sys = platform.system()
@@ -76,7 +77,12 @@ LOGGER = logging.getLogger(__name__)
 
 
 def run_black(file_path: str) -> None:
-    """Format the given file with Black."""
+    """Format the given file with Black, if Black is available.
+
+    Black ships in the optional ``codegen`` extra (``pip install cbfkit[codegen]``).
+    When it is not installed the file is left unformatted (still valid Python) and
+    a warning is logged, so code generation works on a slim ``pip install cbfkit``.
+    """
     try:
         subprocess.run(
             ["black", file_path],
@@ -84,12 +90,12 @@ def run_black(file_path: str) -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-    except FileNotFoundError as exc:
-        LOGGER.error("Black executable not found while formatting %s", file_path)
-        raise RuntimeError(
-            "Black executable not found. Please ensure Black is installed and available. "
-            "You can install it with: pip install cbfkit[codegen]"
-        ) from exc
+    except FileNotFoundError:
+        LOGGER.warning(
+            "Black is not installed; leaving %s unformatted. Install the codegen "
+            "extra for auto-formatted output: pip install cbfkit[codegen]",
+            file_path,
+        )
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr.decode().strip() if exc.stderr else str(exc)
         LOGGER.error("Black failed to format %s: %s", file_path, stderr)

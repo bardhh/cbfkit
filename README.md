@@ -1,14 +1,20 @@
 # CBFKit: A Control Barrier Function Toolbox for Robotics Applications
 
+[![Python 3.10–3.12](https://img.shields.io/badge/python-3.10--3.12-blue.svg)](https://github.com/bardhh/cbfkit)
+[![CI](https://github.com/bardhh/cbfkit/actions/workflows/ci.yml/badge.svg)](https://github.com/bardhh/cbfkit/actions/workflows/ci.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://github.com/bardhh/cbfkit/blob/main/LICENSE)
+[![arXiv](https://img.shields.io/badge/arXiv-2404.07158-b31b1b.svg)](https://arxiv.org/abs/2404.07158)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/bardhh/cbfkit/blob/main/examples/gymnasium/safe_single_integrator.ipynb)
+
 CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barrier Functions (CBFs). Built on JAX for automatic differentiation and JIT compilation, it provides formal safety guarantees for robotic systems operating in deterministic, disturbed, and stochastic environments. It also includes an efficient JAX implementation of Model Predictive Path Integral (MPPI) control with reach-avoid specifications.
 
 <p align="center">
-  <img src="media/showcase/ped_mppi.gif" width="48%" alt="MPPI navigation among pedestrians">
-  <img src="media/showcase/pedestrian_head_on.gif" width="48%" alt="CBF safety with head-on encounter">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/ped_mppi.gif" width="48%" alt="MPPI navigation among pedestrians">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/pedestrian_head_on.gif" width="48%" alt="CBF safety with head-on encounter">
 </p>
 <p align="center">
-  <img src="media/showcase/mppi_rollouts.gif" width="48%" alt="MPPI trajectory sampling">
-  <img src="media/showcase/ekf_estimation.gif" width="48%" alt="EKF state estimation">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/mppi_rollouts.gif" width="48%" alt="MPPI trajectory sampling">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/ekf_estimation.gif" width="48%" alt="EKF state estimation">
 </p>
 <p align="center">
   <em>MPPI among pedestrians &nbsp;|&nbsp; CBF head-on safety</em><br>
@@ -19,11 +25,19 @@ Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx
 
 ## Quick Start
 
-Requires **Python 3.10--3.12**.
+Requires **Python 3.10--3.12**. Install directly from GitHub:
+
+```bash
+pip install "cbfkit @ git+https://github.com/bardhh/cbfkit.git"
+```
+
+Need optional features? Add extras, e.g. `pip install "cbfkit[gymnasium] @ git+https://github.com/bardhh/cbfkit.git"` (also available: `neural`, `casadi`, `cvxopt`, `plotly`, `manim`, or `all`).
+
+Or clone for development (editable install with all dev tools + extras):
 
 ```bash
 git clone https://github.com/bardhh/cbfkit.git && cd cbfkit
-pip install -e .
+pip install -e ".[dev]"
 python examples/unicycle/reach_goal/unicycle_reach_avoid_cbf.py
 ```
 
@@ -87,7 +101,7 @@ print(f"Final position: ({results.states[-1, 0]:.2f}, {results.states[-1, 1]:.2f
 
 Drop-in CBF safety filter for any continuous Gymnasium environment. Wraps the env so every action from your RL policy gets safety-projected by a CBF-QP before reaching the simulator — works with PPO, SAC, or any off-the-shelf algorithm, no policy retraining required.
 
-<p align="center"><img src="media/showcase/safe_rl_gymnasium.gif" width="85%" alt="Safe RL: naive vs CBF-filtered policy"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/safe_rl_gymnasium.gif" width="85%" alt="Safe RL: naive vs CBF-filtered policy"></p>
 
 ```bash
 python examples/gymnasium/safe_single_integrator.py
@@ -97,7 +111,7 @@ python examples/gymnasium/safe_single_integrator.py
 
 Skip the math: learn the barrier function from samples. A small neural network learns h(x) from labeled safe/unsafe states, then plugs straight into CBFKit's CBF-QP controller. Useful when obstacles are hard to describe analytically — point clouds, learned occupancy maps, scanned environments.
 
-<p align="center"><img src="media/showcase/neural_cbf.gif" width="65%" alt="Neural CBF: agent avoiding a learned obstacle"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/neural_cbf.gif" width="65%" alt="Neural CBF: agent avoiding a learned obstacle"></p>
 
 ```bash
 python examples/neural_cbf/neural_cbf_obstacle_avoidance.py
@@ -115,7 +129,7 @@ Measured on random PD QPs (50 reps after warmup) on the sizes typical of CBF-CLF
 | 4×10       | **785×**       | 73×       |
 | 8×20       | **696×**       | 64×       |
 
-<p align="center"><img src="media/showcase/fast_qp_benchmark.png" width="75%" alt="QP solver wall-time comparison"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/fast_qp_benchmark.png" width="75%" alt="QP solver wall-time comparison"></p>
 
 ```bash
 python benchmarks/qp_solver_comparison.py
@@ -125,7 +139,7 @@ python benchmarks/qp_solver_comparison.py
 
 Cinematic 3D simulation rendering with Manim. Multi-robot reach-avoid in 3D, rendered via CBFKit's Manim backend. Shows the visualization stack scales from quick matplotlib plots to publication-quality 3D animations.
 
-<p align="center"><img src="media/showcase/multi_robot_3d.gif" width="70%" alt="Manim 3D render of multi-robot reach-avoid"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/multi_robot_3d.gif" width="70%" alt="Manim 3D render of multi-robot reach-avoid"></p>
 
 ```bash
 python tutorials/multi_robot_3d_reachavoid.py
@@ -136,64 +150,64 @@ python tutorials/multi_robot_3d_reachavoid.py
 <table>
   <tr>
     <td align="center" width="33%">
-      <img src="media/showcase/risk_aware_cvar.gif" width="100%" alt="Ellipsoidal-obstacle CBF"><br>
-      <sub><b>Ellipsoidal-obstacle CBF</b> <a href="examples/unicycle/reach_goal/ellipsoidal_obstacle_cbf.py" title="Source: examples/unicycle/reach_goal/ellipsoidal_obstacle_cbf.py">🔗</a><br>Unicycle reach-goal with linear class-K</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/risk_aware_cvar.gif" width="100%" alt="Ellipsoidal-obstacle CBF"><br>
+      <sub><b>Ellipsoidal-obstacle CBF</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/ellipsoidal_obstacle_cbf.py" title="Source: examples/unicycle/reach_goal/ellipsoidal_obstacle_cbf.py">🔗</a><br>Unicycle reach-goal with linear class-K</sub>
     </td>
     <td align="center" width="33%">
-      <img src="media/showcase/stochastic_cbf.gif" width="100%" alt="Stochastic CBF"><br>
-      <sub><b>Stochastic CBF (SDE)</b> <a href="examples/unicycle/reach_goal/stochastic_cbf.py" title="Source: examples/unicycle/reach_goal/stochastic_cbf.py">🔗</a><br>Safety under Brownian disturbance</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/stochastic_cbf.gif" width="100%" alt="Stochastic CBF"><br>
+      <sub><b>Stochastic CBF (SDE)</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/stochastic_cbf.py" title="Source: examples/unicycle/reach_goal/stochastic_cbf.py">🔗</a><br>Safety under Brownian disturbance</sub>
     </td>
     <td align="center" width="33%">
-      <img src="media/showcase/robust_cbf.gif" width="100%" alt="Robust CBF"><br>
-      <sub><b>Robust CBF</b> <a href="examples/unicycle/reach_goal/robust_cbf.py" title="Source: examples/unicycle/reach_goal/robust_cbf.py">🔗</a><br>Worst-case bounded disturbance</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/robust_cbf.gif" width="100%" alt="Robust CBF"><br>
+      <sub><b>Robust CBF</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/robust_cbf.py" title="Source: examples/unicycle/reach_goal/robust_cbf.py">🔗</a><br>Worst-case bounded disturbance</sub>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="media/showcase/mppi_rollouts.gif" width="100%" alt="MPPI rollouts"><br>
-      <sub><b>MPPI rollout sampling</b> <a href="examples/unicycle/reach_goal/mppi_cbf.py" title="Source: examples/unicycle/reach_goal/mppi_cbf.py">🔗</a><br>Sampling-based planning</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/mppi_rollouts.gif" width="100%" alt="MPPI rollouts"><br>
+      <sub><b>MPPI rollout sampling</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/mppi_cbf.py" title="Source: examples/unicycle/reach_goal/mppi_cbf.py">🔗</a><br>Sampling-based planning</sub>
     </td>
     <td align="center">
-      <img src="media/showcase/mppi_stl.gif" width="100%" alt="MPPI reach-avoid"><br>
-      <sub><b>MPPI reach-avoid</b> <a href="examples/single_integrator/mppi_reach_avoid.py" title="Source: examples/single_integrator/mppi_reach_avoid.py">🔗</a><br>Sampling-based planning with goal + obstacle cost</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/mppi_stl.gif" width="100%" alt="MPPI reach-avoid"><br>
+      <sub><b>MPPI reach-avoid</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/single_integrator/mppi_reach_avoid.py" title="Source: examples/single_integrator/mppi_reach_avoid.py">🔗</a><br>Sampling-based planning with goal + obstacle cost</sub>
     </td>
     <td align="center">
-      <img src="media/showcase/multi_robot_2d.gif" width="100%" alt="Multi-robot 2D coordination"><br>
-      <sub><b>Multi-robot 2D</b> <a href="examples/single_integrator/multi_robot_coordination.py" title="Source: examples/single_integrator/multi_robot_coordination.py">🔗</a><br>Coordination via shared CBFs</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/multi_robot_2d.gif" width="100%" alt="Multi-robot 2D coordination"><br>
+      <sub><b>Multi-robot 2D</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/single_integrator/multi_robot_coordination.py" title="Source: examples/single_integrator/multi_robot_coordination.py">🔗</a><br>Coordination via shared CBFs</sub>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="media/showcase/fixed_wing_3d.gif" width="100%" alt="Fixed-wing aerial 3D"><br>
-      <sub><b>Fixed-wing aerial 3D</b> <a href="examples/fixed_wing/reach_drop_point/ekf.py" title="Source: examples/fixed_wing/reach_drop_point/ekf.py">🔗</a><br>UAV reach-drop-point in 3D</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/fixed_wing_3d.gif" width="100%" alt="Fixed-wing aerial 3D"><br>
+      <sub><b>Fixed-wing aerial 3D</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/fixed_wing/reach_drop_point/ekf.py" title="Source: examples/fixed_wing/reach_drop_point/ekf.py">🔗</a><br>UAV reach-drop-point in 3D</sub>
     </td>
     <td align="center">
-      <img src="media/showcase/pedestrian_head_on.gif" width="100%" alt="Pedestrian head-on"><br>
-      <sub><b>Pedestrian head-on</b> <a href="examples/pedestrian/navigate_among_pedestrians/head_on.py" title="Source: examples/pedestrian/navigate_among_pedestrians/head_on.py">🔗</a><br>Dynamic-agent avoidance</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/pedestrian_head_on.gif" width="100%" alt="Pedestrian head-on"><br>
+      <sub><b>Pedestrian head-on</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/pedestrian/navigate_among_pedestrians/head_on.py" title="Source: examples/pedestrian/navigate_among_pedestrians/head_on.py">🔗</a><br>Dynamic-agent avoidance</sub>
     </td>
     <td align="center">
-      <img src="media/showcase/ekf_estimation.gif" width="100%" alt="EKF state estimation"><br>
-      <sub><b>EKF state estimation</b> <a href="examples/unicycle/reach_goal/ekf.py" title="Source: examples/unicycle/reach_goal/ekf.py">🔗</a><br>Unicycle reach-goal under measurement noise</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/ekf_estimation.gif" width="100%" alt="EKF state estimation"><br>
+      <sub><b>EKF state estimation</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/ekf.py" title="Source: examples/unicycle/reach_goal/ekf.py">🔗</a><br>Unicycle reach-goal under measurement noise</sub>
     </td>
   </tr>
   <tr>
     <td align="center" width="33%">
-      <img src="media/showcase/van_der_pol_clf.gif" width="100%" alt="Van der Pol CLF"><br>
-      <sub><b>Van der Pol (CLF)</b> <a href="examples/van_der_pol/regulation/perfect_sensing.py" title="Source: examples/van_der_pol/regulation/perfect_sensing.py">🔗</a><br>Nonlinear regulation to the origin</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/van_der_pol_clf.gif" width="100%" alt="Van der Pol CLF"><br>
+      <sub><b>Van der Pol (CLF)</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/van_der_pol/regulation/perfect_sensing.py" title="Source: examples/van_der_pol/regulation/perfect_sensing.py">🔗</a><br>Nonlinear regulation to the origin</sub>
     </td>
     <td align="center" width="33%">
-      <img src="media/showcase/mpc_double_integrator.gif" width="100%" alt="Model Predictive Control"><br>
-      <sub><b>Model Predictive Control</b> <a href="examples/double_integrator/mpc_tracking.py" title="Source: examples/double_integrator/mpc_tracking.py">🔗</a><br>Receding-horizon LTI tracking</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/mpc_double_integrator.gif" width="100%" alt="Model Predictive Control"><br>
+      <sub><b>Model Predictive Control</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/double_integrator/mpc_tracking.py" title="Source: examples/double_integrator/mpc_tracking.py">🔗</a><br>Receding-horizon LTI tracking</sub>
     </td>
     <td align="center" width="33%">
-      <img src="media/showcase/quadrotor_6dof.gif" width="100%" alt="Quadrotor 6-DOF geometric tracking"><br>
-      <sub><b>Quadrotor 6-DOF</b> <a href="examples/quadrotor_6dof/geometric_tracking.py" title="Source: examples/quadrotor_6dof/geometric_tracking.py">🔗</a><br>Geometric SE(3) tracking + altitude CBF</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/quadrotor_6dof.gif" width="100%" alt="Quadrotor 6-DOF geometric tracking"><br>
+      <sub><b>Quadrotor 6-DOF</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/quadrotor_6dof/geometric_tracking.py" title="Source: examples/quadrotor_6dof/geometric_tracking.py">🔗</a><br>Geometric SE(3) tracking + altitude CBF</sub>
     </td>
   </tr>
   <tr>
     <td align="center" colspan="3">
-      <img src="media/showcase/monte_carlo_safety.gif" width="45%" alt="Monte Carlo safety verification"><br>
-      <sub><b>Monte Carlo safety verification</b> <a href="examples/single_integrator/monte_carlo_safety.py" title="Source: examples/single_integrator/monte_carlo_safety.py">🔗</a><br>200 stochastic CBF rollouts (<code>jax.vmap</code>), live empirical risk</sub>
+      <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/monte_carlo_safety.gif" width="45%" alt="Monte Carlo safety verification"><br>
+      <sub><b>Monte Carlo safety verification</b> <a href="https://github.com/bardhh/cbfkit/blob/main/examples/single_integrator/monte_carlo_safety.py" title="Source: examples/single_integrator/monte_carlo_safety.py">🔗</a><br>200 stochastic CBF rollouts (<code>jax.vmap</code>), live empirical risk</sub>
     </td>
   </tr>
 </table>

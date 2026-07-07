@@ -380,7 +380,6 @@ def _unicycle_batch_runner(seeds: list[int], params: dict) -> list[dict]:
 
     # Generate keys and initial states for all seeds × trials
     n_seeds = len(seeds)
-    total = n_seeds * N_TRIALS
     all_keys = []
     all_sampler_keys = []
     for seed in seeds:

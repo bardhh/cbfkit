@@ -43,6 +43,9 @@ try:
     _MANIM_AVAILABLE = True
 except ImportError:
     _MANIM_AVAILABLE = False
+    # Fallback base class so this module still imports when Manim is absent;
+    # actual rendering is gated by _require_manim() in render_multi_robot_3d().
+    ThreeDScene = object  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------
@@ -245,9 +248,7 @@ class MultiRobot3DScene(ThreeDScene):
             goal_pos = s(goals[idx : idx + 3])
             color = _robot_color(i)
             goal_dot = Dot3D(point=goal_pos, radius=0.15, color=color).set_opacity(0.9)
-            goal_sphere = _goal_sphere(
-                goal_pos, self.desired_state_radius * self._scale, color
-            )
+            goal_sphere = _goal_sphere(goal_pos, self.desired_state_radius * self._scale, color)
             self.add(goal_dot, goal_sphere)
 
         # --- Animated robot dots + safety bubbles + traced paths -----------
