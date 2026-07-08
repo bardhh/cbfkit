@@ -71,6 +71,7 @@ class BlogCarousel extends HTMLElement {
 
   disconnectedCallback() {
     this._ul?.removeEventListener("scroll", this._onScroll);
+    if (this._onResize) window.removeEventListener("resize", this._onResize);
   }
 
   attributeChangedCallback() {
@@ -141,7 +142,10 @@ class BlogCarousel extends HTMLElement {
         padding: 0;
       }
       .bc-btn:hover { background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
-      .bc-btn:active { transform: translateY(-50%) scale(0.95); }
+      /* Scale only — a translate here would move the button out from under
+         the pointer mid-press and swallow the click (buttons are positioned
+         via an absolute px \`top\`, not a translateY(-50%) baseline). */
+      .bc-btn:active { transform: scale(0.95); }
       .bc-btn[aria-disabled="true"] {
         opacity: 0.25;
         cursor: default;
@@ -227,11 +231,13 @@ class BlogCarousel extends HTMLElement {
       `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${points}"/></svg>`;
 
     this._prevBtn = document.createElement("button");
+    this._prevBtn.type = "button";
     this._prevBtn.className = "bc-btn bc-prev";
     this._prevBtn.setAttribute("aria-label", "Previous slide");
     this._prevBtn.innerHTML = makeSVG("13 4 7 10 13 16");
 
     this._nextBtn = document.createElement("button");
+    this._nextBtn.type = "button";
     this._nextBtn.className = "bc-btn bc-next";
     this._nextBtn.setAttribute("aria-label", "Next slide");
     this._nextBtn.innerHTML = makeSVG("7 4 13 10 7 16");
@@ -286,6 +292,16 @@ class BlogCarousel extends HTMLElement {
       this._scrollTimer = setTimeout(() => this._onScrollEnd(), 100);
     };
     this._ul.addEventListener("scroll", this._onScroll, { passive: true });
+
+    /* Button vertical centering depends on track height, which changes on
+       viewport resize and as slide images finish loading. */
+    this._onResize = () => this._syncState();
+    window.addEventListener("resize", this._onResize);
+    this.querySelectorAll("img").forEach((img) => {
+      if (!img.complete) {
+        img.addEventListener("load", this._onResize, { once: true });
+      }
+    });
   }
 
   _onScrollEnd() {
