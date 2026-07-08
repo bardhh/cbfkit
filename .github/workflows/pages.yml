@@ -1,0 +1,41 @@
+name: Deploy blog to GitHub Pages
+
+# Serves blog/ (the "CBFKit Reborn" landing page) at the project's Pages URL.
+# One-time setup: repo Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+# All media in blog/index.html is referenced by absolute raw.githubusercontent URLs,
+# so the deployed folder stays free of large binaries.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "blog/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload blog as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: blog
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

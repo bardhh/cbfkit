@@ -1,0 +1,1842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CBFKit — Control Barrier Functions for Robotics, in JAX</title>
+    <meta name="description" content="CBFKit is a JAX toolbox for safe robotics control with Control Barrier Functions — safety filters for deterministic, disturbed, and stochastic dynamics, MPPI planning, Monte Carlo verification, and code generation for new systems.">
+    <meta name="keywords" content="CBF, Control Barrier Functions, safe control, robotics, JAX, machine learning, safety-critical systems">
+    <meta name="author" content="CBFKit Team">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="CBFKit — Control Barrier Functions for Robotics, in JAX">
+    <meta property="og:description" content="A JAX toolbox for safe robotics control: CBF safety filters, MPPI planning, Monte Carlo verification, and code generation for new systems.">
+    <meta property="og:type" content="article">
+
+    <!-- Favicon (inline, keeps the page self-contained) -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231a1a1a'/%3E%3Ccircle cx='32' cy='32' r='17' fill='none' stroke='%23eaeae7' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23eaeae7'/%3E%3C/svg%3E">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@10..48,400;10..48,500;10..48,600;10..48,700&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* ── Reset & Base ─────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            /* Graphite palette: near-monochrome paper + ink, one slate accent */
+            --color-bg-dark: #1a1a1a;        /* intentional flat-ink feature blocks */
+            --color-bg-hero: #f6f5f3;        /* hero + page: warm paper */
+            --color-primary: #3d4248;        /* muted teal accent */
+            --color-accent: #3d4248;
+            --color-accent-2: #2b2c2e;
+            --color-text: #1a1a1a;           /* ink */
+            --color-text-light: #6d6d6a;     /* muted ink */
+            --color-text-inverse: #eaeae7;   /* text on ink blocks */
+            --color-surface: #ffffff;
+            --color-surface-alt: #eaeae7;    /* alt sections: warm tint */
+            --color-border: #e2e1dd;         /* hairline */
+            --color-code-bg: #1a1a1a;
+            --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+            --font-body: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+            --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+            --max-width: 820px;
+            --max-width-wide: 1100px;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-body);
+            color: var(--color-text);
+            background: var(--color-bg-hero);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Navigation ───────────────────────────────────── */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: var(--color-bg-hero);
+            border-bottom: 1px solid var(--color-border);
+            transition: background 0.3s;
+        }
+        .nav-inner {
+            max-width: var(--max-width-wide);
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+        }
+        .nav-logo {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: var(--color-text);
+            text-decoration: none;
+            letter-spacing: -0.01em;
+        }
+        .nav-logo span { color: var(--color-accent); }
+        .nav-links { display: flex; gap: 2rem; }
+        .nav-links a {
+            color: var(--color-text);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            opacity: 0.65;
+            transition: opacity 0.2s;
+        }
+        .nav-links a:hover { opacity: 1; }
+
+        /* ── Hero ─────────────────────────────────────────── */
+        .hero {
+            position: relative;
+            min-height: 74vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--color-bg-hero);
+            border-bottom: 1px solid var(--color-border);
+            overflow: hidden;
+            padding: 8rem 2rem 4rem;
+        }
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: var(--max-width);
+            width: 100%;
+            text-align: left;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--color-text-light);
+            padding: 0 0 0.7rem;
+            border-bottom: 1px solid var(--color-border);
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin-bottom: 1.75rem;
+        }
+        .hero-title {
+            font-family: var(--font-display);
+            font-size: clamp(2.4rem, 5.4vw, 3.8rem);
+            font-weight: 600;
+            color: var(--color-text);
+            line-height: 1.06;
+            letter-spacing: -0.02em;
+            margin-bottom: 1.5rem;
+        }
+        .hero-title .highlight {
+            font-weight: 600;
+            color: var(--color-accent);
+        }
+        .hero-subtitle {
+            font-size: clamp(1.02rem, 1.6vw, 1.18rem);
+            color: var(--color-text-light);
+            max-width: 620px;
+            margin: 0 0 2.5rem;
+            line-height: 1.7;
+        }
+        .hero-meta {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 1.25rem;
+            color: var(--color-text-light);
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+        }
+        .hero-meta-sep { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+        .hero-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-start;
+            margin-bottom: 2rem;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.8rem 1.6rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-primary {
+            background: var(--color-accent);
+            color: #fff;
+        }
+        .btn-primary:hover { background: #2c3035; }
+        .btn-secondary {
+            background: transparent;
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+        }
+        .btn-secondary:hover { border-color: var(--color-text); }
+        /* Secondary buttons on flat-ink blocks need light text/border */
+        .section-dark .btn-secondary,
+        .cta-section .btn-secondary {
+            color: var(--color-text-inverse);
+            border-color: rgba(234,234,231,0.35);
+        }
+        .section-dark .btn-secondary:hover,
+        .cta-section .btn-secondary:hover { border-color: var(--color-text-inverse); }
+
+        /* ── Scroll indicator ─────────────────────────────── */
+        .scroll-indicator {
+            position: absolute;
+            bottom: 2.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--color-text-light);
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            animation: pulse-scroll 2s ease-in-out infinite;
+        }
+        .scroll-indicator svg { width: 20px; height: 20px; }
+        @keyframes pulse-scroll {
+            0%, 100% { opacity: 0.3; transform: translateX(-50%) translateY(0); }
+            50% { opacity: 0.7; transform: translateX(-50%) translateY(5px); }
+        }
+
+        /* ── Article layout ───────────────────────────────── */
+        .article { padding: 0; }
+        .section {
+            padding: 5rem 2rem;
+        }
+        .section-alt { background: var(--color-surface-alt); }
+        .section-dark {
+            background: var(--color-bg-dark);
+            color: var(--color-text-inverse);
+        }
+        .container { max-width: var(--max-width); margin: 0 auto; }
+        .container-wide { max-width: var(--max-width-wide); margin: 0 auto; }
+
+        /* ── Section headers ──────────────────────────────── */
+        .section-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.74rem;
+            font-weight: 500;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--color-accent);
+            margin-bottom: 1rem;
+        }
+        .section-dark .section-label { color: rgba(234,234,231,0.6); }
+        .section-title {
+            font-family: var(--font-display);
+            font-size: clamp(1.7rem, 3.6vw, 2.4rem);
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            line-height: 1.16;
+            margin-bottom: 1.25rem;
+        }
+        .section-desc {
+            font-size: 1.1rem;
+            color: var(--color-text-light);
+            max-width: 640px;
+            line-height: 1.7;
+            margin-bottom: 3rem;
+        }
+        .section-dark .section-desc { color: rgba(234,234,231,0.6); }
+
+        /* ── Prose ────────────────────────────────────────── */
+        .prose { max-width: var(--max-width); margin: 0 auto; }
+        .prose p {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+            color: var(--color-text);
+        }
+        .prose p strong { font-weight: 700; }
+        .prose a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
+        .prose a:hover { color: var(--color-accent); }
+
+        .lead {
+            font-size: 1.25rem;
+            line-height: 1.8;
+            color: var(--color-text-light);
+            margin-bottom: 2rem;
+            max-width: 680px;
+        }
+
+        /* ── Architecture diagram ─────────────────────────── */
+        .arch-diagram {
+            background: var(--color-code-bg);
+            border-radius: 16px;
+            padding: 2.5rem 2rem;
+            margin: 2.5rem 0;
+            overflow-x: auto;
+        }
+        .arch-pipeline {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+            min-width: fit-content;
+        }
+        .arch-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 1.1rem 1.25rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04);
+            min-width: 110px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .arch-node:hover {
+            border-color: rgba(234,234,231,0.35);
+            background: rgba(255,255,255,0.07);
+            transform: translateY(-2px);
+        }
+        .arch-node-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: 0.02em;
+        }
+        .arch-node-sub {
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.4);
+        }
+        .arch-arrow {
+            color: rgba(234,234,231,0.4);
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        /* ── Stat cards ───────────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin: 2.5rem 0;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .stat-card:hover {
+            border-color: rgba(61,66,72,0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+        }
+        .stat-number {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+            color: #f0efec;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: rgba(234,234,231,0.55);
+            font-weight: 500;
+        }
+
+        /* ── Feature grid ─────────────────────────────────── */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .feature-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: all 0.3s;
+        }
+        .feature-card:hover {
+            border-color: var(--color-primary);
+            box-shadow: 0 8px 30px rgba(61,66,72,0.08);
+            transform: translateY(-2px);
+        }
+        .feature-num {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--color-text-light);
+            letter-spacing: 0.12em;
+            margin-bottom: 0.85rem;
+        }
+        .feature-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.01em;
+        }
+        .feature-desc {
+            font-size: 0.925rem;
+            color: var(--color-text-light);
+            line-height: 1.65;
+        }
+
+        /* ── Carousel benchmark slides ─────────────────────── */
+        .carousel-bench-slide {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 14px;
+            padding: 2rem 2.5rem;
+            min-height: 360px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .carousel-bench-slide h3 {
+            color: #eaeae7;
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+        }
+        .carousel-bench-subtitle {
+            color: rgba(234,234,231,0.5);
+            font-size: 0.8rem;
+            margin-bottom: 1.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .carousel-bench-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.85rem;
+        }
+        .carousel-bench-label {
+            width: 155px;
+            flex-shrink: 0;
+            font-size: 0.825rem;
+            font-weight: 500;
+            color: rgba(234,234,231,0.65);
+            text-align: right;
+        }
+        .carousel-bar-bg {
+            flex: 1;
+            height: 28px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .carousel-bar {
+            height: 100%;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            background: linear-gradient(90deg, rgba(154,160,166,0.35), #9aa0a6);
+        }
+        .carousel-stat-row {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .carousel-stat-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            flex: 1;
+            min-width: 120px;
+        }
+        .carousel-stat-val {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+            color: #f0efec;
+        }
+        .carousel-stat-lbl {
+            font-size: 0.7rem;
+            color: rgba(234,234,231,0.45);
+            line-height: 1.3;
+        }
+
+        /* Carousel overrides inside dark sections */
+        .section-dark .bc-dot {
+            border-color: rgba(234,234,231,0.4);
+        }
+        .section-dark .bc-dot:hover { background: rgba(234,234,231,0.3); }
+        .section-dark .bc-dot[aria-current="true"] {
+            background: #eaeae7;
+            border-color: #eaeae7;
+        }
+        .section-dark .bc-caption {
+            color: rgba(234,234,231,0.5);
+        }
+        .section-dark .bc-btn {
+            border-color: rgba(234,234,231,0.5);
+            color: #eaeae7;
+            background: rgba(26,26,26,0.8);
+        }
+        .section-dark .bc-btn:hover {
+            background: rgba(43,43,44,0.95);
+        }
+        /* ── Showcase gallery (README-style tiles) ────────── */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1.25rem;
+            margin-top: 2rem;
+        }
+        .gallery-card {
+            display: flex;
+            flex-direction: column;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            overflow: hidden;
+            text-decoration: none;
+            color: var(--color-text);
+            transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+        }
+        .gallery-card:hover {
+            border-color: var(--color-accent);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(26,26,26,0.07);
+        }
+        .gallery-media {
+            aspect-ratio: 4 / 3;
+            min-height: 0; /* flex item: keep intrinsic image ratios from overriding the 4:3 box */
+            background: #fff;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .gallery-media img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        .gallery-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            flex: 1;
+            padding: 1rem 1.1rem 1.05rem;
+        }
+        .gallery-name {
+            font-size: 0.92rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+        .gallery-desc {
+            font-size: 0.8rem;
+            color: var(--color-text-light);
+            line-height: 1.5;
+        }
+        .gallery-src {
+            margin-top: auto;
+            padding-top: 0.55rem;
+            font-family: var(--font-mono);
+            font-size: 0.64rem;
+            color: var(--color-text-light);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .gallery-card:hover .gallery-src { color: var(--color-accent); }
+
+        /* ── System cards ─────────────────────────────────── */
+        .systems-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .system-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 14px;
+            padding: 1.5rem;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .system-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--color-accent), var(--color-primary));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .system-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.06); }
+        .system-card:hover::before { opacity: 1; }
+        .system-name {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+        }
+        .system-desc {
+            font-size: 0.825rem;
+            color: var(--color-text-light);
+            line-height: 1.55;
+        }
+        .system-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.75rem;
+        }
+        .system-tag {
+            font-size: 0.65rem;
+            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            background: var(--color-surface-alt);
+            color: var(--color-text-light);
+            letter-spacing: 0.02em;
+        }
+
+        /* ── Code block ───────────────────────────────────── */
+        .code-block {
+            background: var(--color-code-bg);
+            border-radius: 14px;
+            overflow: hidden;
+            margin: 2rem 0;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .code-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .code-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .code-dot.red { background: #ff5f57; }
+        .code-dot.yellow { background: #ffbd2e; }
+        .code-dot.green { background: #28ca41; }
+        .code-filename {
+            margin-left: 0.75rem;
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.4);
+            font-family: var(--font-mono);
+        }
+        .code-block pre {
+            padding: 1.25rem 1.5rem;
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: 0.825rem;
+            line-height: 1.7;
+            color: #eaeae7;
+        }
+        .code-block .kw { color: #c084fc; }
+        .code-block .fn { color: #67e8f9; }
+        .code-block .str { color: #86efac; }
+        .code-block .num { color: #9aa0a6; }
+        .code-block .comment { color: #6d6d6a; font-style: italic; }
+        .code-block .op { color: #94a3b8; }
+
+        /* ── Equation blocks (dark sections) ──────────────── */
+        .equation-block {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 1.75rem 2rem 1.4rem;
+            margin: 2.5rem 0 0;
+            font-family: var(--font-mono);
+            font-size: 1rem;
+            color: #eaeae7;
+            text-align: center;
+        }
+        .eq-line {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: baseline;
+            column-gap: 1.5rem;
+            row-gap: 0.4rem;
+        }
+        .eq-term { white-space: nowrap; }
+        .eq-st {
+            font-family: var(--font-body);
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: rgba(234,234,231,0.45);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+        .equation-label {
+            display: block;
+            font-family: var(--font-body);
+            font-size: 0.78rem;
+            color: rgba(234,234,231,0.45);
+            margin-top: 1rem;
+            font-style: italic;
+        }
+
+        /* ── CBF formulations table ───────────────────────── */
+        .formulations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr));
+            gap: 1.25rem;
+            margin: 2rem 0;
+        }
+        .formulation-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 1.75rem;
+            transition: all 0.3s;
+        }
+        .formulation-card:hover {
+            border-color: rgba(61,66,72,0.3);
+            background: rgba(61,66,72,0.04);
+        }
+        .formulation-card h4 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+        .formulation-eq {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: #b9bfc6;
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+        }
+        .formulation-desc {
+            font-size: 0.85rem;
+            color: rgba(234,234,231,0.5);
+            line-height: 1.55;
+        }
+
+        /* ── Visualization section ────────────────────────── */
+        .viz-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.25rem;
+            margin: 2rem 0;
+        }
+        .viz-card {
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid var(--color-border);
+            transition: all 0.3s;
+        }
+        .viz-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.08); }
+        .viz-preview {
+            aspect-ratio: 4/3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+        }
+        .viz-preview.plotly { background: linear-gradient(135deg, #1f1f20, #161617); }
+        .viz-preview.matplotlib { background: linear-gradient(135deg, #1f1f20, #161617); }
+        .viz-preview.manim { background: linear-gradient(135deg, #1f1f20, #161617); }
+        .viz-info { padding: 1rem 1.25rem; }
+        .viz-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.25rem; }
+        .viz-desc { font-size: 0.8rem; color: var(--color-text-light); line-height: 1.5; }
+
+        /* ── CTA section ──────────────────────────────────── */
+        .cta-section {
+            background: var(--color-bg-dark);
+            padding: 6rem 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .cta-section::before {
+            content: '';
+            display: none;
+        }
+        .cta-content { position: relative; z-index: 1; }
+        .cta-title {
+            font-family: var(--font-display);
+            font-size: clamp(1.7rem, 3.6vw, 2.5rem);
+            font-weight: 600;
+            color: var(--color-text-inverse);
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+        .cta-desc {
+            color: rgba(234,234,231,0.6);
+            font-size: 1.1rem;
+            max-width: 520px;
+            margin: 0 auto 2.5rem;
+        }
+        .cta-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .cta-pip {
+            margin-top: 2rem;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: rgba(234,234,231,0.4);
+        }
+        .cta-pip code {
+            background: rgba(255,255,255,0.06);
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
+            color: #eaeae7;
+        }
+
+        /* ── Footer ───────────────────────────────────────── */
+        .footer {
+            background: var(--color-bg-dark);
+            border-top: 1px solid rgba(255,255,255,0.06);
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+        .footer-cite {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+        .footer-cite-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: rgba(234,234,231,0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.75rem;
+        }
+        .footer-cite pre {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: rgba(234,234,231,0.5);
+            line-height: 1.6;
+            overflow-x: auto;
+        }
+        .footer-links {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+        .footer-links a {
+            color: rgba(234,234,231,0.4);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.2s;
+        }
+        .footer-links a:hover { color: #eaeae7; }
+        .footer-copy {
+            font-size: 0.8rem;
+            color: rgba(234,234,231,0.25);
+        }
+
+        /* ── Animations ───────────────────────────────────── */
+        .fade-up {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .fade-up.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            .fade-up { opacity: 1; transform: none; transition: none; }
+            .scroll-indicator { animation: none; }
+        }
+
+        /* ── Responsive ───────────────────────────────────── */
+        @media (max-width: 768px) {
+            .hero { min-height: 80vh; padding: 5rem 1.25rem 3rem; }
+            .section { padding: 3.5rem 1.25rem; }
+            .arch-pipeline { flex-direction: column; gap: 0.25rem; }
+            .arch-arrow { transform: rotate(90deg); }
+            .carousel-bench-row { flex-direction: column; align-items: stretch; gap: 0.25rem; }
+            .carousel-bench-label { width: auto; text-align: left; }
+            .carousel-bench-slide { padding: 1.5rem 1.25rem; }
+            .carousel-stat-row { flex-direction: column; }
+            .viz-grid { grid-template-columns: 1fr; }
+            .nav-links { display: none; }
+            .hero-actions { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ════ Navigation ════ -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <a href="#" class="nav-logo">CBF<span>Kit</span></a>
+            <div class="nav-links">
+                <a href="#architecture">Architecture</a>
+                <a href="#performance">Performance</a>
+                <a href="#showcase">Showcase</a>
+                <a href="#safety">Safety</a>
+                <a href="#systems">Systems</a>
+                <a href="#visualization">Visualization</a>
+                <a href="https://github.com/bardhh/cbfkit" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ════ Hero ════ -->
+    <header class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">Open source · JAX</div>
+            <h1 class="hero-title">
+                Control barrier functions<br>
+                <span class="highlight">for robotics, in JAX.</span>
+            </h1>
+            <p class="hero-subtitle">
+                A Control Barrier Function toolbox built on JAX. Safety filters for
+                deterministic, disturbed, and stochastic dynamics &mdash; with MPPI planning,
+                Monte Carlo verification, and code generation for new systems.
+            </p>
+            <div class="hero-actions">
+                <a href="https://github.com/bardhh/cbfkit" class="btn btn-primary" target="_blank">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                    View on GitHub
+                </a>
+                <a href="https://arxiv.org/abs/2404.07158" class="btn btn-secondary" target="_blank">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    Read the Paper
+                </a>
+            </div>
+            <div class="hero-meta">
+                <span>March 2026</span>
+                <div class="hero-meta-sep"></div>
+                <span>Mitchell Black, Georgios Fainekos, Bardh Hoxha, Hideki Okamoto, Danil Prokhorov</span>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <span>Scroll</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
+        </div>
+    </header>
+
+    <article class="article">
+
+        <!-- ════ Introduction ════ -->
+        <section class="section">
+            <div class="container fade-up">
+                <p class="lead">
+                    As robots move from controlled lab environments into the real world &mdash; navigating
+                    city streets, sharing factory floors with humans, and flying through cluttered airspace &mdash;
+                    the question is no longer <em>can</em> they work, but <em>can we guarantee they are safe?</em>
+                </p>
+                <div class="prose">
+                    <p>
+                        Classical control gives us stability. Machine learning gives us adaptability.
+                        But neither alone provides <strong>formal safety guarantees at runtime</strong> &mdash; the
+                        mathematical promise that a robot will never collide, never exceed a boundary,
+                        never enter a dangerous state, regardless of what its nominal controller wants to do.
+                    </p>
+                    <p>
+                        This is the domain of <strong>Control Barrier Functions (CBFs)</strong>: a framework that
+                        acts as a safety filter on top of any controller, solving a constrained optimization
+                        problem at each timestep to find the closest safe action to the desired one. The theory
+                        is elegant. The implementations have historically been painful &mdash; slow, inflexible,
+                        and difficult to extend.
+                    </p>
+                    <p>
+                        <strong>CBFKit addresses this.</strong> It is built on
+                        <a href="https://github.com/google/jax">JAX</a>, so the safety filter is
+                        automatically differentiable, JIT-compiled, and vectorizable &mdash; the same code
+                        runs a single controller or thousands of Monte&nbsp;Carlo rollouts in parallel.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ Architecture ════ -->
+        <section id="architecture" class="section section-dark">
+            <div class="container-wide fade-up">
+                <div class="section-label">Architecture</div>
+                <h2 class="section-title">Composable Safety by Design</h2>
+                <p class="section-desc">
+                    Every component in CBFKit is a pure function. No class hierarchies, no inheritance chains &mdash;
+                    just composable building blocks that you snap together into a simulation pipeline.
+                </p>
+
+                <div class="arch-diagram">
+                    <div class="arch-pipeline">
+                        <div class="arch-node">
+                            <div class="arch-node-label">Planner</div>
+                            <div class="arch-node-sub">MPPI / RRT*</div>
+                        </div>
+                        <div class="arch-arrow">&rarr;</div>
+                        <div class="arch-node">
+                            <div class="arch-node-label">Nominal Ctrl</div>
+                            <div class="arch-node-sub">Goal reaching</div>
+                        </div>
+                        <div class="arch-arrow">&rarr;</div>
+                        <div class="arch-node" style="border-color: rgba(234,234,231,0.45); background: rgba(255,255,255,0.08);">
+                            <div class="arch-node-label">Safety Filter</div>
+                            <div class="arch-node-sub">CBF-CLF-QP</div>
+                        </div>
+                        <div class="arch-arrow">&rarr;</div>
+                        <div class="arch-node">
+                            <div class="arch-node-label">Dynamics</div>
+                            <div class="arch-node-sub">f(x) + g(x)u</div>
+                        </div>
+                        <div class="arch-arrow">&rarr;</div>
+                        <div class="arch-node">
+                            <div class="arch-node-label">Integrator</div>
+                            <div class="arch-node-sub">RK4 / Euler</div>
+                        </div>
+                        <div class="arch-arrow">&rarr;</div>
+                        <div class="arch-node">
+                            <div class="arch-node-label">Sensor</div>
+                            <div class="arch-node-sub">Noisy / perfect</div>
+                        </div>
+                        <div class="arch-arrow">&rarr;</div>
+                        <div class="arch-node">
+                            <div class="arch-node-label">Estimator</div>
+                            <div class="arch-node-sub">EKF / UKF</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="prose" style="color: var(--color-text-inverse);">
+                    <p style="color: rgba(234,234,231,0.7);">
+                        The safety filter sits at the heart of the pipeline. It receives the nominal control
+                        signal &mdash; whatever your planner or tracking controller wants to do &mdash;
+                        and solves a Quadratic Program to find the <strong>minimally invasive correction</strong> that
+                        keeps the system within its safe set. If the nominal command is already safe, it passes through
+                        unchanged. If not, the CBF bends it just enough.
+                    </p>
+                </div>
+
+                <div class="equation-block">
+                    <div class="eq-line">
+                        <span class="eq-term">min<sub>u</sub> &Vert;u &minus; u<sub>nom</sub>&Vert;&sup2;</span>
+                        <span class="eq-st">subject to</span>
+                        <span class="eq-term">h&#775;(x, u) + &alpha;(h(x)) &ge; 0</span>
+                    </div>
+                    <span class="equation-label">CBF-QP: find the closest safe action to the desired one</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ Performance ════ -->
+        <section id="performance" class="section section-dark" style="padding-top: 0;">
+            <div class="container-wide fade-up">
+                <div class="section-label">Performance</div>
+                <h2 class="section-title">JAX Under the Hood</h2>
+                <p class="section-desc">
+                    Built on JAX from the ground up. Automatic differentiation for barrier gradients.
+                    JIT compilation for real-time loop performance. <code>vmap</code> for massively
+                    parallel Monte Carlo safety verification.
+                </p>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">&lt;2ms</div>
+                        <div class="stat-label">Per-step CBF-QP solve</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">1000+</div>
+                        <div class="stat-label">Parallel Monte Carlo trials</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">100%</div>
+                        <div class="stat-label">Safety rate across parameter sweeps</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">0</div>
+                        <div class="stat-label">Barrier violations in benchmarks</div>
+                    </div>
+                </div>
+
+                <!-- Benchmark carousel -->
+                <blog-carousel loop="true">
+                    <ul>
+                        <!-- Slide 1: CBF-QP Step Time -->
+                        <li data-caption="CBF-QP solve time per simulation step, measured with JIT-compiled barrier evaluation.">
+                            <div class="carousel-bench-slide">
+                                <h3>CBF-QP Step Execution Time</h3>
+                                <div class="carousel-bench-subtitle">Per-step solve time by system complexity (lower is better)</div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">Single Integrator</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:25%">1.54 ms</div></div>
+                                </div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">Unicycle</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:28%">1.70 ms</div></div>
+                                </div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">Quadrotor 6-DOF</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:45%">2.80 ms</div></div>
+                                </div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">4-Robot Coordination</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:65%">4.10 ms</div></div>
+                                </div>
+                                <div class="carousel-stat-row">
+                                    <div class="carousel-stat-pill"><div class="carousel-stat-val">&lt;2ms</div><div class="carousel-stat-lbl">Typical solve time</div></div>
+                                    <div class="carousel-stat-pill"><div class="carousel-stat-val">100%</div><div class="carousel-stat-lbl">Safety rate</div></div>
+                                    <div class="carousel-stat-pill"><div class="carousel-stat-val">0</div><div class="carousel-stat-lbl">Barrier violations</div></div>
+                                </div>
+                            </div>
+                        </li>
+
+                        <!-- Slide 2: Monte Carlo GPU Throughput -->
+                        <li data-caption="GPU-accelerated Monte Carlo verification using jax.vmap. Throughput scales near-linearly with trial count.">
+                            <div class="carousel-bench-slide">
+                                <h3>Monte Carlo Safety Verification</h3>
+                                <div class="carousel-bench-subtitle">GPU-accelerated throughput via jax.vmap (higher is better)</div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">100 trials</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:30%">~30 trials/s</div></div>
+                                </div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">500 trials</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:55%">~120 trials/s</div></div>
+                                </div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">1,000 trials</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:85%">~220 trials/s</div></div>
+                                </div>
+                                <div class="carousel-stat-row">
+                                    <div class="carousel-stat-pill"><div class="carousel-stat-val">1000+</div><div class="carousel-stat-lbl">Parallel trials</div></div>
+                                    <div class="carousel-stat-pill"><div class="carousel-stat-val">7.3x</div><div class="carousel-stat-lbl">Throughput gain 100&rarr;1K</div></div>
+                                </div>
+                            </div>
+                        </li>
+
+                        <!-- Slide 3: MPPI Sampling -->
+                        <li data-caption="MPPI sampling performance with increasing sample count. JAX vectorization keeps per-sample cost near-constant.">
+                            <div class="carousel-bench-slide">
+                                <h3>MPPI Sampling Performance</h3>
+                                <div class="carousel-bench-subtitle">Trajectory rollout time vs. sample count (JIT-compiled)</div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">100 samples</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:15%">8 ms</div></div>
+                                </div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">500 samples</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:35%">22 ms</div></div>
+                                </div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">1,000 samples</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:60%">38 ms</div></div>
+                                </div>
+                                <div class="carousel-bench-row">
+                                    <div class="carousel-bench-label">5,000 samples</div>
+                                    <div class="carousel-bar-bg"><div class="carousel-bar" style="width:90%">55 ms</div></div>
+                                </div>
+                                <div class="carousel-stat-row">
+                                    <div class="carousel-stat-pill"><div class="carousel-stat-val">50x</div><div class="carousel-stat-lbl">More samples for ~7x time</div></div>
+                                    <div class="carousel-stat-pill"><div class="carousel-stat-val">50</div><div class="carousel-stat-lbl">Horizon steps</div></div>
+                                </div>
+                            </div>
+                        </li>
+
+                    </ul>
+                </blog-carousel>
+            </div>
+        </section>
+
+        <!-- ════ Showcase Gallery ════ -->
+        <section id="showcase" class="section section-alt">
+            <div class="container-wide fade-up">
+                <div class="section-label">Showcase</div>
+                <h2 class="section-title">Every Tile Is a Runnable Example</h2>
+                <p class="section-desc">
+                    Each animation below is rendered by a script in the repository &mdash;
+                    open a tile to read the source it came from.
+                </p>
+
+                <div class="gallery-grid">
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/gymnasium/safe_single_integrator.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/safe_rl_gymnasium.gif" alt="Safe RL: naive vs CBF-filtered policy in Gymnasium" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Safe RL with Gymnasium</div>
+                            <div class="gallery-desc">A CBF-QP projects every policy action to the safe set &mdash; no retraining.</div>
+                            <div class="gallery-src">examples/gymnasium/safe_single_integrator.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/neural_cbf/neural_cbf_obstacle_avoidance.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/neural_cbf.gif" alt="Agent avoiding an obstacle described by a learned neural barrier" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Neural CBF</div>
+                            <div class="gallery-desc">Barrier learned from labeled safe/unsafe samples.</div>
+                            <div class="gallery-src">examples/neural_cbf/neural_cbf_obstacle_avoidance.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/tutorials/multi_robot_3d_reachavoid.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/multi_robot_3d.gif" alt="Manim 3D render of 4-robot reach-avoid" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Multi-robot 3D reach-avoid</div>
+                            <div class="gallery-desc">4 robots, pairwise collision barriers, Manim render.</div>
+                            <div class="gallery-src">tutorials/multi_robot_3d_reachavoid.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/ellipsoidal_obstacle_cbf.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/risk_aware_cvar.gif" alt="Unicycle avoiding an ellipsoidal obstacle" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Ellipsoidal-obstacle CBF</div>
+                            <div class="gallery-desc">Unicycle reach-goal with linear class-K.</div>
+                            <div class="gallery-src">examples/unicycle/reach_goal/ellipsoidal_obstacle_cbf.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/stochastic_cbf.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/stochastic_cbf.gif" alt="Stochastic CBF trajectory under Brownian disturbance" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Stochastic CBF (SDE)</div>
+                            <div class="gallery-desc">Safety under Brownian disturbance.</div>
+                            <div class="gallery-src">examples/unicycle/reach_goal/stochastic_cbf.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/robust_cbf.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/robust_cbf.gif" alt="Robust CBF under worst-case bounded disturbance" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Robust CBF</div>
+                            <div class="gallery-desc">Worst-case bounded disturbance.</div>
+                            <div class="gallery-src">examples/unicycle/reach_goal/robust_cbf.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/mppi_cbf.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/mppi_rollouts.gif" alt="MPPI trajectory rollouts fanning toward the goal" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">MPPI rollout sampling</div>
+                            <div class="gallery-desc">Sampling-based planning, JIT-compiled.</div>
+                            <div class="gallery-src">examples/unicycle/reach_goal/mppi_cbf.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/single_integrator/mppi_reach_avoid.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/mppi_stl.gif" alt="MPPI reach-avoid trajectory" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">MPPI reach-avoid</div>
+                            <div class="gallery-desc">Goal + obstacle cost terms.</div>
+                            <div class="gallery-src">examples/single_integrator/mppi_reach_avoid.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/single_integrator/multi_robot_coordination.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/multi_robot_2d.gif" alt="Robots swapping positions with collision-avoidance barriers" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Multi-robot 2D</div>
+                            <div class="gallery-desc">Coordination via shared CBFs.</div>
+                            <div class="gallery-src">examples/single_integrator/multi_robot_coordination.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/fixed_wing/reach_drop_point/ekf.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/fixed_wing_3d.gif" alt="Fixed-wing UAV 3D reach-drop-point mission" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Fixed-wing aerial 3D</div>
+                            <div class="gallery-desc">UAV reach-drop-point in 3D.</div>
+                            <div class="gallery-src">examples/fixed_wing/reach_drop_point/ekf.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/pedestrian/navigate_among_pedestrians/head_on.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/pedestrian_head_on.gif" alt="Robot safely avoiding a head-on pedestrian" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Pedestrian head-on</div>
+                            <div class="gallery-desc">Dynamic-agent avoidance.</div>
+                            <div class="gallery-src">examples/pedestrian/navigate_among_pedestrians/head_on.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/unicycle/reach_goal/ekf.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/ekf_estimation.gif" alt="Unicycle reach-goal with EKF estimation under noisy sensing" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">EKF state estimation</div>
+                            <div class="gallery-desc">Reach-goal under measurement noise.</div>
+                            <div class="gallery-src">examples/unicycle/reach_goal/ekf.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/van_der_pol/regulation/perfect_sensing.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/van_der_pol_clf.gif" alt="Van der Pol oscillator regulated to the origin with a CLF" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Van der Pol (CLF)</div>
+                            <div class="gallery-desc">Nonlinear regulation to the origin.</div>
+                            <div class="gallery-src">examples/van_der_pol/regulation/perfect_sensing.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/double_integrator/mpc_tracking.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/mpc_double_integrator.gif" alt="MPC tracking a reference with a double integrator" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Model predictive control</div>
+                            <div class="gallery-desc">Receding-horizon LTI tracking.</div>
+                            <div class="gallery-src">examples/double_integrator/mpc_tracking.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/quadrotor_6dof/geometric_tracking.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/quadrotor_6dof.gif" alt="Quadrotor 6-DOF geometric tracking with altitude CBF" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Quadrotor 6-DOF</div>
+                            <div class="gallery-desc">Geometric SE(3) tracking + altitude CBF.</div>
+                            <div class="gallery-src">examples/quadrotor_6dof/geometric_tracking.py</div>
+                        </div>
+                    </a>
+                    <a class="gallery-card" href="https://github.com/bardhh/cbfkit/blob/main/examples/single_integrator/monte_carlo_safety.py" target="_blank" rel="noopener">
+                        <div class="gallery-media"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/monte_carlo_safety.gif" alt="200 stochastic CBF rollouts with live empirical risk" loading="lazy" decoding="async"></div>
+                        <div class="gallery-info">
+                            <div class="gallery-name">Monte Carlo verification</div>
+                            <div class="gallery-desc">200 stochastic rollouts via <code>jax.vmap</code>.</div>
+                            <div class="gallery-src">examples/single_integrator/monte_carlo_safety.py</div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ Code Example ════ -->
+        <section class="section">
+            <div class="container fade-up">
+                <div class="section-label">Developer Experience</div>
+                <h2 class="section-title">Express Safety in a Few Lines</h2>
+                <p class="section-desc">
+                    CBFKit's functional API lets you define dynamics, barriers, and controllers as
+                    composable building blocks. A complete safe simulation in under 40 lines.
+                </p>
+
+                <div class="code-block">
+                    <div class="code-header">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                        <span class="code-filename">unicycle_reach_goal.py</span>
+                    </div>
+<pre><span class="kw">import</span> jax.numpy <span class="kw">as</span> jnp
+<span class="kw">import</span> cbfkit.simulation.simulator <span class="kw">as</span> sim
+<span class="kw">import</span> cbfkit.systems.unicycle.models.accel_unicycle <span class="kw">as</span> unicycle
+<span class="kw">from</span> cbfkit.controllers.cbf_clf <span class="kw">import</span> vanilla_cbf_clf_qp_controller
+<span class="kw">from</span> cbfkit.certificates <span class="kw">import</span> concatenate_certificates, rectify_relative_degree
+<span class="kw">from</span> cbfkit.certificates.conditions.barrier_conditions <span class="kw">import</span> zeroing_barriers
+
+<span class="comment"># 1. Define dynamics</span>
+dynamics = unicycle.<fn>plant</fn>(lam=<span class="num">1.0</span>)
+
+<span class="comment"># 2. Define a nominal goal-reaching controller</span>
+nom_controller = unicycle.controllers.<fn>proportional_controller</fn>(
+    dynamics=dynamics, Kp_pos=<span class="num">1.0</span>, Kp_theta=<span class="num">1.0</span>
+)
+
+<span class="comment"># 3. Define obstacles and barrier functions</span>
+barriers = [
+    <fn>rectify_relative_degree</fn>(
+        function=<fn>ellipsoid_cbf</fn>(center, radii),
+        system_dynamics=dynamics,
+        state_dim=<span class="num">4</span>, form=<span class="str">"high-order"</span>,
+    )(certificate_conditions=zeroing_barriers.<fn>linear_class_k</fn>(<span class="num">5.0</span>))
+    <span class="kw">for</span> center, radii <span class="kw">in</span> obstacles
+]
+
+<span class="comment"># 4. Compose the safety filter</span>
+controller = <fn>vanilla_cbf_clf_qp_controller</fn>(
+    control_limits=jnp.array([<span class="num">100.0</span>, <span class="num">100.0</span>]),
+    dynamics_func=dynamics,
+    barriers=<fn>concatenate_certificates</fn>(*barriers),
+)
+
+<span class="comment"># 5. Run the simulation &mdash; JIT-compiled for real-time speed</span>
+x, u, z, p, *_ = sim.<fn>execute</fn>(
+    x0=jnp.array([<span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">0.785</span>]),
+    dt=<span class="num">0.01</span>, num_steps=<span class="num">1000</span>,
+    dynamics=dynamics, controller=controller,
+    nominal_controller=nom_controller,
+    use_jit=<span class="num">True</span>,
+)</pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ Safety Guarantees ════ -->
+        <section id="safety" class="section section-dark">
+            <div class="container-wide fade-up">
+                <div class="section-label">Safety Guarantees</div>
+                <h2 class="section-title">Beyond Vanilla CBFs</h2>
+                <p class="section-desc">
+                    Real-world robots face noise, disturbances, and model uncertainty. CBFKit provides a
+                    spectrum of CBF formulations that match the right safety guarantee to the right problem.
+                </p>
+
+                <div class="formulations-grid">
+                    <div class="formulation-card">
+                        <h4>Vanilla CBF</h4>
+                        <div class="formulation-eq">h&#775;(x,u) + &alpha;(h(x)) &ge; 0</div>
+                        <div class="formulation-desc">
+                            The classic formulation. Exponential and high-order relative degree
+                            support for systems where the barrier function does not have direct control authority.
+                        </div>
+                    </div>
+                    <div class="formulation-card">
+                        <h4>Robust CBF</h4>
+                        <div class="formulation-eq">h&#775;(x,u) + &alpha;(h(x)) &ge; sup<sub>w</sub> &Vert;Mw&Vert;</div>
+                        <div class="formulation-desc">
+                            For systems with bounded disturbances dx = f(x) + g(x)u + Mw. The barrier
+                            condition tightens to account for worst-case perturbations.
+                        </div>
+                    </div>
+                    <div class="formulation-card">
+                        <h4>Stochastic CBF</h4>
+                        <div class="formulation-eq">Lh(x,u) + &alpha;(h(x)) &ge; &beta;</div>
+                        <div class="formulation-desc">
+                            For stochastic differential equations dx = (f + gu)dt + &sigma;dw.
+                            Safety guarantees hold in expectation over the diffusion term.
+                        </div>
+                    </div>
+                    <div class="formulation-card">
+                        <h4>Risk-Aware CBF (CVaR)</h4>
+                        <div class="formulation-eq">CVaR<sub>&alpha;</sub>[h(x<sub>t+1</sub>)] &ge; &gamma;</div>
+                        <div class="formulation-desc">
+                            Adaptive Conditional Value-at-Risk formulation. Safety is defined over
+                            the tail of the distribution &mdash; guarding against rare catastrophic events.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="prose" style="color: var(--color-text-inverse); margin-top: 2rem;">
+                    <p style="color: rgba(234,234,231,0.7);">
+                        All formulations share the same compositional API. You can
+                        <strong>concatenate multiple barriers</strong> (obstacle avoidance + workspace bounds +
+                        inter-robot separation) into a single QP, swap in a different solver backend
+                        (jaxopt, cvxopt, or casadi), and switch between deterministic and stochastic
+                        dynamics &mdash; all without changing the rest of your pipeline.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ MPPI + CBF ════ -->
+        <section class="section section-alt">
+            <div class="container fade-up">
+                <div class="section-label">Planning</div>
+                <h2 class="section-title">MPPI Meets Safety Filters</h2>
+                <p class="section-desc">
+                    Sampling-based planning for complex environments, with CBF safety
+                    filtering on the executed trajectory. The best of both worlds.
+                </p>
+                <div class="prose">
+                    <p>
+                        <strong>Model Predictive Path Integral (MPPI)</strong> control generates
+                        candidate trajectories by sampling thousands of control sequences in parallel,
+                        weighting them by a user-defined cost function. CBFKit's MPPI implementation
+                        runs entirely in JAX &mdash; meaning the sampling, rollout, and cost evaluation
+                        are all JIT-compiled and GPU-acceleratable.
+                    </p>
+                    <p>
+                        The MPPI planner outputs a reference trajectory. At each timestep, the CBF
+                        safety filter intervenes <em>only if needed</em>, ensuring that the executed
+                        control never violates the barrier constraints. This decouples planning quality
+                        from safety &mdash; you get aggressive, cost-optimal plans with ironclad safety
+                        guarantees.
+                    </p>
+                </div>
+                <div class="features-grid" style="margin-top: 2rem;">
+                    <div class="feature-card">
+                        <div class="feature-title">1000+ parallel samples</div>
+                        <div class="feature-desc">
+                            Roll out thousands of candidate trajectories simultaneously using JAX's
+                            vectorization primitives. GPU acceleration makes this practical for real-time use.
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-title">JIT-compiled cost functions</div>
+                        <div class="feature-desc">
+                            Define stage and terminal costs as standard Python functions. JAX traces and
+                            compiles them once, then executes at native speed for every sample.
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-title">STL specifications</div>
+                        <div class="feature-desc">
+                            Express complex temporal objectives with Signal Temporal Logic. Reach region A
+                            within 5 seconds, then stay in region B for 3 seconds &mdash; all encoded as
+                            MPPI cost terms.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ Monte Carlo ════ -->
+        <section class="section">
+            <div class="container fade-up">
+                <div class="section-label">Verification</div>
+                <h2 class="section-title">GPU-Accelerated Monte Carlo Safety Verification</h2>
+                <p class="section-desc">
+                    Don't just simulate once. Simulate a thousand times in parallel and
+                    statistically verify that your controller is safe.
+                </p>
+                <div class="prose">
+                    <p>
+                        CBFKit's Monte Carlo engine uses <code>jax.vmap</code> to run hundreds to thousands
+                        of simulations simultaneously &mdash; each with different initial conditions, noise
+                        realizations, or disturbance profiles. The result is a statistical safety certificate:
+                        <strong>violation rates, minimum barrier values, and success probabilities</strong>
+                        across your entire operating envelope.
+                    </p>
+                    <p>
+                        Combined with the <strong>Optuna-powered parameter sweep engine</strong>, you can
+                        automatically search for the CBF and class-K function parameters that maximize
+                        performance while maintaining zero safety violations. The sweep engine tracks
+                        per-trial metrics and produces structured JSON results for downstream analysis.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ Systems Gallery ════ -->
+        <section id="systems" class="section section-alt">
+            <div class="container-wide fade-up">
+                <div class="section-label">Pre-Built Systems</div>
+                <h2 class="section-title">From Single Integrators to 6-DOF Quadrotors</h2>
+                <p class="section-desc">
+                    Eight ready-to-use robotic systems with dynamics, controllers, and barrier
+                    functions. Start running experiments in minutes, not days.
+                </p>
+
+                <div class="systems-grid">
+                    <div class="system-card">
+                        <div class="system-name">Unicycle</div>
+                        <div class="system-desc">Mobile robot with acceleration control. Reach-goal, reach-avoid, and obstacle avoidance examples.</div>
+                        <div class="system-tags">
+                            <span class="system-tag">CBF</span>
+                            <span class="system-tag">MPPI</span>
+                            <span class="system-tag">Stochastic</span>
+                            <span class="system-tag">Risk-Aware</span>
+                        </div>
+                    </div>
+                    <div class="system-card">
+                        <div class="system-name">Single Integrator</div>
+                        <div class="system-desc">First-order dynamics in 2D, 3D, or N-D. The simplest testbed for barrier function research.</div>
+                        <div class="system-tags">
+                            <span class="system-tag">2D/3D/ND</span>
+                            <span class="system-tag">EKF</span>
+                            <span class="system-tag">UKF</span>
+                        </div>
+                    </div>
+                    <div class="system-card">
+                        <div class="system-name">Quadrotor 6-DOF</div>
+                        <div class="system-desc">Full six-degree-of-freedom dynamics with geometric and proportional controllers. Multi-robot coordination.</div>
+                        <div class="system-tags">
+                            <span class="system-tag">3D</span>
+                            <span class="system-tag">Multi-Robot</span>
+                            <span class="system-tag">Geometric Ctrl</span>
+                        </div>
+                    </div>
+                    <div class="system-card">
+                        <div class="system-name">Fixed-Wing UAV</div>
+                        <div class="system-desc">Beard 2014 kinematic model. Reach-and-drop-point missions with 3D obstacle avoidance.</div>
+                        <div class="system-tags">
+                            <span class="system-tag">3D Flight</span>
+                            <span class="system-tag">Missions</span>
+                        </div>
+                    </div>
+                    <div class="system-card">
+                        <div class="system-name">Pedestrian</div>
+                        <div class="system-desc">Multi-agent pedestrian dynamics with crowd navigation scenarios: crossing, overtaking, head-on, and starburst.</div>
+                        <div class="system-tags">
+                            <span class="system-tag">Multi-Agent</span>
+                            <span class="system-tag">Crowd Nav</span>
+                        </div>
+                    </div>
+                    <div class="system-card">
+                        <div class="system-name">Van der Pol Oscillator</div>
+                        <div class="system-desc">Nonlinear limit-cycle dynamics. Lyapunov regulation with fixed-time, stochastic, and risk-aware variants.</div>
+                        <div class="system-tags">
+                            <span class="system-tag">Lyapunov</span>
+                            <span class="system-tag">Stochastic</span>
+                        </div>
+                    </div>
+                    <div class="system-card">
+                        <div class="system-name">Differential Drive</div>
+                        <div class="system-desc">Obstacle avoidance and human-aware navigation with barrier-activated and augmented CBF modes.</div>
+                        <div class="system-tags">
+                            <span class="system-tag">Human-Aware</span>
+                            <span class="system-tag">Dynamic Obs</span>
+                        </div>
+                    </div>
+                    <div class="system-card">
+                        <div class="system-name">Double Integrator</div>
+                        <div class="system-desc">Position + velocity state space. Used in adaptive CVaR-CBF controller development and testing.</div>
+                        <div class="system-tags">
+                            <span class="system-tag">CVaR</span>
+                            <span class="system-tag">Adaptive</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ Visualization ════ -->
+        <section id="visualization" class="section">
+            <div class="container-wide fade-up">
+                <div class="section-label">Visualization</div>
+                <h2 class="section-title">Three Backends, One API</h2>
+                <p class="section-desc">
+                    From interactive exploration to publication-quality renders.
+                    Choose the visualization backend that fits your workflow.
+                </p>
+
+                <div class="viz-grid">
+                    <div class="viz-card">
+                        <div class="viz-preview plotly">
+                            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                                <rect x="10" y="10" width="60" height="60" rx="8" stroke="#2b2c2e" stroke-width="2" fill="none"/>
+                                <polyline points="18,55 30,35 42,45 54,20 62,30" stroke="#3d4248" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                                <circle cx="30" cy="35" r="3" fill="#3d4248"/>
+                                <circle cx="42" cy="45" r="3" fill="#3d4248"/>
+                                <circle cx="54" cy="20" r="3" fill="#3d4248"/>
+                            </svg>
+                        </div>
+                        <div class="viz-info">
+                            <div class="viz-name">Plotly</div>
+                            <div class="viz-desc">Interactive 3D HTML visualizations. Rotate, zoom, and inspect trajectories in the browser. Default backend.</div>
+                        </div>
+                    </div>
+                    <div class="viz-card">
+                        <div class="viz-preview matplotlib">
+                            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                                <rect x="10" y="10" width="60" height="60" rx="8" stroke="#2b2c2e" stroke-width="2" fill="none"/>
+                                <path d="M20,60 Q30,20 50,40 T70,25" stroke="#9aa0a6" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                                <circle cx="35" cy="45" r="8" stroke="#3d4248" stroke-width="2" fill="rgba(61,66,72,0.18)"/>
+                                <circle cx="55" cy="30" r="6" stroke="#2b2c2e" stroke-width="2" fill="rgba(43,44,46,0.14)"/>
+                            </svg>
+                        </div>
+                        <div class="viz-info">
+                            <div class="viz-name">Matplotlib</div>
+                            <div class="viz-desc">High-quality MP4 and GIF export. Publication-ready trajectory plots with obstacle rendering.</div>
+                        </div>
+                    </div>
+                    <div class="viz-card">
+                        <div class="viz-preview manim">
+                            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                                <rect x="10" y="10" width="60" height="60" rx="8" stroke="#2b2c2e" stroke-width="2" fill="none"/>
+                                <path d="M25,55 L40,20 L55,55" stroke="#3d4248" stroke-width="2" fill="none" stroke-linejoin="round"/>
+                                <circle cx="40" cy="40" r="12" stroke="#2b2c2e" stroke-width="2" fill="rgba(61,66,72,0.15)"/>
+                                <line x1="28" y1="40" x2="52" y2="40" stroke="#2b2c2e" stroke-width="1.5" stroke-dasharray="3,3"/>
+                            </svg>
+                        </div>
+                        <div class="viz-info">
+                            <div class="viz-name">Manim</div>
+                            <div class="viz-desc">3D mathematical animations with distance-metric panels, safety bubbles, and camera motion.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="prose" style="margin-top: 2rem;">
+                    <p>
+                        The unified <code>CBFAnimator</code> class provides a single interface across all three
+                        backends. Visualize 2D trajectories, 3D multi-robot coordination with distance-to-goal
+                        panels, minimum inter-robot distance tracking, and per-robot safety metrics &mdash;
+                        all generated from the same simulation results.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ Code Generation ════ -->
+        <section class="section section-alt">
+            <div class="container fade-up">
+                <div class="section-label">Extensibility</div>
+                <h2 class="section-title">Generate New Systems Automatically</h2>
+                <p class="section-desc">
+                    Define dynamics as symbolic expressions. CBFKit's code generator builds a
+                    complete system module with controllers, barriers, and ROS 2 nodes.
+                </p>
+                <div class="prose">
+                    <p>
+                        The <strong>code generation engine</strong> uses Jinja2 templates to transform symbolic
+                        dynamics definitions into fully typed Python modules. Specify your drift dynamics as
+                        string expressions, provide a control matrix, and list your barrier function formulas.
+                        CBFKit generates a complete package: plant model, barrier functions with automatic
+                        differentiation, Lyapunov functions, and optionally ROS 2 nodes for deployment.
+                    </p>
+                    <p>
+                        This is how multi-robot coordination scales. Instead of hand-coding N(N-1)/2 inter-robot
+                        collision avoidance barriers, you define the pattern once and generate for any number of
+                        agents. The 3D multi-robot tutorial demonstrates this with 4 robots, 6 pairwise collision
+                        barriers, and 4 obstacle barriers &mdash; all auto-generated and composed into a single QP.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════ Tutorials ════ -->
+        <section class="section">
+            <div class="container-wide fade-up">
+                <div class="section-label">Getting Started</div>
+                <h2 class="section-title">Tutorials for Every Level</h2>
+                <p class="section-desc">
+                    From first barrier function to multi-robot 3D reach-avoid with MPPI.
+                    Each tutorial builds on the last.
+                </p>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-num">01</div>
+                        <div class="feature-title">Code Generation Tutorial</div>
+                        <div class="feature-desc">
+                            Generate a Van der Pol oscillator system from scratch &mdash;
+                            dynamics, controllers, barriers, and ROS 2 nodes.
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-num">02</div>
+                        <div class="feature-title">Multi-Robot Coordination</div>
+                        <div class="feature-desc">
+                            N-robot collision avoidance with inter-robot CBF constraints.
+                            Composable barrier packaging for scalable multi-agent safety.
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-num">03</div>
+                        <div class="feature-title">MPPI + CBF Reach-Avoid</div>
+                        <div class="feature-desc">
+                            Sampling-based planning with safety filtering.
+                            Navigate complex obstacle fields with formal guarantees.
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-num">04</div>
+                        <div class="feature-title">MPPI + STL Specifications</div>
+                        <div class="feature-desc">
+                            Signal Temporal Logic objectives encoded as MPPI cost terms.
+                            Express complex time-bounded reach-avoid missions.
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-num">05</div>
+                        <div class="feature-title">Dynamic Obstacles</div>
+                        <div class="feature-desc">
+                            Single integrator with moving obstacles. Time-varying barrier
+                            functions that track obstacle state.
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-num">06</div>
+                        <div class="feature-title">3D Multi-Robot Reach-Avoid</div>
+                        <div class="feature-desc">
+                            The full stack: 4 robots in 3D, MPPI planning, CBF safety,
+                            code generation, and Manim visualization.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </article>
+
+    <!-- ════ CTA ════ -->
+    <section class="cta-section">
+        <div class="cta-content">
+            <h2 class="cta-title">Get started</h2>
+            <p class="cta-desc">
+                CBFKit is open source and ready for your research.
+                Install it in one line, run an example in five minutes.
+            </p>
+            <div class="cta-actions">
+                <a href="https://github.com/bardhh/cbfkit" class="btn btn-primary" target="_blank">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                    GitHub Repository
+                </a>
+                <a href="https://arxiv.org/abs/2404.07158" class="btn btn-secondary" target="_blank">
+                    Read the Paper
+                </a>
+            </div>
+            <div class="cta-pip">
+                <code>pip install cbfkit</code>
+            </div>
+        </div>
+    </section>
+
+    <!-- ════ Footer ════ -->
+    <footer class="footer">
+        <div class="footer-cite">
+            <div class="footer-cite-title">Citation</div>
+<pre>@misc{black2024cbfkit,
+  title   = {CBFKIT: A Control Barrier Function Toolbox for Robotics Applications},
+  author  = {Mitchell Black and Georgios Fainekos and Bardh Hoxha
+             and Hideki Okamoto and Danil Prokhorov},
+  year    = {2024},
+  eprint  = {2404.07158},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.RO}
+}</pre>
+        </div>
+        <div class="footer-links">
+            <a href="https://github.com/bardhh/cbfkit">GitHub</a>
+            <a href="https://arxiv.org/abs/2404.07158">arXiv</a>
+            <a href="https://github.com/bardhh/cbfkit/tree/main/tutorials">Tutorials</a>
+            <a href="https://github.com/bardhh/cbfkit/tree/main/examples">Examples</a>
+        </div>
+        <p class="footer-copy">CBFKit &mdash; Open-source safe robotics control.</p>
+    </footer>
+
+    <!-- ════ Scripts ════ -->
+    <script src="blog-carousel.js?v=2"></script>
+    <script>
+        // ── Scroll-triggered fade-in animations ──
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+        document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+        // ── Smooth scroll for nav links ──
+        document.querySelectorAll('.nav-links a[href^="#"]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = document.querySelector(link.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

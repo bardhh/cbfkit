@@ -228,3 +228,6 @@ jax_cache/
 
 # Generated results
 results/
+
+# Local-only launch notes (not published to the repo)
+docs/launch/

@@ -68,3 +68,31 @@ jobs:
         CBFKIT_TEST_MODE: "1"
       run: |
         pytest -m "slow" tests
+
+  core-import:
+    name: Slim-core import (no extras)
+    runs-on: ubuntu-latest
+    env:
+      JAX_PLATFORM_NAME: cpu
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+    - name: Install core only (no extras)
+      run: pip install .
+    - name: Assert the default import surface stays lean
+      run: |
+        python - <<'PY'
+        import sys
+        import cbfkit
+        from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+        from cbfkit.optimization.quadratic_program import get_solver
+        get_solver("fast")
+        get_solver("jaxopt")
+        heavy = {"casadi", "cvxopt", "kvxopt", "plotly"}
+        leaked = sorted(m for m in sys.modules if m.split(".")[0] in heavy)
+        assert not leaked, f"Heavy optional deps leaked into the default import: {leaked}"
+        print("OK: default import surface is lean (no casadi/cvxopt/plotly).")
+        PY

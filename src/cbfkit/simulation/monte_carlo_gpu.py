@@ -186,7 +186,6 @@ def conduct_monte_carlo_gpu_multiseed(
         A list of ``MonteCarloGPUResults``, one per seed.
     """
     n_seeds = len(seeds)
-    total = n_seeds * n_trials
 
     # Generate keys and initial states for all seeds × trials
     all_keys_list = []

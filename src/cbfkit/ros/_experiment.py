@@ -9,6 +9,7 @@ from cbfkit.utils.user_types import (
     Covariance,
     Estimate,
     EstimatorCallable,
+    Time,
 )
 
 

@@ -72,7 +72,6 @@ def animate(
     from cbfkit.utils.animator import AnimationConfig, CBFAnimator
 
     states_np = np.asarray(states)
-    estimates_np = np.asarray(estimates)
 
     animator = CBFAnimator(
         states_np,
@@ -108,9 +107,7 @@ def animate(
         (selected_line,) = ax.plot([], [], "b", linewidth=2)
 
         sampled_key = (
-            "sampled_x_traj"
-            if "sampled_x_traj" in controller_data_keys
-            else "robot_sampled_states"
+            "sampled_x_traj" if "sampled_x_traj" in controller_data_keys else "robot_sampled_states"
         )
         state_dim = mppi_args["robot_state_dim"]
 
