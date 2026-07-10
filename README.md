@@ -21,8 +21,13 @@ CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barr
   <em>MPPI rollout sampling &nbsp;|&nbsp; EKF state estimation</em>
 </p>
 
-Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx = (f(x) + g(x)u)dt + \sigma(x)dw$
+Supported dynamics: 
 
+<p align="center">
+$\dot{x} = f(x) + g(x)u$, <br>
+$\dot{x} = f(x) + g(x)u + Mw$, <br>
+$dx = (f(x) + g(x)u)dt + \sigma(x)dw$
+</p>
 ## Quick Start
 
 Requires **Python 3.10--3.12**. Install directly from GitHub:
