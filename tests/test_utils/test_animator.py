@@ -78,7 +78,9 @@ class TestCBFAnimatorBuild:
         plt.close(fig)
 
     def test_build_sets_limits_and_labels(self, simple_states):
-        a = CBFAnimator(simple_states, x_lim=(-5, 5), y_lim=(-3, 3), title="Test", backend="matplotlib")
+        a = CBFAnimator(
+            simple_states, x_lim=(-5, 5), y_lim=(-3, 3), title="Test", backend="matplotlib"
+        )
         fig, ax = a.build()
         assert ax.get_xlim() == (-5, 5)
         assert ax.get_ylim() == (-3, 3)
@@ -259,7 +261,9 @@ class TestCBFAnimatorSave:
 
     def test_save_gif_fallback(self, simple_states, tmp_path):
         """Force GIF fallback by using a config and verifying some file is created."""
-        a = CBFAnimator(simple_states, dt=0.1, config=AnimationConfig(fps=5, dpi=50), backend="matplotlib")
+        a = CBFAnimator(
+            simple_states, dt=0.1, config=AnimationConfig(fps=5, dpi=50), backend="matplotlib"
+        )
         a.add_trajectory(x_idx=0, y_idx=1)
         path = str(tmp_path / "test_anim.mp4")
         result = a.save(path)
@@ -423,7 +427,72 @@ class TestImportGuard:
 
 
 class TestManimBackend:
-    def test_manim_backend_accepted_but_not_implemented(self, simple_states):
-        """backend='manim' is a valid value but raises NotImplementedError for 2D."""
-        with pytest.raises(NotImplementedError, match="Manim 2D backend not yet implemented"):
+    """2D Manim backend: construction, dispatch, and guards.
+
+    Dependency-free tests monkeypatch ``_HAS_MANIM`` / the render path so
+    they run in CI (where the ``manim`` extra is not installed); the real
+    render smoke test skips without manim.
+    """
+
+    def test_manim_backend_raises_import_error_when_missing(self, simple_states, monkeypatch):
+        from cbfkit.utils.animators import deps
+
+        monkeypatch.setattr(deps, "_HAS_MANIM", False)
+        with pytest.raises(ImportError, match=r"cbfkit\[manim\]"):
             CBFAnimator(simple_states, backend="manim")
+
+    def test_manim_invalid_quality_raises_value_error(self, simple_states):
+        # Quality is validated before the optional dependency is required,
+        # so this fails loudly whether or not manim is installed.
+        with pytest.raises(ValueError, match="Unknown Manim backend"):
+            CBFAnimator(simple_states, backend="manim-ultra")
+
+    @pytest.mark.parametrize(
+        "backend,quality",
+        [
+            ("manim", "low_quality"),
+            ("manim-low", "low_quality"),
+            ("manim-medium", "medium_quality"),
+            ("manim-high", "high_quality"),
+            ("manim-production", "production_quality"),
+        ],
+    )
+    def test_manim_quality_parsing(self, simple_states, backend, quality, monkeypatch):
+        from cbfkit.utils.animators import deps
+
+        monkeypatch.setattr(deps, "_HAS_MANIM", True)
+        a = CBFAnimator(simple_states, backend=backend)
+        assert a._manim_quality == quality
+
+    def test_manim_save_dispatches_to_backend(self, simple_states, monkeypatch, tmp_path):
+        from cbfkit.utils.animators import deps
+
+        monkeypatch.setattr(deps, "_HAS_MANIM", True)
+        a = CBFAnimator(simple_states, backend="manim-medium")
+
+        recorded = {}
+
+        def fake_save(path):
+            recorded["path"] = path
+            recorded["quality"] = a._manim_quality
+            return path
+
+        monkeypatch.setattr(a, "_save_manim", fake_save)
+        out = a.save(str(tmp_path / "anim.mp4"))
+        assert recorded["path"] == out
+        assert recorded["quality"] == "medium_quality"
+
+    def test_manim_real_render_smoke(self, simple_states, tmp_path):
+        from cbfkit.utils.animators.deps import _HAS_MANIM
+
+        if not _HAS_MANIM:
+            pytest.skip("manim not installed")
+
+        a = CBFAnimator(simple_states[:10], dt=0.1, backend="manim", title="Test", aspect="equal")
+        a.add_goal((1.0, 0.0), radius=0.2, color="g")
+        a.add_obstacle((0.0, 0.5), radius=0.3, color="k")
+        a.add_agent(x_idx=0, y_idx=1, body_radius=0.1, body_color="blue")
+        a.show_time()
+        out = a.save(str(tmp_path / "manim_smoke.mp4"))
+        assert os.path.exists(out)
+        assert os.path.getsize(out) > 0
