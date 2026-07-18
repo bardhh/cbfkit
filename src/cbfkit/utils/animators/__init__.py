@@ -9,12 +9,13 @@ Supports three backends:
 * ``"matplotlib"`` — generates MP4 / GIF animations via ``FuncAnimation``.
 * ``"plotly"`` (default) — generates interactive HTML files with play/pause
   controls and a timeline slider.  Requires ``pip install cbfkit[plotly]``.
-* ``"manim"`` — high-quality 3D animations (MP4) via Manim.  Currently only
-  available for 3D multi-robot scenes via :func:`visualize_3d_multi_robot`.
-  Requires ``pip install cbfkit[manim]``.
+* ``"manim"`` / ``"manim-<quality>"`` — high-quality MP4 / GIF animations via
+  Manim, for both :class:`CBFAnimator` 2D scenes and 3D multi-robot scenes
+  (:func:`visualize_3d_multi_robot`).  Requires ``pip install cbfkit[manim]``.
 """
 
 from .animator import CBFAnimator
+from .manim_backend import CBFAnimator2DScene
 from .config import AnimationConfig, DEFAULT_CONFIG
 from .deps import (
     _HAS_MANIM,
@@ -29,6 +30,7 @@ from .helpers import save_animation
 __all__ = [
     "AnimationConfig",
     "CBFAnimator",
+    "CBFAnimator2DScene",
     "DEFAULT_CONFIG",
     "save_animation",
     "_HAS_MATPLOTLIB",
