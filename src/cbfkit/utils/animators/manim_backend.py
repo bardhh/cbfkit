@@ -37,8 +37,8 @@ try:
         TracedPath,  # noqa: F401  (re-exported for parity with the 3D module)
         ValueTracker,
         VGroup,
-        config,
         rate_functions,
+        tempconfig,
     )
 
     _MANIM_AVAILABLE = True
@@ -419,15 +419,23 @@ class _ManimMixin:
 
         scene_cls = self._build_manim()
 
-        config.quality = self._manim_quality
+        overrides = {
+            "quality": self._manim_quality,
+            # Caching keys partial movie files by animation hash; with a fresh
+            # media dir per render, stale in-process cache entries would point
+            # at deleted files and crash a second render, so disable it.
+            "disable_caching": True,
+        }
         if path.lower().endswith(".gif"):
-            config.format = "gif"
+            overrides["format"] = "gif"
         # Render intermediates in a temp dir so the caller's cwd stays clean;
-        # the finished video is copied to *path* below.
+        # the finished video is copied to *path* below.  tempconfig scopes the
+        # global Manim config so repeated renders in one process stay isolated.
         with tempfile.TemporaryDirectory(prefix="cbfkit_manim_") as tmp_media:
-            config.media_dir = tmp_media
-            scene = scene_cls()
-            scene.render()
+            overrides["media_dir"] = tmp_media
+            with tempconfig(overrides):
+                scene = scene_cls()
+                scene.render()
             # For MP4 the file writer reports the exact output path; for GIF
             # it still reports the .mp4 name, so fall back to globbing the
             # media dir for the rendered file with the requested extension.
@@ -454,7 +462,6 @@ class _ManimMixin:
     def _show_manim(self):
         """Render and open the result in the default player (Manim preview)."""
         scene_cls = self._build_manim()
-        config.quality = self._manim_quality
-        config.preview = True
-        scene = scene_cls()
-        scene.render()
+        with tempconfig({"quality": self._manim_quality, "preview": True, "disable_caching": True}):
+            scene = scene_cls()
+            scene.render()

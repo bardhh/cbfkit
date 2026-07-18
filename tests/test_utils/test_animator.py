@@ -496,3 +496,17 @@ class TestManimBackend:
         out = a.save(str(tmp_path / "manim_smoke.mp4"))
         assert os.path.exists(out)
         assert os.path.getsize(out) > 0
+
+    def test_manim_repeated_renders_same_process(self, simple_states, tmp_path):
+        """Regression: a second render in the same process must not reuse
+        cached partial-movie files from the first render's deleted temp dir."""
+        from cbfkit.utils.animators.deps import _HAS_MANIM
+
+        if not _HAS_MANIM:
+            pytest.skip("manim not installed")
+
+        for i in range(2):
+            a = CBFAnimator(simple_states[:8], dt=0.1, backend="manim")
+            a.add_agent(x_idx=0, y_idx=1, body_radius=0.1)
+            out = a.save(str(tmp_path / f"repeat_{i}.mp4"))
+            assert os.path.getsize(out) > 0
