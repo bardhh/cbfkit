@@ -309,6 +309,87 @@ class TestSaveAnimation:
 
 
 # ---------------------------------------------------------------------------
+# Prediction computation (backend-shared, dependency-free)
+# ---------------------------------------------------------------------------
+
+
+class TestPredictionComputation:
+    """Cover ``CBFAnimator._compute_prediction`` directly.
+
+    This is the shared core that every backend's prediction rendering calls
+    (matplotlib, plotly, and the Manim ``_prediction_group`` updater), so it
+    runs in CI without the optional ``manim`` extra. The Manim smoke test
+    exercises the render path but skips whenever manim is absent — this keeps
+    the prediction logic itself verified everywhere.
+    """
+
+    def test_linear_source_constant_velocity(self):
+        # Explicit (x, y, vx, vy) columns so the prediction is meaningful,
+        # unlike the (x, y, v, theta) `simple_states` fixture.
+        states = np.array(
+            [
+                [0.0, 0.0, 1.0, 2.0],
+                [0.5, 1.0, 1.0, 2.0],
+            ]
+        )
+        a = CBFAnimator(states, dt=0.1)
+        a.add_prediction(
+            source="linear",
+            agent_x_idx=0, agent_y_idx=1,
+            agent_vx_idx=2, agent_vy_idx=3,
+            horizon=4,
+        )
+        spec = a._predictions[0]
+        px, py = a._compute_prediction(spec, frame=0)
+
+        assert len(px) == len(py) == 4
+        # p + v * dt * k, with p=(0,0), v=(1,2), dt=0.1
+        assert px == pytest.approx([0.0, 0.1, 0.2, 0.3])
+        assert py == pytest.approx([0.0, 0.2, 0.4, 0.6])
+
+    def test_linear_source_zero_velocity_is_degenerate(self):
+        # Mirrors the smoke test at frame 0: the fixture's speed column is 0,
+        # so every predicted point collapses onto the current position. Pinned
+        # here (in CI) since the manim render can't assert on it.
+        states = np.array([[3.0, -1.0, 0.0, 0.0]])
+        a = CBFAnimator(states, dt=0.1)
+        a.add_prediction(
+            source="linear",
+            agent_x_idx=0, agent_y_idx=1,
+            agent_vx_idx=2, agent_vy_idx=3,
+            horizon=5,
+        )
+        px, py = a._compute_prediction(a._predictions[0], frame=0)
+        assert px == [3.0] * 5
+        assert py == [-1.0] * 5
+
+    def test_data_source_reads_trajectory_rows(self):
+        states = np.zeros((3, 2))
+        # One (2, H) trajectory array per frame; rows are x / y.
+        traj_frames = [
+            np.array([[0.0, 1.0, 2.0], [0.0, 0.5, 1.0]]),
+            np.array([[1.0, 2.0, 3.0], [1.0, 1.5, 2.0]]),
+        ]
+        a = CBFAnimator(states, dt=0.1)
+        a.add_prediction(source="data", trajectory_data=traj_frames)
+        spec = a._predictions[0]
+
+        px, py = a._compute_prediction(spec, frame=1)
+        assert px == [1.0, 2.0, 3.0]
+        assert py == [1.0, 1.5, 2.0]
+
+    def test_data_source_out_of_range_returns_empty(self):
+        states = np.zeros((3, 2))
+        a = CBFAnimator(states, dt=0.1)
+        a.add_prediction(
+            source="data",
+            trajectory_data=[np.array([[0.0, 1.0], [0.0, 1.0]])],
+        )
+        px, py = a._compute_prediction(a._predictions[0], frame=5)
+        assert px == [] and py == []
+
+
+# ---------------------------------------------------------------------------
 # Plotly backend
 # ---------------------------------------------------------------------------
 
@@ -493,6 +574,12 @@ class TestManimBackend:
         a.add_obstacle((0.0, 0.5), radius=0.3, color="k")
         a.add_agent(x_idx=0, y_idx=1, body_radius=0.1, body_color="blue")
         a.show_time()
+        a.add_prediction(
+            source="linear",
+            agent_x_idx=0, agent_y_idx=1,
+            agent_vx_idx=2, agent_vy_idx=3,
+            horizon=5,
+        )
         out = a.save(str(tmp_path / "manim_smoke.mp4"))
         assert os.path.exists(out)
         assert os.path.getsize(out) > 0
