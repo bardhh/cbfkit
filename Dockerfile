@@ -33,24 +33,17 @@ EXPOSE 8888
 
 WORKDIR /home/cbfkit
 
-# # Copy the project files
-COPY pyproject.toml ./
-
 # Set the PYTHONPATH to include /home and project directories
 ENV PYTHONPATH="/home:/home/cbfkit:/home/cbfkit/src:${PYTHONPATH}"
 
-# Copy dependency definitions first to leverage caching
-COPY pyproject.toml uv.lock ./
-
-# Install dependencies using uv (system-wide)
-# We use --no-root to install only dependencies defined in pyproject.toml/uv.lock
-# This prevents the command from failing due to missing source code
-RUN uv pip install --system --no-root .
-
-# Copy the project files
+# Copy the source before installing.  The version is read from
+# src/cbfkit/VERSION via [tool.setuptools.dynamic], and setuptools treats a
+# missing VERSION file as a warning rather than an error -- so installing from
+# pyproject.toml alone quietly produces an empty cbfkit 0.0.0.
 COPY . .
 
-# Install the project itself
+# --system is required: uv installs into a virtualenv by default and aborts
+# when it cannot find one, which is always the case in this image.
 RUN uv pip install --system .
 
 # Source the ROS 2 environment for all users when starting a shell

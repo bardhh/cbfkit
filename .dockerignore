@@ -1,5 +1,16 @@
+# Keeps the build context small.  The Dockerfile does `COPY . .`, so anything
+# not excluded here is shipped into the image, and generated animation output
+# dwarfs the source tree (examples/ and tutorials/ are ~186 MB on disk but only
+# ~736 KB tracked).
+#
+# README.md and LICENSE must NOT be excluded: setuptools reads both when it
+# builds the wheel metadata.
+
 .git
 .gitignore
+.github
+
+# Python build and cache artefacts
 **/__pycache__
 **/*.pyc
 **/*.pyo
@@ -8,10 +19,31 @@
 **/*.dylib
 **/*.o
 **/*.swp
+**/*.egg-info
+build/
+dist/
 .venv
 .env
-mypy_cache
+.mypy_cache
 .pytest_cache
+.ruff_cache
 .ipynb_checkpoints
+
+# Generated figures, animations and rendered notebooks.  Safe to drop: src/
+# contains no media, and package-data is limited to codegen/templates/*.j2,
+# py.typed and VERSION.
+media/
+**/*.gif
+**/*.mp4
+**/*.png
+**/*.html
+
+# Prose and local tooling state, not needed to run the library
+docs/
+paper/
+blog/
+.omc/
+.playwright-mcp/
+
 __MACOSX
 .DS_Store

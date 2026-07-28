@@ -1,14 +1,19 @@
 """
-Root conftest.py - Loads environment variables from .env file.
+Root conftest.py - test-session environment setup.
 
-This module:
-1. Uses python-dotenv to load .env file (if present)
-2. Sets environment variables for mypy, ruff, pytest, and Python bytecode caches
-3. Sets JAX/XLA GPU memory configuration if specified
-4. Configures pytest's cache directory dynamically
+pytest.ini anchors the rootdir here, so pytest imports this before any test
+module.  That makes it the earliest available hook for process-wide setup:
 
-Environment variables are only set if not already present in the environment,
-allowing system-level overrides.
+1. Loads a .env file from the project root via python-dotenv, when both the
+   file and the package are present.  Existing environment variables win.
+2. Puts ./src at the front of sys.path, so the checkout is exercised rather
+   than an unrelated cbfkit sitting in site-packages.
+3. Defaults JAX to the CPU backend, which stops sandboxed and CI hosts from
+   crashing on a Metal/GPU backend that is visible but not usable.
+4. Honours PYTEST_CACHE_DIR, for keeping the cache off a synced folder.
+
+Note the reach of step 1: .env only affects code running inside this process.
+mypy, ruff and black are separate processes and never see it.
 """
 
 import os
@@ -22,6 +27,7 @@ except ImportError:
     # is not installed in the current interpreter.
     def load_dotenv(*_args, **_kwargs):
         return False
+
 
 # Load .env file from project root (won't override existing env vars)
 load_dotenv(Path(__file__).parent / ".env")

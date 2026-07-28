@@ -5,7 +5,7 @@ services:
     platform: linux/arm64
     build:
       context: ../
-      dockerfile: .devcontainer/Dockerfile
+      dockerfile: Dockerfile
     volumes:
       - ../:/home/cbfkit
       - ${SSH_KEYS_DIR:-~/.ssh}:/root/.ssh:ro
