@@ -21,8 +21,13 @@ CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barr
   <em>MPPI rollout sampling &nbsp;|&nbsp; EKF state estimation</em>
 </p>
 
-Supported dynamics: $\dot{x} = f(x) + g(x)u$, $\dot{x} = f(x) + g(x)u + Mw$, $dx = (f(x) + g(x)u)dt + \sigma(x)dw$
+Supported dynamics: 
 
+<p align="center">
+$\dot{x} = f(x) + g(x)u$, <br>
+$\dot{x} = f(x) + g(x)u + Mw$, <br>
+$dx = (f(x) + g(x)u)dt + \sigma(x)dw$
+</p>
 ## Quick Start
 
 Requires **Python 3.10--3.12**. Install directly from GitHub:
@@ -137,7 +142,7 @@ python benchmarks/qp_solver_comparison.py
 
 #### Multi-robot 3D coordination
 
-Cinematic 3D simulation rendering with Manim. Multi-robot reach-avoid in 3D, rendered via CBFKit's Manim backend. Shows the visualization stack scales from quick matplotlib plots to publication-quality 3D animations.
+Cinematic 3D simulation rendering with Manim. Multi-robot reach-avoid in 3D, rendered via CBFKit's Manim backend. Shows the visualization stack scales from quick matplotlib plots to publication-quality 3D animations. The same backend also renders 2D `CBFAnimator` scenes: pass `backend="manim"` (or `"manim-<low|medium|high|production>"`) to any `CBFAnimator` and `save("out.mp4")` produces a publication-quality video (`.gif` also supported).
 
 <p align="center"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/multi_robot_3d.gif" width="70%" alt="Manim 3D render of multi-robot reach-avoid"></p>
 

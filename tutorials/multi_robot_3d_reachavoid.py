@@ -42,7 +42,8 @@ CONTROL_DIM = CONTROL_DIM_PER_ROBOT * NUM_ROBOTS
 ACTUATION_LIMITS = jnp.full((CONTROL_DIM,), 10)
 
 # Barrier Parameters
-D_MIN_SQUARED = 0.1  # Minimum distance squared between robots
+D_MIN_SQUARED = 0.25  # Minimum separation squared between robots
+D_MIN = float(np.sqrt(D_MIN_SQUARED))  # => robots must stay 0.5 apart
 OBS_RADIUS = 8.0  # Obstacle sphere radius
 OBS_RADIUS_SQUARED = OBS_RADIUS**2  # Obstacle radius squared for barrier
 
@@ -56,18 +57,22 @@ LYAPUNOV_C = 0.8  # Exponential stability constant
 INITIAL_STATE = np.zeros(STATE_DIM)
 goals = np.zeros(STATE_DIM)
 
+# Seeded so the scenario -- and therefore the safety margins it demonstrates --
+# is the same on every run.
+rng = np.random.default_rng(0)
+
 radius = 15
 for i in range(NUM_ROBOTS):
     angle = 2 * np.pi * i / NUM_ROBOTS
     idx = STATE_DIM_PER_ROBOT * i
 
     # Initial positions (distributed in a circle with some noise)
-    INITIAL_STATE[idx] = radius * np.cos(angle) + np.random.normal(0.5, 1)  # x
-    INITIAL_STATE[idx + 1] = radius * np.sin(angle) + np.random.normal(0.5, 1)  # y
-    INITIAL_STATE[idx + 2] = np.random.normal(-3, 3)  # z
+    INITIAL_STATE[idx] = radius * np.cos(angle) + rng.normal(0.5, 1)  # x
+    INITIAL_STATE[idx + 1] = radius * np.sin(angle) + rng.normal(0.5, 1)  # y
+    INITIAL_STATE[idx + 2] = rng.normal(-3, 3)  # z
 
     # Initial velocities
-    INITIAL_STATE[idx + 3 : idx + 6] = np.random.normal(0.05, 0.1)  # vx, vy, vz
+    INITIAL_STATE[idx + 3 : idx + 6] = rng.normal(0.05, 0.1, size=3)  # vx, vy, vz
 
     # Goals (opposite side of the circle)
     goals[idx : idx + 3] = -INITIAL_STATE[idx : idx + 3]  # x_goal, y_goal, z_goal
@@ -145,7 +150,7 @@ def terminal_cost(x: jnp.ndarray, action: jnp.ndarray) -> float:
 state_constraint_funcs = [
     f"(x[{STATE_DIM_PER_ROBOT * i}] - x[{STATE_DIM_PER_ROBOT * j}])**2 + "
     f"(x[{STATE_DIM_PER_ROBOT * i + 1}] - x[{STATE_DIM_PER_ROBOT * j + 1}])**2 + "
-    f"(x[{STATE_DIM_PER_ROBOT * i + 2}] - x[{STATE_DIM_PER_ROBOT * j + 2}])**2 - 0.25 "
+    f"(x[{STATE_DIM_PER_ROBOT * i + 2}] - x[{STATE_DIM_PER_ROBOT * j + 2}])**2 - {D_MIN_SQUARED} "
     for i in range(NUM_ROBOTS)
     for j in range(i + 1, NUM_ROBOTS)
 ]
@@ -288,7 +293,7 @@ if not os.getenv("CBFKIT_TEST_MODE"):
         os.path.join(TARGET_DIRECTORY, MODEL_NAME, f"animation_{NUM_ROBOTS}_robots.gif")
     )
 
-    visualize_3d_multi_robot(
+    saved_to = visualize_3d_multi_robot(
         states=results.states,
         desired_states=goals,
         desired_state_radius=0.3,
@@ -299,10 +304,16 @@ if not os.getenv("CBFKIT_TEST_MODE"):
         save_animation=True,
         animation_filename=animation_path,
         include_min_distance_plot=True,
+        # Same constant the QP enforces, so the panel reads as satisfied /
+        # violated and the drawn bubbles touch exactly at the constraint.
+        threshold=D_MIN,
+        safety_radius=D_MIN / 2,
         ellipse_centers=obstacle_centers,
         ellipse_radii=obstacle_radii,
         ellipse_rotations=obstacle_rotations,
         backend="manim-low",  # Options: manim-low, manim-medium, manim-high, manim-production
     )
 
-    print(f"\nAnimation saved to: file://{animation_path}")
+    # Report what the backend actually wrote, not what we asked for -- these
+    # differed silently before, leaving a stale file at the advertised path.
+    print(f"\nAnimation saved to: file://{saved_to}")

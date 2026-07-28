@@ -6,11 +6,12 @@ import numpy as np
 
 from .config import AnimationConfig
 from .deps import _require_manim, _require_matplotlib, _require_plotly
+from .manim_backend import _ManimMixin
 from .matplotlib_backend import _MatplotlibMixin
 from .plotly_backend import _PlotlyMixin
 
 
-class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
+class CBFAnimator(_MatplotlibMixin, _PlotlyMixin, _ManimMixin):
     """Declarative 2D trajectory animator for CBFKit simulations.
 
     Build an animation by chaining ``add_*`` calls, then :meth:`save` or
@@ -31,7 +32,9 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
     aspect : str or None
         Axis aspect ratio (e.g. ``"equal"``).  *None* keeps matplotlib default.
     backend : str
-        ``"plotly"`` (default) or ``"matplotlib"``.
+        ``"plotly"`` (default), ``"matplotlib"``, or ``"manim"`` /
+        ``"manim-<quality>"`` with quality one of ``low``, ``medium``,
+        ``high``, ``production`` (requires ``pip install cbfkit[manim]``).
     config : AnimationConfig, optional
         Animation parameters.  Uses :data:`DEFAULT_CONFIG` when *None*.
     """
@@ -54,15 +57,16 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
             )
 
         self._backend = backend
+        self._manim_quality: Optional[str] = None
         if backend == "matplotlib":
             _require_matplotlib()
         elif backend.startswith("manim"):
-            # The 2D Manim backend is unimplemented whether or not Manim is
-            # installed, so surface that before requiring the optional dependency.
-            raise NotImplementedError(
-                "Manim 2D backend not yet implemented. "
-                "Use visualize_3d_multi_robot(backend='manim') for 3D scenes."
-            )
+            # Validate the quality suffix before requiring the optional
+            # dependency so a typo'd backend string fails loudly either way.
+            from cbfkit.utils.visualization import _parse_manim_backend
+
+            self._manim_quality = _parse_manim_backend(backend)
+            _require_manim()
         else:
             _require_plotly()
 
@@ -396,23 +400,30 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
     def build(self):
         """Create the figure and all static / dynamic artists.
 
-        Returns ``(fig, ax)`` for the matplotlib backend, or the Plotly
-        ``Figure`` for the plotly backend.
+        Returns ``(fig, ax)`` for the matplotlib backend, the Plotly
+        ``Figure`` for the plotly backend, or the configured
+        :class:`~cbfkit.utils.animators.manim_backend.CBFAnimator2DScene`
+        class for the manim backend.
         """
         if self._backend == "plotly":
             return self._build_plotly()
+        if self._backend.startswith("manim"):
+            return self._build_manim()
         return self._build_matplotlib()
 
     def animate(self):
         """Build (if needed) and create the animation object.
 
-        Returns a matplotlib ``FuncAnimation`` or a Plotly ``Figure``
-        (which already contains the animation frames).
+        Returns a matplotlib ``FuncAnimation``, a Plotly ``Figure``
+        (which already contains the animation frames), or the configured
+        Scene class for the manim backend (rendering happens in :meth:`save`).
         """
         if self._backend == "plotly":
             if self._fig is None:
                 self._build_plotly()
             return self._fig
+        if self._backend.startswith("manim"):
+            return self._build_manim()
         return self._animate_matplotlib()
 
     def save(self, path: str, config: Optional[AnimationConfig] = None) -> str:
@@ -420,11 +431,15 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
 
         * matplotlib: saves MP4 (ffmpeg) or GIF (pillow fallback).
         * plotly: saves an interactive ``.html`` file.
+        * manim: renders MP4 (or GIF if *path* ends in ``.gif``) at the
+          quality encoded in the backend string (``manim-<quality>``).
 
         Returns the absolute path of the saved file.
         """
         if self._backend == "plotly":
             return self._save_plotly(path)
+        if self._backend.startswith("manim"):
+            return self._save_manim(path)
         return self._save_matplotlib(path, config)
 
     def show(self):
@@ -432,9 +447,12 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin):
 
         * matplotlib: opens a matplotlib window.
         * plotly: opens the default web browser.
+        * manim: renders and opens the video in the default player.
         """
         if self._backend == "plotly":
             return self._show_plotly()
+        if self._backend.startswith("manim"):
+            return self._show_manim()
         return self._show_matplotlib()
 
     # -- properties ---------------------------------------------------------
