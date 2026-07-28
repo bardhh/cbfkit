@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import pytest
 
-import cbfkit.utils.animator as animator_module
+from cbfkit.utils.animators import deps
 from cbfkit.utils.visualization import _parse_manim_backend, visualize_3d_multi_robot
 
 
@@ -29,12 +29,15 @@ class TestManimQualityParsing:
     def test_bare_manim_defaults_to_low(self):
         assert _parse_manim_backend("manim") == "low_quality"
 
-    @pytest.mark.parametrize("suffix,expected", [
-        ("low", "low_quality"),
-        ("medium", "medium_quality"),
-        ("high", "high_quality"),
-        ("production", "production_quality"),
-    ])
+    @pytest.mark.parametrize(
+        "suffix,expected",
+        [
+            ("low", "low_quality"),
+            ("medium", "medium_quality"),
+            ("high", "high_quality"),
+            ("production", "production_quality"),
+        ],
+    )
     def test_quality_suffixes(self, suffix, expected):
         assert _parse_manim_backend(f"manim-{suffix}") == expected
 
@@ -44,8 +47,10 @@ class TestManimQualityParsing:
 
     def test_quality_passed_to_render(self, monkeypatch):
         """Ensure the quality kwarg reaches render_multi_robot_3d."""
-        if not animator_module._HAS_MANIM:
-            pytest.skip("manim not installed")
+        # Nothing here needs manim itself: the renderer is mocked and only the
+        # dispatch path is under test.  Satisfy the gate rather than skipping --
+        # manim is excluded from the [dev] extra, so a skip means "never in CI".
+        monkeypatch.setattr(deps, "_HAS_MANIM", True)
 
         states, goals = _make_synthetic_data()
         captured = {}
@@ -71,7 +76,9 @@ class TestManimQualityParsing:
 class TestManimBackendDispatch:
     def test_manim_backend_raises_import_error_when_missing(self, monkeypatch):
         """Without manim installed, backend='manim' should raise ImportError."""
-        monkeypatch.setattr(animator_module, "_HAS_MANIM", False)
+        # deps._HAS_MANIM is what _require_manim() consults; patching the
+        # re-export on cbfkit.utils.animator does not affect the gate.
+        monkeypatch.setattr(deps, "_HAS_MANIM", False)
         states, goals = _make_synthetic_data()
         with pytest.raises(ImportError, match=r"cbfkit\[manim\]"):
             visualize_3d_multi_robot(
@@ -82,18 +89,25 @@ class TestManimBackendDispatch:
                 backend="manim",
             )
 
-    def test_manim_backend_warns_on_subplot_features(self, monkeypatch):
-        """Subplot features should emit warnings when using manim backend."""
-        # Skip if manim is not installed
-        if not animator_module._HAS_MANIM:
-            pytest.skip("manim not installed")
+    def test_manim_backend_forwards_subplot_data(self, monkeypatch):
+        """The manim backend renders the distance panels rather than dropping them.
+
+        It previously warned that ``include_min_distance_plot`` "will be
+        ignored" while forwarding the data and drawing the panel anyway, so the
+        warning told users the opposite of what happened.
+        """
+        # Only the dispatch path is under test and the renderer is mocked, so
+        # satisfy the gate rather than skipping (manim is not in the [dev]
+        # extra, so skipping here would mean this never runs in CI).
+        monkeypatch.setattr(deps, "_HAS_MANIM", True)
 
         states, goals = _make_synthetic_data()
 
         # We can't actually render without a display, so mock render_multi_robot_3d
-        import cbfkit.utils.visualization as vis_module
+        recorded = {}
 
         def mock_render(**kwargs):
+            recorded.update(kwargs)
             return "/tmp/mock_output.mp4"
 
         monkeypatch.setattr(
@@ -111,9 +125,18 @@ class TestManimBackendDispatch:
                 backend="manim",
                 include_min_distance_plot=True,
                 include_min_distance_to_obstacles_plot=True,
+                threshold=0.5,
+                safety_radius=0.25,
                 ellipse_centers=[np.array([0.0, 0.0, 0.0])],
                 ellipse_radii=[np.array([1.0, 1.0, 1.0])],
                 ellipse_rotations=[np.eye(3)],
             )
-            manim_warnings = [x for x in w if "Manim backend" in str(x.message)]
-            assert len(manim_warnings) == 2
+            # Stronger than matching the old text: the path should be silent.
+            assert [str(x.message) for x in w] == []
+
+        # The panels are actually drawn, so the data must reach the renderer.
+        assert recorded["min_dists"] is not None
+        assert recorded["obs_dists"] is not None
+        # ...along with the reference line and bubble size that make them readable.
+        assert recorded["threshold"] == 0.5
+        assert recorded["safety_radius"] == 0.25

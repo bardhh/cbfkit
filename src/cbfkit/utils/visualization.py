@@ -7,7 +7,6 @@ Visualization Utilities for CBFKit Simulations.
   matplotlib (MP4/GIF), and Manim (high-quality MP4) backends.
 """
 
-import warnings
 from typing import Any, List, Optional
 
 import numpy as np
@@ -173,6 +172,7 @@ def visualize_3d_multi_robot(
     include_min_distance_to_obstacles_plot: bool = False,
     threshold: Optional[float] = None,
     backend: str = "plotly",
+    safety_radius: float = 0.25,
 ):
     """Animate a 3D multi-robot system with optional distance subplots.
 
@@ -192,6 +192,14 @@ def visualize_3d_multi_robot(
         ``"plotly"`` (default), ``"matplotlib"``, or ``"manim"``.
         Manim accepts a quality suffix: ``"manim-low"`` (default),
         ``"manim-medium"``, ``"manim-high"``, ``"manim-production"``.
+    threshold : float, optional
+        Minimum-separation threshold drawn as a dashed reference line on the
+        inter-robot distance panel.  Pass the same value the controller
+        enforces so the plot can be read as satisfied / violated.
+    safety_radius : float
+        Radius of the per-robot safety bubble drawn by the manim backend.  Two
+        bubbles touch at ``2 * safety_radius``; pass ``threshold / 2`` to keep
+        the drawing consistent with the enforced constraint.
     """
     from cbfkit.utils.visualizations.helpers_3d import _compute_distance_metrics
 
@@ -276,20 +284,6 @@ def visualize_3d_multi_robot(
         from cbfkit.utils.visualizations.manim_3d_multi_robot import render_multi_robot_3d
 
         _require_manim()
-        if include_min_distance_plot:
-            warnings.warn(
-                "Manim backend does not support inline subplot panels. "
-                "include_min_distance_plot will be ignored.",
-                UserWarning,
-                stacklevel=2,
-            )
-        if include_min_distance_to_obstacles_plot:
-            warnings.warn(
-                "Manim backend does not support inline subplot panels. "
-                "include_min_distance_to_obstacles_plot will be ignored.",
-                UserWarning,
-                stacklevel=2,
-            )
         save_path = animation_filename if save_animation else None
         return render_multi_robot_3d(
             states=states,
@@ -307,9 +301,11 @@ def visualize_3d_multi_robot(
             ellipse_rotations=ellipse_rotations,
             save_path=save_path,
             quality=quality,
+            safety_radius=safety_radius,
             goal_dists=goal_dists,
             min_dists=min_dists if include_min_distance_plot else None,
             obs_dists=obs_dists if include_min_distance_to_obstacles_plot else None,
+            threshold=threshold,
         )
     else:
         from cbfkit.utils.visualizations.matplotlib_3d_multi_robot import _visualize_3d_matplotlib

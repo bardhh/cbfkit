@@ -8,24 +8,48 @@ from .helpers_3d import _ellipsoid_mesh
 
 # Plotly tab10-equivalent colours
 _PLOTLY_TAB10 = [
-    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-    "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
 ]
 
 
 def _visualize_3d_plotly(
-    states, desired_states, desired_state_radius, num_robots,
-    ellipse_centers, ellipse_radii, ellipse_rotations,
-    x_lim, y_lim, z_lim, dt, sdim, title, save_animation,
-    animation_filename, include_min_distance_plot,
-    include_min_distance_to_obstacles_plot, threshold,
-    goal_dists, min_dists, obs_dists,
+    states,
+    desired_states,
+    desired_state_radius,
+    num_robots,
+    ellipse_centers,
+    ellipse_radii,
+    ellipse_rotations,
+    x_lim,
+    y_lim,
+    z_lim,
+    dt,
+    sdim,
+    title,
+    save_animation,
+    animation_filename,
+    include_min_distance_plot,
+    include_min_distance_to_obstacles_plot,
+    threshold,
+    goal_dists,
+    min_dists,
+    obs_dists,
 ):
     from cbfkit.utils.animators.helpers import (
         _compute_plotly_frame_step,
         _plotly_animation_controls,
     )
     from cbfkit.utils.animators.deps import _require_plotly
+
     _require_plotly()
 
     import plotly.graph_objects as go
@@ -37,7 +61,10 @@ def _visualize_3d_plotly(
 
     # 3D scenes are heavier to render; use a higher floor than 2D
     frame_indices, frame_duration_ms = _compute_plotly_frame_step(
-        dt, N, max_frames=200, min_frame_ms=80,
+        dt,
+        N,
+        max_frames=200,
+        min_frame_ms=80,
     )
 
     # --- subplot layout ---
@@ -55,7 +82,8 @@ def _visualize_3d_plotly(
 
     widths = [2] + [1] * (num_cols - 1)
     fig = make_subplots(
-        rows=1, cols=num_cols,
+        rows=1,
+        cols=num_cols,
         specs=[specs_row],
         column_widths=widths,
         subplot_titles=titles,
@@ -64,46 +92,68 @@ def _visualize_3d_plotly(
     # --- static 3D elements ---
     for i in range(num_robots):
         idx = sdim * i
-        gx, gy, gz = float(desired_states[idx]), float(desired_states[idx + 1]), float(desired_states[idx + 2])
+        gx, gy, gz = (
+            float(desired_states[idx]),
+            float(desired_states[idx + 1]),
+            float(desired_states[idx + 2]),
+        )
         fig.add_trace(
             go.Scatter3d(
-                x=[gx], y=[gy], z=[gz],
+                x=[gx],
+                y=[gy],
+                z=[gz],
                 mode="markers",
                 marker=dict(size=8, color=colors[i], symbol="diamond"),
                 name=f"Goal {i + 1}",
                 showlegend=True,
             ),
-            row=1, col=1,
+            row=1,
+            col=1,
         )
         sx, sy, sz, si, sj, sk = _ellipsoid_mesh(
             np.array([gx, gy, gz]),
             np.array([desired_state_radius] * 3),
-            np.eye(3), n=15,
+            np.eye(3),
+            n=15,
         )
         fig.add_trace(
             go.Mesh3d(
-                x=sx.tolist(), y=sy.tolist(), z=sz.tolist(),
-                i=si, j=sj, k=sk,
-                color=colors[i], opacity=0.15,
+                x=sx.tolist(),
+                y=sy.tolist(),
+                z=sz.tolist(),
+                i=si,
+                j=sj,
+                k=sk,
+                color=colors[i],
+                opacity=0.15,
                 showlegend=False,
             ),
-            row=1, col=1,
+            row=1,
+            col=1,
         )
 
     # Ellipsoid obstacles
     if ellipse_centers is not None and ellipse_radii is not None and ellipse_rotations is not None:
         for ec, er, erot in zip(ellipse_centers, ellipse_radii, ellipse_rotations):
             mx, my, mz, ii, jj, kk = _ellipsoid_mesh(
-                np.asarray(ec), np.asarray(er), np.asarray(erot),
+                np.asarray(ec),
+                np.asarray(er),
+                np.asarray(erot),
             )
             fig.add_trace(
                 go.Mesh3d(
-                    x=mx.tolist(), y=my.tolist(), z=mz.tolist(),
-                    i=ii, j=jj, k=kk,
-                    color="black", opacity=0.2,
+                    x=mx.tolist(),
+                    y=my.tolist(),
+                    z=mz.tolist(),
+                    i=ii,
+                    j=jj,
+                    k=kk,
+                    color="black",
+                    opacity=0.2,
                     showlegend=False,
                 ),
-                row=1, col=1,
+                row=1,
+                col=1,
             )
 
     n_static = len(fig.data)
@@ -112,23 +162,28 @@ def _visualize_3d_plotly(
     for i in range(num_robots):
         fig.add_trace(
             go.Scatter3d(
-                x=[], y=[], z=[],
+                x=[],
+                y=[],
+                z=[],
                 mode="lines",
                 line=dict(color=colors[i], width=3),
                 name=f"Robot {i + 1}",
                 showlegend=True,
             ),
-            row=1, col=1,
+            row=1,
+            col=1,
         )
         fig.add_trace(
             go.Scatter(
-                x=[], y=[],
+                x=[],
+                y=[],
                 mode="lines",
                 line=dict(color=colors[i], width=2),
                 name=f"Robot {i + 1}",
                 showlegend=False,
             ),
-            row=1, col=2,
+            row=1,
+            col=2,
         )
 
     if include_min_distance_plot:
@@ -136,18 +191,23 @@ def _visualize_3d_plotly(
         for i in range(num_robots):
             fig.add_trace(
                 go.Scatter(
-                    x=[], y=[],
+                    x=[],
+                    y=[],
                     mode="lines",
                     line=dict(color=colors[i], width=2),
                     name=f"Robot {i + 1}",
                     showlegend=False,
                 ),
-                row=1, col=col_md,
+                row=1,
+                col=col_md,
             )
         if threshold is not None:
             fig.add_hline(
-                y=threshold, line_dash="dash", line_color="red",
-                row=1, col=col_md,
+                y=threshold,
+                line_dash="dash",
+                line_color="red",
+                row=1,
+                col=col_md,
             )
 
     if include_min_distance_to_obstacles_plot:
@@ -155,13 +215,15 @@ def _visualize_3d_plotly(
         for i in range(num_robots):
             fig.add_trace(
                 go.Scatter(
-                    x=[], y=[],
+                    x=[],
+                    y=[],
                     mode="lines",
                     line=dict(color=colors[i], width=2),
                     name=f"Robot {i + 1}",
                     showlegend=False,
                 ),
-                row=1, col=col_od,
+                row=1,
+                col=col_od,
             )
 
     n_animated = len(fig.data) - n_static
@@ -219,7 +281,9 @@ def _visualize_3d_plotly(
 
     # --- scene + axis layout ---
     menus, sliders = _plotly_animation_controls(
-        frames, frame_duration_ms, button_y=-0.25,
+        frames,
+        frame_duration_ms,
+        button_y=-0.25,
     )
     fig.update_layout(
         scene=dict(
@@ -243,7 +307,15 @@ def _visualize_3d_plotly(
     if include_min_distance_plot:
         fig.update_xaxes(title_text="Time [s]", row=1, col=3)
         fig.update_yaxes(title_text="Distance [m]", row=1, col=3)
-        fig.update_yaxes(range=[0, float(np.max(min_dists)) * 1.1], row=1, col=3)
+        # Include the threshold in the range, else a run that violates the
+        # constraint throughout renders as a clean plot with the reference
+        # line clipped off-screen.
+        md_top = float(np.max(min_dists)) * 1.1
+        if not np.isfinite(md_top):
+            md_top = 0.0
+        if threshold is not None and threshold >= 0:
+            md_top = max(md_top, float(threshold) * 1.15)
+        fig.update_yaxes(range=[0, md_top if md_top > 1e-6 else 1.0], row=1, col=3)
 
     if include_min_distance_to_obstacles_plot:
         col_od = 3 if not include_min_distance_plot else 4

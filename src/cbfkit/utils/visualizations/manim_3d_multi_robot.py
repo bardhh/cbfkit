@@ -27,6 +27,7 @@ try:
         RIGHT,
         UP,
         Axes,
+        DashedLine,
         Dot3D,
         Line,
         Sphere,
@@ -86,21 +87,34 @@ def _build_chart_panel(
     num_robots: int,
     panel_width: float = 3.8,
     panel_height: float = 2.0,
+    threshold: float | None = None,
 ):
     """Build a 2D Axes with pre-drawn static line segments for each robot.
 
-    Returns ``(axes, title_mob, robot_lines)`` where ``robot_lines[i]`` is a
-    :class:`VGroup` of ``Line`` segments for robot *i* that will be revealed
-    progressively by an updater.
+    Returns ``(axes, title_mob, x_label, robot_lines, panel)`` where
+    ``robot_lines[i]`` is a :class:`VGroup` of ``Line`` segments for robot *i*
+    that will be revealed progressively by an updater.
 
     Parameters
     ----------
     data : np.ndarray
         Shape ``(N, num_robots)`` — one column per robot.
+    threshold : float, optional
+        Safety threshold; drawn as a dashed red horizontal line so a viewer can
+        tell satisfaction from violation.  Matches the plotly / matplotlib
+        backends, which draw the same reference line.
     """
     N = len(data)
     t_max = (N - 1) * dt
     y_max = float(np.nanmax(data)) * 1.15
+    if not np.isfinite(y_max):
+        # All-NaN data, or the all-inf min_dists a single robot produces.
+        # max() below would propagate NaN from its left argument.
+        y_max = 0.0
+    if threshold is not None and threshold >= 0:
+        # Keep the line on-screen even when every sample sits below it
+        # (i.e. when the constraint is violated throughout).
+        y_max = max(y_max, float(threshold) * 1.15)
     if y_max < 1e-6:
         y_max = 1.0
 
@@ -133,6 +147,15 @@ def _build_chart_panel(
         robot_lines.append(segs)
 
     panel = VGroup(axes, title_mob, x_label, *robot_lines)
+    if threshold is not None and threshold >= 0:
+        panel.add(
+            DashedLine(
+                axes.c2p(0, float(threshold)),
+                axes.c2p(t_max, float(threshold)),
+                stroke_width=2,
+                color="#ff0000",
+            )
+        )
     return axes, title_mob, x_label, robot_lines, panel
 
 
@@ -166,6 +189,8 @@ class MultiRobot3DScene(ThreeDScene):
     goal_dists: np.ndarray | None = None
     min_dists: np.ndarray | None = None
     obs_dists: np.ndarray | None = None
+    # Safety threshold drawn on the inter-robot panel (None = no reference line)
+    threshold: float | None = None
     # Scale factor to fit data into Manim's coordinate system (default ~7 units)
     _scale: float = 1.0
 
@@ -302,16 +327,16 @@ class MultiRobot3DScene(ThreeDScene):
 
         panel_configs = []
         if has_goal:
-            panel_configs.append(("Dist to Goal", self.goal_dists))
+            panel_configs.append(("Dist to Goal", self.goal_dists, None))
         if has_min:
-            panel_configs.append(("Min Inter-Robot Dist", self.min_dists))
+            panel_configs.append(("Min Inter-Robot Dist", self.min_dists, self.threshold))
         if has_obs:
-            panel_configs.append(("Min Obstacle Dist", self.obs_dists))
+            panel_configs.append(("Min Obstacle Dist", self.obs_dists, None))
 
         panel_height = min(2.0, 5.5 / max(n_panels, 1))
         panel_gap = 0.4
 
-        for p_idx, (p_title, p_data) in enumerate(panel_configs):
+        for p_idx, (p_title, p_data, p_threshold) in enumerate(panel_configs):
             _, _, _, robot_lines, panel = _build_chart_panel(
                 title_text=p_title,
                 data=p_data,
@@ -319,6 +344,7 @@ class MultiRobot3DScene(ThreeDScene):
                 num_robots=n_robots,
                 panel_width=3.8,
                 panel_height=panel_height,
+                threshold=p_threshold,
             )
             all_robot_lines.append(robot_lines)
             panels_group.add(panel)
@@ -430,6 +456,7 @@ def render_multi_robot_3d(
     goal_dists: np.ndarray | None = None,
     min_dists: np.ndarray | None = None,
     obs_dists: np.ndarray | None = None,
+    threshold: float | None = None,
 ) -> str:
     """Render a multi-robot 3D animation using Manim.
 
@@ -440,7 +467,11 @@ def render_multi_robot_3d(
     desired_states : np.ndarray
         ``(state_dim,)`` goal vector.
     safety_radius : float
-        Per-robot collision avoidance bubble radius.
+        Per-robot collision avoidance bubble radius.  Two bubbles touch when
+        the robots are ``2 * safety_radius`` apart, so this should be half the
+        minimum separation the controller actually enforces.
+    threshold : float, optional
+        Minimum-separation threshold marked on the inter-robot distance panel.
     ellipse_centers : list, optional
         List of obstacle center positions ``[x, y, z]``.
     ellipse_radii : list, optional
@@ -466,13 +497,21 @@ def render_multi_robot_3d(
     """
     _require_manim()
 
+    import glob
     import os
+    import shutil
 
     # Configure Manim output
     config.quality = quality
     if save_path:
-        config.output_file = os.path.basename(save_path)
+        # Manim appends its own extension, so hand it the stem: passing
+        # "anim.gif" produced "anim.gif.mp4".  The format must be set
+        # explicitly or a .gif request silently renders MP4.
+        stem, ext = os.path.splitext(os.path.basename(save_path))
+        config.output_file = stem
         config.media_dir = os.path.dirname(save_path) or "./media"
+        if ext.lower() == ".gif":
+            config.format = "gif"
 
     # Inject data into the scene class
     MultiRobot3DScene.states = np.asarray(states)
@@ -492,9 +531,31 @@ def render_multi_robot_3d(
     MultiRobot3DScene.goal_dists = goal_dists
     MultiRobot3DScene.min_dists = min_dists
     MultiRobot3DScene.obs_dists = obs_dists
+    MultiRobot3DScene.threshold = threshold
 
     scene = MultiRobot3DScene()
     scene.render()
 
-    # Return path to rendered file
-    return str(scene.renderer.file_writer.movie_file_path)
+    rendered = str(scene.renderer.file_writer.movie_file_path)
+    if not save_path:
+        return rendered
+
+    # For GIF output the file writer still reports the .mp4 name, so fall back
+    # to the newest matching file under the media dir.
+    if not os.path.exists(rendered):
+        pattern = os.path.join(config.media_dir, "videos", "**", f"*{ext or '.mp4'}")
+        candidates = glob.glob(pattern, recursive=True)
+        if not candidates:
+            raise FileNotFoundError(
+                f"Manim did not produce a {ext or '.mp4'} file under {config.media_dir!r}."
+            )
+        rendered = max(candidates, key=os.path.getmtime)
+
+    # Manim writes under <media_dir>/videos/<quality>/; copy to the path the
+    # caller asked for so the returned path is the file that actually exists.
+    # Without this the caller's path silently keeps whatever was there before.
+    if os.path.abspath(rendered) != os.path.abspath(save_path):
+        out_dir = os.path.dirname(os.path.abspath(save_path))
+        os.makedirs(out_dir, exist_ok=True)
+        shutil.copy2(rendered, save_path)
+    return os.path.abspath(save_path)
