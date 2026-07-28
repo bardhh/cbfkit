@@ -210,8 +210,7 @@ def _build_combo_summary(
 def _format_combo_desc(combo: dict[str, Any], max_len: int = 40) -> str:
     """Format a parameter combo as a short description string."""
     desc = ", ".join(
-        f"{k}={v:.3g}" if isinstance(v, float) else f"{k}={v}"
-        for k, v in combo.items()
+        f"{k}={v:.3g}" if isinstance(v, float) else f"{k}={v}" for k, v in combo.items()
     )
     if len(desc) > max_len:
         desc = desc[: max_len - 3] + "..."
@@ -242,9 +241,15 @@ def _process_combo(
     progress.update(seed_task_id, description=f"  Seeds ({combo_desc})")
 
     combo_records, was_falsified = _run_combo(
-        runner, seeds, combo, combo_idx, records,
-        falsifier=falsifier, falsifier_metric=falsifier_metric,
-        progress=progress, seed_task_id=seed_task_id,
+        runner,
+        seeds,
+        combo,
+        combo_idx,
+        records,
+        falsifier=falsifier,
+        falsifier_metric=falsifier_metric,
+        progress=progress,
+        seed_task_id=seed_task_id,
         batch_runner=batch_runner,
     )
 
@@ -293,7 +298,10 @@ def run_sweep(
         colour-coded results table and scatter plot in the terminal.
     """
     falsifier, falsifier_metric = _resolve_falsifier_kwargs(
-        falsifier, falsifier_metric, skip_on_failure, failure_metric,
+        falsifier,
+        falsifier_metric,
+        skip_on_failure,
+        failure_metric,
     )
 
     records: list[dict[str, Any]] = []
@@ -307,26 +315,38 @@ def run_sweep(
             return Group(viz.render_header(), progress, viz.render())
         return progress
 
-    with Live(_build_live_renderable(), console=_console, refresh_per_second=4,
-              transient=True, vertical_overflow="visible") as live, \
-            _quiet_stdout():
+    with Live(
+        _build_live_renderable(),
+        console=_console,
+        refresh_per_second=4,
+        transient=True,
+        vertical_overflow="visible",
+    ) as live, _quiet_stdout():
         combo_task = progress.add_task("Combos", total=len(param_combos))
         seed_task = progress.add_task("  Seeds", total=len(seeds))
 
         for combo_idx, combo in enumerate(param_combos):
             remaining = _process_combo(
-                runner, seeds, combo, combo_idx, records, per_combo_summaries,
-                falsifier=falsifier, falsifier_metric=falsifier_metric,
-                progress=progress, seed_task_id=seed_task, combo_task_id=combo_task,
-                batch_runner=batch_runner, viz=viz, live=live,
+                runner,
+                seeds,
+                combo,
+                combo_idx,
+                records,
+                per_combo_summaries,
+                falsifier=falsifier,
+                falsifier_metric=falsifier_metric,
+                progress=progress,
+                seed_task_id=seed_task,
+                combo_task_id=combo_task,
+                batch_runner=batch_runner,
+                viz=viz,
+                live=live,
                 live_renderable_fn=_build_live_renderable,
             )
             skipped += remaining
 
     if skipped > 0:
-        _console.print(
-            f"[dim]Skipped {skipped} runs (moved to next combo on failure)[/dim]"
-        )
+        _console.print(f"[dim]Skipped {skipped} runs (moved to next combo on failure)[/dim]")
 
     # Print final viz so it persists after Live exits
     if viz is not None:
@@ -377,6 +397,7 @@ def run_optuna_sweep(
     objective_metric: str = "safety_violation_rate",
     direction: str = "minimize",
     *,
+    seed: int | None = 0,
     falsifier: bool = False,
     falsifier_metric: str = "safety_violations",
     safety_constraint: "tuple[str, float] | None" = None,
@@ -393,6 +414,11 @@ def run_optuna_sweep(
 
     Parameters
     ----------
+    seed : int or None
+        Seed for Optuna's sampler, so a sweep is reproducible across runs
+        (matching :func:`sample_param_combos`).  Pass *None* to let Optuna
+        draw a fresh random seed, which makes the trials chosen, and
+        therefore the results, vary between runs.
     falsifier : bool
         When *True*, stop iterating seeds on first failure and move to
         the next trial.
@@ -408,15 +434,17 @@ def run_optuna_sweep(
     Requires ``pip install cbfkit[optuna]``.
     """
     falsifier, falsifier_metric = _resolve_falsifier_kwargs(
-        falsifier, falsifier_metric, skip_on_failure, failure_metric,
+        falsifier,
+        falsifier_metric,
+        skip_on_failure,
+        failure_metric,
     )
 
     try:
         import optuna
     except ImportError as exc:
         raise ImportError(
-            "Optuna is required for method='optuna'. "
-            "Install it with: pip install cbfkit[optuna]"
+            "Optuna is required for method='optuna'. " "Install it with: pip install cbfkit[optuna]"
         ) from exc
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -436,15 +464,24 @@ def run_optuna_sweep(
         return progress
 
     def objective(trial) -> float:
-        combo = {pname: _suggest_param(trial, pname, pspec)
-                 for pname, pspec in parameters.items()}
+        combo = {pname: _suggest_param(trial, pname, pspec) for pname, pspec in parameters.items()}
         param_combos.append(combo)
 
         _process_combo(
-            runner, seeds, combo, trial.number, records, per_combo_summaries,
-            falsifier=falsifier, falsifier_metric=falsifier_metric,
-            progress=progress, seed_task_id=seed_task, combo_task_id=trial_task,
-            batch_runner=batch_runner, viz=None, live=None,
+            runner,
+            seeds,
+            combo,
+            trial.number,
+            records,
+            per_combo_summaries,
+            falsifier=falsifier,
+            falsifier_metric=falsifier_metric,
+            progress=progress,
+            seed_task_id=seed_task,
+            combo_task_id=trial_task,
+            batch_runner=batch_runner,
+            viz=None,
+            live=None,
         )
 
         summary = per_combo_summaries[-1]
@@ -462,11 +499,20 @@ def run_optuna_sweep(
 
         return obj_val
 
-    study = optuna.create_study(direction=direction)
+    # Seed the sampler so which trials get explored, and therefore the
+    # results, are reproducible across runs.  Left unseeded, the startup
+    # trials are drawn uniformly with replacement, so a small sweep can
+    # miss part of the grid entirely from one run to the next.
+    sampler = optuna.samplers.TPESampler(seed=seed) if seed is not None else None
+    study = optuna.create_study(direction=direction, sampler=sampler)
 
-    with Live(_build_live_renderable(), console=_console, refresh_per_second=4,
-              transient=True, vertical_overflow="visible") as live, \
-            _quiet_stdout():
+    with Live(
+        _build_live_renderable(),
+        console=_console,
+        refresh_per_second=4,
+        transient=True,
+        vertical_overflow="visible",
+    ) as live, _quiet_stdout():
         live_instance = live
         trial_task = progress.add_task("Trials", total=n_trials)
         seed_task = progress.add_task("  Seeds", total=len(seeds))

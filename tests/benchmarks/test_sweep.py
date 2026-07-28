@@ -66,10 +66,12 @@ class TestBuildParamGrid:
         assert grid[2] == {"a": 3}
 
     def test_cartesian_product(self):
-        grid = build_param_grid({
-            "x": {"values": [1, 2]},
-            "y": {"values": [10, 20]},
-        })
+        grid = build_param_grid(
+            {
+                "x": {"values": [1, 2]},
+                "y": {"values": [10, 20]},
+            }
+        )
         assert len(grid) == 4
         assert {"x": 1, "y": 10} in grid
         assert {"x": 2, "y": 20} in grid
@@ -158,8 +160,12 @@ class TestFalsifier:
         combos = [{"alpha": 3.0}]  # alpha > 2 fails on seed >= 1
         seeds = [0, 1, 2, 3]
         result = run_sweep(
-            "test_falsify", seeds, combos, _mock_failing_runner,
-            falsifier=True, falsifier_metric="safety_violations",
+            "test_falsify",
+            seeds,
+            combos,
+            _mock_failing_runner,
+            falsifier=True,
+            falsifier_metric="safety_violations",
         )
         # seed=0 passes, seed=1 fails -> seeds 2,3 skipped
         assert len(result.records) == 2
@@ -170,7 +176,10 @@ class TestFalsifier:
         combos = [{"alpha": 1.0}]  # alpha <= 2 never fails
         seeds = [0, 1, 2]
         result = run_sweep(
-            "test_falsify_pass", seeds, combos, _mock_failing_runner,
+            "test_falsify_pass",
+            seeds,
+            combos,
+            _mock_failing_runner,
             falsifier=True,
         )
         assert len(result.records) == 3
@@ -181,7 +190,10 @@ class TestFalsifier:
         combos = [{"alpha": 3.0}]
         seeds = [0, 1, 2, 3]
         result = run_sweep(
-            "test_no_falsify", seeds, combos, _mock_failing_runner,
+            "test_no_falsify",
+            seeds,
+            combos,
+            _mock_failing_runner,
             falsifier=False,
         )
         assert len(result.records) == 4
@@ -370,8 +382,12 @@ class TestOptunaSweep:
         params = {"count": {"int_range": [1, 10]}}
 
         def runner(seed, p):
-            return {"success": 1, "safety_violations": 0, "solver_failures": 0,
-                    "avg_step_ms": float(p["count"])}
+            return {
+                "success": 1,
+                "safety_violations": 0,
+                "solver_failures": 0,
+                "avg_step_ms": float(p["count"]),
+            }
 
         result = run_optuna_sweep(
             "test_optuna_int",
@@ -416,12 +432,57 @@ class TestOptunaSweep:
             falsifier=True,
             falsifier_metric="safety_violations",
         )
-        # alpha=1.0 runs all 4 seeds (no failures)
-        # alpha=3.0 and alpha=5.0 fail on seed>=1, so only 2 seeds each
-        # Total records should be less than 3*4=12
+        # A combo with alpha > 2.0 fails at seed>=1, so it runs 2 seeds
+        # instead of 4; alpha=1.0 never fails and runs all 4. The sampler is
+        # seeded (run_optuna_sweep defaults to seed=0), so the three trials
+        # are a fixed draw that includes alpha > 2.0 and the total stays
+        # under 3*4=12. Unseeded, a 1-in-27 all-alpha=1.0 draw made this
+        # assertion fail intermittently in CI.
         assert len(result.records) < 3 * len(seeds)
         # At least one combo should be falsified
         assert any(s["falsified"] for s in result.per_combo_summaries)
+
+    def test_optuna_sweep_is_reproducible(self):
+        """The same seed explores the same trials.
+
+        Regression: the study was created without a sampler, so Optuna drew a
+        fresh random seed per run. Which points got explored, and therefore
+        the sweep's results, changed between identical invocations.
+        """
+        params = {"alpha": {"values": [1.0, 3.0, 5.0]}}
+
+        def run(seed):
+            return run_optuna_sweep(
+                "test_optuna_repro",
+                seeds=[0, 1],
+                parameters=params,
+                runner=_mock_runner,
+                n_trials=4,
+                objective_metric="avg_step_ms",
+                seed=seed,
+            ).param_combos
+
+        assert run(0) == run(0)
+        assert run(7) == run(7)
+
+    def test_optuna_sweep_seed_none_is_unseeded(self):
+        """seed=None opts back into Optuna choosing its own seed."""
+        params = {"alpha": {"range": [0.1, 5.0]}}
+
+        def run():
+            return run_optuna_sweep(
+                "test_optuna_unseeded",
+                seeds=[0],
+                parameters=params,
+                runner=_mock_runner,
+                n_trials=6,
+                objective_metric="avg_step_ms",
+                seed=None,
+            ).param_combos
+
+        # Continuous range over 6 trials: two unseeded runs matching exactly
+        # would be an essentially impossible coincidence.
+        assert run() != run()
 
     def test_optuna_config_loading(self):
         from cbfkit.benchmarks.sweep_config import load_sweep_config, resolve_param_combos
@@ -555,14 +616,22 @@ class TestBatchRunner:
         def batch_fn(seeds, params):
             calls.append(seeds)
             return [
-                {"success": 1, "safety_violations": 0, "solver_failures": 0,
-                 "avg_step_ms": 1.0, "score": params.get("alpha", 1.0) + s}
+                {
+                    "success": 1,
+                    "safety_violations": 0,
+                    "solver_failures": 0,
+                    "avg_step_ms": 1.0,
+                    "score": params.get("alpha", 1.0) + s,
+                }
                 for s in seeds
             ]
 
         combos = [{"alpha": 2.0}]
         result = run_sweep(
-            "test_batch", [0, 1, 2], combos, _mock_runner,
+            "test_batch",
+            [0, 1, 2],
+            combos,
+            _mock_runner,
             batch_runner=batch_fn,
         )
         assert len(calls) == 1  # single batched call
@@ -575,13 +644,19 @@ class TestBatchRunner:
 
         def batch_fn(seeds, params):
             calls.append(seeds)
-            return [{"success": 1, "safety_violations": 0, "solver_failures": 0,
-                     "avg_step_ms": 1.0} for _ in seeds]
+            return [
+                {"success": 1, "safety_violations": 0, "solver_failures": 0, "avg_step_ms": 1.0}
+                for _ in seeds
+            ]
 
         combos = [{"alpha": 3.0}]
         run_sweep(
-            "test_batch_falsifier", [0, 1, 2], combos, _mock_failing_runner,
-            falsifier=True, batch_runner=batch_fn,
+            "test_batch_falsifier",
+            [0, 1, 2],
+            combos,
+            _mock_failing_runner,
+            falsifier=True,
+            batch_runner=batch_fn,
         )
         assert len(calls) == 0  # batch runner not used
 
@@ -680,9 +755,7 @@ output:
             config = load_sweep_config(f.name)
 
         assert config.obstacles is not None
-        assert config.obstacles.items[0].sweepable == {
-            "radius": {"linspace": [0.3, 1.5, 5]}
-        }
+        assert config.obstacles.items[0].sweepable == {"radius": {"linspace": [0.3, 1.5, 5]}}
         # Synthetic param merged into parameters
         assert "obstacle_0_radius" in config.parameters
         assert config.parameters["obstacle_0_radius"] == {"linspace": [0.3, 1.5, 5]}
@@ -777,7 +850,11 @@ output:
         assert config.obstacles is None
 
     def test_build_obstacle_fixed_params(self):
-        from cbfkit.benchmarks.sweep_config import ObstacleItemSpec, ObstaclesSpec, _build_obstacle_fixed_params
+        from cbfkit.benchmarks.sweep_config import (
+            ObstacleItemSpec,
+            ObstaclesSpec,
+            _build_obstacle_fixed_params,
+        )
 
         spec = ObstaclesSpec(
             type="circular",
@@ -802,12 +879,18 @@ output:
         assert "_obstacle_1_radius" not in fixed
 
     def test_extract_obstacle_sweep_params(self):
-        from cbfkit.benchmarks.sweep_config import ObstacleItemSpec, ObstaclesSpec, _extract_obstacle_sweep_params
+        from cbfkit.benchmarks.sweep_config import (
+            ObstacleItemSpec,
+            ObstaclesSpec,
+            _extract_obstacle_sweep_params,
+        )
 
         spec = ObstaclesSpec(
             type="circular",
             items=[
-                ObstacleItemSpec(fixed={"center": [3.0, 4.0]}, sweepable={"radius": {"values": [0.5, 1.0]}}),
+                ObstacleItemSpec(
+                    fixed={"center": [3.0, 4.0]}, sweepable={"radius": {"values": [0.5, 1.0]}}
+                ),
                 ObstacleItemSpec(fixed={"center": [6.0, 5.0], "radius": 1.2}, sweepable={}),
             ],
         )
