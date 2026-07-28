@@ -142,7 +142,7 @@ python benchmarks/qp_solver_comparison.py
 
 #### Multi-robot 3D coordination
 
-Cinematic 3D simulation rendering with Manim. Multi-robot reach-avoid in 3D, rendered via CBFKit's Manim backend. Shows the visualization stack scales from quick matplotlib plots to publication-quality 3D animations.
+Cinematic 3D simulation rendering with Manim. Multi-robot reach-avoid in 3D, rendered via CBFKit's Manim backend. Shows the visualization stack scales from quick matplotlib plots to publication-quality 3D animations. The same backend also renders 2D `CBFAnimator` scenes: pass `backend="manim"` (or `"manim-<low|medium|high|production>"`) to any `CBFAnimator` and `save("out.mp4")` produces a publication-quality video (`.gif` also supported).
 
 <p align="center"><img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/multi_robot_3d.gif" width="70%" alt="Manim 3D render of multi-robot reach-avoid"></p>
 
