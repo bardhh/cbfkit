@@ -29,7 +29,7 @@ def _point_to_ellipsoid_distance(p, c, r, R):
         return -np.min(r)
 
     u_normalized = u / norm_u
-    inv_r_squared = np.diag(1.0 / (r ** 2))
+    inv_r_squared = np.diag(1.0 / (r**2))
     K = u_normalized.T @ R @ inv_r_squared @ R.T @ u_normalized
     s = 1.0 / np.sqrt(K)
     x = c + s * u_normalized
@@ -60,9 +60,17 @@ def _ellipsoid_mesh(center, radii, rotation, n=12):
     return pts[:, 0], pts[:, 1], pts[:, 2], ii, jj, kk
 
 
-def _compute_distance_metrics(states, desired_states, num_robots, sdim,
-                              ellipse_centers, ellipse_radii, ellipse_rotations,
-                              include_min_dist, include_obs_dist):
+def _compute_distance_metrics(
+    states,
+    desired_states,
+    num_robots,
+    sdim,
+    ellipse_centers,
+    ellipse_radii,
+    ellipse_rotations,
+    include_min_dist,
+    include_obs_dist,
+):
     """Pre-compute distance arrays used by both backends."""
     N = len(states)
 
@@ -71,15 +79,19 @@ def _compute_distance_metrics(states, desired_states, num_robots, sdim,
     for i in range(num_robots):
         idx = sdim * i
         goal_dists[:, i] = np.linalg.norm(
-            states[:, idx:idx + 3] - desired_states[idx:idx + 3], axis=1,
+            states[:, idx : idx + 3] - desired_states[idx : idx + 3],
+            axis=1,
         )
 
-    # Min inter-robot distances (vectorized over robots)
+    # Min inter-robot distances (vectorized over robots).
+    # Only the first 3 columns of each robot's block are positions; including
+    # the remaining state (e.g. velocity) would report sqrt(|dp|^2 + |dv|^2),
+    # which overstates separation exactly when robots converge at speed.
     min_dists = None
     if include_min_dist:
         min_dists = np.zeros((N, num_robots))
         for t in range(N):
-            positions = states[t, :].reshape(num_robots, sdim)
+            positions = states[t, : num_robots * sdim].reshape(num_robots, sdim)[:, :3]
             diffs = positions[:, np.newaxis, :] - positions[np.newaxis, :, :]
             dists = np.linalg.norm(diffs, axis=2)
             np.fill_diagonal(dists, np.inf)
@@ -93,11 +105,14 @@ def _compute_distance_metrics(states, desired_states, num_robots, sdim,
         for t in range(N):
             for i in range(num_robots):
                 idx = sdim * i
-                p = states[t, idx:idx + 3]
+                p = states[t, idx : idx + 3]
                 dmin = np.inf
                 for j in range(num_obs):
                     d = _point_to_ellipsoid_distance(
-                        p, ellipse_centers[j], ellipse_radii[j], ellipse_rotations[j],
+                        p,
+                        ellipse_centers[j],
+                        ellipse_radii[j],
+                        ellipse_rotations[j],
                     )
                     dmin = min(dmin, d)
                 obs_dists[t, i] = dmin
