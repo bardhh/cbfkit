@@ -17,6 +17,7 @@ SCRIPTS_TO_TEST = [
     "examples/unicycle/reach_goal/unicycle_reach_avoid_cbf.py",
     "examples/unicycle/reach_goal/vanilla_cbf_accel_unicycle.py",
     "examples/unicycle/reach_goal/risk_aware_cbf_monte_carlo.py",
+    "examples/unicycle/reach_goal/manim_2d_animation.py",
     # "examples/unicycle/reach_goal/risk_aware_cbf.py",  # Disabled: needs visualization fix
     # Differential drive examples
     "examples/differential_drive/obstacle_avoidance/single_robot_cbf.py",
@@ -97,9 +98,9 @@ def test_example_script_execution(script_path, solver, tmp_path):
     # Ensure tmp_path (for generated/copied modules), src and root (for examples) are in python path
     # Prepend tmp_path to PYTHONPATH so that imported modules (like 'tutorials') are loaded
     # from the temporary directory (where code generation happens) instead of the source tree.
-    env[
-        "PYTHONPATH"
-    ] = f"{tmp_path}{os.pathsep}{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
+    env["PYTHONPATH"] = (
+        f"{tmp_path}{os.pathsep}{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
+    )
 
     # Copy script parent directory to tmp_path to ensure relative assets/imports work
     # and to isolate output files.

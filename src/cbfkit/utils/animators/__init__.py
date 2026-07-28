@@ -15,8 +15,7 @@ Supports three backends:
 """
 
 from .animator import CBFAnimator
-from .manim_backend import CBFAnimator2DScene
-from .config import AnimationConfig, DEFAULT_CONFIG
+from .config import DEFAULT_CONFIG, AnimationConfig
 from .deps import (
     _HAS_MANIM,
     _HAS_MATPLOTLIB,
@@ -26,6 +25,7 @@ from .deps import (
     _require_plotly,
 )
 from .helpers import save_animation
+from .manim_backend import CBFAnimator2DScene
 
 __all__ = [
     "AnimationConfig",

@@ -34,7 +34,6 @@ try:
         Line,
         Scene,
         Text,
-        TracedPath,  # noqa: F401  (re-exported for parity with the 3D module)
         ValueTracker,
         VGroup,
         rate_functions,

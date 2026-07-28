@@ -335,8 +335,10 @@ class TestPredictionComputation:
         a = CBFAnimator(states, dt=0.1)
         a.add_prediction(
             source="linear",
-            agent_x_idx=0, agent_y_idx=1,
-            agent_vx_idx=2, agent_vy_idx=3,
+            agent_x_idx=0,
+            agent_y_idx=1,
+            agent_vx_idx=2,
+            agent_vy_idx=3,
             horizon=4,
         )
         spec = a._predictions[0]
@@ -355,8 +357,10 @@ class TestPredictionComputation:
         a = CBFAnimator(states, dt=0.1)
         a.add_prediction(
             source="linear",
-            agent_x_idx=0, agent_y_idx=1,
-            agent_vx_idx=2, agent_vy_idx=3,
+            agent_x_idx=0,
+            agent_y_idx=1,
+            agent_vx_idx=2,
+            agent_vy_idx=3,
             horizon=5,
         )
         px, py = a._compute_prediction(a._predictions[0], frame=0)
@@ -576,8 +580,10 @@ class TestManimBackend:
         a.show_time()
         a.add_prediction(
             source="linear",
-            agent_x_idx=0, agent_y_idx=1,
-            agent_vx_idx=2, agent_vy_idx=3,
+            agent_x_idx=0,
+            agent_y_idx=1,
+            agent_vx_idx=2,
+            agent_vy_idx=3,
             horizon=5,
         )
         out = a.save(str(tmp_path / "manim_smoke.mp4"))
