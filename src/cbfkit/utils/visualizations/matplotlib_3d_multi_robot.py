@@ -8,12 +8,27 @@ from .helpers_3d import _plot_ellipse_3d
 
 
 def _visualize_3d_matplotlib(
-    states, desired_states, desired_state_radius, num_robots,
-    ellipse_centers, ellipse_radii, ellipse_rotations,
-    x_lim, y_lim, z_lim, dt, sdim, title, save_animation,
-    animation_filename, include_min_distance_plot,
-    include_min_distance_to_obstacles_plot, threshold,
-    goal_dists, min_dists, obs_dists,
+    states,
+    desired_states,
+    desired_state_radius,
+    num_robots,
+    ellipse_centers,
+    ellipse_radii,
+    ellipse_rotations,
+    x_lim,
+    y_lim,
+    z_lim,
+    dt,
+    sdim,
+    title,
+    save_animation,
+    animation_filename,
+    include_min_distance_plot,
+    include_min_distance_to_obstacles_plot,
+    threshold,
+    goal_dists,
+    min_dists,
+    obs_dists,
 ):
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation
@@ -61,8 +76,12 @@ def _visualize_3d_matplotlib(
         color = colors[i % num_robots]
 
         ax_traj.scatter(
-            desired_states[idx], desired_states[idx + 1], desired_states[idx + 2],
-            color=color, s=50, label=f"Desired State {i + 1}",
+            desired_states[idx],
+            desired_states[idx + 1],
+            desired_states[idx + 2],
+            color=color,
+            s=50,
+            label=f"Desired State {i + 1}",
         )
         u = np.linspace(0, 2 * np.pi, 50)
         v = np.linspace(0, np.pi, 50)
@@ -89,7 +108,15 @@ def _visualize_3d_matplotlib(
         ax_min_dist.set_ylabel("Minimum Distance [m]")
         ax_min_dist.set_title("Min Distance Between Robots")
         ax_min_dist.grid(True)
-        ax_min_dist.set_ylim(0, float(np.max(min_dists)) * 1.1)
+        # Include the threshold in the range, else a run that violates the
+        # constraint throughout renders as a clean plot with the reference
+        # line clipped off-screen.
+        md_top = float(np.max(min_dists)) * 1.1
+        if not np.isfinite(md_top):
+            md_top = 0.0
+        if threshold is not None and threshold >= 0:
+            md_top = max(md_top, float(threshold) * 1.15)
+        ax_min_dist.set_ylim(0, md_top if md_top > 1e-6 else 1.0)
         if threshold is not None:
             ax_min_dist.axhline(y=threshold, color="red", linestyle="--", label="Threshold")
         for i in range(num_robots):
@@ -145,8 +172,12 @@ def _visualize_3d_matplotlib(
         return artists
 
     ani = FuncAnimation(
-        fig, update, frames=N,
-        init_func=init, blit=True, interval=dt * 1000,
+        fig,
+        update,
+        frames=N,
+        init_func=init,
+        blit=True,
+        interval=dt * 1000,
     )
 
     plt.tight_layout()
