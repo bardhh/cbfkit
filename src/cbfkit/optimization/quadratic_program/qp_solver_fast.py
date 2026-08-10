@@ -13,6 +13,7 @@ from typing import Optional, Tuple
 from jax import Array
 
 from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
+    DEFAULT_MAX_ITER,
     PdipmState,
     solve_qp_pdipm,
 )
@@ -24,13 +25,17 @@ def solve_qp_fast(
     G: Array,
     h: Array,
     warm_start: Optional[Array] = None,
-    max_iter: int = 25,
+    max_iter: Optional[int] = None,
     tol: float = 1e-6,
 ) -> Tuple[Array, int, Array]:
     """Backward-compatible alias for solve_qp_pdipm.
 
     Returns ``(x, status, dual)``. For full state including primal slacks
     (needed for richer warm-starting), call ``solve_qp_pdipm`` directly.
+
+    ``max_iter=None`` defers to ``qp_solver_pdipm.DEFAULT_MAX_ITER`` rather
+    than pinning its own copy of the budget, so tuning the solver default is
+    not silently masked here.
 
     Note: the legacy interface accepted an Array as ``warm_start`` (the dual
     only). To preserve that signature, we wrap it in a minimal ``PdipmState``
@@ -55,7 +60,7 @@ def solve_qp_fast(
         G,
         h,
         warm_start=warm,
-        max_iter=max_iter,
+        max_iter=DEFAULT_MAX_ITER if max_iter is None else max_iter,
         tol=tol,
     )
     return x, status, state.dual

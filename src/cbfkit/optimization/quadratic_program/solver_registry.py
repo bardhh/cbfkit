@@ -3,6 +3,19 @@
 Provides a common ``QpSolution`` return type and factory functions that wrap
 each backend (jaxopt, cvxopt, casadi) behind a single callable signature.
 
+**Objective convention.** Every solver returned by :func:`get_solver` solves
+
+.. math::
+
+    \\min_x \\; x^T H x + f^T x \\quad \\text{s.t.} \\quad G x \\le h \\;(, A x = b)
+
+This matches the CBF-CLF-QP generator, which passes ``f = -2 H u_nom`` so the
+unconstrained minimizer is ``u_nom``.  Backends whose native form is
+``min 1/2 x^T P x + q^T x`` (OSQP, CVXOPT, PDIPM) are adapted at this boundary
+(``P = 2 H`` or equivalently ``q = f/2``); the raw modules
+(``qp_solver_pdipm.solve_qp_pdipm``, ``qp_solver_cvxopt.solve``) keep their
+native halved convention.
+
 Usage::
 
     from cbfkit.optimization.quadratic_program import get_solver
@@ -168,7 +181,7 @@ def casadi_solver() -> QpSolverCallable:
 # ---------------------------------------------------------------------------
 
 
-def fast_solver(max_iter: int = 25, tol: float = 1e-6) -> QpSolverCallable:
+def fast_solver(max_iter: Optional[int] = None, tol: float = 1e-6) -> QpSolverCallable:
     """Fast PDIPM solver for small CBF-CLF problems.
 
     Mehrotra predictor-corrector primal-dual interior-point method. Designed
@@ -181,14 +194,23 @@ def fast_solver(max_iter: int = 25, tol: float = 1e-6) -> QpSolverCallable:
     (see ``benchmarks/qp_solver_comparison.py``). JIT-compatible and
     warm-startable across consecutive control steps.
 
+    Inequality constraints only: passing ``a_mat``/``b_vec`` raises
+    ``NotImplementedError`` rather than dropping them.
+
     Args:
-        max_iter: Maximum PDIPM iterations (default 25; ~10-15 typically suffice).
+        max_iter: Maximum PDIPM iterations. ``None`` (default) defers to
+            ``qp_solver_pdipm.DEFAULT_MAX_ITER`` so the solver's calibrated
+            budget is not silently pinned here.
         tol: Combined primal/dual/complementarity residual tolerance.
     """
     from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
+        DEFAULT_MAX_ITER,
         PdipmState,
         solve_qp_pdipm,
     )
+
+    if max_iter is None:
+        max_iter = DEFAULT_MAX_ITER
 
     def solve_with_details(
         h_mat: Array,
@@ -199,8 +221,19 @@ def fast_solver(max_iter: int = 25, tol: float = 1e-6) -> QpSolverCallable:
         b_vec: Optional[Array] = None,
         init_params: Any = None,
     ) -> QpSolution:
+        if a_mat is not None or b_vec is not None:
+            raise NotImplementedError(
+                "The 'fast' (PDIPM) backend solves inequality-constrained QPs only "
+                "(min x'Hx + f'x s.t. Gx <= h), but was given equality constraints "
+                "via a_mat/b_vec. Silently dropping them would return a solution "
+                "that violates Ax = b — e.g. an MPC trajectory ignoring its own "
+                "dynamics. Use get_solver('jaxopt') or get_solver('casadi'), which "
+                "support equality constraints."
+            )
+
         if g_mat is None or h_vec is None:
-            x = jnp.linalg.solve(h_mat, -f_vec)
+            # Registry convention min x'Hx + f'x  =>  2H x* = -f.
+            x = jnp.linalg.solve(2.0 * h_mat, -f_vec)
             return QpSolution(primal=x, status=1, params=None)
 
         # Extract warm-start state from previous QpSolution.params
@@ -213,8 +246,11 @@ def fast_solver(max_iter: int = 25, tol: float = 1e-6) -> QpSolverCallable:
             elif isinstance(init_params, PdipmState):
                 warm = init_params
 
+        # Convention adapter: solve_qp_pdipm natively solves
+        # min 1/2 x'Px + q'x; the registry convention is min x'Hx + f'x,
+        # so pass P = 2H (the jaxopt wrapper adapts via q = f/2 instead).
         sol, status, state = solve_qp_pdipm(
-            h_mat,
+            2.0 * h_mat,
             f_vec,
             g_mat,
             h_vec,

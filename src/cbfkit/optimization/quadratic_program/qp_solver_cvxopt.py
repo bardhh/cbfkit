@@ -104,8 +104,12 @@ def solve_with_details(
 
     ``init_params`` is accepted for interface compatibility but ignored
     (CVXOPT does not support warm-starting).
+
+    Note: the registry convention is ``min x'Hx + f'x`` while CVXOPT's native
+    form is ``min 1/2 x'Px + q'x``; the ``P = 2H`` conversion happens here so
+    all ``get_solver()`` backends agree (see ``solver_registry`` docstring).
     """
     from cbfkit.optimization.quadratic_program.solver_registry import QpSolution
 
-    primal, success = solve(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
+    primal, success = solve(2.0 * h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
     return QpSolution(primal=primal, status=1 if success else 0, params=None)

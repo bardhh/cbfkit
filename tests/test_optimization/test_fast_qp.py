@@ -1,7 +1,5 @@
 """Tests for the fast small-QP solver and its integration with CBF-CLF-QP."""
 
-import pytest
-import jax
 import jax.numpy as jnp
 from jax import random
 
@@ -110,15 +108,21 @@ class TestFastSolverRegistry:
         assert solver.solver_name == "fast"
 
     def test_fast_solver_via_registry(self):
+        """Registry convention: min x'Hx + f'x (matches jaxopt/casadi backends).
+
+        With H=I, f=-2*[1,2] the minimizer is [1,2] — NOT [2,4], which is
+        what the pre-fix wrapper returned by feeding (H, f) straight into
+        the native ``min 1/2 x'Px + q'x`` PDIPM form.
+        """
         solver = get_solver("fast")
         P = jnp.eye(2)
         q = jnp.array([-2.0, -4.0])
         G = jnp.array([[1, 0], [-1, 0], [0, 1], [0, -1.0]])
         h = jnp.array(
             [3.0, 3.0, 5.0, 5.0]
-        )  # box [-3,3] x [-5,5] — unconstrained opt [2,4] is feasible
+        )  # box [-3,3] x [-5,5] — unconstrained opt [1,2] is feasible
         sol = solver(P, q, G, h)
-        assert jnp.allclose(sol.primal, jnp.array([2.0, 4.0]), atol=1e-4)
+        assert jnp.allclose(sol.primal, jnp.array([1.0, 2.0]), atol=1e-4)
         assert int(sol.status) == 1
 
     def test_fast_solver_warm_start_via_registry(self):
