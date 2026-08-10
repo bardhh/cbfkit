@@ -41,7 +41,7 @@ class TestStepToBoundary:
 class TestNewtonReduced:
     def test_H_is_positive_definite(self):
         """H = P + G^T diag(lam/s) G must be PD when P is PD and s, lam > 0."""
-        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import _solve_newton_reduced
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import _factor_newton_reduced
         from jax import random
 
         key = random.PRNGKey(0)
@@ -49,23 +49,29 @@ class TestNewtonReduced:
         G = random.normal(key, (5, 3))
         s = jnp.array([0.5, 1.0, 1.5, 2.0, 0.1])
         lam = jnp.array([0.2, 0.8, 1.0, 0.05, 2.0])
-        rhs = jnp.ones(3)
         # Build H exactly as the helper would
         D = lam / s
         H = P + G.T @ (D[:, None] * G) + 1e-10 * jnp.eye(3)
         eigs = jnp.linalg.eigvalsh((H + H.T) / 2)
         assert float(eigs[0]) > 0, f"H not PD, min eig = {float(eigs[0])}"
+        # The Cholesky factor returned by the helper must reproduce H
+        L = _factor_newton_reduced(P, G, s, lam)
+        assert float(jnp.max(jnp.abs(L @ L.T - H))) < 1e-8
 
     def test_solves_system(self):
-        """_solve_newton_reduced returns dx such that H dx = rhs."""
-        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import _solve_newton_reduced
+        """factor + solve_with_factor returns dx such that H dx = rhs."""
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
+            _factor_newton_reduced,
+            _solve_with_factor,
+        )
 
         P = jnp.diag(jnp.array([1.0, 1.0]))
         G = jnp.array([[1.0, 0.0], [0.0, 1.0], [-1.0, -1.0]])
         s = jnp.array([1.0, 1.0, 1.0])
         lam = jnp.array([0.5, 0.5, 0.5])
         rhs = jnp.array([1.0, 2.0])
-        dx = _solve_newton_reduced(P, G, s, lam, rhs)
+        L = _factor_newton_reduced(P, G, s, lam)
+        dx = _solve_with_factor(L, rhs)
         D = lam / s
         H = P + G.T @ (D[:, None] * G) + 1e-10 * jnp.eye(2)
         residual = H @ dx - rhs
@@ -82,18 +88,25 @@ class TestPdipmIteration:
         return P, q, G, h
 
     def test_iteration_keeps_strict_interior(self):
-        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import _pdipm_iteration
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
+            _pdipm_iteration,
+            _residuals,
+        )
 
         P, q, G, h = self._make_simple_qp()
         x = jnp.zeros(2)
         s = jnp.ones(4)
         lam = jnp.ones(4)
-        x_new, s_new, lam_new = _pdipm_iteration(P, q, G, h, x, s, lam)
+        r_d, r_p = _residuals(P, q, G, h, x, s, lam)
+        x_new, s_new, lam_new = _pdipm_iteration(P, G, x, s, lam, r_d, r_p)
         assert float(jnp.min(s_new)) > 0.0, f"slack went non-positive: {s_new}"
         assert float(jnp.min(lam_new)) > 0.0, f"dual went non-positive: {lam_new}"
 
     def test_iteration_reduces_residual(self):
-        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import _pdipm_iteration
+        from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
+            _pdipm_iteration,
+            _residuals,
+        )
 
         P, q, G, h = self._make_simple_qp()
         x = jnp.zeros(2)
@@ -107,7 +120,8 @@ class TestPdipmIteration:
             return float(jnp.linalg.norm(r_d)) + float(jnp.linalg.norm(r_p)) + r_c
 
         r0 = residual_norm(x, s, lam)
-        x1, s1, lam1 = _pdipm_iteration(P, q, G, h, x, s, lam)
+        r_d, r_p = _residuals(P, q, G, h, x, s, lam)
+        x1, s1, lam1 = _pdipm_iteration(P, G, x, s, lam, r_d, r_p)
         r1 = residual_norm(x1, s1, lam1)
         assert r1 < r0, f"residual did not decrease: {r0} -> {r1}"
 
@@ -211,7 +225,6 @@ class TestWarmStart:
     def test_warm_start_reduces_iters_to_convergence(self):
         """Warm-started solve from prior optimum converges with extremely loose iter budget."""
         from cbfkit.optimization.quadratic_program.qp_solver_pdipm import (
-            PdipmState,
             solve_qp_pdipm,
         )
 
