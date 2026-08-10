@@ -1,4 +1,27 @@
-from typing import Any, Callable, Dict, Tuple
+"""
+risk_aware_path_integral_clfs.py
+=================================
+
+.. deprecated::
+    **NON-FUNCTIONAL STUB — the path integral never accumulates.**
+
+    This is the CLF counterpart of ``risk_aware_path_integral_cbfs.py`` and shares
+    its defect.  The generator body unconditionally overwrites
+    ``ra_params.integrator_states`` with zeros, and no term anywhere in the package
+    ever increments it, so ``w_vals`` collapses to the constant
+    ``gamma + r_buffer`` at every timestep instead of tracking an accumulated
+    integral.  The root cause is architectural: this function receives only
+    ``(t, x)`` and cannot accumulate mutable state across calls inside a JIT/scan
+    loop without a proper carry mechanism.
+
+    See ``cbfkit.controllers.cbf_clf.accumulating_risk_aware_cbf`` for the pattern
+    that carries the integral correctly in ``ControllerData.sub_data``.
+
+    This module is kept for backward compatibility only.  Its runtime behaviour is
+    unchanged so that existing tests continue to pass.
+"""
+
+from typing import Any, Callable, Tuple
 
 import jax.numpy as jnp
 from jax import Array, jit, lax, scipy
@@ -31,7 +54,7 @@ def generate_compute_ra_pi_clf_constraints(
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     conditions = lyapunovs[-1]
     compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
-    n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
+    n_con, _n_bfs, n_lfs, a_clf_template, b_clf_template, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs
     )
     scale_clf = kwargs.get("scale_clf", 1.0)
@@ -57,24 +80,36 @@ def generate_compute_ra_pi_clf_constraints(
         r_buffer = 0.0
 
     ra_params.integrator_states = jnp.zeros((n_lfs,))
+    integrator_states_template = ra_params.integrator_states
 
     @jit
     def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
-        nonlocal a_clf, b_clf, ra_params
         data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
         assert ra_params.sigma is not None
         sigma = ra_params.sigma(x)
-        ra_params.integrator_states = lax.cond(
-            t == 0, lambda _: jnp.zeros((n_lfs,)), lambda _: ra_params.integrator_states, 0
+
+        # Bind the zero templates to locals. Rebinding the enclosing names instead
+        # would store this trace's tracers in the closure, so the next trace (new
+        # dtype/shape, or disable_jit) would read a leaked tracer.
+        a_clf = a_clf_template
+        b_clf = b_clf_template
+
+        # Per the module docstring this integrator never accumulates: no term
+        # anywhere increments it, so both branches yield the construction-time
+        # zeros and the reset is a no-op. It is kept (reading the concrete
+        # template, never the mutated attribute) so the reset-at-t==0 intent
+        # survives for whoever threads a real carry through ControllerData.
+        integrator_states = lax.cond(
+            t == 0, lambda _: jnp.zeros((n_lfs,)), lambda _: integrator_states_template, 0
         )
 
         if n_lfs > 0:
             lf_x, lj_x, lh_x, dlf_t, _ = compute_lyapunov_values(t, x)
             assert ra_params.gamma is not None
             # Ensure array types for addition
-            w_vals = ra_params.integrator_states + ra_params.gamma + r_buffer
+            w_vals = integrator_states + ra_params.gamma + r_buffer
             lc_x = jnp.stack([lc(w_vals[ii]) for ii, lc in enumerate(conditions)])
             traces = batched_hessian_trace(sigma, lh_x)
 

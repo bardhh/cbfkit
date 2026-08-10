@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Tuple, Union, cast
+from typing import Callable, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -21,7 +21,7 @@ def ct_ukf_dtmeas(
         step_ukf (Callable): function handle to compute the next UKF observer state
     """
     predict = predict_ct_dtmeas(Q, dynamics, dt)
-    update = update_dtmeas(R, h)
+    update = update_dtmeas(R, h, Q.shape[0])
 
     def step_ukf(
         t: Time,
@@ -111,21 +111,23 @@ def predict_ct_dtmeas(
 
 
 def update_dtmeas(
-    R: Array, h: Callable[[Array], Array]
+    R: Array, h: Callable[[Array], Array], n_states: int
 ) -> Callable[[Array, Array, Array], Tuple[Array, Array]]:
-    """Function defining the update step for (any) EKF with discrete-time measurements.
+    """Function defining the update step for the UKF with discrete-time measurements.
 
     Arguments:
         R (Array): measurement noise covariance matrix
         h (Callable): measurement model
-        dhdx (Callable): linearized measurement model
+        n_states (int): dimension of the observer state
 
 
     Returns
     -------
-        update (Callable): function handle to compute the updated EKF state and covariance matrix
+        update (Callable): function handle to compute the updated UKF state and covariance matrix
     """
-    sigma_points = generate_sigma_points(R.shape[0], scheme=1)
+    # Sigma points are drawn over the state, so the unscented transform is
+    # parameterized by the state dimension, not the measurement dimension.
+    sigma_points = generate_sigma_points(n_states, scheme=1)
 
     def update(z: Array, y: Array, P: Array) -> Tuple[Array, Array]:
         """Update step for (any)) EKF with discrete-time measurements.
@@ -223,8 +225,13 @@ def generate_sigma_points(
         Returns
         -------
         """
-        # Cholesky decomposition of covariance matrix
-        A = jnp.linalg.cholesky(P)
+        # Cholesky decomposition of covariance matrix. LAPACK's factorization
+        # returns NaN for a zero pivot, but an all-zero P is a legitimate
+        # "no prior uncertainty" seed (the simulator's default initial
+        # covariance): its factor is exactly zero, so the sigma points collapse
+        # to the mean and the predict step restores spread via Q. Genuinely
+        # degenerate or NaN covariances still fail loudly.
+        A = jnp.where(jnp.all(P == 0.0), jnp.zeros_like(P), jnp.linalg.cholesky(P))
 
         # Initialize sigma points and weights
         sigma_points = jnp.zeros((2 * L + 1, len(z)))

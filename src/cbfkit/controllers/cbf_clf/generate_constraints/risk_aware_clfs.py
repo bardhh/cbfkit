@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Tuple
 
 import jax.numpy as jnp
 from jax import Array, jit, lax, scipy
@@ -31,7 +31,7 @@ def generate_compute_ra_clf_constraints(
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
-    n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
+    n_con, _n_bfs, n_lfs, a_clf_template, b_clf_template, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs
     )
     scale_clf = kwargs.get("scale_clf", 1.0)
@@ -54,11 +54,16 @@ def generate_compute_ra_clf_constraints(
     @jit
     def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
-        nonlocal a_clf, b_clf
         data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
         assert ra_params.sigma is not None
         sigma = ra_params.sigma(x)
+
+        # Bind the zero templates to locals. Rebinding the enclosing names instead
+        # would store this trace's tracers in the closure, so the next trace (new
+        # dtype/shape, or disable_jit) would read a leaked tracer.
+        a_clf = a_clf_template
+        b_clf = b_clf_template
 
         if n_lfs > 0:
             lf_x, lj_x, lh_x, dlf_t, lc_x = compute_lyapunov_values(t, x)
@@ -93,7 +98,7 @@ def generate_compute_estimate_feedback_ra_clf_constraints(
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
-    n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
+    n_con, _n_bfs, n_lfs, a_clf_template, b_clf_template, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs
     )
     scale_clf = kwargs.get("scale_clf", 1.0)
@@ -119,11 +124,15 @@ def generate_compute_estimate_feedback_ra_clf_constraints(
     @jit
     def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
-        nonlocal a_clf, b_clf
         data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
         # Get K matrix from kwargs (passed from estimator state)
         k_mat = kwargs.get("kalman_gain", jnp.zeros((x.shape[0], x.shape[0])))
+
+        # See the note in generate_compute_ra_clf_constraints: the enclosing
+        # templates must stay concrete, so this trace works on locals.
+        a_clf = a_clf_template
+        b_clf = b_clf_template
 
         if n_lfs > 0:
             lf_x, lj_x, lh_x, dlf_t, lc_x = compute_lyapunov_values(t, x)

@@ -26,7 +26,7 @@ Examples
 >>> )
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, Optional, Tuple, Union, cast
 
 import jax.numpy as jnp
 import jax.debug as jdebug
@@ -34,12 +34,10 @@ from jax import Array, jit, lax, tree_util
 
 from cbfkit.certificates import concatenate_certificates
 from cbfkit.optimization.quadratic_program.solver_registry import (
-    QpSolution,
     get_solver,
 )
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
-    CbfClfQpConfig,
     CbfClfQpData,
     CbfClfQpGenerator,
     CertificateCollection,
@@ -154,6 +152,7 @@ def cbf_clf_qp_generator(
         slack_bound_clf: float = 1e9,
         slack_penalty_cbf: float = 2e3,
         slack_penalty_clf: float = 2e3,
+        report_failures: bool = False,
         **kwargs: Any,
     ) -> ControllerCallable:
         """Produces the function to deploy a CBF-CLF-QP control law.
@@ -177,6 +176,12 @@ def cbf_clf_qp_generator(
             slack_bound_clf (float): Maximum slack for CLF constraints (default: 1e9).
             slack_penalty_cbf (float): Penalty weight for CBF slack variables (default: 2e3).
             slack_penalty_clf (float): Penalty weight for CLF slack variables (default: 2e3).
+            report_failures (bool): whether to emit human-readable diagnostics when the QP
+                fails (default: False). The reporter is built from ``jax.debug`` host
+                callbacks, which cannot be optimized out of the compiled graph, so enabling
+                it costs roughly 60us per step on the success path as well. Turn it on when
+                debugging solver failures, not in benchmarks or production loops. The solver
+                status is recorded in ``sub_data["solver_status"]`` either way.
             **kwargs (CbfClfQpConfig): keyword arguments.
 
         Returns
@@ -468,7 +473,6 @@ def cbf_clf_qp_generator(
             # Avoid normalizing noise vectors. If norm < tol, do NOT scale up.
             # Input constraints (box limits) are already normalized (row norm = 1).
             impossible_constraints = jnp.array(False)
-            autodiff_safety_override = jnp.array(False)
             if auto_p_mat:
                 # Compute norms with overflow/underflow-safe scaling.
                 row_max = jnp.max(jnp.abs(g_mat_c), axis=1)
@@ -493,11 +497,13 @@ def cbf_clf_qp_generator(
                 infeasible_zero_rows = lax.stop_gradient(zero_rows & (h_vec_c < -1e-12))
                 impossible_constraints = jnp.any(infeasible_zero_rows)
                 feasible_zero_rows = lax.stop_gradient(zero_rows & (~infeasible_zero_rows))
-                autodiff_safety_override = lax.stop_gradient(jnp.any(feasible_zero_rows))
                 h_vec_c = jnp.where(feasible_zero_rows, 1.0, h_vec_c)
 
                 # Add an inactive regularization row for feasible degenerate constraints
-                # so reverse-mode differentiation avoids singular sensitivities.
+                # so reverse-mode differentiation avoids singular sensitivities. Rewriting
+                # the row is the whole remedy: a degenerate row carries no information, so
+                # replacing it with an inactive one leaves the QP's feasible set unchanged
+                # and its solution is still the control that must be applied.
                 reg_rows = jnp.zeros_like(g_mat_c)
                 reg_rows = reg_rows.at[:, 0].set(1e-6)
                 g_mat_c = jnp.where(feasible_zero_rows[:, None], reg_rows, g_mat_c)
@@ -526,10 +532,6 @@ def cbf_clf_qp_generator(
 
             if "solver_params" in controller_sub_data:
                 solver_params = controller_sub_data["solver_params"]
-
-            safe_nominal_u = jnp.clip(
-                u_nom[:n_con], -control_limits[:n_con], control_limits[:n_con]
-            )
 
             def _solve_with(p_local: Array, q_local: Array, g_local: Array, h_local: Array):
                 sol_local, status_local, new_params_local = solve_qp(
@@ -573,20 +575,22 @@ def cbf_clf_qp_generator(
             new_params = tree_util.tree_map(lax.stop_gradient, new_params)
             iter_num = lax.stop_gradient(iter_num)
 
+            # The applied control is the QP solution whenever the solve succeeded, and NaN
+            # otherwise. Substituting the nominal control for a solved QP would hand the
+            # plant an unfiltered input while still reporting success -- an unsafe control
+            # that no downstream check can see. Infeasibility is surfaced through `error`.
             success = status == 1
-            solved_u = lax.cond(
+            u = lax.cond(
                 success,
                 lambda _fake: sol[:n_con],
                 lambda _fake: jnp.full_like(u_nom[:n_con], jnp.nan),
                 0,
             )
-            u = lax.cond(
-                autodiff_safety_override,
-                lambda _fake: lax.stop_gradient(safe_nominal_u),
-                lambda _fake: solved_u,
-                0,
-            )
 
+            # The reporter below is built from jax.debug host callbacks. Those cannot be
+            # elided by XLA, so they are paid on every step -- including successful ones --
+            # even though they only print on failure. Tracing it out entirely when
+            # report_failures is False keeps the compiled graph callback-free.
             def _print_failure(status, iter_num, sub_data):
                 # Map status codes to human-readable strings
                 def print_status_msg(msg):
@@ -646,19 +650,20 @@ def cbf_clf_qp_generator(
                 if "lfs" in sub_data:
                     jdebug.print("   -> Lyapunov Values (V): {V}", V=sub_data["lfs"])
 
-            # Only print failure if we weren't already in error state
-            prev_error = data.error if data.error is not None else jnp.array(False)
-            should_print = jnp.logical_not(success) & jnp.logical_not(prev_error)
+            if report_failures:
+                # Only print failure if we weren't already in error state
+                prev_error = data.error if data.error is not None else jnp.array(False)
+                should_print = jnp.logical_not(success) & jnp.logical_not(prev_error)
 
-            # Debug hook: Print failure details if solver failed AND it's a new failure
-            lax.cond(
-                should_print,
-                _print_failure,
-                lambda *_: None,
-                status,
-                iter_num,
-                sub_data,
-            )
+                # Debug hook: Print failure details if solver failed AND it's a new failure
+                lax.cond(
+                    should_print,
+                    _print_failure,
+                    lambda *_: None,
+                    status,
+                    iter_num,
+                    sub_data,
+                )
 
             error = lax.cond(success, lambda _fake: False, lambda _fake: True, 0)
 
