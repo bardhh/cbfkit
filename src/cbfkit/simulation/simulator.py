@@ -9,9 +9,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 import os
 import time
 
-import jax
 import jax.numpy as jnp
-import jax.tree_util
 import numpy as np
 from jax import Array, random
 
@@ -38,7 +36,7 @@ from .callbacks import LoggingCallback, ProgressCallback, SimulationCallback
 from .formatting import format_return_data
 from .simulator_jit import INTEGRATION_NAN_ERROR, simulator_jit
 from .status import (
-    SOLVER_STATUS_MAP,
+    SOLVER_STATUS_MAP,  # noqa: F401  (re-exported; external code imports it from here)
     _check_simulation_status,
     _default_estimator,
     _default_perturbation,
@@ -47,6 +45,44 @@ from .status import (
 )
 from .ui import create_progress, print_jit_status
 from .utils import SimulationStepData
+
+
+class _JitProgressHook:
+    """Host-side progress callback whose identity is stable across ``execute()`` calls.
+
+    ``simulator_jit`` takes ``progress_callback`` as a static argument, so a
+    fresh closure per call would miss the JIT cache and recompile the whole
+    simulation every run. A single instance is reused instead and re-bound to
+    the live progress bar before each run; the compiled computation captures
+    this object once and calls through to whichever bar is currently bound.
+    """
+
+    __slots__ = ("_bar", "_task_id", "_last_step")
+
+    def __init__(self) -> None:
+        self._bar: Any = None
+        self._task_id: Any = None
+        self._last_step: int = -1
+
+    def bind(self, bar: Any, task_id: Any) -> None:
+        self._bar = bar
+        self._task_id = task_id
+        self._last_step = -1
+
+    def unbind(self) -> None:
+        self._bar = None
+        self._task_id = None
+
+    def __call__(self, step_idx: int) -> None:
+        if self._bar is None or self._task_id is None:
+            return
+        step_delta = step_idx - self._last_step
+        if step_delta > 0:
+            self._bar.update(self._task_id, advance=step_delta)
+            self._last_step = step_idx
+
+
+_JIT_PROGRESS_HOOK = _JitProgressHook()
 
 
 def simulator(
@@ -64,6 +100,7 @@ def simulator(
     key: Array,
     callbacks: Optional[List[SimulationCallback]] = None,
     stl_trajectory_cost: Optional[StlTrajectoryCostCallable] = None,
+    log_planner_samples: bool = False,
 ) -> Callable[
     [Array, Optional[ControllerData], Optional[PlannerData]],
     Iterator[SimulationStepData],
@@ -160,9 +197,19 @@ def simulator(
                 xs_buf = xs_buf.at[:, s + 1].set(x)
                 planner_data = planner_data._replace(xs=xs_buf[:, : s + 2])
 
-            # Strip sampled_x_traj before logging to avoid accumulating
-            # massive MPPI sample arrays (num_samples * state_dim * horizon per step)
-            planner_data_for_log = planner_data._replace(sampled_x_traj=None)
+            # Strip the fields that must not accumulate before logging:
+            # sampled_x_traj holds a full MPPI sample batch (num_samples *
+            # state_dim * horizon) per step, and xs is a growing slice of the
+            # trajectory buffer, so retaining one per step costs O(N^2) memory.
+            # Both are still carried on planner_data for the next step; xs is
+            # also dropped by format_return_data for having inconsistent shapes.
+            # log_planner_samples opts the sample batch back in for callers that
+            # animate the rollout cloud; xs is dropped either way.
+            planner_data_for_log = (
+                planner_data._replace(xs=None)
+                if log_planner_samples
+                else planner_data._replace(sampled_x_traj=None, xs=None)
+            )
 
             # Use the list for step data to avoid JAX array overhead for logging
             step_data = SimulationStepData(
@@ -235,12 +282,25 @@ def execute(
     use_jit: Union[bool, str] = "auto",
     jit_progress: bool = False,
     jit_progress_interval: int = 50,
+    log_planner_samples: bool = False,
 ) -> SimulationResults:
     """Executes a complete simulation of the dynamical system.
 
     This function runs the simulation for `num_steps` starting from `x0`.
     It can execute either in a standard Python loop or using JAX JIT compilation
     for performance.
+
+    Build once, call many
+    ---------------------
+    On the JIT path the component callables (``dynamics``, ``integrator``,
+    ``planner``, ``nominal_controller``, ``controller``, ``sensor``,
+    ``estimator``, ``perturbation``) are static arguments, so their *identity*
+    keys the JIT cache along with ``num_steps`` and ``jit_progress_interval``.
+    Build each component once and reuse those objects across calls: rebuilding
+    them per call -- for example calling a generator factory inside a sweep loop
+    -- produces a fresh object every time and recompiles the whole simulation on
+    every run. Array arguments (``x0``, ``sigma``, ``key``, initial data) may
+    vary freely without recompiling.
 
     Args:
         x0 (State): Initial state vector.
@@ -277,6 +337,11 @@ def execute(
             Disabled by default to avoid overhead; requires `verbose=True` to display.
         jit_progress_interval (int, optional): Number of steps between progress updates when
             `jit_progress` is enabled. Defaults to 50.
+        log_planner_samples (bool, optional): Retain ``PlannerData.sampled_x_traj`` in the
+            returned planner values. Off by default because one MPPI sample batch per step
+            (``n_samples * state_dim * horizon``) dwarfs the trajectory -- roughly 320 MB for
+            1000 samples over a 200-step run. Enable it to animate the MPPI rollout cloud;
+            the two ``examples/unicycle/reach_goal`` MPPI scripts do exactly that.
 
     Returns
     -------
@@ -419,15 +484,9 @@ def execute(
             progress_bar = create_progress(total=num_steps, description="JIT Simulation")
             progress_bar.start()
             progress_task_id = progress_bar.add_task("JIT Simulation", total=num_steps)
-            last_step_reported = -1
-
-            def progress_hook(step_idx: int) -> None:
-                nonlocal last_step_reported
-                if progress_bar is not None and progress_task_id is not None:
-                    step_delta = step_idx - last_step_reported
-                    if step_delta > 0:
-                        progress_bar.update(progress_task_id, advance=step_delta)
-                        last_step_reported = step_idx
+            # Reuse the shared hook so repeated runs hit the same JIT cache entry.
+            progress_hook = _JIT_PROGRESS_HOOK
+            progress_hook.bind(progress_bar, progress_task_id)
 
         if verbose:
             print_jit_status("Warming up JIT...")
@@ -436,8 +495,12 @@ def execute(
 
         if planner is not None:
             _, p_data = planner(0.0, x0, None, prime_key1, p_data)  # type: ignore
-            # Strip sampled_x_traj from p_data to avoid carrying it in JIT loop
-            p_data = p_data._replace(sampled_x_traj=None)
+            # Strip sampled_x_traj from p_data to avoid carrying it in JIT loop.
+            # When the caller opted in, the priming call above is what gives the
+            # initial carry a correctly shaped sample batch instead of None --
+            # the scan carry cannot start as None and later hold an array.
+            if not log_planner_samples:
+                p_data = p_data._replace(sampled_x_traj=None)
 
         if controller is not None:
             u_nom_dummy = jnp.zeros((g_check.shape[1],))
@@ -460,35 +523,41 @@ def execute(
                 )
 
         start_time = time.time()
-        xs, us, zs, cs, c_datas, p_datas = simulator_jit(
-            dt=dt,
-            num_steps=num_steps,
-            dynamics=dynamics,
-            integrator=integrator,
-            planner=planner,
-            nominal_controller=nominal_controller,
-            controller=controller,
-            sensor=_sensor,
-            estimator=_estimator,
-            perturbation=_perturbation,
-            sigma=sigma_val,
-            key=key,  # type: ignore
-            initial_state=x0,
-            initial_controller_data=c_data,
-            initial_planner_data=p_data,
-            initial_covariance=initial_covariance,
-            progress_callback=progress_hook,
-            progress_interval=jit_progress_interval,
-        )
-        # Ensure progress callbacks flush before printing completion.
-        xs.block_until_ready()
+        try:
+            xs, us, zs, cs, c_datas, p_datas = simulator_jit(
+                dt=dt,
+                num_steps=num_steps,
+                dynamics=dynamics,
+                integrator=integrator,
+                planner=planner,
+                nominal_controller=nominal_controller,
+                controller=controller,
+                sensor=_sensor,
+                estimator=_estimator,
+                perturbation=_perturbation,
+                sigma=sigma_val,
+                key=key,  # type: ignore
+                initial_state=x0,
+                initial_controller_data=c_data,
+                initial_planner_data=p_data,
+                initial_covariance=initial_covariance,
+                progress_callback=progress_hook,
+                progress_interval=jit_progress_interval,
+                log_planner_samples=log_planner_samples,
+            )
+            # Ensure progress callbacks flush before printing completion.
+            xs.block_until_ready()
+        finally:
+            # The hook is a module-level singleton (stable identity for the JIT
+            # cache); unbind on every exit so an exception mid-run cannot leave
+            # it bound to a dead progress bar.
+            if progress_bar is not None:
+                progress_bar.stop()
+                _JIT_PROGRESS_HOOK.unbind()
         elapsed = time.time() - start_time
 
         if verbose:
             print_jit_status(f"JIT execution completed in {elapsed:.4f}s.")
-
-        if progress_bar is not None:
-            progress_bar.stop()
 
         # If logging was requested, we must simulate the callbacks behavior
         if logging_callback:
@@ -614,6 +683,7 @@ def execute(
         key=key,  # type: ignore
         callbacks=callbacks,
         stl_trajectory_cost=stl_trajectory_cost,
+        log_planner_samples=log_planner_samples,
     )
 
     # Run simulation from initial state

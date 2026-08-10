@@ -1,10 +1,10 @@
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import jax.numpy as jnp
 from jax import Array, random
 
 from cbfkit.simulation.integration_utils import integrate_with_cached_dynamics
-from cbfkit.simulation.utils import SimulationStepData, resolve_nominal_control
+from cbfkit.simulation.utils import resolve_nominal_control
 from cbfkit.utils.user_types import (
     Control,
     ControllerCallable,
@@ -71,12 +71,16 @@ def stepper(
             planner_data = PlannerData()
 
         nonlocal key
-        key, _ = random.split(key)  # type: ignore
+        # One split per step, handing a dedicated subkey to each consumer. The
+        # JIT backend (simulator_jit._advance) derives its subkeys the same way
+        # in the same order, and test_rng_consistency pins the two streams
+        # together -- change one scheme and you must change the other.
+        key, sensor_key, planner_key, nom_key, ctrl_key, pert_key = random.split(key, 6)  # type: ignore
 
         if z is None:
             z = x
 
-        y = sensor(t, x, sigma=sigma, key=key)
+        y = sensor(t, x, sigma=sigma, key=sensor_key)
         # Handle both 2-tuple (z, c) and 3-tuple (z, c, K) returns from estimator
         est_result = estimator(t, y, z, u, c)
         if len(est_result) == 3:
@@ -98,7 +102,6 @@ def stepper(
             planner_data = planner_data._replace(prev_robustness=None)
 
         if planner is not None:
-            key, planner_key = random.split(key)  # type: ignore
             u_planner, planner_data = planner(t, z, None, planner_key, planner_data)
             if planner_data.error:
                 return (
@@ -113,11 +116,11 @@ def stepper(
             u_planner = jnp.zeros(g.shape[1])
             planner_data = planner_data._replace(u_traj=None)
 
-        u, key = resolve_nominal_control(
+        u = resolve_nominal_control(
             t,
             z,
             dt,
-            key,
+            nom_key,
             g,
             nominal_controller,
             planner_data,
@@ -125,7 +128,6 @@ def stepper(
             has_planner=(planner is not None),
         )
 
-        key, ctrl_key = random.split(key)  # type: ignore
         if controller is not None:
             u, controller_data = controller(t, z, u, ctrl_key, controller_data)
             if controller_data.error:
@@ -150,9 +152,7 @@ def stepper(
             controller_data = ControllerData()
 
         p = perturbation(x, u, f, g)
-        key, subkey = random.split(key)  # type: ignore
-
-        p_val = p(subkey)
+        p_val = p(pert_key)
         x = integrate_with_cached_dynamics(
             x=x,
             u=u,

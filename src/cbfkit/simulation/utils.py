@@ -1,7 +1,7 @@
-from typing import Any, Callable, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, List, NamedTuple, Optional
 
 import jax.numpy as jnp
-from jax import Array, random
+from jax import Array
 
 from cbfkit.utils.user_types import (
     Control,
@@ -31,13 +31,13 @@ def resolve_nominal_control(
     t: Time,
     z: State,
     dt: float,
-    key: Array,
+    nom_key: Array,
     g: Array,
     nominal_controller: Optional[NominalControllerCallable],
     planner_data: PlannerData,
     u_planner: Array,
     has_planner: bool,
-) -> Tuple[Array, Array]:
+) -> Array:
     """Determine the nominal control input from planner output.
 
     Shared by both eager (backend.py) and JIT (simulator_jit.py) paths.
@@ -47,11 +47,15 @@ def resolve_nominal_control(
         2. Planner provided a state trajectory (x_traj) -> track via nominal_controller.
         3. No trajectory -> call nominal_controller with no reference, or zero.
 
+    ``nom_key`` is the caller's per-step subkey for the nominal controller; both
+    backends derive it from a single split at the top of the step, so this
+    function consumes a key rather than advancing one.
+
     Returns:
-        (u_nom, updated_key)
+        u_nom
     """
     if has_planner and planner_data.u_traj is not None:
-        return u_planner, key
+        return u_planner
 
     if planner_data.x_traj is not None:
         if nominal_controller is None:
@@ -64,13 +68,11 @@ def resolve_nominal_control(
         idx = jnp.round(t / dt).astype(int)
         idx = jnp.clip(idx, 0, planner_data.x_traj.shape[1] - 1)
         x_des = planner_data.x_traj[:, idx]
-        key, nom_key = random.split(key)
         u_nom, _ = nominal_controller(t, z, nom_key, x_des)
-        return u_nom, key
+        return u_nom
 
     if nominal_controller is not None:
-        key, nom_key = random.split(key)
         u_nom, _ = nominal_controller(t, z, nom_key, None)
-        return u_nom, key
+        return u_nom
 
-    return jnp.zeros((g.shape[1],)), key
+    return jnp.zeros((g.shape[1],))

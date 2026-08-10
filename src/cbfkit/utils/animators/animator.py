@@ -367,6 +367,28 @@ class CBFAnimator(_MatplotlibMixin, _PlotlyMixin, _ManimMixin):
         self._y_lim = (float(ys.min()) - margin, float(ys.max()) + margin)
         return self
 
+    # -- per-frame data normalization -----------------------------------
+
+    def _ensure_frame_data_numpy(self) -> None:
+        """Convert every per-frame data source to NumPy, exactly once.
+
+        Frame callbacks index these arrays on every animation frame; a
+        caller-supplied JAX device array would otherwise dispatch a JAX
+        primitive per frame instead of a cheap NumPy slice. Must run before
+        the frame loop starts.
+        """
+        for spec in self._trajectories:
+            if spec["data"] is not None:
+                spec["data"] = np.asarray(spec["data"])
+        for spec in self._agents:
+            if spec["data"] is not None:
+                spec["data"] = np.asarray(spec["data"])
+        for spec in self._predictions:
+            if spec["agent_data"] is not None:
+                spec["agent_data"] = np.asarray(spec["agent_data"])
+            if spec["trajectory_data"] is not None:
+                spec["trajectory_data"] = [np.asarray(t) for t in spec["trajectory_data"]]
+
     # -- prediction computation (shared by both backends) -------------------
 
     def _compute_prediction(self, spec: dict, frame: int):
