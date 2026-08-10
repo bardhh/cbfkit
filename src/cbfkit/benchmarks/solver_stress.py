@@ -1,5 +1,6 @@
-
 import time
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 from cbfkit.benchmarks.registry import register_scenario
@@ -12,6 +13,7 @@ from cbfkit.certificates.packager import certificate_package
 from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
 from cbfkit.simulation import simulator
 from cbfkit.integration import forward_euler
+
 
 @register_scenario("solver_stress", description="Dense obstacle field navigation")
 def solver_stress(seed: int) -> dict:
@@ -32,10 +34,12 @@ def solver_stress(seed: int) -> dict:
 
     # Barriers
     barriers = []
+
     # Capture closure correctly by creating a factory
     def make_h(center):
         def h(x):
-            return jnp.sum((x[:2] - center)**2) - radius**2
+            return jnp.sum((x[:2] - center) ** 2) - radius**2
+
         return h
 
     for i in range(n_obs):
@@ -44,18 +48,12 @@ def solver_stress(seed: int) -> dict:
         # 1. use_factory=False because h_func is the function itself
         # 2. input_style="state" because it takes only x
         # 3. Call the result with conditions
-        pkg_factory = certificate_package(
-            h_func,
-            n=3,
-            input_style="state",
-            use_factory=False
-        )
+        pkg_factory = certificate_package(h_func, n=3, input_style="state", use_factory=False)
         barriers.append(pkg_factory(certificate_conditions=linear_class_k(1.0)))
 
     # Controller Setup
     gen_func = cbf_clf_qp_generator(
-        generate_compute_zeroing_cbf_constraints,
-        generate_compute_vanilla_clf_constraints
+        generate_compute_zeroing_cbf_constraints, generate_compute_vanilla_clf_constraints
     )
 
     # We use a nominal controller wrapper to match signature
@@ -76,7 +74,7 @@ def solver_stress(seed: int) -> dict:
         control_limits=jnp.array([1.0, 1.0]),
         dynamics_func=dynamics,
         barriers=barriers,
-        relaxable_cbf=False, # Hard constraints to force solver work
+        relaxable_cbf=False,  # Hard constraints to force solver work
         slack_penalty_cbf=1e4,
     )
 
@@ -90,12 +88,9 @@ def solver_stress(seed: int) -> dict:
     # Simulation
     x0 = jnp.array([0.0, 0.0, 0.0])
     dt = 0.05
-    steps = 100 # Short but intense
+    steps = 100  # Short but intense
 
-    start_time = time.time()
-
-    # Run with JIT to stress compilation and solver
-    results = simulator.execute(
+    sim_kwargs: dict[str, Any] = dict(
         x0=x0,
         dt=dt,
         num_steps=steps,
@@ -104,10 +99,18 @@ def solver_stress(seed: int) -> dict:
         nominal_controller=nominal_wrapper,
         controller=controller_wrapper,
         use_jit=True,
-        verbose=False
+        verbose=False,
     )
 
-    duration = time.time() - start_time
+    # Warmup: trigger JIT compilation with an identical call, discard result.
+    simulator.execute(**sim_kwargs)
+
+    start_time = time.perf_counter()
+
+    # Run with JIT to stress compilation and solver
+    results = simulator.execute(**sim_kwargs)
+
+    duration = time.perf_counter() - start_time
 
     # Extract Metrics
     # Locate solver_iter key
@@ -149,6 +152,6 @@ def solver_stress(seed: int) -> dict:
         "avg_solver_iter": avg_iter,
         "max_solver_iter": max_iter,
         "solver_failures": failures,
-        "success": int(failures == 0), # Simple success definition
-        "final_dist": float(jnp.linalg.norm(results.states[-1, :2] - jnp.array([10.0, 10.0])))
+        "success": int(failures == 0),  # Simple success definition
+        "final_dist": float(jnp.linalg.norm(results.states[-1, :2] - jnp.array([10.0, 10.0]))),
     }

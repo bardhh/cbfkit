@@ -178,6 +178,10 @@ x, u, z, p, dkeys, dvals, planner_data_keys, planner_data_values = sim.execute(
         prev_robustness=None,
     ),
     use_jit=True,
+    # The animation below draws the MPPI rollout cloud, which lives in
+    # PlannerData.sampled_x_traj and is dropped from the logged outputs unless
+    # asked for. Retaining it costs ~320 MB at these sample/horizon/step counts.
+    log_planner_samples=True,
 )
 
 # Visualization

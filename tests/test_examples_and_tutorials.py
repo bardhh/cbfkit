@@ -98,9 +98,9 @@ def test_example_script_execution(script_path, solver, tmp_path):
     # Ensure tmp_path (for generated/copied modules), src and root (for examples) are in python path
     # Prepend tmp_path to PYTHONPATH so that imported modules (like 'tutorials') are loaded
     # from the temporary directory (where code generation happens) instead of the source tree.
-    env["PYTHONPATH"] = (
-        f"{tmp_path}{os.pathsep}{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
-    )
+    env[
+        "PYTHONPATH"
+    ] = f"{tmp_path}{os.pathsep}{os.getcwd()}{os.pathsep}{os.path.join(os.getcwd(), 'src')}"
 
     # Copy script parent directory to tmp_path to ensure relative assets/imports work
     # and to isolate output files.
@@ -130,6 +130,7 @@ def test_example_script_execution(script_path, solver, tmp_path):
         )
 
 
+@pytest.mark.slow
 def test_risk_aware_comparison_ordering():
     """ACC 2026 Fig. 1: the four controllers separate in the expected p_fail order.
 
@@ -145,5 +146,36 @@ def test_risk_aware_comparison_ordering():
     assert 0.03 < p["ra_cbf_ct"] < 0.30, p  # RA-CBF-CT rides near boundary, ~rho_d
     assert p["ra_cbf_dt"] < p["ra_cbf_ct"], p  # DT margin is more conservative than CT
     assert p["s_cbf"] <= p["ra_cbf_dt"] + 1e-9, p  # S-CBF is the safest controller (Fig. 1)
+    for cbf in ("s_cbf", "ra_cbf_dt", "ra_cbf_ct"):
+        assert p[cbf] < p["nominal"], p
+
+
+def test_risk_aware_comparison_smoke():
+    """Fast twin of test_risk_aware_comparison_ordering: every safety filter beats nominal.
+
+    The 64-trial ordering test above is slow-marked, so this keeps the comparison pipeline
+    (four controllers x Monte-Carlo rollout x p_fail extraction) in the default suite.
+
+    It deliberately asserts the WEAKER invariant -- each CBF variant fails less often than
+    the unfiltered nominal -- rather than the full Fig. 1 ordering, because the ordering is
+    not resolvable at this trial count. p_fail is quantized to multiples of 1/n_trials, and
+    the RA-CBF-CT rate (true value ~rho_d = 0.3, the tightest of the four) was measured at
+    0.500 / 0.333 / 0.250 / 0.417 for n_trials = 4 / 6 / 8 / 12: the `0.03 < p_ct < 0.30`
+    band and the `p_dt < p_ct` separation land or miss essentially at random. Asserting them
+    here would buy a coin flip, not a regression signal. Separating S-CBF from RA-CBF-DT is
+    harder still -- both sit at 0.0 for any small n, so their strict ordering is unobservable.
+
+    The nominal-vs-filtered gap, by contrast, is wide (p_nominal ~ 1.0 against <= 0.5) and
+    held at every trial count measured, which makes it the one comparison worth spending
+    ~2s on. A filter that silently stopped filtering still fails this test.
+    """
+    from examples.single_integrator.risk_aware_comparison.run_comparison import run_all
+
+    res = run_all(n_trials=4, seed=0)  # fixed seed => deterministic CI; ~2s for 4x4 rollouts
+    p = {k: v[0] for k, v in res.items()}
+    assert set(p) == {"nominal", "s_cbf", "ra_cbf_dt", "ra_cbf_ct"}, p
+    for name, rate in p.items():
+        assert 0.0 <= rate <= 1.0, (name, p)  # every controller produced a real rate
+    assert p["nominal"] > 0.9, p  # unfiltered outward drive almost always exits
     for cbf in ("s_cbf", "ra_cbf_dt", "ra_cbf_ct"):
         assert p[cbf] < p["nominal"], p

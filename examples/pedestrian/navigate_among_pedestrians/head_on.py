@@ -134,7 +134,7 @@ def run_demo():
             dt=dt,
             p_values=p_values,
             p_keys=p_keys,
-            save_path=str(results_dir / "head_on.mp4"),
+            save_path=str(results_dir / "head_on.html"),
         )
 
     print("Demo Complete!")

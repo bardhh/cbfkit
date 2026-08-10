@@ -160,7 +160,7 @@ def run_demo():
             dt=dt,
             p_values=p_values,
             p_keys=p_keys,
-            save_path=os.path.join(results_dir, "star_burst.mp4"),
+            save_path=os.path.join(results_dir, "star_burst.html"),
         )
 
     print("Demo Complete!")

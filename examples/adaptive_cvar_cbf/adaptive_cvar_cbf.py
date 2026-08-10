@@ -149,6 +149,22 @@ def main():
     states = np.array(states)
     controls = np.array(controls)
 
+    # Report the outcome so the run is verifiable without inspecting the animation.
+    goal_dist = float(np.linalg.norm(states[-1, :2] - np.array([4.0, 4.0])))
+    print(f"Steps simulated: {len(states) - 1}/{num_steps}")
+    print(
+        f"Final state: [{states[-1, 0]:.3f}, {states[-1, 1]:.3f}], distance to goal: {goal_dist:.3f}"
+    )
+    for i, obs in enumerate(obstacles):
+        center = np.asarray(obs.x_curr).flatten()[:2]
+        clearance = float(np.min(np.linalg.norm(states[:, :2] - center, axis=1)))
+        safe_dist = obs.radius + radius
+        status = "SAFE" if clearance >= safe_dist else "VIOLATION"
+        print(
+            f"Obstacle {i}: min center distance {clearance:.3f} "
+            f"(safe >= {safe_dist:.3f}) -> {status}"
+        )
+
     if not os.getenv("CBFKIT_TEST_MODE"):
         results_dir = os.path.join(os.path.dirname(__file__), "results")
         os.makedirs(results_dir, exist_ok=True)

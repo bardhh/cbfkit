@@ -52,6 +52,12 @@ NUM_STEPS = 500
 DT = 0.05
 GOAL_TOL = 0.25
 
+# Tracks (n_obstacles, num_steps, n_seeds) shape combos that have already
+# triggered a JIT compile of ``_get_unicycle_sim_fn``'s kernel, so the warmup
+# call in ``_unicycle_batch_runner`` only runs once per shape instead of on
+# every combo.
+_warmed_shapes: set[tuple[int, int, int]] = set()
+
 # Ellipsoidal barrier factory for unicycle (position indices 0,1)
 _cbf, _cbf_grad, _cbf_hess = ellipsoidal_barrier_factory(
     system_position_indices=(0, 1),
@@ -398,9 +404,7 @@ def _unicycle_batch_runner(seeds: list[int], params: dict) -> list[dict]:
 
     x0s = jax.vmap(_sample_x0)(sampler_keys)  # (total, 4)
 
-    # Run — first combo compiles, subsequent combos reuse
-    start = time.perf_counter()
-    xs, us, psis = sim_fn(
+    sim_args = (
         keys,
         x0s,
         alpha,
@@ -413,6 +417,19 @@ def _unicycle_batch_runner(seeds: list[int], params: dict) -> list[dict]:
         GOAL,
         DT,
     )
+
+    # Warmup: only the first combo for a given (n_obstacles, num_steps,
+    # n_seeds) shape triggers a JIT compile — later combos hit the cached
+    # XLA kernel, so skip the (otherwise wasted) duplicate warmup call then.
+    shape_key = (n_obstacles, NUM_STEPS, n_seeds)
+    if shape_key not in _warmed_shapes:
+        warmup_xs, _, _ = sim_fn(*sim_args)
+        jax.block_until_ready(warmup_xs)
+        _warmed_shapes.add(shape_key)
+
+    # Run — first combo compiles, subsequent combos reuse
+    start = time.perf_counter()
+    xs, us, psis = sim_fn(*sim_args)
     jax.block_until_ready(xs)
     wall_time = time.perf_counter() - start
 

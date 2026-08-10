@@ -33,7 +33,7 @@ class BaseConfig:
 
 
 class PerfectMeasurementsConfig(BaseConfig):
-    VISUALIZE = True
+    VISUALIZE = False if os.getenv("CBFKIT_TEST_MODE") else True
     R = 0.01 * jnp.eye(len(BaseConfig.desired_state))
     pg = 0.50
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2
@@ -42,7 +42,7 @@ class PerfectMeasurementsConfig(BaseConfig):
 
 
 class EKFEstimationConfig(BaseConfig):
-    VISUALIZE = True
+    VISUALIZE = False if os.getenv("CBFKIT_TEST_MODE") else True
     actuation_limits = 1e6 * jnp.array([1.0, 1.0])
     R = 0.25 * jnp.eye(len(BaseConfig.desired_state))
     # pg=0.95 makes path-integral RA-CLF r_buffer ~4.6, driving the CLF
@@ -55,7 +55,7 @@ class EKFEstimationConfig(BaseConfig):
 
 
 class UKFEstimationConfig(BaseConfig):
-    VISUALIZE = True if os.getenv("CBFKIT_TEST_MODE") else True
+    VISUALIZE = False if os.getenv("CBFKIT_TEST_MODE") else True
     R = 0.25 * jnp.eye(len(BaseConfig.desired_state))
     pg = 0.50
     gamma_v = 1.0 - 0.5 * BaseConfig.goal_radius**2

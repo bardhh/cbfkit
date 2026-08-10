@@ -174,7 +174,7 @@ def run_demo():
             dt=dt,
             # p_values=p_values, # Likely empty
             # p_keys=p_keys,
-            save_path="examples/pedestrian/navigate_among_pedestrians/results/crossing.mp4",
+            save_path="examples/pedestrian/navigate_among_pedestrians/results/crossing.html",
         )
 
     print("Demo Complete!")

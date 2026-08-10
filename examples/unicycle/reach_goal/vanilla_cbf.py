@@ -135,7 +135,7 @@ if should_animate:  # Changed from if animate:
         animation_filename=file_path + "bh_vanilla_cbf_control.mp4",
     )
 
-final_pos = x[:2, -1]
+final_pos = x[-1, :2]
 desired_pos = desired_state[:2]
 dist = jnp.linalg.norm(final_pos - desired_pos)
 print(f"Final Distance to Goal: {dist}")
