@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main", "develop" ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,6 +17,7 @@ jobs:
       JAX_PLATFORM_NAME: cpu
       UV_CACHE_DIR: /tmp/.uv-cache
       JAX_COMPILATION_CACHE_DIR: /tmp/jax_cache
+      JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: "0"
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -34,9 +39,9 @@ jobs:
       uses: actions/cache@v5
       with:
         path: /tmp/jax_cache
-        key: ${{ runner.os }}-jax-${{ github.sha }}
+        key: ${{ runner.os }}-py${{ matrix.python-version }}-jax-${{ hashFiles('src/**/*.py') }}
         restore-keys: |
-          ${{ runner.os }}-jax-
+          ${{ runner.os }}-py${{ matrix.python-version }}-jax-
     - name: Install dependencies
       env:
         UV_SYSTEM_PYTHON: 1

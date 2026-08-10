@@ -159,7 +159,7 @@ def run_demo():
             dt=dt,
             p_values=p_values,
             p_keys=p_keys,
-            save_path="examples/pedestrian/navigate_among_pedestrians/results/crowded.mp4",
+            save_path="examples/pedestrian/navigate_among_pedestrians/results/crowded.html",
         )
 
     print("Demo Complete!")

@@ -21,6 +21,7 @@ from cbfkit.controllers.cbf_clf.risk_aware_cbf_clf_qp_control_laws import (
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.estimators import ct_ukf_dtmeas
 from cbfkit.integration import runge_kutta_4 as integrator
+from cbfkit.optimization.quadratic_program import get_solver
 from cbfkit.sensors import unbiased_gaussian_noise as sensor
 from cbfkit.simulation.monte_carlo import conduct_monte_carlo
 from cbfkit.systems import single_integrator
@@ -149,6 +150,12 @@ controller = risk_aware_cbf_clf_qp_controller(
     control_limits=setup.actuation_limits,
     alpha=np.array([0.1]),
     ra_clf_params=ra_clf_params,
+    # The RA-CLF carries a constant stochastic term 0.5*Tr[sigma^T d2V/dx2 sigma]
+    # = 0.5*Tr[Q] = 2.0, while the control authority over V (grad(V) . g . u) decays
+    # to zero as x approaches the goal. The constraint therefore stiffens near the
+    # origin and OSQP thrashes there (10000 iters, MAX_ITER_REACHED). PDIPM handles
+    # the slack-relaxed QP; same remedy as risk_aware_comparison/controllers.py.
+    solver=get_solver("fast"),
 )
 
 

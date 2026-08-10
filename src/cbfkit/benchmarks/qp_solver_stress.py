@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -62,9 +63,7 @@ def qp_solver_stress(seed: int) -> dict[str, float | int]:
     def nominal_controller(t, x, _k, _r):
         return 2.0 * (jnp.array([10.0, 10.0]) - x), None
 
-    JitMonitor.reset()
-    start = time.time()
-    results = simulator.execute(
+    sim_kwargs: dict[str, Any] = dict(
         x0=x0,
         dt=dt,
         num_steps=num_steps,
@@ -75,7 +74,14 @@ def qp_solver_stress(seed: int) -> dict[str, float | int]:
         use_jit=True,
         verbose=False,
     )
-    total_time = time.time() - start
+
+    # Warmup: trigger JIT compilation with an identical call, discard result.
+    simulator.execute(**sim_kwargs)
+
+    JitMonitor.reset()
+    start = time.perf_counter()
+    results = simulator.execute(**sim_kwargs)
+    total_time = time.perf_counter() - start
 
     c_data = results.controller_data
     iters = c_data.get("sub_data_solver_iter", c_data.get("solver_iter"))

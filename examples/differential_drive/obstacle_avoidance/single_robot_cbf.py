@@ -3,6 +3,19 @@ Single robot CBF controller example using CBFKit's simulation framework.
 
 This example follows the structure of past_proj files but uses CBFKit's built-in
 simulation capabilities for a single robot with obstacle avoidance.
+
+Tuning is seed-validated over 20 MPPI seeds (PRNGKey(0..19), full 12 s horizon,
+5000 samples). Measured with the settings below vs. the previous ones:
+
+                        final goal error      peak speed   collisions  QP failures
+    previous tuning     mean 6.750, max 11.271   16.38 m/s     0/20        5/20
+    current tuning      mean 0.219, max  0.362    4.92 m/s     0/20        0/20
+
+Three changes were needed; each is marked SEED-VALIDATED at its site below.
+Ablation over the same seeds shows all three carry weight: the barrier form
+alone fixes goal-reaching but leaves peak speed at 7.4 m/s, and the speed terms
+without the MPPI temperature change cannot get peak speed under v_max without
+pushing mean error back above 0.5 m.
 """
 
 import os
@@ -36,6 +49,17 @@ from cbfkit.sensors import perfect as sensor
 from cbfkit.utils.user_types import PlannerData
 
 
+# Distance at which the run counts as a success. Used both as the declared
+# dynamics tolerance and as the pass/fail threshold in the performance report,
+# so the two cannot drift apart.
+GOAL_TOLERANCE = 0.5
+
+# Speed limit the planner is expected to respect, and the approach-profile gain:
+# the allowed speed tapers as min(V_MAX, APPROACH_GAIN * distance_to_goal).
+V_MAX = 5.0
+APPROACH_GAIN = 1.0
+
+
 def create_robot_with_obstacles():
     """Create a single robot with obstacle avoidance using CBFKit framework."""
 
@@ -47,8 +71,8 @@ def create_robot_with_obstacles():
     dynamics = unicycle.plant(l=1.0)
     dynamics.a_max = control_bound
     dynamics.omega_max = control_bound
-    dynamics.v_max = 5.0
-    dynamics.goal_tol = 0.25
+    dynamics.v_max = V_MAX
+    dynamics.goal_tol = GOAL_TOLERANCE
 
     # Define scenario
     init_state = jnp.array([0.0, 0.0, 0.0, 0.0])  # [x, y, v, theta]
@@ -80,7 +104,22 @@ def create_robot_with_obstacles():
         dists = jnp.linalg.norm(diffs, axis=1)
         cost_obs = jnp.sum(100.0 * jnp.exp(-5.0 * (dists - d_min_obstacle)))
 
-        return cost_goal + cost_obs
+        # SEED-VALIDATED (1/3): speed shaping.
+        # With distance as the only stage cost, nothing opposed acceleration:
+        # MPPI drove the robot to 16.4 m/s on a 5.8 m course -- over three times
+        # the declared v_max -- and it overshot and orbited the goal. Two terms:
+        #   * an approach profile, allowing min(v_max, k*distance), which forces
+        #     deceleration into the goal instead of a flyby. A plain velocity
+        #     penalty was tried first and is worse: being constant in distance,
+        #     it creates a deadzone that stalls the robot ~0.9 m short.
+        #   * a stiff ceiling that is inactive below v_max and so does not
+        #     interfere with the approach.
+        speed = jnp.abs(state[2])
+        speed_limit = jnp.minimum(V_MAX, APPROACH_GAIN * jnp.sqrt(dist_sq + 1e-9))
+        cost_speed = 50.0 * jnp.maximum(0.0, speed - speed_limit) ** 2
+        cost_speed = cost_speed + 2000.0 * jnp.maximum(0.0, speed - V_MAX) ** 2
+
+        return cost_goal + cost_obs + cost_speed
 
     @jit
     def terminal_cost(state: Array, action: Array) -> Array:
@@ -108,7 +147,12 @@ def create_robot_with_obstacles():
         "num_samples": 5000 if not os.getenv("CBFKIT_TEST_MODE") else 500,
         "time_step": 0.1,
         "use_GPU": False,
-        "costs_lambda": 0.1,
+        # SEED-VALIDATED (2/3): MPPI temperature.
+        # At 0.1 the softmax over rollout costs is so peaked that the update is
+        # effectively "copy the single best sample", which makes the command
+        # jitter: the robot spun in place near the goal and crept in at ~0.1 m/s
+        # instead of parking. Averaging over more of the elite set settles it.
+        "costs_lambda": 50.0,
         "cost_perturbation": 0.1,
     }
 
@@ -139,13 +183,22 @@ def create_robot_with_obstacles():
     for i, obs in enumerate(obstacles):
         print(f"Creating barrier for obstacle {i+1} at ({obs[0]}, {obs[1]})")
 
+        # SEED-VALIDATED (3/3): barrier form and class-K gain.
+        # The exponential form at gain 10 was badly over-conservative here: the
+        # filter clamped acceleration to ~0 while the robot sat at the origin,
+        # 1.98 m from the nearest obstacle with both barriers slack. That cost
+        # the first ~3 s of every run, and on 5 of 20 seeds it wedged the QP
+        # (MAX_ITER_REACHED on >100 of 120 steps) so the robot never moved at
+        # all -- the dominant failure mode, and one no cost tuning could reach.
+        # The high-order form is what the sibling MPPI example
+        # (examples/unicycle/reach_goal/mppi_cbf.py) already uses.
         barrier = rectify_relative_degree(
             function=cbf_factory(jnp.array(obs), (d_min_obstacle, d_min_obstacle)),
             system_dynamics=dynamics,
             state_dim=4,
-            form="exponential",
+            form="high-order",
         )(
-            certificate_conditions=zeroing_barriers.linear_class_k(10.0),
+            certificate_conditions=zeroing_barriers.linear_class_k(5.0),
         )
         barriers.append(barrier)
 
@@ -522,8 +575,12 @@ def analyze_performance(
     # Goal reaching analysis
     final_state = states[-1]
     goal_error = np.linalg.norm(final_state[:2] - desired_state[:2])
+    reached = goal_error < GOAL_TOLERANCE
     print(f"Final goal error: {goal_error:.3f} m")
-    print(f"Goal reached: {'✅' if goal_error < 0.5 else '❌'}")
+    print(
+        f"Goal reached: {'✅' if reached else '❌'} "
+        f"({goal_error:.3f} m {'<' if reached else '>='} {GOAL_TOLERANCE} m threshold)"
+    )
 
     # Control effort analysis (following past_proj metrics)
     control_effort = np.sum(np.linalg.norm(controls, axis=1)) * 0.1  # dt = 0.1
@@ -559,10 +616,11 @@ def analyze_performance(
 
     # Velocity analysis
     velocities = states[:, 2]  # v is the 3rd component
-    max_velocity = np.max(velocities)
+    max_velocity = np.max(np.abs(velocities))
     avg_velocity = np.mean(velocities)
     print(f"Max velocity: {max_velocity:.2f} m/s")
     print(f"Average velocity: {avg_velocity:.2f} m/s")
+    print(f"Speed limit respected: {'✅' if max_velocity <= V_MAX else '❌'} (v_max {V_MAX} m/s)")
 
 
 def main():

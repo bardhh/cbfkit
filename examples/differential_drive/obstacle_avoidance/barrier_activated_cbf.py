@@ -92,12 +92,18 @@ def create_scenario():
         ellipsoid_axis_indices=(0, 1),
     )
 
+    # The position barrier has relative degree 2 for the acceleration unicycle, so it is
+    # rectified into h_e = hdot - root * h. The rectifier's default root of -0.1 caps the
+    # approach rate at 0.1 * h, which on this geometry throttles the robot to roughly
+    # 0.05 m/s per metre of clearance -- it crawls and never reaches the goal. A root of
+    # -3.0 leaves the same safe set while allowing the full 2 m/s transit.
     barriers = []
     for obs in obstacles:
         barrier = rectify_relative_degree(
             function=cbf_factory(jnp.array(obs), (d_min, d_min)),
             system_dynamics=dynamics,
             state_dim=4,
+            roots=-3.0,
             form="exponential",
         )(
             certificate_conditions=zeroing_barriers.linear_class_k(5.0),
@@ -280,8 +286,8 @@ def plot_results(states, controls, goal_state, obstacles, d_min):
         )
 
         # Add control bounds visualization
-        ax3.axhline(y=100, color="red", linestyle=":", alpha=0.5, label="Control limits")
-        ax3.axhline(y=-100, color="red", linestyle=":", alpha=0.5)
+        ax3.axhline(y=5.0, color="red", linestyle=":", alpha=0.5, label="Control limits")
+        ax3.axhline(y=-5.0, color="red", linestyle=":", alpha=0.5)
 
         ax3.set_xlabel("Time (s)", fontsize=12, fontweight="bold")
         ax3.set_ylabel("Control Input", fontsize=12, fontweight="bold")
@@ -531,8 +537,10 @@ def create_animation(states, goal_state, obstacles, d_min):
         robot_circle.center = (x, y)
 
         # Compute activation weights
+        # Must match the controller's activation settings, or the plot colors barriers
+        # that the QP is actually enforcing as inactive.
         activation_weights = compute_activation_weights(
-            state, obstacle_positions, activation_type="combined", k=3, radius=2.0, smoothness=5.0
+            state, obstacle_positions, activation_type="combined", k=4, radius=3.0, smoothness=5.0
         )
 
         # Update obstacle appearance based on activation

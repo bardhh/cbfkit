@@ -97,6 +97,10 @@ barriers = [
         system_dynamics=unicycle_dynamics,
         state_dim=len(init_state),
         form="exponential",
+        # The default pole (-0.1) is too slow here: the resulting psi_1 constraint is
+        # nearly a pure derivative, which scales badly against the alpha/beta offset and
+        # leaves the QP unsolved after 10k OSQP iterations. -1.0 matches stochastic_cbf.py.
+        roots=jnp.array([-1.0]),
     )(
         certificate_conditions=stochastic_barrier.right_hand_side(alpha=1.0, beta=1.0),
     )
@@ -216,6 +220,9 @@ from cbfkit.utils.user_types import ControllerData, PlannerData
     planner_data=PlannerData(u_traj=u_guess, prev_robustness=None),
     controller_data=ControllerData(),
     use_jit=True,
+    # Keep the MPPI rollout cloud (PlannerData.sampled_x_traj) so the animation
+    # below can draw it; it is dropped from the logged outputs by default.
+    log_planner_samples=True,
 )
 
 plot = 1 if not os.getenv("CBFKIT_TEST_MODE") else 0

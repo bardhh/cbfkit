@@ -38,6 +38,11 @@ from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
 
 N_TRIALS = 1
 
+# Tracks (n_obstacles, num_steps, n_seeds) shape combos that have already
+# triggered a JIT compile of ``_get_sim_fn``'s kernel, so the warmup call in
+# ``_si_batch_runner`` only runs once per shape instead of on every combo.
+_warmed_shapes: set[tuple[int, int, int]] = set()
+
 
 # ---------------------------------------------------------------------------
 # Optimised sweep path: compile once, run many combos
@@ -141,6 +146,15 @@ def _si_batch_runner(seeds: list[int], params: dict) -> list[dict]:
         [random.split(random.fold_in(random.PRNGKey(s), 1), 1)[0] for s in seeds]
     )
     x0s = jax.vmap(lambda k: random.uniform(k, (2,), minval=-1.0, maxval=1.0))(sampler_keys)
+
+    # Warmup: only the first combo for a given (n_obstacles, num_steps,
+    # n_seeds) shape triggers a JIT compile — later combos hit the cached
+    # XLA kernel, so skip the (otherwise wasted) duplicate warmup call then.
+    shape_key = (n_obstacles, num_steps, n_seeds)
+    if shape_key not in _warmed_shapes:
+        warmup_xs, _, _ = sim_fn(keys, x0s, alpha, control_limit, centers, radii, goal, dt)
+        jax.block_until_ready(warmup_xs)
+        _warmed_shapes.add(shape_key)
 
     # Run — first combo compiles, subsequent combos are JIT cache hits
     start = time.perf_counter()
