@@ -4,7 +4,7 @@ generate_compute_ra_cbf_constraints: placeholder (theory in development).
 generate_compute_estimate_feedback_ra_cbf_constraints: estimate-feedback variant.
 """
 
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Tuple
 
 import jax.numpy as jnp
 from jax import Array, jit, lax, scipy
@@ -78,7 +78,7 @@ def generate_compute_estimate_feedback_ra_cbf_constraints(
     **kwargs: Any,
 ) -> Callable[[Time, State], Tuple[Array, Array, CbfClfQpData]]:
     compute_lyapunov_values = generate_compute_certificate_values(lyapunovs)
-    n_con, n_bfs, _n_lfs, a_clf, b_clf, tunable, relaxable = unpack_for_cbf(
+    n_con, n_bfs, _n_lfs, a_clf_template, b_clf_template, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
 
@@ -103,11 +103,16 @@ def generate_compute_estimate_feedback_ra_cbf_constraints(
     @jit
     def compute_clf_constraints(t: Time, x: State) -> Tuple[Array, Array, CbfClfQpData]:
         """Computes CBF and CLF constraints."""
-        nonlocal a_clf, b_clf
         data: CbfClfQpData = {}
         dyn_f, dyn_g = dyn_func(x)
         # Get K matrix from kwargs (passed from estimator state)
         k_mat = kwargs.get("kalman_gain", jnp.zeros((x.shape[0], x.shape[0])))
+
+        # Bind the zero templates to locals. Rebinding the enclosing names instead
+        # would store this trace's tracers in the closure, so the next trace (new
+        # dtype/shape, or disable_jit) would read a leaked tracer.
+        a_clf = a_clf_template
+        b_clf = b_clf_template
 
         if n_bfs > 0:
             lf_x, lj_x, lh_x, dlf_t, lc_x = compute_lyapunov_values(t, x)

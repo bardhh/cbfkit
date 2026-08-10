@@ -80,7 +80,7 @@ def build_cbf_constraint_generator(
     """
     certs = certificate_package if certificate_package is not None else barriers
     compute_barrier_values = generate_compute_certificate_values(certs, compute_hessians)
-    n_con, n_bfs, _n_lfs, a_cbf, b_cbf, tunable, relaxable = unpack_for_cbf(
+    n_con, n_bfs, _n_lfs, a_cbf_template, b_cbf_template, tunable, relaxable = unpack_for_cbf(
         control_limits, barriers, lyapunovs, **kwargs
     )
     scale_cbf = kwargs.get("scale_cbf", 1.0)
@@ -92,13 +92,18 @@ def build_cbf_constraint_generator(
         f: Optional[Array] = None,
         g: Optional[Array] = None,
     ) -> Tuple[Array, Array, CbfClfQpData]:
-        nonlocal a_cbf, b_cbf
         data: CbfClfQpData = {}
 
         dyn_f = f
         dyn_g = g
         if dyn_f is None or dyn_g is None:
             dyn_f, dyn_g = dyn_func(x)
+
+        # Bind the zero templates to locals. Rebinding the enclosing names instead
+        # would store this trace's tracers in the closure, so the next trace (new
+        # dtype/shape, or disable_jit) would read a leaked tracer.
+        a_cbf = a_cbf_template
+        b_cbf = b_cbf_template
 
         if n_bfs > 0:
             bf_x, bj_x, bh_x, dbf_t, bc_x = compute_barrier_values(t, x)
@@ -151,7 +156,7 @@ def build_clf_constraint_generator(
         **kwargs: Forwarded to ``unpack_for_clf``.
     """
     compute_lyapunov_values = generate_compute_certificate_values(lyapunovs, compute_hessians)
-    n_con, _n_bfs, n_lfs, a_clf, b_clf, relaxable = unpack_for_clf(
+    n_con, _n_bfs, n_lfs, a_clf_template, b_clf_template, relaxable = unpack_for_clf(
         control_limits, lyapunovs, barriers, **kwargs
     )
     scale_clf = kwargs.get("scale_clf", 1.0)
@@ -164,13 +169,17 @@ def build_clf_constraint_generator(
         f: Optional[Array] = None,
         g: Optional[Array] = None,
     ) -> Tuple[Array, Array, CbfClfQpData]:
-        nonlocal a_clf, b_clf
         data: CbfClfQpData = {}
 
         dyn_f = f
         dyn_g = g
         if dyn_f is None or dyn_g is None:
             dyn_f, dyn_g = dyn_func(x)
+
+        # See the note in build_cbf_constraint_generator: the enclosing templates
+        # must stay concrete, so this trace works on locals.
+        a_clf = a_clf_template
+        b_clf = b_clf_template
 
         if n_lfs > 0:
             lf_x, lj_x, lh_x, dlf_t, lc_x = compute_lyapunov_values(t, x)
