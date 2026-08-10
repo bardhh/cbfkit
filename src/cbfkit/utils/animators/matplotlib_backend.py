@@ -22,6 +22,8 @@ class _MatplotlibMixin:
     """
 
     def _build_matplotlib(self):
+        self._ensure_frame_data_numpy()
+
         self._fig, self._ax = plt.subplots(figsize=self._config.figsize)
         ax = self._ax
 
@@ -105,17 +107,22 @@ class _MatplotlibMixin:
         self._agent_artists = []
         for spec in self._agents:
             body = Circle(
-                (0, 0), spec["body_radius"],
-                color=spec["body_color"], alpha=spec["body_alpha"],
-                zorder=spec["zorder"], label=spec["label"],
+                (0, 0),
+                spec["body_radius"],
+                color=spec["body_color"],
+                alpha=spec["body_alpha"],
+                zorder=spec["zorder"],
+                label=spec["label"],
             )
             ax.add_patch(body)
 
             zone = None
             if spec["zone_radius"] is not None:
                 zone = Circle(
-                    (0, 0), spec["zone_radius"],
-                    color=spec["zone_color"], alpha=spec["zone_alpha"],
+                    (0, 0),
+                    spec["zone_radius"],
+                    color=spec["zone_color"],
+                    alpha=spec["zone_alpha"],
                     zorder=spec["zorder"] - 1,
                 )
                 ax.add_patch(zone)
@@ -123,7 +130,8 @@ class _MatplotlibMixin:
             trail_line = None
             if spec["trail"]:
                 (trail_line,) = ax.plot(
-                    [], [],
+                    [],
+                    [],
                     spec["trail_style"],
                     color=spec["trail_color"],
                     alpha=spec["trail_alpha"],
@@ -138,8 +146,10 @@ class _MatplotlibMixin:
             ls_map = {"dotted": ":", "dashed": "--", "solid": "-"}
             ls = ls_map.get(spec["linestyle"], spec["linestyle"])
             lc = LineCollection(
-                [], linewidths=spec["linewidth"],
-                linestyles=ls, colors=spec["color"],
+                [],
+                linewidths=spec["linewidth"],
+                linestyles=ls,
+                colors=spec["color"],
                 zorder=spec["zorder"],
             )
             if spec["label"]:

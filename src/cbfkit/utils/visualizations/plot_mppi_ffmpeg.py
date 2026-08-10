@@ -1,7 +1,22 @@
 """MPPI trajectory animation with circle obstacles."""
 
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
+
+_MISSING_SAMPLES_MESSAGE = (
+    "MPPI rollout overlay skipped: sampled rollouts not logged; "
+    "pass log_planner_samples=True to sim.execute to record them."
+)
+
+
+def _lookup_key(keys, *candidates):
+    """Index of the first candidate present in ``keys``, or None if none are."""
+    for candidate in candidates:
+        if candidate in keys:
+            return keys.index(candidate)
+    return None
 
 
 class circle:
@@ -100,35 +115,38 @@ def animate(
     if backend == "matplotlib":
         fig, ax = animator.build()
 
-        sampled_lines = []
-        for _ in range(mppi_args["plot_samples"]):
-            (line,) = ax.plot([], [], "g", alpha=0.2)
-            sampled_lines.append(line)
-        (selected_line,) = ax.plot([], [], "b", linewidth=2)
+        sampled_idx = _lookup_key(controller_data_keys, "sampled_x_traj", "robot_sampled_states")
+        selected_idx = _lookup_key(controller_data_keys, "x_traj")
 
-        sampled_key = (
-            "sampled_x_traj" if "sampled_x_traj" in controller_data_keys else "robot_sampled_states"
-        )
-        state_dim = mppi_args["robot_state_dim"]
+        if sampled_idx is None or selected_idx is None:
+            warnings.warn(_MISSING_SAMPLES_MESSAGE, RuntimeWarning, stacklevel=2)
+        else:
+            sampled_lines = []
+            for _ in range(mppi_args["plot_samples"]):
+                (line,) = ax.plot([], [], "g", alpha=0.2)
+                sampled_lines.append(line)
+            (selected_line,) = ax.plot([], [], "b", linewidth=2)
 
-        def mppi_overlay(frame, _ax):
-            # Note: this file uses [frame][key] indexing (not [key][frame])
-            if frame >= len(controller_data_items):
-                return []
-            frame_data = controller_data_items[frame]
-            sampled = frame_data[controller_data_keys.index(sampled_key)]
-            selected = frame_data[controller_data_keys.index("x_traj")]
+            state_dim = mppi_args["robot_state_dim"]
 
-            for i, line in enumerate(sampled_lines):
-                line.set_data(
-                    sampled[state_dim * i, :],
-                    sampled[state_dim * i + 1, :],
-                )
-            selected_line.set_data(selected[0, :], selected[1, :])
+            def mppi_overlay(frame, _ax):
+                # Note: this file uses [frame][key] indexing (not [key][frame])
+                if frame >= len(controller_data_items):
+                    return []
+                frame_data = controller_data_items[frame]
+                sampled = frame_data[sampled_idx]
+                selected = frame_data[selected_idx]
 
-            return sampled_lines + [selected_line]
+                for i, line in enumerate(sampled_lines):
+                    line.set_data(
+                        sampled[state_dim * i, :],
+                        sampled[state_dim * i + 1, :],
+                    )
+                selected_line.set_data(selected[0, :], selected[1, :])
 
-        animator.on_frame(mppi_overlay)
+                return sampled_lines + [selected_line]
+
+            animator.on_frame(mppi_overlay)
 
     if save_animation:
         animator.save(animation_filename)

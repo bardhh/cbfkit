@@ -43,23 +43,53 @@ def _make_scan_step(
     enable_debug=True,
     progress_callback=None,
     progress_interval=1,
+    emit_estimates=True,
+    log_planner_samples=False,
 ):
     """Factory that builds the lax.scan step function.
 
     When ``enable_debug=False``, host-side callbacks (NaN warning print and
     progress reporting) are omitted, making the returned ``scan_step``
     compatible with ``jax.vmap``.
+
+    ``log_planner_samples`` controls whether ``PlannerData.sampled_x_traj`` --
+    one MPPI sample batch of shape ``(n_samples * state_dim, horizon)`` --
+    survives the step. It is dropped by default: stacking it over the horizon
+    dwarfs the trajectory itself (~320 MB for 1000 samples over 200 steps). Set
+    it to ``True`` when a caller needs the rollout cloud, e.g. to animate the
+    full-horizon MPPI overlay. The flag applies to the carry and the emitted
+    output together, never one alone: the ``_held`` and ``_advance`` branches of
+    the stop gate must return the same pytree structure, so a stripped carry
+    paired with a populated output would be a structure mismatch. When it is
+    ``True`` the initial carry's ``planner_data.sampled_x_traj`` must therefore
+    be a correctly shaped array rather than ``None``.
+
+    When ``emit_estimates=False``, the estimate ``z`` and covariance ``c`` are
+    still carried (the estimator needs them) but are not emitted as per-step
+    scan outputs, so ``lax.scan`` does not stack them over the horizon. Callers
+    that discard them -- the vmapped Monte Carlo path -- then avoid
+    materialising ``(num_steps, n)`` and ``(num_steps, n, n)`` buffers per
+    trajectory. The emitted tuple is ``(x, u, controller_data, planner_data)``
+    instead of ``(x, u, z, c, controller_data, planner_data)``.
+
+    The carry holds a ``stopped`` flag: once a step reports goal completion, a
+    controller/planner error, or a NaN, every later step skips the whole
+    pipeline and re-emits the held values. Under ``jax.vmap`` the gate lowers to
+    a select, so both branches still execute per lane and only the emitted
+    values change; the held branch keeps the last valid (finite) values, so a
+    lane that has stopped contributes no new data.
     """
 
-    def scan_step(carry, step_idx):
-        # Unpack carry
-        key, t, x, u, z, c, controller_data, planner_data = carry
-
-        # Split key for this step
-        key, subkey = random.split(key)
+    def _advance(key, t, x, u, z, c, controller_data, planner_data, stopped):
+        """Run one full pipeline step and return the next carry values."""
+        # One split per step, handing a dedicated subkey to each consumer. The
+        # eager backend (backend.py) derives its subkeys the same way in the
+        # same order, and test_rng_consistency pins the two streams together --
+        # change one scheme and you must change the other.
+        key, sensor_key, planner_key, nom_key, ctrl_key, pert_key = random.split(key, 6)
 
         # 1. Sensor
-        y = sensor(t, x, sigma=sigma, key=key)
+        y = sensor(t, x, sigma=sigma, key=sensor_key)
 
         # 2. Estimator - handle both 2-tuple (z, c) and 3-tuple (z, c, K) returns
         est_result = estimator(t, y, z, u, c)
@@ -73,18 +103,17 @@ def _make_scan_step(
 
         # 4. Planner
         if planner is not None:
-            key, planner_key = random.split(key)
             # Note: We assume planner signature matches and is JIT-able
             u_planner, planner_data = planner(t, z, None, planner_key, planner_data)
         else:
             u_planner = jnp.zeros((g.shape[1],))
 
         # 5. Resolve nominal control from planner output
-        u_nom, key = resolve_nominal_control(
+        u_nom = resolve_nominal_control(
             t,
             z,
             dt,
-            key,
+            nom_key,
             g,
             nominal_controller,
             planner_data,
@@ -93,7 +122,6 @@ def _make_scan_step(
         )
 
         # 6. Controller (CBF/CLF filter)
-        key, ctrl_key = random.split(key)
         if controller is not None:
             u, controller_data = controller(t, z, u_nom, ctrl_key, controller_data)
         else:
@@ -109,12 +137,11 @@ def _make_scan_step(
         # 7. Perturbation and integration (skipped if stopped)
         def _integrate(_):
             p = perturbation(x, u, f, g)
-            key_int, subkey = random.split(key)
 
             # Evaluate perturbation once per step.
             # This avoids repeated calls inside vector_field (e.g., 4 times for RK4),
             # reducing graph size and runtime if p is complex.
-            p_val = p(subkey)
+            p_val = p(pert_key)
             x_next = integrate_with_cached_dynamics(
                 x=x,
                 u=u,
@@ -126,12 +153,12 @@ def _make_scan_step(
                 perturbation_value=p_val,
                 perturbation_is_increment=getattr(perturbation, "is_increment", False),
             )
-            return key_int, x_next
+            return x_next
 
-        def _hold(_):
-            return key, x
+        def _skip_integration(_):
+            return x
 
-        key, x_next_candidate = lax.cond(stop, _hold, _integrate, operand=None)
+        x_next_candidate = lax.cond(stop, _skip_integration, _integrate, operand=None)
 
         # Check for NaNs in the next state to prevent divergent simulation
         nan_in_next = jnp.any(jnp.isnan(x_next_candidate))
@@ -162,7 +189,47 @@ def _make_scan_step(
                 lambda: None,
             )
 
+        # Strip sampled_x_traj from carry to save bandwidth/memory. Retained
+        # verbatim when the caller opted in, so the carry and the emitted output
+        # agree with the initial carry's structure.
+        if not log_planner_samples:
+            planner_data = planner_data._replace(sampled_x_traj=None)
+
+        # Latch the stop flag so every later step takes the held branch.
+        stop_next = stopped | jnp.asarray(stop) | nan_in_next
+
+        return (key, x_next, u, z, c, controller_data, planner_data, stop_next)
+
+    def scan_step(carry, step_idx):
+        # Unpack carry
+        key, t, x, u, z, c, controller_data, planner_data, stopped = carry
+
+        # `stopped` is False on the first step, so the pipeline always runs at
+        # least once. Both branches return the carry leaves, whose avals lax.scan
+        # already pins to the incoming carry, so the structures agree by
+        # construction.
+        def _held(_):
+            return (key, x, u, z, c, controller_data, planner_data, stopped)
+
+        (
+            key_next,
+            x_next,
+            u,
+            z,
+            c,
+            controller_data,
+            planner_data,
+            stop_next,
+        ) = lax.cond(
+            stopped,
+            _held,
+            lambda _: _advance(key, t, x, u, z, c, controller_data, planner_data, stopped),
+            operand=None,
+        )
+
         if enable_debug and progress_callback is not None and progress_interval > 0:
+            # Reported outside the stop gate so the progress bar still reaches
+            # the end of the horizon after an early stop.
             should_report = jnp.logical_or(
                 step_idx == num_steps - 1, step_idx % progress_interval == 0
             )
@@ -181,9 +248,17 @@ def _make_scan_step(
         t_next = t + dt
 
         # Pack carry
-        # Strip sampled_x_traj from carry to save bandwidth/memory
-        planner_data_carry = planner_data._replace(sampled_x_traj=None)
-        new_carry = (key, t_next, x_next, u, z, c, controller_data, planner_data_carry)
+        new_carry = (
+            key_next,
+            t_next,
+            x_next,
+            u,
+            z,
+            c,
+            controller_data,
+            planner_data,
+            stop_next,
+        )
 
         # Output (trajectory)
         # Strip solver_params from logged data to save memory
@@ -194,7 +269,14 @@ def _make_scan_step(
             del log_sub_data["solver_params"]
             log_controller_data = controller_data._replace(sub_data=log_sub_data)
 
-        output = (x, u, z, c, log_controller_data, planner_data)
+        # planner_data here is whatever _advance/_held produced, so its
+        # sampled_x_traj follows log_planner_samples: absent by default, stacked
+        # to (num_steps, n_samples * state_dim, horizon) when opted in. The
+        # eager path applies the same rule before logging.
+        if emit_estimates:
+            output = (x, u, z, c, log_controller_data, planner_data)
+        else:
+            output = (x, u, log_controller_data, planner_data)
 
         return new_carry, output
 
@@ -215,6 +297,7 @@ def _make_scan_step(
         "progress_callback",
         "num_steps",
         "progress_interval",
+        "log_planner_samples",
     ],
 )
 def simulator_jit(
@@ -236,6 +319,7 @@ def simulator_jit(
     initial_covariance: Optional[Covariance] = None,
     progress_callback: Optional[Callable[[int], None]] = None,
     progress_interval: int = 1,
+    log_planner_samples: bool = False,
 ) -> Tuple[jax.Array, jax.Array, jax.Array, jax.Array, ControllerData, PlannerData]:
     """JIT-compiled simulation loop using jax.lax.scan.
 
@@ -243,6 +327,9 @@ def simulator_jit(
     - planner_data and controller_data must be initialized with JAX-compatible arrays
       (no None) for any fields that will be used/updated.
     - Optional host-side progress reporting can be enabled via `progress_callback`.
+    - When ``log_planner_samples=True``, ``initial_planner_data.sampled_x_traj``
+      must already hold an array of the planner's sample-batch shape, since it
+      becomes part of the scan carry.
 
     Returns
     -------
@@ -266,6 +353,7 @@ def simulator_jit(
         enable_debug=True,
         progress_callback=progress_callback,
         progress_interval=progress_interval,
+        log_planner_samples=log_planner_samples,
     )
 
     # Initialize carry
@@ -291,6 +379,7 @@ def simulator_jit(
         c0,
         initial_controller_data,
         initial_planner_data,
+        jnp.asarray(False),  # stopped: the first step is never gated
     )
 
     # Run scan

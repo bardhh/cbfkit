@@ -14,10 +14,17 @@ import jax.numpy as jnp
 from jax import lax, random
 
 from cbfkit.simulation.simulator_jit import _make_scan_step
+
+# Re-exported for external consumers (benchmarks/scenario_builders.py imports
+# these from here); "unused" only from this module's own perspective.
+from cbfkit.simulation.status import (  # noqa: F401
+    _default_estimator,
+    _default_perturbation,
+    _default_sensor,
+)
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
-    Covariance,
     DynamicsCallable,
     EstimatorCallable,
     IntegratorCallable,
@@ -60,13 +67,6 @@ class MonteCarloGPUResults(NamedTuple):
     n_trials: int
 
 
-from cbfkit.simulation.status import (
-    _default_sensor,
-    _default_estimator,
-    _default_perturbation,
-)
-
-
 def conduct_monte_carlo_gpu(
     setup: MonteCarloSetup,
     n_trials: int,
@@ -93,7 +93,10 @@ def conduct_monte_carlo_gpu(
     sampler_keys = random.split(random.fold_in(master_key, 1), n_trials)
     initial_states = jax.vmap(setup.initial_state_sampler)(sampler_keys)
 
-    # Build the vmap-safe scan step (no debug callbacks)
+    # Build the vmap-safe scan step (no debug callbacks). The estimate and
+    # covariance are dropped from the emitted outputs: this function keeps only
+    # states, controls and the two data pytrees, and stacking the covariance
+    # costs (n_trials, num_steps, n, n) of device memory for nothing.
     scan_step = _make_scan_step(
         dynamics=setup.dynamics,
         integrator=setup.integrator,
@@ -109,6 +112,7 @@ def conduct_monte_carlo_gpu(
         enable_debug=False,
         progress_callback=None,
         progress_interval=1,
+        emit_estimates=False,
     )
 
     # Probe dimensions from dynamics
@@ -133,27 +137,27 @@ def conduct_monte_carlo_gpu(
             c0,
             setup.controller_data,
             setup.planner_data,
+            jnp.asarray(False),  # stopped
         )
 
         _final_carry, trajectory = lax.scan(scan_step, carry_init, jnp.arange(setup.num_steps))
         return trajectory
 
-    # JIT-compile the vmapped function
-    batched_fn = jax.jit(jax.vmap(single_trajectory, in_axes=(0, 0)))
+    # Compile ahead of time so the batch is *executed* exactly once: calling the
+    # jitted function to warm it up would run all n_trials trajectories, and the
+    # timed call would then run them a second time (doubling both wall time and
+    # peak memory, while reporting only half the cost).
+    compiled_fn = (
+        jax.jit(jax.vmap(single_trajectory, in_axes=(0, 0))).lower(keys, initial_states).compile()
+    )
 
-    # Warmup: compile without timing
-    _ = batched_fn(keys, initial_states)
-    # Block until compilation + execution finishes
-    jax.block_until_ready(_)
-
-    # Timed run
     start = time.perf_counter()
-    trajectory = batched_fn(keys, initial_states)
+    trajectory = compiled_fn(keys, initial_states)
     # Force synchronization for accurate timing
     jax.block_until_ready(trajectory)
     wall_time = time.perf_counter() - start
 
-    xs, us, zs, cs, c_datas, p_datas = trajectory
+    xs, us, c_datas, p_datas = trajectory
 
     return MonteCarloGPUResults(
         states=xs,
@@ -200,7 +204,7 @@ def conduct_monte_carlo_gpu_multiseed(
 
     initial_states = jax.vmap(setup.initial_state_sampler)(all_sampler_keys)
 
-    # Build the vmap-safe scan step
+    # Build the vmap-safe scan step (estimate/covariance not emitted; see above)
     scan_step = _make_scan_step(
         dynamics=setup.dynamics,
         integrator=setup.integrator,
@@ -216,6 +220,7 @@ def conduct_monte_carlo_gpu_multiseed(
         enable_debug=False,
         progress_callback=None,
         progress_interval=1,
+        emit_estimates=False,
     )
 
     # Probe dimensions
@@ -237,25 +242,29 @@ def conduct_monte_carlo_gpu_multiseed(
             c0,
             setup.controller_data,
             setup.planner_data,
+            jnp.asarray(False),  # stopped
         )
         _final_carry, trajectory = lax.scan(scan_step, carry_init, jnp.arange(setup.num_steps))
         return trajectory
 
-    batched_fn = jax.jit(jax.vmap(single_trajectory, in_axes=(0, 0)))
+    # Compile without executing, then execute once (see conduct_monte_carlo_gpu).
+    compiled_fn = (
+        jax.jit(jax.vmap(single_trajectory, in_axes=(0, 0)))
+        .lower(all_keys, initial_states)
+        .compile()
+    )
 
-    # Warmup (single JIT compilation for all seeds)
-    _ = batched_fn(all_keys, initial_states)
-    jax.block_until_ready(_)
-
-    # Timed run
     start = time.perf_counter()
-    trajectory = batched_fn(all_keys, initial_states)
+    trajectory = compiled_fn(all_keys, initial_states)
     jax.block_until_ready(trajectory)
     wall_time = time.perf_counter() - start
 
-    xs, us, zs, cs, c_datas, p_datas = trajectory
+    xs, us, c_datas, p_datas = trajectory
 
-    # Split results back into per-seed MonteCarloGPUResults
+    # Split results back into per-seed MonteCarloGPUResults.
+    # All seeds run inside one batched kernel, so there is no independently
+    # measurable per-seed time: this is that single execution's wall time
+    # amortised over the seeds, and the per-seed values sum to the real total.
     per_seed_time = wall_time / n_seeds
     results = []
     for i in range(n_seeds):
