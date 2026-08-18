@@ -59,4 +59,4 @@ def test_cart_pole_swingup_through_execute():
     assert float(jnp.min(dist[-50:])) < 0.5  # within ~30 deg of upright in the last second
     assert float(jnp.max(jnp.abs(res.states[:, 0]))) < 1.8  # stays on the rail
     # MPC state was carried, not logged as an array column.
-    assert not any(k.startswith("sub_data_mpc") for k in res.controller_keys)
+    assert not any(k.startswith("sub_data__mpc") for k in res.controller_keys)

@@ -197,6 +197,8 @@ def _render_gif(plant, states, controls, fps: int = 25):
     cam = mujoco.MjvCamera()
     cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
     cam.fixedcamid = mujoco.mj_name2id(plant.mj_model, mujoco.mjtObj.mjOBJ_CAMERA, "lookatcart")
+    if cam.fixedcamid < 0:  # model without that camera: fall back to the free camera
+        cam.type = mujoco.mjtCamera.mjCAMERA_FREE
     for d, k in _replay(plant, states, controls):
         if k % every:
             continue

@@ -18,7 +18,16 @@ from mujoco import mjx
 
 
 class MujocoPlant:
-    """Wrap a ``mujoco.MjModel`` for use with ``simulator.execute(plant=...)``."""
+    """Wrap a ``mujoco.MjModel`` for use with ``simulator.execute(plant=...)``.
+
+    Build one plant and reuse it. ``execute()`` passes the plant as a static JIT
+    argument keyed by identity, so a new plant per call recompiles the whole
+    simulation (~7 s for a cart-pole, ~100 s for the G1) *and* the JIT cache
+    holds a strong reference to every plant it has compiled for -- including its
+    ``mjx.Model`` device arrays. In a sweep that must rebuild plants, call
+    ``cbfkit.simulation.simulator_jit.simulator_jit.clear_cache()`` between
+    configurations.
+    """
 
     def __init__(self, mj_model: mujoco.MjModel, *, substeps: int = 1, com_body: int = 0) -> None:
         if substeps < 1:

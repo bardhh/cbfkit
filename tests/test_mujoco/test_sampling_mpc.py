@@ -149,3 +149,20 @@ def test_dr_requires_randomize_model(plant):
             temperature=0.1,
             num_randomizations=2,
         )
+
+
+def test_mppi_update_moves_toward_low_cost_samples(mpc, plant):
+    # Pins the update rule's direction (a uniform-weight or sign-flipped update
+    # would fail): the new mean's rollout is cheaper than the average sample,
+    # and the new mean sits closer to the best sample than to the worst.
+    d0 = plant.from_state(jnp.array([0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]))
+    s0 = mpc.init_state()
+    key = jax.random.PRNGKey(2)
+    s1, costs = jax.jit(mpc.optimize)(d0, 0.0, s0, key)
+    mean_cost = float(mpc.rollout_cost(d0, s1.mean[None], tk=s1.tk)[0])
+    assert mean_cost < float(jnp.mean(costs))
+    # Reconstruct the sampled knots exactly as optimize did (same key, same shift).
+    noise = jax.random.normal(key, (mpc.num_samples, mpc.num_knots, plant.nu))
+    knots = jnp.clip(s0.mean + mpc.noise_level * noise, plant.u_min, plant.u_max)
+    best, worst = knots[jnp.argmin(costs)], knots[jnp.argmax(costs)]
+    assert float(jnp.linalg.norm(s1.mean - best)) < float(jnp.linalg.norm(s1.mean - worst))

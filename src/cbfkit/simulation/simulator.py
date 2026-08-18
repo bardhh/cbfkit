@@ -116,6 +116,11 @@ def simulator(
         callbacks = []
     sensor_func: SensorCallable = sensor if sensor is not None else _default_sensor
     estimator_func: EstimatorCallable = estimator if estimator is not None else _default_estimator
+    if plant is not None and perturbation is not None:
+        raise NotImplementedError(
+            "perturbation is not supported on the plant path (v1); use the plant's own "
+            "domain randomisation."
+        )
     perturbation_func: PerturbationCallable = (
         perturbation if perturbation is not None else _default_perturbation
     )
@@ -544,8 +549,9 @@ def execute(
 
         prime_key1, prime_key2, prime_key3 = random.split(key, 3)  # type: ignore
 
+        u_planner0 = None
         if planner is not None:
-            _, p_data = planner(0.0, x0, None, prime_key1, p_data)  # type: ignore
+            u_planner0, p_data = planner(0.0, x0, None, prime_key1, p_data)  # type: ignore
             # Strip sampled_x_traj from p_data to avoid carrying it in JIT loop.
             # When the caller opted in, the priming call above is what gives the
             # initial carry a correctly shaped sample batch instead of None --
@@ -560,13 +566,25 @@ def execute(
                 # On the plant path u_nom need not have plant.nu entries (a
                 # reduced-order nominal feeding a wrapper that emits actuator
                 # commands), so probe the nominal controller for its shape.
+                # Mirror resolve_nominal_control's priority: planner u_traj, then
+                # the nominal controller (tracking x_traj if any), else zeros.
                 u_nom_dummy = jnp.zeros((plant.nu,))
-                if nominal_controller is not None:
+                if planner is not None and p_data.u_traj is not None and u_planner0 is not None:
+                    u_nom_dummy = jnp.asarray(u_planner0)
+                elif nominal_controller is not None:
                     ref0 = None if p_data.x_traj is None else p_data.x_traj[:, 0]
                     try:
                         u_nom_dummy, _ = nominal_controller(0.0, x0, prime_key2, ref0)  # type: ignore
-                    except Exception:  # noqa: BLE001 -- shape probe only; fall back to plant.nu
-                        pass
+                    except Exception as exc:  # noqa: BLE001 -- shape probe; surface, don't hide
+                        warnings.warn(
+                            f"Priming call to nominal_controller failed ({exc!r}); assuming "
+                            f"u_nom has plant.nu={plant.nu} entries. If your safety controller "
+                            "records a u_nom of another dimension the JIT carry will mismatch -- "
+                            "pass goal=/planner_data so the nominal controller can be probed, or "
+                            "make it accept ref=None.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
         # Ensure error_data is initialized to enable NaN reporting in JIT loop.

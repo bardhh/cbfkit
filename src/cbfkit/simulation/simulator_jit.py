@@ -288,11 +288,14 @@ def _make_scan_step(
         )
 
         # Output (trajectory)
-        # Carry-only sub_data entries (solver warm starts, MPC knots) are not
-        # stacked over the horizon; drop them from the emitted copy only.
+        # Carry-only sub_data entries are not stacked over the horizon; drop
+        # them from the emitted copy only. Convention: "solver_params" (legacy)
+        # and any key beginning with "_" (e.g. a controller's private state).
         log_controller_data = controller_data
         if controller_data.sub_data is not None:
-            dropped = [k for k in ("solver_params", "mpc") if k in controller_data.sub_data]
+            dropped = [
+                k for k in controller_data.sub_data if k == "solver_params" or k.startswith("_")
+            ]
             if dropped:
                 log_sub_data = controller_data.sub_data.copy()
                 for k in dropped:

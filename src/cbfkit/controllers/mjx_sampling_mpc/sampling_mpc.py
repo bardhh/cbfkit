@@ -9,6 +9,7 @@ knot perturbations, rolls each sample out through ``plant.step`` under
 Rollouts keep only per-sample costs -- never ``mjx.Data`` trajectories.
 """
 
+import warnings
 from typing import Any, Callable, NamedTuple, Optional, Tuple
 
 import jax
@@ -67,6 +68,12 @@ class SamplingMpc:
         # vmap in_axes pytree (hydrax convention).
         self.model = plant.model
         self.randomized_axes = None
+        if self.num_randomizations == 1 and randomize_model is not None:
+            warnings.warn(
+                "randomize_model= given but num_randomizations=1: no randomisation is applied.",
+                UserWarning,
+                stacklevel=2,
+            )
         if self.num_randomizations > 1:
             if randomize_model is None:
                 raise ValueError("num_randomizations > 1 requires randomize_model=")
@@ -134,7 +141,9 @@ class SamplingMpc:
         noise = jax.random.normal(key, (self.num_samples, self.num_knots, self.plant.nu))
         knots = jnp.clip(mean + self.noise_level * noise, self.plant.u_min, self.plant.u_max)
 
-        # Roll out.
+        # Roll out. Query times span [t, t + plan_horizon] in ctrl_steps points,
+        # i.e. spacing plan_horizon/(H-1) rather than exactly dt -- byte-for-byte
+        # hydrax (alg_base.py), kept for parity with its tuned configurations.
         tq = jnp.linspace(new_tk[0], new_tk[-1], self.ctrl_steps)
         controls = self.interp(tq, new_tk, knots)  # (N, H, nu)
         costs = self._eval_batch(self.model, data0, controls, aux)  # (N,)
@@ -157,24 +166,33 @@ class SamplingMpc:
     def as_controller(self):
         """Return a ``ControllerCallable``: ``(t, x, u_nom, key, data) -> (u, data)``.
 
-        ``MpcState`` is carried in ``data.sub_data["mpc"]`` and created on the
-        first call (the simulator's priming call), so the JIT carry always holds
-        a concrete state. ``u_nom`` is forwarded to the cost functions as ``aux``.
-        The rollout root is ``plant.from_state(x)`` -- a fresh contact solve, as
-        in hydrax's deterministic loop.
+        ``MpcState`` is carried in ``data.sub_data["_mpc"]`` (the leading
+        underscore marks it carry-only: the simulator does not stack it over the
+        horizon) and created on the first call (the simulator's priming call),
+        so the JIT carry always holds a concrete state. ``u_nom`` is forwarded
+        to the cost functions as ``aux``. The rollout root is
+        ``plant.from_state(x)`` -- a fresh contact solve, as in hydrax's
+        deterministic loop.
+
+        The same closure is returned on repeated calls: ``controller`` is a
+        static JIT argument keyed by identity, so a fresh closure per call
+        would recompile the whole simulation.
         """
+        if getattr(self, "_controller", None) is not None:
+            return self._controller
         plant = self.plant
 
         def controller(t, x, u_nom, key, data):
             sub = dict(data.sub_data) if data.sub_data is not None else {}
-            state = sub.get("mpc")
+            state = sub.get("_mpc")
             if state is None:
                 state = self.init_state()
             data0 = plant.from_state(x)
             u, state = self.step(data0, t, state, key, aux=u_nom)
-            sub["mpc"] = state
+            sub["_mpc"] = state
             return u, data._replace(sub_data=sub, u=u, u_nom=u_nom)
 
         # Already canonical 5-arg form; tell setup_controller not to wrap it.
         controller.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+        self._controller = controller
         return controller

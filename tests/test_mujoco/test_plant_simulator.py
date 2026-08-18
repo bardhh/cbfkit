@@ -212,3 +212,53 @@ def test_execute_plant_primes_u_nom_from_nominal_controller(plant):
         verbose=False,
     )
     assert res.controls.shape == (3, 1)
+
+
+def test_priming_prefers_planner_u_traj_over_nominal(plant):
+    # resolve_nominal_control gives u_traj priority; the priming probe must too,
+    # otherwise the carry's u_nom aval disagrees between the priming call and
+    # the scan (a lax.cond branch-type error far from the cause).
+    from cbfkit.utils.user_types import PlannerData
+
+    def planner(t, x, u_prev, key, pdata):
+        u = jnp.zeros(plant.nu)
+        return u, pdata._replace(u_traj=jnp.tile(u[:, None], (1, 3)))
+
+    def nominal(t, x, key, ref):
+        return jnp.array([1.0, -1.0]), ControllerData()  # 2-D, must NOT be used
+
+    def ctrl(t, x, u_nom, key, data):
+        return jnp.atleast_1d(u_nom[0]), data._replace(u_nom=u_nom)  # records u_nom
+
+    res = sim.execute(
+        x0=X0,
+        dt=plant.dt,
+        num_steps=3,
+        plant=plant,
+        planner=planner,
+        nominal_controller=nominal,
+        controller=ctrl,
+        planner_data=PlannerData(),
+        use_jit=True,
+        verbose=False,
+    )
+    assert res.controls.shape == (3, 1)
+
+
+def test_simulator_factory_rejects_perturbation_with_plant(plant):
+    with pytest.raises(NotImplementedError, match="perturbation"):
+        sim.simulator(
+            dt=plant.dt,
+            num_steps=2,
+            dynamics=None,
+            integrator=None,
+            planner=None,
+            nominal_controller=None,
+            controller=_zero_ctrl,
+            sensor=None,
+            estimator=None,
+            perturbation=lambda x, u, f, g: (lambda k: jnp.zeros_like(x)),
+            sigma=None,
+            key=jax.random.PRNGKey(0),
+            plant=plant,
+        )
