@@ -88,3 +88,58 @@ def test_jit_plant_path_nan_guard_freezes_state(plant):
     assert jnp.all(jnp.isfinite(res.states))
     # After the NaN the held state repeats.
     assert jnp.allclose(res.states[-1], res.states[-2])
+
+
+def test_eager_plant_path_matches_jit_shifted_by_one(plant):
+    # Eager logs post-step x_{k+1}; JIT logs pre-step x_k (same convention as
+    # tests/test_simulation/test_backend_parity.py).
+    with pytest.warns(UserWarning, match="debug-only"):
+        res_py = sim.execute(
+            x0=X0,
+            dt=plant.dt,
+            num_steps=N,
+            plant=plant,
+            controller=_pd_controller,
+            use_jit=False,
+            verbose=False,
+        )
+    res_jit = sim.execute(
+        x0=X0,
+        dt=plant.dt,
+        num_steps=N,
+        plant=plant,
+        controller=_pd_controller,
+        use_jit=True,
+        verbose=False,
+    )
+    assert jnp.allclose(res_py.states[:-1], res_jit.states[1:], atol=1e-9)
+    assert jnp.allclose(res_py.controls, res_jit.controls, atol=1e-9)
+
+
+def test_eager_and_jit_plant_paths_share_rng_stream(plant):
+    # A controller that leaks its key into the control proves the split order is pinned.
+    def _keyed(t, x, u_nom, key, data):
+        return jnp.atleast_1d(0.01 * jax.random.normal(key)), data
+
+    with pytest.warns(UserWarning):
+        res_py = sim.execute(
+            x0=X0,
+            dt=plant.dt,
+            num_steps=8,
+            plant=plant,
+            controller=_keyed,
+            use_jit=False,
+            verbose=False,
+            key=jax.random.PRNGKey(3),
+        )
+    res_jit = sim.execute(
+        x0=X0,
+        dt=plant.dt,
+        num_steps=8,
+        plant=plant,
+        controller=_keyed,
+        use_jit=True,
+        verbose=False,
+        key=jax.random.PRNGKey(3),
+    )
+    assert jnp.allclose(res_py.controls, res_jit.controls, atol=1e-12)

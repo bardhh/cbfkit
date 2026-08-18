@@ -39,6 +39,7 @@ def stepper(
     sigma: Array,
     key: Key,
     stl_trajectory_cost: Optional[StlTrajectoryCostCallable],
+    plant=None,
 ) -> Callable[
     [
         Time,
@@ -54,7 +55,17 @@ def stepper(
     """Creates a closure to step the simulation forward by one timestep.
 
     Moved from simulator.py to decouple logic.
+
+    When ``plant`` is given, ``dynamics``/``integrator``/``perturbation`` are
+    unused; the plant's opaque state is advanced with ``plant.step``. This eager
+    plant path dispatches the whole state pytree from Python every step and is
+    debug-only -- ``execute()`` warns when it is selected.
     """
+
+    # Eager plant path (debug-only): keep the plant's opaque state alongside the
+    # flat x the caller passes in. If the caller hands us an x that does not
+    # match (fresh run, NaN clamp), rebuild from it.
+    plant_state = None
 
     def step(
         t: Time,
@@ -87,7 +98,15 @@ def stepper(
             z, c, _kalman_gain = est_result  # K available for risk-aware controllers via kwargs
         else:
             z, c = est_result
-        f, g = dynamics(x)
+
+        nonlocal plant_state
+        if plant is None:
+            f, g = dynamics(x)
+        else:
+            if plant_state is None or not bool(jnp.array_equal(plant.to_state(plant_state), x)):
+                plant_state = plant.from_state(x)
+            f = None
+            g = jnp.zeros((x.shape[0], plant.nu))  # resolve_nominal_control reads only g.shape[1]
 
         if planner is None and nominal_controller is None and controller is None:
             raise ValueError(
@@ -151,19 +170,27 @@ def stepper(
         else:
             controller_data = ControllerData()
 
-        p = perturbation(x, u, f, g)
-        p_val = p(pert_key)
-        x = integrate_with_cached_dynamics(
-            x=x,
-            u=u,
-            dt=dt,
-            dynamics=dynamics,
-            integrator=integrator,
-            f=f,
-            g=g,
-            perturbation_value=p_val,
-            perturbation_is_increment=getattr(perturbation, "is_increment", False),
-        )
+        if plant is None:
+            p = perturbation(x, u, f, g)
+            p_val = p(pert_key)
+            x = integrate_with_cached_dynamics(
+                x=x,
+                u=u,
+                dt=dt,
+                dynamics=dynamics,
+                integrator=integrator,
+                f=f,
+                g=g,
+                perturbation_value=p_val,
+                perturbation_is_increment=getattr(perturbation, "is_increment", False),
+            )
+        else:
+            # pert_key stays split above even though unused: the split order is pinned.
+            next_state = plant.step(plant_state, u)
+            x_next = plant.to_state(next_state)
+            if not bool(jnp.any(jnp.isnan(x_next))):
+                plant_state = next_state  # commit only finite states; the caller clamps x
+            x = x_next
 
         u_ret = u
         c_ret = c if c is not None else jnp.zeros((len(z), len(z)))
