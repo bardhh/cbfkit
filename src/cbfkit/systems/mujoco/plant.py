@@ -37,6 +37,12 @@ class MujocoPlant:
         rng = jnp.asarray(mj_model.actuator_ctrlrange)
         self.u_min = jnp.where(limited, rng[:, 0], -jnp.inf)
         self.u_max = jnp.where(limited, rng[:, 1], jnp.inf)
+        # Jit the hot methods once: called from Python (eager path, tests) they
+        # would otherwise re-trace mjx.step on every call; inside an outer
+        # jit/scan a jitted callee is inlined at no cost.
+        self.step = jax.jit(self.step)  # type: ignore[method-assign]
+        self.to_state = jax.jit(self.to_state)  # type: ignore[method-assign]
+        self.from_state = jax.jit(self.from_state)  # type: ignore[method-assign]
 
     # -- data construction -------------------------------------------------
     def make_data(self) -> mjx.Data:

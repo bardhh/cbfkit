@@ -143,3 +143,72 @@ def test_eager_and_jit_plant_paths_share_rng_stream(plant):
         key=jax.random.PRNGKey(3),
     )
     assert jnp.allclose(res_py.controls, res_jit.controls, atol=1e-12)
+
+
+def _zero_ctrl(t, x, u_nom, key, data):
+    return jnp.zeros(1), data
+
+
+def test_execute_plant_validation(plant):
+    with pytest.raises(ValueError, match="state_dim"):
+        sim.execute(
+            x0=jnp.zeros(3),
+            dt=plant.dt,
+            num_steps=2,
+            plant=plant,
+            controller=_zero_ctrl,
+            verbose=False,
+        )
+    with pytest.raises(ValueError, match="dt"):
+        sim.execute(x0=X0, dt=0.5, num_steps=2, plant=plant, controller=_zero_ctrl, verbose=False)
+    with pytest.raises(NotImplementedError, match="perturbation"):
+        sim.execute(
+            x0=X0,
+            dt=plant.dt,
+            num_steps=2,
+            plant=plant,
+            controller=_zero_ctrl,
+            perturbation=lambda x, u, f, g: (lambda k: jnp.zeros_like(x)),
+            verbose=False,
+        )
+
+
+def test_execute_plant_warns_when_dynamics_also_given(plant):
+    with pytest.warns(UserWarning, match="ignored"):
+        sim.execute(
+            x0=X0,
+            dt=plant.dt,
+            num_steps=2,
+            plant=plant,
+            controller=_zero_ctrl,
+            dynamics=lambda x: (x, jnp.eye(7)),
+            verbose=False,
+        )
+
+
+def test_execute_plant_auto_selects_jit(plant, capsys):
+    sim.execute(x0=X0, dt=plant.dt, num_steps=2, plant=plant, controller=_zero_ctrl, verbose=True)
+    assert "JIT" in capsys.readouterr().out
+
+
+def test_execute_plant_primes_u_nom_from_nominal_controller(plant):
+    # Nominal returns a 2-D command while the plant is 1-D: priming must not
+    # assume u_nom has plant.nu entries. The controller maps 2-D -> 1-D.
+    def nominal(t, x, key, ref):
+        return jnp.array([1.0, -1.0]), ControllerData()
+
+    def ctrl(t, x, u_nom, key, data):
+        assert u_nom.shape == (2,)
+        return jnp.atleast_1d(u_nom[0] + u_nom[1]), data
+
+    res = sim.execute(
+        x0=X0,
+        dt=plant.dt,
+        num_steps=3,
+        plant=plant,
+        nominal_controller=nominal,
+        controller=ctrl,
+        use_jit=True,
+        verbose=False,
+    )
+    assert res.controls.shape == (3, 1)

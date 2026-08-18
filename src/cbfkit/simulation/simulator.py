@@ -18,6 +18,7 @@ from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
     Covariance,
+    DiscretePlant,
     DynamicsCallable,
     EstimatorCallable,
     IntegratorCallable,
@@ -101,6 +102,7 @@ def simulator(
     callbacks: Optional[List[SimulationCallback]] = None,
     stl_trajectory_cost: Optional[StlTrajectoryCostCallable] = None,
     log_planner_samples: bool = False,
+    plant: Optional[DiscretePlant] = None,
 ) -> Callable[
     [Array, Optional[ControllerData], Optional[PlannerData]],
     Iterator[SimulationStepData],
@@ -148,6 +150,7 @@ def simulator(
         dt=dt,
         key=key,
         stl_trajectory_cost=stl_trajectory_cost,
+        plant=plant,
     )
 
     def simulate_iter(
@@ -258,12 +261,45 @@ def simulator(
     return simulate_iter
 
 
+def _validate_dynamics_shapes(x0: Array, f_check: Array, g_check: Array) -> None:
+    """Shape checks for the (f, g) returned by ``dynamics(x0)`` on the flat-state path."""
+    if f_check.shape != x0.shape:
+        msg = (
+            f"Shape mismatch: Initial state 'x0' has shape {x0.shape}, "
+            f"but dynamics drift 'f' has shape {f_check.shape}.\n"
+            "The state vector must match the dynamics output shape."
+        )
+        if x0.ndim == 2 and x0.shape[1] == 1 and f_check.ndim == 1:
+            msg += "\nTip: Pass a 1D array for 'x0' (e.g., use x0.ravel() or x0.flatten())."
+        elif x0.shape[0] < f_check.shape[0]:
+            msg += f"\nTip: System expects {f_check.shape[0]} states, but got {x0.shape[0]}."
+        raise ValueError(msg)
+
+    if f_check.ndim != 1:
+        msg = (
+            f"Dynamics function returned `f` with shape {f_check.shape}. "
+            "Expected 1D array (shape (n,)).\n"
+        )
+        if f_check.ndim == 2 and f_check.shape[1] == 1:
+            msg += (
+                "It appears `f` is a column vector (n, 1). "
+                "Please squeeze it to (n,) (e.g., using jnp.squeeze or .flatten())."
+            )
+        raise ValueError(msg)
+
+    if g_check.ndim != 2:
+        raise ValueError(
+            f"Dynamics function returned `g` with shape {g_check.shape}. "
+            "Expected 2D array (shape (n, m))."
+        )
+
+
 def execute(
     x0: State,
     dt: float,
     num_steps: int,
-    dynamics: DynamicsCallable,
-    integrator: IntegratorCallable,
+    dynamics: Optional[DynamicsCallable] = None,
+    integrator: Optional[IntegratorCallable] = None,
     planner: Optional[PlannerCallable] = None,
     nominal_controller: Optional[NominalControllerCallable] = None,
     controller: Optional[ControllerCallable] = None,
@@ -283,6 +319,7 @@ def execute(
     jit_progress: bool = False,
     jit_progress_interval: int = 50,
     log_planner_samples: bool = False,
+    plant: Optional[DiscretePlant] = None,
 ) -> SimulationResults:
     """Executes a complete simulation of the dynamical system.
 
@@ -342,6 +379,12 @@ def execute(
             (``n_samples * state_dim * horizon``) dwarfs the trajectory -- roughly 320 MB for
             1000 samples over a 200-step run. Enable it to animate the MPPI rollout cloud;
             the two ``examples/unicycle/reach_goal`` MPPI scripts do exactly that.
+        plant (Optional[DiscretePlant], optional): A discrete-time plant that owns its own
+            state (e.g. ``cbfkit.systems.mujoco.MujocoPlant``). When given, ``dynamics`` and
+            ``integrator`` are ignored, ``x0`` must have shape ``(plant.state_dim,)``, ``dt``
+            must equal ``plant.dt``, and ``perturbation`` is unsupported. The JIT path is the
+            supported path; ``use_jit=False`` is debug-only. Logged states are
+            ``plant.to_state(...)`` so ``SimulationResults`` keeps its flat layout.
 
     Returns
     -------
@@ -357,44 +400,44 @@ def execute(
     """
     # Validate dynamics output — single call, reused for all checks
     x0 = jnp.atleast_1d(jnp.asarray(x0))
-    try:
-        f_check, g_check = dynamics(x0)
-    except Exception as e:
-        raise ValueError(
-            f"Dynamics evaluation failed for initial state 'x0' with shape {x0.shape}.\n"
-            f"Ensure 'x0' has the correct dimensions for the system.\n"
-            f"Original error: {e}"
-        ) from e
-
-    if f_check.shape != x0.shape:
-        msg = (
-            f"Shape mismatch: Initial state 'x0' has shape {x0.shape}, "
-            f"but dynamics drift 'f' has shape {f_check.shape}.\n"
-            "The state vector must match the dynamics output shape."
-        )
-        if x0.ndim == 2 and x0.shape[1] == 1 and f_check.ndim == 1:
-            msg += "\nTip: Pass a 1D array for 'x0' (e.g., use x0.ravel() or x0.flatten())."
-        elif x0.shape[0] < f_check.shape[0]:
-            msg += f"\nTip: System expects {f_check.shape[0]} states, but got {x0.shape[0]}."
-        raise ValueError(msg)
-
-    if f_check.ndim != 1:
-        msg = (
-            f"Dynamics function returned `f` with shape {f_check.shape}. "
-            "Expected 1D array (shape (n,)).\n"
-        )
-        if f_check.ndim == 2 and f_check.shape[1] == 1:
-            msg += (
-                "It appears `f` is a column vector (n, 1). "
-                "Please squeeze it to (n,) (e.g., using jnp.squeeze or .flatten())."
+    if plant is not None:
+        if dynamics is not None or integrator is not None:
+            warnings.warn(
+                "plant= given: 'dynamics' and 'integrator' are ignored.", UserWarning, stacklevel=2
             )
-        raise ValueError(msg)
+        if x0.shape != (plant.state_dim,):
+            raise ValueError(
+                f"x0 has shape {x0.shape} but plant.state_dim is {plant.state_dim} "
+                f"(expected [qpos | qvel | com_xyz] for MujocoPlant)."
+            )
+        if abs(float(dt) - float(plant.dt)) > 1e-9:
+            raise ValueError(
+                f"dt={dt} must equal plant.dt={plant.dt} "
+                "(use MujocoPlant(substeps=...) to change it)."
+            )
+        if perturbation is not None:
+            raise NotImplementedError(
+                "perturbation is not supported on the plant path (v1); "
+                "use the plant's own domain randomisation."
+            )
+        if stl_trajectory_cost is not None:
+            raise NotImplementedError(
+                "stl_trajectory_cost requires the eager path, which is debug-only for plants."
+            )
+        g_check = None
+    elif dynamics is None or integrator is None:
+        raise ValueError("Either plant= or both dynamics= and integrator= must be given.")
+    else:
+        try:
+            f_check, g_check = dynamics(x0)
+        except Exception as e:
+            raise ValueError(
+                f"Dynamics evaluation failed for initial state 'x0' with shape {x0.shape}.\n"
+                f"Ensure 'x0' has the correct dimensions for the system.\n"
+                f"Original error: {e}"
+            ) from e
 
-    if g_check.ndim != 2:
-        raise ValueError(
-            f"Dynamics function returned `g` with shape {g_check.shape}. "
-            "Expected 2D array (shape (n, m))."
-        )
+        _validate_dynamics_shapes(x0, f_check, g_check)
 
     # Setup callbacks
     callbacks: List[SimulationCallback] = []
@@ -463,6 +506,14 @@ def execute(
         elif verbose and jit_blocked:
             print_jit_status("Auto-selected eager path (stl_trajectory_cost requires it).")
 
+    if plant is not None and use_jit is False:
+        warnings.warn(
+            "Eager execution with plant= is debug-only: per-step dispatch of the plant state is "
+            "~500x slower than the JIT path.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     if use_jit:
         # JIT Execution Path
 
@@ -503,7 +554,19 @@ def execute(
                 p_data = p_data._replace(sampled_x_traj=None)
 
         if controller is not None:
-            u_nom_dummy = jnp.zeros((g_check.shape[1],))
+            if plant is None:
+                u_nom_dummy = jnp.zeros((g_check.shape[1],))
+            else:
+                # On the plant path u_nom need not have plant.nu entries (a
+                # reduced-order nominal feeding a wrapper that emits actuator
+                # commands), so probe the nominal controller for its shape.
+                u_nom_dummy = jnp.zeros((plant.nu,))
+                if nominal_controller is not None:
+                    ref0 = None if p_data.x_traj is None else p_data.x_traj[:, 0]
+                    try:
+                        u_nom_dummy, _ = nominal_controller(0.0, x0, prime_key2, ref0)  # type: ignore
+                    except Exception:  # noqa: BLE001 -- shape probe only; fall back to plant.nu
+                        pass
             _, c_data = controller(0.0, x0, u_nom_dummy, prime_key3, c_data)  # type: ignore
 
         # Ensure error_data is initialized to enable NaN reporting in JIT loop.
@@ -544,6 +607,7 @@ def execute(
                 progress_callback=progress_hook,
                 progress_interval=jit_progress_interval,
                 log_planner_samples=log_planner_samples,
+                plant=plant,
             )
             # Ensure progress callbacks flush before printing completion.
             xs.block_until_ready()
@@ -684,6 +748,7 @@ def execute(
         callbacks=callbacks,
         stl_trajectory_cost=stl_trajectory_cost,
         log_planner_samples=log_planner_samples,
+        plant=plant,
     )
 
     # Run simulation from initial state
