@@ -152,3 +152,29 @@ class SamplingMpc:
     ) -> Tuple[Array, MpcState]:
         state, _ = self.optimize(data0, t, state, key, aux)
         return self.get_action(state, t), state
+
+    # -- CBFKit controller adapter ----------------------------------------
+    def as_controller(self):
+        """Return a ``ControllerCallable``: ``(t, x, u_nom, key, data) -> (u, data)``.
+
+        ``MpcState`` is carried in ``data.sub_data["mpc"]`` and created on the
+        first call (the simulator's priming call), so the JIT carry always holds
+        a concrete state. ``u_nom`` is forwarded to the cost functions as ``aux``.
+        The rollout root is ``plant.from_state(x)`` -- a fresh contact solve, as
+        in hydrax's deterministic loop.
+        """
+        plant = self.plant
+
+        def controller(t, x, u_nom, key, data):
+            sub = dict(data.sub_data) if data.sub_data is not None else {}
+            state = sub.get("mpc")
+            if state is None:
+                state = self.init_state()
+            data0 = plant.from_state(x)
+            u, state = self.step(data0, t, state, key, aux=u_nom)
+            sub["mpc"] = state
+            return u, data._replace(sub_data=sub, u=u, u_nom=u_nom)
+
+        # Already canonical 5-arg form; tell setup_controller not to wrap it.
+        controller.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+        return controller

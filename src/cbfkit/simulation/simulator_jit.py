@@ -288,13 +288,16 @@ def _make_scan_step(
         )
 
         # Output (trajectory)
-        # Strip solver_params from logged data to save memory
+        # Carry-only sub_data entries (solver warm starts, MPC knots) are not
+        # stacked over the horizon; drop them from the emitted copy only.
         log_controller_data = controller_data
-        if controller_data.sub_data is not None and "solver_params" in controller_data.sub_data:
-            # Create a shallow copy and remove the key to avoid affecting carry
-            log_sub_data = controller_data.sub_data.copy()
-            del log_sub_data["solver_params"]
-            log_controller_data = controller_data._replace(sub_data=log_sub_data)
+        if controller_data.sub_data is not None:
+            dropped = [k for k in ("solver_params", "mpc") if k in controller_data.sub_data]
+            if dropped:
+                log_sub_data = controller_data.sub_data.copy()
+                for k in dropped:
+                    del log_sub_data[k]
+                log_controller_data = controller_data._replace(sub_data=log_sub_data)
 
         # planner_data here is whatever _advance/_held produced, so its
         # sampled_x_traj follows log_planner_samples: absent by default, stacked
