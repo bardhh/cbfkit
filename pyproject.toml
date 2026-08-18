@@ -117,7 +117,10 @@ version = {file = "src/cbfkit/VERSION"}
     "py.typed",
     "VERSION",
     "systems/mujoco/models/**/*.xml",
+    "systems/mujoco/models/**/*.json",
     "systems/mujoco/models/**/NOTICE",
+    "systems/mujoco/models/**/LICENSE",
+    "systems/mujoco/models/**/README.md",
 ]
 
 [tool.black]
