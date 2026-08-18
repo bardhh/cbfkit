@@ -13,6 +13,7 @@ except ImportError as exc:
         "Install with: pip install cbfkit[mujoco]"
     ) from exc
 
+from .sampling_mpc import MpcState, SamplingMpc  # noqa: E402
 from .spline import get_interp_func, interp_linear, interp_zero  # noqa: E402
 
-__all__ = ["get_interp_func", "interp_linear", "interp_zero"]
+__all__ = ["MpcState", "SamplingMpc", "get_interp_func", "interp_linear", "interp_zero"]
