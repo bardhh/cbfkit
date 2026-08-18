@@ -13,8 +13,10 @@ Usage
     python examples/mujoco/cart_pole_swingup.py --view        # replay in the MuJoCo viewer
     CBFKIT_TEST_MODE=1 python examples/mujoco/cart_pole_swingup.py   # short run, no plots
 
-On macOS the interactive viewer needs MuJoCo's ``mjpython`` launcher:
-    mjpython examples/mujoco/cart_pole_swingup.py --view
+On macOS the interactive viewer needs MuJoCo's ``mjpython`` launcher; with
+``--view`` the script re-execs itself under the venv's ``mjpython`` automatically
+(set ``CBFKIT_NO_MJPYTHON=1`` to disable). Running ``mjpython <script> --view``
+directly works too.
 """
 
 import argparse
@@ -34,6 +36,7 @@ import numpy as np
 import cbfkit.simulation.simulator as sim
 from cbfkit.controllers.mjx_sampling_mpc import SamplingMpc
 from cbfkit.systems.mujoco import MujocoPlant, load_model
+from cbfkit.systems.mujoco.viewer_utils import relaunch_under_mjpython_if_needed, under_mjpython
 
 # In test mode we shorten the run and skip plots/rendering.
 TEST_MODE = bool(os.getenv("CBFKIT_TEST_MODE"))
@@ -134,6 +137,11 @@ def main(duration: float = 4.0, seed: int = 0, gif: bool = False, view: bool = F
 # Output helpers
 # ---------------------------------------------------------------------------
 def _plot(t, states, controls, dist, plant):
+    import matplotlib
+
+    # Figures are only saved, never shown. Agg also keeps matplotlib off the GUI
+    # thread, which matters under mjpython (Cocoa owns the main thread there).
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(3, 1, figsize=(8, 8), sharex=True)
@@ -172,7 +180,10 @@ def _replay(plant, states, controls):
 
 
 def _render_gif(plant, states, controls, fps: int = 25):
+    import matplotlib
     import mujoco
+
+    matplotlib.use("Agg")
     from matplotlib import animation
     from matplotlib import pyplot as plt
 
@@ -207,15 +218,14 @@ def _render_gif(plant, states, controls, fps: int = 25):
 def _replay_in_viewer(plant, states, controls):
     import mujoco
 
-    try:
-        import mujoco.viewer
-    except Exception as exc:  # noqa: BLE001
-        print(f"viewer unavailable ({exc})")
-        return
-    if sys.platform == "darwin" and not os.environ.get("MJPYTHON_BIN"):
+    if not under_mjpython():
         print(
-            "note: on macOS the viewer needs `mjpython examples/mujoco/cart_pole_swingup.py --view`"
+            "viewer skipped: on macOS it needs `mjpython` "
+            f"(run `{sys.executable.replace('python', 'mjpython', 1)} {sys.argv[0]} --view`)."
         )
+        return
+    import mujoco.viewer
+
     m = plant.mj_model
     d = mujoco.MjData(m)
     with mujoco.viewer.launch_passive(m, d) as viewer:
@@ -241,4 +251,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--view", action="store_true", help="replay the run in the MuJoCo viewer")
     args = parser.parse_args()
+    if args.view:
+        # macOS: the passive viewer needs mjpython. Re-exec now, before the JIT
+        # work, so `python ... --view` and `mjpython ... --view` behave the same.
+        relaunch_under_mjpython_if_needed()
     main(duration=args.duration, seed=args.seed, gif=args.gif, view=args.view)
