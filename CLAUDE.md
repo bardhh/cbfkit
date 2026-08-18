@@ -28,7 +28,7 @@ pytest tests/test_controllers/test_cbf_clf.py::TestCbfClfQP::test_vanilla_cbf  #
 
 The root `conftest.py` (loaded first, since `pytest.ini` anchors the rootdir) puts `./src` ahead of site-packages, optionally loads `.env`, and defaults JAX to CPU; `tests/conftest.py` repeats the CPU default via `os.environ.setdefault` so tests run on CPU locally, and CI also sets it as an env var. Slow tests are gated by `CBFKIT_TEST_MODE=1`; examples/tutorials also use this env var to shorten simulations and skip plots. CI runs linting and mypy only on Python 3.10.
 
-MuJoCo tests live in `tests/test_mujoco/` and are skipped when the extra is not installed; run them with `CBFKIT_TEST_MODE=1 pytest tests/test_mujoco` (the cart-pole swing-up acceptance test is `slow`). CI installs the extra on the 3.10 job only.
+MuJoCo tests live in `tests/test_mujoco/` and are skipped when the extra is not installed; run them with `CBFKIT_TEST_MODE=1 pytest tests/test_mujoco` (the cart-pole swing-up acceptance test is `slow`). CI installs the extra on the 3.10 job only. MuJoCo examples live in `examples/mujoco/` and are smoke-run by `tests/test_mujoco/test_examples.py`, not by `test_examples_and_tutorials.py` (which runs on all Python versions).
 
 ## Linting & Formatting
 
