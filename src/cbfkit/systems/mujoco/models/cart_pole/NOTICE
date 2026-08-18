@@ -1,0 +1,4 @@
+cart_pole.xml and scene.xml are copied unmodified from hydrax
+(https://github.com/vincekurtz/hydrax, MIT License), which in turn adapts the
+MuJoCo MPC cart-pole. Contact is disabled in the model; CBFKit uses it as its
+contact-free MJX test system.
