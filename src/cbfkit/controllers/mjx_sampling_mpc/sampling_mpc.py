@@ -62,11 +62,19 @@ class SamplingMpc:
         self.num_randomizations = max(int(num_randomizations), 1)
         self.randomize_model = randomize_model
         self.seed = int(seed)
-        # Domain randomisation is added in a later task.
+        # Domain randomisation: a batched mjx.Model with a leading axis of size
+        # num_randomizations on every randomised field, plus the matching
+        # vmap in_axes pytree (hydrax convention).
         self.model = plant.model
         self.randomized_axes = None
         if self.num_randomizations > 1:
-            raise NotImplementedError("num_randomizations > 1 is not implemented yet")
+            if randomize_model is None:
+                raise ValueError("num_randomizations > 1 requires randomize_model=")
+            keys = jax.random.split(jax.random.PRNGKey(self.seed), self.num_randomizations)
+            randomizations = jax.vmap(lambda k: randomize_model(plant.model, k))(keys)
+            self.model = plant.model.tree_replace(randomizations)
+            axes = jax.tree.map(lambda _: None, plant.model)
+            self.randomized_axes = axes.tree_replace({k: 0 for k in randomizations})
 
     # -- state -------------------------------------------------------------
     def init_state(self, initial_knots: Optional[Array] = None) -> MpcState:
@@ -94,8 +102,15 @@ class SamplingMpc:
         return jnp.sum(stage) + self.terminal_cost(d_final, aux)
 
     def _eval_batch(self, model: mjx.Model, data0: mjx.Data, controls: Array, aux: Any) -> Array:
-        """Costs of a batch ``controls: (B, H, nu)`` under one model -> ``(B,)``."""
-        return jax.vmap(lambda c: self._rollout(model, data0, c, aux))(controls)
+        """Costs of a batch ``controls: (B, H, nu)`` -> ``(B,)``, averaged over randomised models."""
+
+        def one(m: mjx.Model) -> Array:
+            return jax.vmap(lambda c: self._rollout(m, data0, c, aux))(controls)
+
+        if self.randomized_axes is None:
+            return one(model)
+        costs = jax.vmap(one, in_axes=(self.randomized_axes,))(model)  # (R, B)
+        return jnp.mean(costs, axis=0)
 
     def rollout_cost(
         self, data0: mjx.Data, knots: Array, aux: Any = None, tk: Optional[Array] = None

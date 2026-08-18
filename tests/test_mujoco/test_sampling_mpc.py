@@ -100,8 +100,45 @@ def test_step_returns_action_and_state(mpc, plant):
     assert isinstance(s1, MpcState)
 
 
-def test_dr_not_available_yet_raises(plant):
-    with pytest.raises(NotImplementedError):
+def _randomize_mass(model, key):
+    scale = jax.random.uniform(key, (), minval=0.5, maxval=2.0)
+    return {"body_mass": model.body_mass * scale}
+
+
+def _dr_mpc(plant, seed=7):
+    return SamplingMpc(
+        plant,
+        running_cost,
+        terminal_cost,
+        num_samples=8,
+        plan_horizon=0.2,
+        noise_level=0.2,
+        temperature=0.1,
+        num_randomizations=3,
+        randomize_model=_randomize_mass,
+        seed=seed,
+    )
+
+
+def test_dr_builds_batched_model(plant):
+    mpc = _dr_mpc(plant)
+    assert mpc.model.body_mass.shape == (3,) + plant.model.body_mass.shape
+    # Three distinct scalings.
+    assert len({float(m[1]) for m in mpc.model.body_mass}) == 3
+    # Non-randomised fields keep their shape.
+    assert mpc.model.geom_friction.shape == plant.model.geom_friction.shape
+
+
+def test_dr_optimize_runs_and_averages(plant):
+    mpc = _dr_mpc(plant)
+    d0 = plant.make_data()
+    s, costs = jax.jit(mpc.optimize)(d0, 0.0, mpc.init_state(), jax.random.PRNGKey(0))
+    assert costs.shape == (8,)
+    assert jnp.all(jnp.isfinite(costs))
+
+
+def test_dr_requires_randomize_model(plant):
+    with pytest.raises(ValueError, match="randomize_model"):
         SamplingMpc(
             plant,
             running_cost,
