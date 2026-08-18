@@ -14,6 +14,8 @@ except ImportError as exc:
         "cbfkit.systems.mujoco requires MuJoCo and MJX. " "Install with: pip install cbfkit[mujoco]"
     ) from exc
 
+from .plant import MujocoPlant  # noqa: E402
+
 MODELS_DIR = Path(__file__).parent / "models"
 
 
@@ -25,4 +27,4 @@ def load_model(name: str) -> mujoco.MjModel:
     return mujoco.MjModel.from_xml_path(str(path))
 
 
-__all__ = ["MODELS_DIR", "load_model", "mujoco"]
+__all__ = ["MODELS_DIR", "MujocoPlant", "load_model", "mujoco"]
