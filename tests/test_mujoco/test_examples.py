@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-EXAMPLES = ["examples/mujoco/cart_pole_swingup.py"]
+EXAMPLES = ["examples/mujoco/cart_pole_swingup.py", "examples/mujoco/g1_standup.py"]
 
 
 @pytest.mark.parametrize("script", EXAMPLES)
@@ -23,4 +23,4 @@ def test_example_runs_in_test_mode(script):
         timeout=600,
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
-    assert "mean upright-distance" in proc.stdout
+    assert ("mean upright-distance" in proc.stdout) or ("torso height" in proc.stdout)

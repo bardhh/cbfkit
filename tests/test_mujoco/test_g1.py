@@ -5,6 +5,7 @@ import urllib.error
 import jax
 import jax.numpy as jnp
 import mujoco
+import numpy as np
 import pytest
 from mujoco import mjx
 
@@ -27,7 +28,8 @@ def test_load_g1_dimensions_and_sim_overrides(g1mod):
     assert m.opt.timestep == pytest.approx(0.02)
     ms = g1mod.load_g1(sim=True)
     assert ms.opt.timestep == pytest.approx(0.01)
-    assert ms.opt.enableflags & mujoco.mjtEnableBit.mjENBL_OVERRIDE
+    assert np.allclose(ms.geom_solimp, [0.9, 0.95, 0.001, 0.5, 2])
+    assert not (ms.opt.enableflags & mujoco.mjtEnableBit.mjENBL_OVERRIDE)  # MJX rejects it
 
 
 def test_g1_ids_and_keyframes(g1mod):

@@ -24,14 +24,21 @@ def load_g1(*, sim: bool = False, offline: bool = False) -> mujoco.MjModel:
     """Load the G1 scene.
 
     ``sim=True`` applies hydrax's simulation-model overrides (stiffer contact
-    and a finer step than the planner model): ``timestep=0.01``,
-    ``o_solimp=[0.9, 0.95, 0.001, 0.5, 2]`` with the OVERRIDE flag enabled.
+    and a finer step than the planner model): ``timestep=0.01`` and
+    ``o_solimp=[0.9, 0.95, 0.001, 0.5, 2]``. hydrax enables the OVERRIDE flag,
+    which MJX does not implement, so the same effect is applied per geom: every
+    geom's ``solimp/solref/friction/margin/gap`` is replaced by the ``o_*``
+    option values -- exactly what OVERRIDE does inside ``mj_step``.
     """
     m = mujoco.MjModel.from_xml_path(str(g1_model_dir(offline=offline) / "scene.xml"))
     if sim:
         m.opt.timestep = 0.01
         m.opt.o_solimp[:] = [0.9, 0.95, 0.001, 0.5, 2]
-        m.opt.enableflags |= mujoco.mjtEnableBit.mjENBL_OVERRIDE
+        m.geom_solimp[:] = m.opt.o_solimp
+        m.geom_solref[:] = m.opt.o_solref
+        m.geom_friction[:] = m.opt.o_friction[:3]
+        m.geom_margin[:] = m.opt.o_margin
+        m.geom_gap[:] = 0.0
     return m
 
 
