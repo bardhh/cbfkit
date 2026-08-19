@@ -123,4 +123,101 @@ def friction_randomizer(
     return randomize
 
 
-__all__ = ["G1", "friction_randomizer", "load_g1", "standup_costs"]
+def walk_costs(
+    g1: G1,
+    *,
+    target_height: float = 0.9,
+    w_velocity: float = 10.0,
+    w_orientation: float = 10.0,
+    w_height: float = 5.0,
+    w_posture: float = 0.1,
+    w_angvel: float = 0.1,
+    w_control: float = 0.0,
+    w_yaw_rate: float = 1.0,
+    w_balance: float = 0.0,
+    w_fall: float = 0.0,
+    h_min: float = 0.75,
+    w_feet: float = 0.0,
+    foot_z_max: float = 0.15,
+    w_qvel: float = 0.0,
+    w_gait: float = 0.0,
+    gait_freq: float = 1.5,
+    gait_swing_height: float = 0.08,
+    gait_duty: float = 0.5,
+    foot_z0: float = 0.033,
+) -> Tuple[Callable[[mjx.Data, Array, Any], Array], Callable[[mjx.Data, Any], Array]]:
+    """Velocity-tracking ("walk") costs in the spirit of MJPC's humanoid walk task.
+
+    ``w_fall`` is a hinge on torso height: ``w_fall * max(0, h_min - h)^2``.
+    ``w_feet`` is a hinge on foot-site height above ``foot_z_max`` (stops the
+    sampler from "walking" by kicking the legs up).
+    ``w_gait`` tracks a periodic foot-height reference (DIAL-MPC-style gait
+    prior): each foot is in stance (z = ``foot_z0``) for a fraction ``gait_duty``
+    of the period ``1/gait_freq`` and follows a half-sine swing of height
+    ``gait_swing_height`` otherwise; the right foot is half a period behind the
+    left. Uses ``data.time`` -- the MPC stamps absolute time on the rollout root.
+    Unlike the quadratic ``w_height`` term it is indifferent above ``h_min`` and
+    steep below it, so a lunge that ends on the knees is never "worth it".
+
+    ``w_balance`` penalises the planar distance between the whole-body CoM and
+    the midpoint of the two foot sites (MJPC's "balance" residual).
+
+    ``aux`` is the planar velocity command ``(vx, vy)`` in the world frame (the
+    2-D reduced-order control the CBF filters). Tracking is on the pelvis
+    free-joint velocity ``qvel[0:2]``; the remaining terms keep the robot
+    upright at height, near its standing posture, and not spinning. No gait is
+    prescribed -- the sampler has to find one.
+    """
+    up = jnp.array([0.0, 0.0, 1.0])
+    q_stand_joints = g1.q_stand[7:]
+
+    def running(data: mjx.Data, u: Array, aux: Any) -> Array:
+        v_cmd = jnp.zeros(2) if aux is None else jnp.asarray(aux)[:2]
+        velocity = jnp.sum(jnp.square(data.qvel[0:2] - v_cmd))
+        orientation = jnp.sum(jnp.square(g1.torso_up_vector(data) - up))
+        height = jnp.square(g1.torso_height(data) - target_height)
+        posture = jnp.sum(jnp.square(data.qpos[7:] - q_stand_joints))
+        angvel = jnp.sum(jnp.square(data.qvel[3:5]))  # roll/pitch rates
+        yaw_rate = jnp.square(data.qvel[5])
+        feet_mid = 0.5 * (data.site_xpos[g1.left_foot_site] + data.site_xpos[g1.right_foot_site])
+        balance = jnp.sum(jnp.square(data.subtree_com[0, :2] - feet_mid[:2]))
+        fall = jnp.square(jnp.maximum(0.0, h_min - g1.torso_height(data)))
+        feet_z = jnp.array(
+            [data.site_xpos[g1.left_foot_site, 2], data.site_xpos[g1.right_foot_site, 2]]
+        )
+        feet = jnp.sum(jnp.square(jnp.maximum(0.0, feet_z - foot_z_max)))
+        joint_vel = jnp.sum(jnp.square(data.qvel[6:]))  # energy-like smoothing of the flailing
+        gait = 0.0
+        if w_gait > 0.0:
+
+            def z_ref(offset):
+                phase = jnp.mod(gait_freq * data.time + offset, 1.0)
+                swing = jnp.maximum(0.0, phase - gait_duty) / (1.0 - gait_duty)  # 0 in stance
+                return foot_z0 + gait_swing_height * jnp.sin(jnp.pi * swing) * (phase > gait_duty)
+
+            gait = jnp.square(feet_z[0] - z_ref(0.0)) + jnp.square(feet_z[1] - z_ref(0.5))
+        control = (
+            jnp.sum(jnp.square(u - data.qpos[7:])) if u.shape[0] == q_stand_joints.shape[0] else 0.0
+        )
+        return (
+            w_velocity * velocity
+            + w_orientation * orientation
+            + w_height * height
+            + w_posture * posture
+            + w_angvel * angvel
+            + w_yaw_rate * yaw_rate
+            + w_balance * balance
+            + w_fall * fall
+            + w_feet * feet
+            + w_qvel * joint_vel
+            + w_gait * gait
+            + w_control * control
+        )
+
+    def terminal(data: mjx.Data, aux: Any) -> Array:
+        return running(data, jnp.zeros(0), aux)
+
+    return running, terminal
+
+
+__all__ = ["G1", "friction_randomizer", "load_g1", "standup_costs", "walk_costs"]

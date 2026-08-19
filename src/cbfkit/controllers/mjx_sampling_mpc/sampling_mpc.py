@@ -24,10 +24,11 @@ TerminalCost = Callable[[mjx.Data, Any], Array]
 
 
 class MpcState(NamedTuple):
-    """Per-step MPC state, carried in ``ControllerData.sub_data["mpc"]``."""
+    """Per-step MPC state, carried in ``ControllerData.sub_data["_mpc"]``."""
 
     tk: Array  # (K,) absolute knot times
     mean: Array  # (K, nu) mean knots
+    cov: Optional[Array] = None  # (K, nu, nu) knot covariance; None for plain MPPI
 
 
 class SamplingMpc:
@@ -39,22 +40,38 @@ class SamplingMpc:
         *,
         num_samples: int,
         plan_horizon: float,
-        noise_level: float,
+        noise_level: Any,
         temperature: float,
         num_knots: int = 4,
         spline_type: str = "zero",
         num_randomizations: int = 1,
         randomize_model: Optional[Callable[[mjx.Model, Array], dict]] = None,
         seed: int = 0,
+        update: str = "mppi",
+        min_noise_level: Optional[float] = None,
+        cov_adaptation_rate: float = 0.5,
+        iterations: int = 1,
     ) -> None:
         self.plant = plant
         self.running_cost = running_cost
         self.terminal_cost = terminal_cost
         self.num_samples = int(num_samples)
         self.plan_horizon = float(plan_horizon)
-        self.noise_level = float(noise_level)
+        # Scalar, or a (nu,) vector for per-actuator exploration scales.
+        self.noise_level = jnp.asarray(noise_level, dtype=float)
         self.temperature = float(temperature)
         self.num_knots = int(num_knots)
+        # "mppi": fixed Gaussian noise. "cma": MPPI-CMA (block-diagonal, per-knot
+        # covariance adapted from the weighted samples, eigenvalues floored at
+        # min_noise_level^2 -- hydrax's MppiCma).
+        if update not in ("mppi", "cma"):
+            raise ValueError("update must be 'mppi' or 'cma'")
+        self.update = update
+        self.min_noise_level = float(min_noise_level) if min_noise_level is not None else None
+        self.alpha = float(cov_adaptation_rate)
+        if iterations < 1:
+            raise ValueError("iterations must be >= 1")
+        self.iterations = int(iterations)
         self.interp = get_interp_func(spline_type)
         self.dt = float(plant.dt)
         self.ctrl_steps = int(round(self.plan_horizon / self.dt))
@@ -95,7 +112,11 @@ class SamplingMpc:
                 f"initial_knots must have shape {(self.num_knots, self.plant.nu)}, got {mean.shape}"
             )
         tk = jnp.linspace(0.0, self.plan_horizon, self.num_knots)
-        return MpcState(tk=tk, mean=mean)
+        cov = None
+        if self.update == "cma":
+            sig = jnp.broadcast_to(self.noise_level, (self.plant.nu,))
+            cov = jnp.tile(jnp.diag(sig**2)[None], (self.num_knots, 1, 1))
+        return MpcState(tk=tk, mean=mean, cov=cov)
 
     # -- rollouts ----------------------------------------------------------
     def _rollout(self, model: mjx.Model, data0: mjx.Data, controls: Array, aux: Any) -> Array:
@@ -129,7 +150,7 @@ class SamplingMpc:
         return self._eval_batch(self.model, data0, controls, aux)
 
     # -- MPPI --------------------------------------------------------------
-    def optimize(
+    def _optimize_once(
         self, data0: mjx.Data, t: Array, state: MpcState, key: Array, aux: Any = None
     ) -> Tuple[MpcState, Array]:
         # Warm start: shift knot times to start at t, re-evaluate old spline there.
@@ -138,8 +159,17 @@ class SamplingMpc:
         mean = self.interp(clamped, state.tk, state.mean[None])[0]
 
         # Sample knots.
-        noise = jax.random.normal(key, (self.num_samples, self.num_knots, self.plant.nu))
-        knots = jnp.clip(mean + self.noise_level * noise, self.plant.u_min, self.plant.u_max)
+        if self.update == "cma":
+            noise = jax.random.multivariate_normal(
+                key,
+                mean=jnp.zeros(self.plant.nu),
+                cov=state.cov,
+                shape=(self.num_samples, self.num_knots),
+            )  # (N, K, nu)
+            knots = jnp.clip(mean + noise, self.plant.u_min, self.plant.u_max)
+        else:
+            noise = jax.random.normal(key, (self.num_samples, self.num_knots, self.plant.nu))
+            knots = jnp.clip(mean + self.noise_level * noise, self.plant.u_min, self.plant.u_max)
 
         # Roll out. Query times span [t, t + plan_horizon] in ctrl_steps points,
         # i.e. spacing plan_horizon/(H-1) rather than exactly dt -- byte-for-byte
@@ -151,7 +181,31 @@ class SamplingMpc:
         # Softmax-weighted average (jax.nn.softmax subtracts the baseline).
         weights = jax.nn.softmax(-costs / self.temperature, axis=0)
         new_mean = jnp.sum(weights[:, None, None] * knots, axis=0)
-        return MpcState(tk=new_tk, mean=new_mean), costs
+        new_cov = state.cov
+        if self.update == "cma":
+            dev = knots - new_mean[None]  # (N, K, nu)
+            sample_cov = jnp.einsum("n,nki,nkj->kij", weights, dev, dev)
+            cov = (1.0 - self.alpha) * state.cov + self.alpha * sample_cov
+            floor = self.min_noise_level if self.min_noise_level is not None else 0.0
+            eigvals, eigvecs = jnp.linalg.eigh(cov)
+            eigvals = jnp.maximum(eigvals, floor**2)
+            new_cov = jnp.einsum("kij,kj,klj->kil", eigvecs, eigvals, eigvecs)
+        return MpcState(tk=new_tk, mean=new_mean, cov=new_cov), costs
+
+    def optimize(
+        self, data0: mjx.Data, t: Array, state: MpcState, key: Array, aux: Any = None
+    ) -> Tuple[MpcState, Array]:
+        """``iterations`` MPPI updates from the same state; returns the last iteration's costs."""
+        if self.iterations == 1:
+            return self._optimize_once(data0, t, state, key, aux)
+        keys = jax.random.split(key, self.iterations)
+
+        def body(st, k):
+            st, costs = self._optimize_once(data0, t, st, k, aux)
+            return st, costs
+
+        state, costs = jax.lax.scan(body, state, keys)
+        return state, costs[-1]
 
     def get_action(self, state: MpcState, t: Array) -> Array:
         return self.interp(jnp.atleast_1d(jnp.asarray(t)), state.tk, state.mean[None])[0, 0]
@@ -187,7 +241,8 @@ class SamplingMpc:
             state = sub.get("_mpc")
             if state is None:
                 state = self.init_state()
-            data0 = plant.from_state(x)
+            # Absolute time on the rollout root so time-dependent costs (gait phase) work.
+            data0 = plant.from_state(x).replace(time=jnp.asarray(t, dtype=float))
             u, state = self.step(data0, t, state, key, aux=u_nom)
             sub["_mpc"] = state
             return u, data._replace(sub_data=sub, u=u, u_nom=u_nom)
