@@ -214,3 +214,88 @@ def safe_locomotion_controller_di(
 
 
 __all__ += ["com_obstacle_hocbfs", "embedded_double_integrator", "safe_locomotion_controller_di"]
+
+
+# --------------------------------------------------------------------------- moving obstacles
+def moving_obstacle_position(p0: Any, v: Any, t: Any) -> Array:
+    """Known constant-velocity obstacle: ``p(t) = p0 + v t``."""
+    return jnp.asarray(p0, dtype=float) + jnp.asarray(v, dtype=float) * t
+
+
+def _com_moving_barrier(plant: Any, p0: Any, v: Any, ellipsoid: Any):
+    """``h(t, x) = ||(com - p(t)) / (a, b)||^2 - 1`` on the plant's flat state."""
+    ci = plant.com_indices
+    p0 = jnp.asarray(p0, dtype=float)
+    v = jnp.asarray(v, dtype=float)
+    axes = jnp.asarray(ellipsoid, dtype=float)
+
+    def h(t, x):
+        com = jnp.asarray(x)[ci[0] : ci[0] + 2]
+        return jnp.sum(((com - moving_obstacle_position(p0, v, t)) / axes) ** 2) - 1.0
+
+    return h
+
+
+def com_moving_obstacle_barriers(
+    plant: Any,
+    positions: Sequence[Sequence[float]],
+    velocities: Sequence[Sequence[float]],
+    ellipsoids: Sequence[Sequence[float]],
+    class_k_gain: float = 1.0,
+):
+    """Time-varying keep-out barriers around constant-velocity obstacles (single-integrator model).
+
+    ``positions[i] + velocities[i] * t`` is obstacle ``i``'s centre at time ``t``; the QP receives
+    ``dh/dt`` through the packaged partial (``input_style="separated"``). Companion of
+    :func:`com_obstacle_barriers` for :func:`embedded_single_integrator`.
+    """
+    conditions = zeroing_barriers.linear_class_k(class_k_gain)
+    packages = []
+    for p0, v, e in zip(positions, velocities, ellipsoids):
+        h = _com_moving_barrier(plant, p0, v, e)
+        # certificate_package expects a *factory*; bind h now (default arg) to avoid late binding.
+        factory = certificate_package(lambda h=h: h, n=plant.state_dim, input_style="separated")
+        packages.append(factory(certificate_conditions=conditions))
+    return concatenate_certificates(*packages)
+
+
+def com_moving_obstacle_hocbfs(
+    plant: Any,
+    positions: Sequence[Sequence[float]],
+    velocities: Sequence[Sequence[float]],
+    ellipsoids: Sequence[Sequence[float]],
+    class_k_gain: float = 1.0,
+    roots: Any = None,
+):
+    """High-order, time-varying keep-out barriers for :func:`embedded_double_integrator`.
+
+    Same barrier as :func:`com_moving_obstacle_barriers`, on the augmented ``[x | v]`` state;
+    ``rectify_relative_degree`` carries ``dh/dt`` into the lifted barrier, so an obstacle walking
+    toward a standing robot makes the QP act even though the robot's own velocity is zero.
+    """
+    from cbfkit.certificates import rectify_relative_degree
+
+    n = plant.state_dim + 2
+    dyn = embedded_double_integrator(plant.state_dim, plant.com_indices)
+    conditions = zeroing_barriers.linear_class_k(class_k_gain)
+    return concatenate_certificates(
+        *[
+            rectify_relative_degree(
+                function=_com_moving_barrier(plant, p0, v, e),
+                system_dynamics=dyn,
+                state_dim=n,
+                roots=roots,
+                form="high-order",
+                certificate_conditions=conditions,
+                input_style="separated",
+            )
+            for p0, v, e in zip(positions, velocities, ellipsoids)
+        ]
+    )
+
+
+__all__ += [
+    "com_moving_obstacle_barriers",
+    "com_moving_obstacle_hocbfs",
+    "moving_obstacle_position",
+]

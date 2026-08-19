@@ -139,3 +139,53 @@ def test_double_integrator_hocbf_brakes_toward_obstacle(g1_plant):
     assert float(d1.sub_data["_di_v"][0]) < 0.5
     assert jnp.allclose(seen["cmd"], d1.sub_data["v_safe"])
     assert "a_safe" in d1.sub_data
+
+
+def test_moving_obstacle_barrier_matches_shifted_static_barrier(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import com_moving_obstacle_barriers
+
+    plant, g1mod = g1_plant
+    x = g1mod.G1(plant.mj_model).x_stand(plant)
+    p0, v, ell = jnp.array([1.0, 0.5]), jnp.array([-0.3, 0.2]), (0.6, 0.6)
+    moving = com_moving_obstacle_barriers(plant, [p0], [v], [ell])
+    for t in (0.0, 2.5):
+        static = com_obstacle_barriers(plant, [p0 + v * t], [ell])
+        assert float(moving.functions[0](t, x)) == pytest.approx(float(static.functions[0](0.0, x)))
+    # dh/dt = -2 (com - p(t)) . v / r^2  (the packaged partial), checked against finite differences
+    t, eps = 1.0, 1e-5
+    fd = (float(moving.functions[0](t + eps, x)) - float(moving.functions[0](t - eps, x))) / (
+        2 * eps
+    )
+    assert abs(fd) > 1e-3  # the test is vacuous if the pedestrian motion does not change h
+    assert float(moving.partials[0](t, x)) == pytest.approx(fd, rel=1e-4, abs=1e-6)
+
+
+def test_moving_obstacle_hocbf_reacts_to_approaching_pedestrian(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import (
+        com_moving_obstacle_hocbfs,
+        com_obstacle_hocbfs,
+        embedded_double_integrator,
+    )
+
+    plant, g1mod = g1_plant
+    x = g1mod.G1(plant.mj_model).x_stand(plant)
+    com = x[plant.com_indices[0] : plant.com_indices[0] + 2]
+    dyn = embedded_double_integrator(plant.state_dim, plant.com_indices)
+    xa = jnp.concatenate([x, jnp.zeros(2)])  # robot standing still, zero commanded velocity
+    ped0 = com + jnp.array([1.4, 0.0])  # 1.4 m ahead, keep-out 0.65
+    still = com_obstacle_hocbfs(plant, [ped0], [(0.65, 0.65)])
+    walking = com_moving_obstacle_hocbfs(plant, [ped0], [jnp.array([-0.6, 0.0])], [(0.65, 0.65)])
+    kw = dict(control_limits=jnp.array([1.0, 1.0]), dynamics_func=dyn)
+    a_still, d1 = vanilla_cbf_clf_qp_controller(barriers=still, **kw)(
+        0.0, xa, jnp.zeros(2), jax.random.PRNGKey(0), ControllerData()
+    )
+    a_walk, d2 = vanilla_cbf_clf_qp_controller(barriers=walking, **kw)(
+        0.0, xa, jnp.zeros(2), jax.random.PRNGKey(0), ControllerData()
+    )
+    assert not bool(d1.error) and not bool(d2.error)
+    assert float(jnp.abs(a_still).max()) < 1e-6  # static obstacle, standing still: nothing to do
+    assert float(a_walk[0]) < -0.05  # pedestrian closing in: back away (dh/dt term is active)
+    # At a later time the pedestrian is elsewhere: h differs from t=0
+    h0 = float(walking.functions[0](0.0, xa))
+    h1 = float(walking.functions[0](1.0, xa))
+    assert h1 < h0
