@@ -134,3 +134,15 @@ the tail, not the mean; (c) the reduced model is trustworthy for ≲ 0.25 s (ε 
 at 1–2 s, which is the horizon a HOCBF with α = 1 implicitly reasons over; (d) the gait is a ~0.3 s lag
 (τ + L); the DI assumption holds below ~1 rad/s. Natural next step: a first-order-lag reduced model
 (v̇_com = (k v_cmd − v_com)/τ, relative degree 3) should shrink δ by ~40 % (RMS 0.107 → 0.066).
+
+## Scramble crossing (2026-08-19, evening)
+
+`g1_scramble.py`: Shibuya-style 12 × 12 m intersection, 40 social-force pedestrians (vectorised `SocialForceCrowd`,
+now with `arrive_radius`) released 0–30 m behind the kerbs in six streams at 0.8–1.3 m/s, robot crosses the diagonal.
+Findings: (1) hard barrier constraints are infeasible within ~10 s whatever the bound (LP-verified: two pedestrians
+closing at ~1 m/s from two sides, |a| ≤ 1 can't satisfy both under CV prediction) — a crush is a true infeasibility;
+(2) soft constraints (`relaxable_cbf`, penalty 1e3) get the robot across in 49 s with h_min +0.08, slack on 10 % of
+steps, 16 pedestrians within 1.5 m, no contact — a safety *filter* outcome, not a certificate; (3) robust margins
+are eaten by slack in a crush (robust 0.15 soft: more slack, h_min −0.05, 65 s). First attempt released everyone
+at t = 0 and the square was empty before the 0.5 m/s robot reached it — release depth matters. Default: soft
+vanilla.

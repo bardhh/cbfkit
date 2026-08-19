@@ -14,6 +14,7 @@ EXAMPLES = [
     "examples/mujoco/g1_navigate.py",
     "examples/mujoco/g1_plaza.py",
     "examples/mujoco/g1_model_distance.py",
+    "examples/mujoco/g1_scramble.py",
 ]
 
 

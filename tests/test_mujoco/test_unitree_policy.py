@@ -200,3 +200,45 @@ def test_plaza_example_certificate_holds(up):
     v_safe = np.asarray(res.controller_data["sub_data_v_safe"])
     v_nom = np.asarray(res.controller_data["sub_data_v_nom"])
     assert np.any(np.linalg.norm(v_safe - v_nom, axis=1) > 1e-3)  # the CBF intervened
+
+
+@pytest.mark.slow
+def test_scramble_example_crosses_without_contact(up):
+    """Scramble acceptance (default: soft barriers, 40 pedestrians): the G1 crosses the
+    intersection upright, never touches a pedestrian (CoM distance >= PED_RADIUS + 0.30, i.e.
+    h >= -0.08 on the 0.65 m keep-out), and the crowd was genuinely around it."""
+    import importlib.util
+    from pathlib import Path
+
+    from cbfkit.utils.user_types import PlannerData
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "mujoco" / "g1_scramble.py"
+    spec = importlib.util.spec_from_file_location("g1_scramble", path)
+    ex = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ex)
+    plant, x0, _pb, nominal, controller, _crowd = ex.build(
+        0, ex.DEFAULT_ROBUST_BOUND, ex.N_PED, ex.DEFAULT_RELAX
+    )
+    res = sim.execute(
+        x0=x0,
+        dt=plant.dt,
+        num_steps=int(round(ex.DEFAULT_DURATION / plant.dt)),
+        plant=plant,
+        planner_data=PlannerData.from_constant(ex.GOAL),
+        nominal_controller=nominal,
+        controller=controller,
+        use_jit=True,
+        verbose=False,
+    )
+    S = np.asarray(res["states"])
+    ci = plant.com_indices
+    com = S[:, ci[0] : ci[0] + 2]
+    agents = np.asarray(res.controller_data["sub_data_agents"])
+    d = np.linalg.norm(com[:, None, :] - agents[:, :, :2], axis=2)
+    hit = np.flatnonzero(np.linalg.norm(com - np.asarray(ex.GOAL), axis=1) < ex.GOAL_RADIUS)
+    assert hit.size, "crossing not completed"
+    n = int(hit[0])
+    assert d[:n].min() >= ex.PED_RADIUS + 0.30  # no contact (robot body radius ~0.30 at the CoM)
+    assert S[:n, 2].min() > 0.6  # upright
+    assert int(np.sum(d[:n].min(0) < 1.5)) >= 8  # it really went through the crowd
+    assert not np.any(np.asarray(res.controller_data["error"])[:n])  # no QP failure
