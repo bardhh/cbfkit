@@ -216,8 +216,8 @@ def test_scramble_example_crosses_without_contact(up):
     spec = importlib.util.spec_from_file_location("g1_scramble", path)
     ex = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ex)
-    plant, x0, _pb, nominal, controller, _crowd = ex.build(
-        0, ex.DEFAULT_ROBUST_BOUND, ex.N_PED, ex.DEFAULT_RELAX
+    plant, x0, _pb, nominal, controller, _crowd = ex.build(  # full crowd even under TEST_MODE
+        0, ex.DEFAULT_ROBUST_BOUND, ex.N_PED_FULL, ex.DEFAULT_RELAX
     )
     res = sim.execute(
         x0=x0,
