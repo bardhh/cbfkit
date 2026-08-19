@@ -70,7 +70,12 @@ from cbfkit.systems.mujoco.reduced_order import (
     safe_locomotion_controller,
     safe_locomotion_controller_di,
 )
-from cbfkit.systems.mujoco.viewer_utils import relaunch_under_mjpython_if_needed, under_mjpython
+from cbfkit.systems.mujoco.viewer_utils import (
+    add_marker,
+    relaunch_under_mjpython_if_needed,
+    render_gif,
+    replay_in_viewer,
+)
 from cbfkit.utils.user_types import ControllerData
 
 TEST_MODE = bool(os.getenv("CBFKIT_TEST_MODE"))
@@ -343,119 +348,24 @@ def _plot(com, h, v_nom, v_safe, hh, dt):
     print(f"saved {path}")
 
 
-def _replay(plant, states):
-    import mujoco
-
-    m = plant.mj_model
-    d = mujoco.MjData(m)
-    for k in range(states.shape[0]):
-        d.qpos[:] = states[k, : plant.nq]
-        d.qvel[:] = states[k, plant.nq : plant.nq + plant.nv]
-        mujoco.mj_forward(m, d)
-        yield d, k
-
-
-def _add_markers(scn):
+def _add_markers(scn, k=0, t=0.0):
     """Visual-only obstacle / keep-out ring / goal in a mjvScene (renderer or viewer)."""
     import mujoco
 
     r = OBSTACLE_RADIUS + ROBOT_RADIUS
-    specs = [
-        (
-            mujoco.mjtGeom.mjGEOM_CYLINDER,
-            [OBSTACLE_RADIUS, 0.5, 0],
-            [*OBSTACLE, 0.5],
-            [0.85, 0.15, 0.2, 1.0],
-        ),
-        (
-            mujoco.mjtGeom.mjGEOM_CYLINDER,
-            [r, 0.005, 0],
-            [*OBSTACLE, 0.005],
-            [0.85, 0.15, 0.2, 0.25],
-        ),
-        (
-            mujoco.mjtGeom.mjGEOM_SPHERE,
-            [GOAL_RADIUS, 0, 0],
-            [*GOAL, GOAL_RADIUS],
-            [0.1, 0.8, 0.2, 0.6],
-        ),
-    ]
-    for gtype, size, pos, rgba in specs:
-        if scn.ngeom >= scn.maxgeom:
-            break
-        g = scn.geoms[scn.ngeom]
-        mujoco.mjv_initGeom(
-            g,
-            gtype,
-            np.asarray(size, float),
-            np.asarray(pos, float),
-            np.eye(3).flatten(),
-            np.asarray(rgba, np.float32),
-        )
-        scn.ngeom += 1
+    cyl, sph = mujoco.mjtGeom.mjGEOM_CYLINDER, mujoco.mjtGeom.mjGEOM_SPHERE
+    add_marker(scn, cyl, [OBSTACLE_RADIUS, 0.5, 0], [*OBSTACLE, 0.5], [0.85, 0.15, 0.2, 1.0])
+    add_marker(scn, cyl, [r, 0.005, 0], [*OBSTACLE, 0.005], [0.85, 0.15, 0.2, 0.25])
+    add_marker(scn, sph, [GOAL_RADIUS, 0, 0], [*GOAL, GOAL_RADIUS], [0.1, 0.8, 0.2, 0.6])
 
 
 def _render_gif(plant, pelvis_body, states, fps=25):
-    import matplotlib
-    import mujoco
-
-    matplotlib.use("Agg")
-    from matplotlib import animation, pyplot as plt
-
-    try:
-        renderer = mujoco.Renderer(plant.mj_model, height=360, width=640)
-    except Exception as exc:  # noqa: BLE001
-        print(f"offscreen rendering unavailable ({exc}); skipping GIF")
-        return
-    cam = mujoco.MjvCamera()
-    cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-    cam.trackbodyid = pelvis_body
-    cam.distance = 4.5
-    cam.azimuth = 135
-    cam.elevation = -25
-    every = max(1, int(round(1.0 / (fps * plant.dt))))
-    frames = []
-    for d, k in _replay(plant, states):
-        if k % every:
-            continue
-        renderer.update_scene(d, camera=cam)
-        _add_markers(renderer.scene)
-        frames.append(renderer.render().copy())
-    fig = plt.figure(figsize=(6.4, 3.6))
-    ax = fig.add_axes([0, 0, 1, 1])
-    ax.axis("off")
-    im = ax.imshow(frames[0])
-    anim = animation.FuncAnimation(
-        fig, lambda i: (im.set_data(frames[i]),), frames=len(frames), interval=1000 / fps
-    )
     path = os.path.join(RESULTS_DIR, f"g1_navigate_{_TAG[0]}.gif")
-    anim.save(path, writer=animation.PillowWriter(fps=fps))
-    plt.close(fig)
-    print(f"saved {path}")
+    render_gif(plant, states, path, track_body=pelvis_body, markers=_add_markers, fps=fps)
 
 
 def _replay_in_viewer(plant, states):
-    import mujoco
-
-    if not under_mjpython():
-        print("viewer skipped: needs mjpython (rerun with --view; it relaunches)")
-        return
-    import mujoco.viewer
-
-    m = plant.mj_model
-    d = mujoco.MjData(m)
-    with mujoco.viewer.launch_passive(m, d) as viewer:
-        viewer.user_scn.ngeom = 0
-        _add_markers(viewer.user_scn)
-        while viewer.is_running():
-            for dd, _ in _replay(plant, states):
-                if not viewer.is_running():
-                    break
-                d.qpos[:] = dd.qpos
-                d.qvel[:] = dd.qvel
-                mujoco.mj_forward(m, d)
-                viewer.sync()
-                time.sleep(plant.dt)
+    replay_in_viewer(plant, states, markers=_add_markers)
 
 
 if __name__ == "__main__":
