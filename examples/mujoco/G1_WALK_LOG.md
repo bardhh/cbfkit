@@ -51,3 +51,20 @@ CoM path deflects left around the obstacle; but h(x) dips to -0.50 at t≈6 s (C
 centre vs 0.70 m keep-out; physical clearance ≈0.15 m) — the gait's tracking error is far larger than any
 small robust bound. Torso height min 0.33 (stumble); ends 2.5 m short of the goal. Qualitatively right,
 quantitatively violated: a better gait (GPU-scale sampling or a trained policy) is what turns this into a demo.
+
+## Milestone 3 closed by a pretrained policy (2026-08-18, Bardh's suggestion)
+
+`unitree_rl_gym` ships a G1 walking checkpoint (`deploy/pre_train/g1/motion.pt`, LSTM 47→64→32→12,
+12-DoF legs, upper body fixed; BSD-3). Integrated as `cbfkit.systems.mujoco.unitree_policy`: files fetched
+from a pinned commit with SHA manifest, TorchScript read **without torch**, evaluated in JAX inside the scan,
+PD torques at 500 Hz via `MujocoPlant(ctrl_map=...)`. MJX needed the collision set trimmed (no
+cylinder–mesh pair; body meshes collide with the floor only).
+
+| cmd (vx, vy) | mean v last 4 s | dist 6 s | pelvis z min | note |
+|---|---|---|---|---|
+| (0.5, 0) | (0.48, −0.02) | (2.68, −0.14) | 0.763 | clean, upright, sustained |
+| (0.3, 0.3) | (0.32, 0.21) | (1.80, 1.27) | 0.762 | diagonal ok |
+| (0, 0.4) | (0.04, 0.30) | (0.21, 1.80) | 0.766 | pure lateral ok (~75 % of cmd) |
+| (−0.3, 0) | (−0.26, −0.01) | (−1.50, −0.05) | 0.775 | backward ok |
+
+The MPC line (t01–t24) stays in the repo as the in-house alternative; the demo uses the policy.

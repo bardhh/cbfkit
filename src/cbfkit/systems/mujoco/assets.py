@@ -30,6 +30,8 @@ _RAW = "https://raw.githubusercontent.com/google-deepmind/mujoco_menagerie/{comm
 
 MODELS_DIR = Path(__file__).parent / "models"
 G1_MANIFEST = MODELS_DIR / "g1" / "assets_manifest.json"
+UNITREE_RL_GYM_MANIFEST = MODELS_DIR / "g1" / "unitree_rl_gym_manifest.json"
+_RAW_GH = "https://raw.githubusercontent.com/{repo}/{commit}/{path}"
 
 
 def asset_cache_root() -> Path:
@@ -126,3 +128,51 @@ def g1_model_dir(offline: bool = False) -> Path:
     """Directory containing ``scene.xml``, ``g1.xml`` and verified ``assets/`` for the G1."""
     assets_dir = ensure_menagerie_assets("unitree_g1", manifest=G1_MANIFEST, offline=offline)
     return _materialise_model_dir(MODELS_DIR / "g1", assets_dir)
+
+
+def ensure_repo_files(manifest: Path, *, offline: bool = False) -> Path:
+    """Fetch (once) and verify every file listed in a GitHub-repo manifest; return the cache root.
+
+    Manifest: ``{"repo": "owner/name", "commit": "<sha>", "files": {"<relpath>": "<sha256>", ...}}``.
+    Files land at ``<cache>/<name>/<commit>/<relpath>``. Same offline/checksum
+    rules as :func:`ensure_menagerie_assets`.
+    """
+    man = json.loads(Path(manifest).read_text())
+    repo, commit = man["repo"], man["commit"]
+    offline = offline or bool(os.environ.get("CBFKIT_ASSETS_OFFLINE"))
+    root = asset_cache_root() / repo.split("/")[-1] / commit
+    missing = []
+    for rel, digest in man["files"].items():
+        dest = root / rel
+        if dest.exists() and _sha256(dest) == digest:
+            continue
+        if offline:
+            missing.append(rel)
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        url = _RAW_GH.format(repo=repo, commit=commit, path=rel)
+        with tempfile.NamedTemporaryFile(dir=dest.parent, delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            _download(url, tmp_path)
+            got = _sha256(tmp_path)
+            if got != digest:
+                raise RuntimeError(
+                    f"checksum mismatch for {rel} from {url}: expected {digest[:12]}..., got {got[:12]}..."
+                )
+            os.replace(tmp_path, dest)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+    if missing:
+        raise RuntimeError(
+            f"{len(missing)} file(s) from {repo}@{commit[:12]} are missing under {root} and downloads "
+            f"are disabled. Populate that directory or point CBFKIT_ASSET_DIR at a cache that has them; "
+            f"unset CBFKIT_ASSETS_OFFLINE to allow downloading."
+        )
+    return root
+
+
+def unitree_rl_gym_dir(offline: bool = False) -> Path:
+    """Root of the cached ``unitree_rl_gym`` files (12-DoF G1 MJCF + meshes, deploy config, policy)."""
+    return ensure_repo_files(UNITREE_RL_GYM_MANIFEST, offline=offline)

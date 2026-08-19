@@ -8,7 +8,7 @@ appended so reduced-order certificates can index it directly
 the free-joint position, not the centre of mass.
 """
 
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -29,7 +29,15 @@ class MujocoPlant:
     configurations.
     """
 
-    def __init__(self, mj_model: mujoco.MjModel, *, substeps: int = 1, com_body: int = 0) -> None:
+    def __init__(
+        self,
+        mj_model: mujoco.MjModel,
+        *,
+        substeps: int = 1,
+        com_body: int = 0,
+        ctrl_map: Optional[Callable[[mjx.Data, Array], Array]] = None,
+        nu: Optional[int] = None,
+    ) -> None:
         if substeps < 1:
             raise ValueError("substeps must be >= 1")
         self.mj_model = mj_model
@@ -37,7 +45,11 @@ class MujocoPlant:
         self.substeps = int(substeps)
         self.nq = int(mj_model.nq)
         self.nv = int(mj_model.nv)
-        self.nu = int(mj_model.nu)
+        # ctrl_map(data, u) -> data.ctrl is applied at every substep, so e.g. a PD
+        # law runs at the simulation rate while u (its target) is held for dt.
+        # With a ctrl_map, u need not have mj_model.nu entries: pass nu=.
+        self._ctrl_map = ctrl_map
+        self.nu = int(mj_model.nu) if nu is None else int(nu)
         self.state_dim = self.nq + self.nv + 3
         self.com_indices: Tuple[int, int] = (self.nq + self.nv, self.nq + self.nv + 1)
         self.dt = float(mj_model.opt.timestep) * self.substeps
@@ -75,9 +87,11 @@ class MujocoPlant:
         ``model`` overrides the plant's model (used for domain randomisation).
         """
         m = self.model if model is None else model
+        cmap = self._ctrl_map
 
         def _one(_, d):
-            return mjx.step(m, d.replace(ctrl=u))
+            ctrl = u if cmap is None else cmap(d, u)
+            return mjx.step(m, d.replace(ctrl=ctrl))
 
         return jax.lax.fori_loop(0, self.substeps, _one, data)
 

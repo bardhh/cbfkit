@@ -1,18 +1,23 @@
-"""Unitree G1 navigates to a goal past an obstacle: reduced-order CBF on the CoM + MJX sampling MPC gait.
+"""Unitree G1 walks to a goal past an obstacle: reduced-order CBF on the CoM + a walking policy.
 
 Pipeline (all inside one CBFKit `execute(plant=...)` call):
 
     goal ->  nominal: v_nom = k (p_goal - com)          (2-D, saturated)
          ->  safety: vanilla CBF-QP on  d/dt com = v    (ellipsoidal keep-out around the obstacle,
                                                          evaluated at plant.com_indices)  -> v_safe
-         ->  locomotion: SamplingMpc tracks v_safe       -> 29 joint-position targets
+         ->  locomotion: tracks v_safe                    -> joint-position targets
          ->  plant: MJX G1
 
-The CBF certifies the *commanded* CoM velocity; how faithfully the gait tracks it is what
-the tracking-error bound (spec milestone 4b) measures. See G1_WALK_LOG.md for the gait's
-current state.
+Locomotion layers (``--locomotion``):
+  policy  (default) Unitree's pretrained ``unitree_rl_gym`` G1 walking policy (12-DoF legs, LSTM),
+                    read without torch and evaluated in JAX; PD torques at 500 Hz. Walks and steers.
+  mpc               the in-repo MJX sampling MPC on the 29-DoF model (G1_WALK_LOG.md): forward
+                    locomotion with stumbles; kept for comparison.
 
-    python examples/mujoco/g1_navigate.py [--gif] [--view] [--duration 8]
+The CBF certifies the *commanded* CoM velocity; the gait's tracking error is what the robust
+variant's disturbance bound must cover (spec milestone 4b).
+
+    python examples/mujoco/g1_navigate.py [--locomotion policy|mpc] [--gif] [--view] [--duration 12]
 """
 
 import argparse
@@ -33,6 +38,11 @@ from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
 from cbfkit.controllers.mjx_sampling_mpc import SamplingMpc
 from cbfkit.systems.mujoco import MujocoPlant
 from cbfkit.systems.mujoco.g1 import G1, load_g1, walk_costs
+from cbfkit.systems.mujoco.unitree_policy import (
+    UnitreeG1WalkPolicy,
+    make_g1_12dof_plant,
+    x0_standing,
+)
 from cbfkit.systems.mujoco.reduced_order import (
     com_obstacle_barriers,
     embedded_single_integrator,
@@ -52,7 +62,14 @@ ROBOT_RADIUS = 0.35  # planar inflation so "CoM outside the ellipse" => "body cl
 V_MAX = 0.5
 
 
-def build(num_samples: int = 256, iterations: int = 2, seed: int = 0):
+def build(locomotion: str = "policy", num_samples: int = 256, iterations: int = 2, seed: int = 0):
+    if locomotion == "policy":
+        sim_plant = make_g1_12dof_plant()  # 12-DoF legs, PD at 500 Hz, dt 0.02
+        loco = UnitreeG1WalkPolicy().as_controller()
+        x0 = x0_standing(sim_plant)
+        pelvis_body = int(sim_plant.mj_model.body("pelvis").id)
+        return sim_plant, loco, x0, pelvis_body, _finish(sim_plant, loco)
+
     sim_plant = MujocoPlant(load_g1(sim=True), substeps=2)
     mpc_plant = MujocoPlant(load_g1())
     g1 = G1(sim_plant.mj_model)
@@ -87,15 +104,25 @@ def build(num_samples: int = 256, iterations: int = 2, seed: int = 0):
         seed=seed,
     )
 
-    # Safety: CBF-QP on the CoM single integrator with the obstacle inflated by the robot radius.
+    x0 = g1.x_stand(sim_plant)
+    return (
+        sim_plant,
+        mpc.as_controller(),
+        x0,
+        g1.pelvis_body,
+        _finish(sim_plant, mpc.as_controller()),
+    )
+
+
+def _finish(sim_plant, loco):
+    """Safety layer + nominal, identical for every locomotion layer."""
     r = OBSTACLE_RADIUS + ROBOT_RADIUS
     dyn = embedded_single_integrator(sim_plant.state_dim, sim_plant.com_indices)
     barriers = com_obstacle_barriers(sim_plant, [OBSTACLE], [(r, r)], class_k_gain=1.0)
     cbf_qp = vanilla_cbf_clf_qp_controller(
         control_limits=jnp.array([V_MAX, V_MAX]), dynamics_func=dyn, barriers=barriers
     )
-    controller = safe_locomotion_controller(cbf_qp, mpc.as_controller())
-
+    controller = safe_locomotion_controller(cbf_qp, loco)
     ci = sim_plant.com_indices
 
     def nominal(t, x, key, ref):  # proportional to goal on the CoM, saturated
@@ -105,15 +132,18 @@ def build(num_samples: int = 256, iterations: int = 2, seed: int = 0):
         v = jnp.where(speed > V_MAX, v * (V_MAX / (speed + 1e-9)), v)
         return v, ControllerData()
 
-    return sim_plant, g1, mpc, controller, nominal
+    return controller, nominal
 
 
-def main(duration=8.0, num_samples=256, iterations=2, seed=0, gif=False, view=False):
+def main(
+    duration=12.0, locomotion="policy", num_samples=256, iterations=2, seed=0, gif=False, view=False
+):
     if TEST_MODE:
         num_samples, iterations = 16, 1
-    sim_plant, g1, mpc, controller, nominal = build(num_samples, iterations, seed)
+    sim_plant, _loco, x0, pelvis_body, (controller, nominal) = build(
+        locomotion, num_samples, iterations, seed
+    )
     steps = 5 if TEST_MODE else int(round(duration / sim_plant.dt))
-    x0 = g1.x_stand(sim_plant)
     t0 = time.time()
     res = sim.execute(
         x0=x0,
@@ -141,14 +171,9 @@ def main(duration=8.0, num_samples=256, iterations=2, seed=0, gif=False, view=Fa
     v_safe = np.asarray(cd.get("sub_data_v_safe")) if "sub_data_v_safe" in cd else None
     dist_goal = np.linalg.norm(com - np.asarray(GOAL), axis=1)
 
-    from mujoco import mjx
-
-    @jax.jit
-    def obs(x):
-        d = mjx.kinematics(sim_plant.model, sim_plant.from_state(x))
-        return g1.torso_height(d), g1.torso_upright(d)
-
-    hh, up = (np.asarray(v) for v in jax.vmap(obs)(jnp.asarray(states)))
+    hh = states[:, 2]  # pelvis height
+    q = states[:, 3:7]  # pelvis quaternion (w, x, y, z): body z-axis . world z
+    up = 1 - 2 * (q[:, 1] ** 2 + q[:, 2] ** 2)
     print(f"{steps} steps in {wall:.1f}s")
     print(
         f"h(x) min over run: {h.min():.3f}   (>= 0 means the CoM never entered the keep-out ellipse)"
@@ -159,7 +184,7 @@ def main(duration=8.0, num_samples=256, iterations=2, seed=0, gif=False, view=Fa
     print(
         f"distance to goal: start {dist_goal[0]:.2f} -> end {dist_goal[-1]:.2f} (min {dist_goal.min():.2f})"
     )
-    print(f"torso height min {hh.min():.2f}, upright min {up.min():.2f}")
+    print(f"pelvis height min {hh.min():.2f}, upright min {up.min():.2f}")
     if v_nom is not None and v_safe is not None:
         print(
             f"CBF active (|v_safe - v_nom| > 1e-3) on {np.mean(np.linalg.norm(v_safe - v_nom, axis=1) > 1e-3)*100:.0f}% of steps"
@@ -169,7 +194,7 @@ def main(duration=8.0, num_samples=256, iterations=2, seed=0, gif=False, view=Fa
     os.makedirs(RESULTS_DIR, exist_ok=True)
     _plot(com, h, v_nom, v_safe, hh, sim_plant.dt)
     if gif:
-        _render_gif(sim_plant, g1, states)
+        _render_gif(sim_plant, pelvis_body, states)
     if view:
         _replay_in_viewer(sim_plant, states)
     return float(h.min())
@@ -232,7 +257,7 @@ def _replay(plant, states):
         yield d, k
 
 
-def _render_gif(plant, g1, states, fps=25):
+def _render_gif(plant, pelvis_body, states, fps=25):
     import matplotlib
     import mujoco
 
@@ -246,7 +271,7 @@ def _render_gif(plant, g1, states, fps=25):
         return
     cam = mujoco.MjvCamera()
     cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-    cam.trackbodyid = g1.pelvis_body
+    cam.trackbodyid = pelvis_body
     cam.distance = 4.0
     cam.azimuth = 160
     cam.elevation = -20
@@ -296,7 +321,8 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("--duration", type=float, default=8.0)
+    p.add_argument("--duration", type=float, default=12.0)
+    p.add_argument("--locomotion", default="policy", choices=["policy", "mpc"])
     p.add_argument("--samples", type=int, default=256)
     p.add_argument("--iterations", type=int, default=2)
     p.add_argument("--seed", type=int, default=0)
@@ -305,4 +331,4 @@ if __name__ == "__main__":
     a = p.parse_args()
     if a.view:
         relaunch_under_mjpython_if_needed()
-    main(a.duration, a.samples, a.iterations, a.seed, a.gif, a.view)
+    main(a.duration, a.locomotion, a.samples, a.iterations, a.seed, a.gif, a.view)
