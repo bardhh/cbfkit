@@ -1,42 +1,39 @@
-"""Unitree G1 crosses a Shibuya-style scramble: ~30 pedestrians released on green, flowing in
-six streams, while the robot takes the diagonal -- tracked-agent HOCBFs at crowd scale.
+"""Unitree G1 crosses a Shibuya-style scramble: ~40 pedestrians released on green, flowing in
+six streams, while the robot takes the diagonal -- tracked-agent HOCBFs at crowd scale, with
+either a go-to-goal nominal or a *socially tuned MPPI* planner in front of the CBF filter.
 
 Same stack as ``g1_plaza.py`` (command-side double integrator, distance-shaped keep-out
-barriers on *tracked agents* with constant-velocity prediction, robust CBF-QP on the in-repo
+barriers on *tracked agents* with constant-velocity prediction, CBF-QP on the in-repo
 PDIPM, Unitree's walking policy, MJX G1), scaled up: ``N_PED`` social-force pedestrians
 (``SocialForceCrowd``) start 0-30 m behind the kerbs of a 12 x 12 m intersection (so they
-arrive throughout the robot's crossing) and cross
-W<->E, S<->N and along both diagonals at 0.8-1.3 m/s -- faster than the robot (0.5 m/s) --
-reacting to the robot and to each other. The robot crosses SW -> NE (17 m).
+arrive throughout the robot's crossing) and cross W<->E, S<->N and along both diagonals at
+0.8-1.3 m/s -- faster than the robot (0.5 m/s) -- reacting to the robot and to each other.
+The robot crosses SW -> NE (17 m).
 
-What to look at: ``h_min`` over all pedestrians (>= 0: no keep-out disc ever entered),
-near-misses, the crossing time and the fraction of time the robot stood waiting for a gap
-(the "freezing robot" regime), plus solver health -- with ~30 relative-degree-2 barriers and
-robust margins the hard-constrained QP can become infeasible in a crush; ``--relax`` turns
-the barrier constraints soft (``relaxable_cbf``) and the slack used is then reported as the
-certificate's model-level violation. Measured (CPU, seed 0, 40 pedestrians, 60 s horizon
-unless noted; "closest" = CoM-pedestrian, keep-out 0.65 m; "slack" = fraction of steps a barrier
-row needed slack):
+Two planners (``--planner``):
 
-    constraints  CBF      bound  result
-    hard         vanilla  --     QP INFEASIBLE at t = 8.5 s (sim stops): two pedestrians closing at ~1 m/s
-    hard         robust   0.15   QP INFEASIBLE at t = 13.4 s (sim stops)  from two sides, |a| <= 1 m/s^2 can't
-                                 satisfy both under constant-velocity prediction -- a true crush, not a solver issue
-    soft*        vanilla  --     crossed 49.2 s; h_min +0.083 (closest 0.70 m); 16 pedestrians within 1.5 m,
-                                 1 near-miss; slack on 10 % of steps (max 0.29); waiting 0 %; tracking 0.088/0.190/0.342
-    soft         robust   0.15   crossed 65.0 s (75 s horizon); h_min -0.051 (closest 0.62 m, 38 steps inside the
-                                 keep-out, no contact); slack on 18.5 % (max 0.95): the margins are simply eaten by slack
+* ``goal`` -- P-law toward the goal at 0.5 m/s; the soft CBF-QP does all the avoiding.
+* ``mppi`` -- ``cbfkit.controllers.mppi`` over the compact augmented state
+  ``[p | v | pedestrians]`` (5 Hz, 5 s horizon, pedestrians predicted at constant velocity:
+  the robot assumes nobody will yield to it), with the cost of
+  ``cbfkit.controllers.mppi.social_costs`` -- asymmetric-Gaussian personal space (cheap to
+  pass behind someone, expensive to cut in front), time-to-collision, progress as a
+  *terminal* cost so waiting for a gap is a legitimate plan, smoothness/legibility terms and
+  a keep-left convention for head-on encounters. The same soft CBF-QP stays downstream as
+  the filter; a well-behaved planner should rarely trigger it.
 
-    (* default)
+What to look at: the *social* metrics -- pedestrian-seconds spent in people's intimate
+(< 0.45 m between bodies) and personal (< 1.2 m) zones, *front intrusions* (robot within
+1.5 m and inside the +-45 deg cone ahead of a walking pedestrian: the "cut in front" event),
+how much the crowd had to deviate from its robot-free paths and slow down near the robot,
+how often the CBF had to override the planner -- next to crossing time, waiting and
+``h_min``. ``--proxy`` replaces the G1 by the identified reduced model (velocity command
+through a 0.2 s first-order lag, see ``g1_model_distance.py``) for fast multi-seed tuning;
+``g1_scramble_social_eval.py`` runs the comparison table. Measured numbers: see that
+table (``results/g1_scramble_social_mppi.md``) and the docstring of the eval script.
 
-Read it this way: in a crowd that is faster than the robot, the barrier constraints cannot be
-hard -- the QP is infeasible within seconds whatever the bound -- so nothing here is a
-*certificate*; the soft-constrained QP is a safety *filter* whose outcome (h_min, near-misses,
-slack) is what gets reported, and the robust margin buys nothing once slack is active. The
-robot still crosses a 40-pedestrian scramble without contact while the pedestrians (social
-force) yield around it; the one squeeze (t ~ 36 s, h 0.08) is visible in the plot.
-
-    python examples/mujoco/g1_scramble.py [--robust B] [--pedestrians N] [--relax] [--duration T] [--seed S] [--gif] [--view]
+    python examples/mujoco/g1_scramble.py [--planner goal|mppi] [--proxy] [--robust B] [--pedestrians N]
+                                          [--relax|--hard] [--duration T] [--seed S] [--gif] [--view]
 """
 
 import argparse
@@ -54,23 +51,16 @@ import numpy as np
 
 import cbfkit.simulation.simulator as sim
 from cbfkit.controllers.cbf_clf import robust_cbf_clf_qp_controller, vanilla_cbf_clf_qp_controller
+from cbfkit.controllers.mppi import vanilla_mppi
+from cbfkit.controllers.mppi.social_costs import SocialCostWeights, social_trajectory_cost
+from cbfkit.integration import forward_euler as euler
 from cbfkit.optimization.quadratic_program.solver_registry import get_solver
 from cbfkit.systems.mujoco.crowd import SocialForceCrowd
 from cbfkit.systems.mujoco.reduced_order import (
     com_agent_hocbfs,
     embedded_double_integrator,
+    mppi_local_planner,
     safe_locomotion_controller_di,
-)
-from cbfkit.systems.mujoco.unitree_policy import (
-    UnitreeG1WalkPolicy,
-    make_g1_12dof_plant,
-    x0_standing,
-)
-from cbfkit.systems.mujoco.viewer_utils import (
-    add_marker,
-    relaunch_under_mjpython_if_needed,
-    render_gif,
-    replay_in_viewer,
 )
 from cbfkit.utils.user_types import ControllerData, PlannerData
 
@@ -94,10 +84,28 @@ R_PED = PED_RADIUS + ROBOT_RADIUS
 V_MAX = 0.5
 A_MAX = 1.0
 BARRIER_SHAPE = "distance"
-DEFAULT_ROBUST_BOUND = 0.0  # see the docstring table: in a crush robust margins are eaten by slack
+DEFAULT_ROBUST_BOUND = 0.0  # in a crush robust margins are eaten by slack (see the eval table)
 DEFAULT_RELAX = True  # hard barrier constraints are infeasible within ~10 s in this crowd
 DEFAULT_DURATION = 60.0
+DEFAULT_PLANNER = "goal"
+CONTROL_DT = 0.02  # the G1 plant's step (policy at 50 Hz); the proxy uses the same
 _TAG = ["run"]
+
+# --------------------------------------------------------------------------- social MPPI
+MPPI_DT = 0.2  # s -- replanned at 5 Hz
+MPPI_HORIZON = 25  # 5 s
+MPPI_SAMPLES = 64 if TEST_MODE else 1024
+MPPI_LAMBDA = 10.0  # temperature, relative to costs of O(10-100)
+MPPI_CONTROL_STD = 0.5  # m/s^2 sampling std (bound A_MAX = 1)
+PASS_SIDE = "left"  # Japan: keep left in head-on encounters
+DEFAULT_WEIGHTS = SocialCostWeights(pass_side=0.5, v_max=V_MAX)
+PROXY_TAU = 0.20  # s, identified first-order lag of the G1 + walking policy (g1_model_distance)
+
+# zones for the social metrics (distance between body surfaces, Hall's proxemics)
+INTIMATE = 0.45
+PERSONAL = 1.2
+FRONT_RANGE = 1.5  # m (centre-to-centre) and
+FRONT_HALF_ANGLE = np.deg2rad(45.0)  # +-45 deg ahead of a walking pedestrian = "cutting in front"
 
 # streams: (start side, goal side) in intersection coordinates; weights favour the straight ones
 _STREAMS = [
@@ -144,13 +152,106 @@ def make_crowd(n_ped: int, seed: int):
     return np.asarray(starts), np.asarray(goals), np.asarray(speeds)
 
 
-def build(seed: int = 0, robust_bound: float = 0.0, n_ped: int = N_PED, relax: bool = False):
-    plant = make_g1_12dof_plant()
-    loco = UnitreeG1WalkPolicy().as_controller()
-    x0 = x0_standing(plant)
-    # Place the robot at START (the XML puts it at the origin): shift the pelvis x, y.
-    x0 = x0.at[0:2].add(START).at[plant.com_indices[0] : plant.com_indices[0] + 2].add(START)
-    pelvis_body = int(plant.mj_model.body("pelvis").id)
+class ProxyPlant:
+    """2-D stand-in for the G1 + walking policy: the CoM follows the planar velocity command
+    through a first-order lag ``tau`` (the model identified in ``g1_model_distance.py``).
+    State ``[px, py, vx, vy]``, control = commanded velocity. Exposes what the reduced-order
+    layer needs (``com_indices``, ``state_dim``, ``dt``, ``nu``)."""
+
+    state_dim = 4
+    com_indices = (0, 1)
+    nu = 2
+
+    def __init__(self, tau: float = PROXY_TAU, dt: float = CONTROL_DT):
+        self.tau = float(tau)
+        self.dt = float(dt)
+
+    def dynamics(self):
+        tau = self.tau
+        g = jnp.zeros((4, 2)).at[2, 0].set(1.0 / tau).at[3, 1].set(1.0 / tau)
+
+        def f_g(x):
+            return jnp.array([x[2], x[3], -x[2] / tau, -x[3] / tau]), g
+
+        return f_g
+
+    def locomotion(self):
+        def loco(t, x, cmd, key, data):
+            return jnp.asarray(cmd, dtype=float)[:2], data
+
+        return loco
+
+
+def build_social_mppi(
+    n_ped: int,
+    weights: SocialCostWeights,
+    seed: int = 0,
+    *,
+    costs_lambda: float = MPPI_LAMBDA,
+    control_std: float = MPPI_CONTROL_STD,
+    samples: int = MPPI_SAMPLES,
+):
+    """MPPI planner over the compact ``[p | v | pedestrians]`` state with the social cost, plus
+    the adapter for :func:`safe_locomotion_controller_di`."""
+    dyn = embedded_double_integrator(2, (0, 1), n_agents=n_ped)
+    cost = social_trajectory_cost(
+        n_agents=n_ped,
+        goal=GOAL,
+        weights=weights,
+        dt=MPPI_DT,
+        robot_radius=ROBOT_RADIUS,
+        ped_radius=PED_RADIUS,
+        pass_side=PASS_SIDE if weights.pass_side > 0 else None,
+    )
+    mppi = vanilla_mppi(
+        control_limits=jnp.array([A_MAX, A_MAX]),
+        dynamics_func=dyn,
+        trajectory_cost=cost,
+        mppi_args={
+            "robot_state_dim": 4 + 4 * n_ped,
+            "robot_control_dim": 2,
+            "prediction_horizon": MPPI_HORIZON,
+            "num_samples": samples,
+            "time_step": MPPI_DT,
+            "use_GPU": False,
+            "costs_lambda": costs_lambda,
+            "cost_perturbation": 0.0,
+            "control_std": control_std,
+        },
+    )
+    return mppi_local_planner(
+        mppi, n_ped, horizon=MPPI_HORIZON, replan_every=int(round(MPPI_DT / CONTROL_DT))
+    )
+
+
+def build(
+    seed: int = 0,
+    robust_bound: float = 0.0,
+    n_ped: int = N_PED,
+    relax: bool = False,
+    planner: str = DEFAULT_PLANNER,
+    weights: SocialCostWeights = DEFAULT_WEIGHTS,
+    proxy: bool = False,
+    mppi_kw: dict = None,
+):
+    if proxy:
+        plant = ProxyPlant()
+        loco = plant.locomotion()
+        x0 = jnp.concatenate([START, jnp.zeros(2)])
+        pelvis_body = None
+    else:
+        from cbfkit.systems.mujoco.unitree_policy import (
+            UnitreeG1WalkPolicy,
+            make_g1_12dof_plant,
+            x0_standing,
+        )
+
+        plant = make_g1_12dof_plant()
+        loco = UnitreeG1WalkPolicy().as_controller()
+        x0 = x0_standing(plant)
+        # Place the robot at START (the XML puts it at the origin): shift the pelvis x, y.
+        x0 = x0.at[0:2].add(START).at[plant.com_indices[0] : plant.com_indices[0] + 2].add(START)
+        pelvis_body = int(plant.mj_model.body("pelvis").id)
     ci = plant.com_indices
     starts, goals, speeds = make_crowd(n_ped, seed)
     crowd = SocialForceCrowd(
@@ -170,7 +271,10 @@ def build(seed: int = 0, robust_bound: float = 0.0, n_ped: int = N_PED, relax: b
         control_limits=jnp.array([A_MAX, A_MAX]),
         dynamics_func=dyn,
         barriers=barriers,
-        solver=get_solver("fast"),
+        # 32 PDIPM iterations (default 16): at an MPPI replan boundary a_nom jumps and the
+        # warm-started active set can need a few extra iterations (measured: 16 fails on
+        # seed 1 at t = 12.4 s, 32 converges; cold start also solves it in 16).
+        solver=get_solver("fast", max_iter=32),
     )
     if relax:
         kw.update(relaxable_cbf=True, slack_penalty_cbf=1e3, slack_bound_cbf=10.0)
@@ -180,7 +284,15 @@ def build(seed: int = 0, robust_bound: float = 0.0, n_ped: int = N_PED, relax: b
         )
     else:
         cbf_qp = vanilla_cbf_clf_qp_controller(**kw)
-    safe = safe_locomotion_controller_di(cbf_qp, loco, plant, plant.dt, v_max=V_MAX, agents=crowd)
+    if planner == "mppi":
+        local_planner = build_social_mppi(n_ped, weights, seed, **(mppi_kw or {}))
+    elif planner == "goal":
+        local_planner = None
+    else:
+        raise ValueError(f"unknown planner {planner!r} (goal | mppi)")
+    safe = safe_locomotion_controller_di(
+        cbf_qp, loco, plant, plant.dt, v_max=V_MAX, agents=crowd, local_planner=local_planner
+    )
 
     def controller(t, x, v_nom, key, data):
         u, d = safe(t, x, v_nom, key, data)
@@ -199,6 +311,266 @@ def build(seed: int = 0, robust_bound: float = 0.0, n_ped: int = N_PED, relax: b
     return plant, x0, pelvis_body, nominal, controller, crowd
 
 
+# --------------------------------------------------------------------------- metrics
+def robot_free_crowd(crowd: SocialForceCrowd, n_steps: int, dt: float) -> np.ndarray:
+    """The crowd's trajectory ``(n_steps, N, 4)`` with the robot absent (parked far away)."""
+    far = jnp.array([1e4, 1e4])
+
+    def step(states, k):
+        new = crowd.step(k * dt, far, states, dt)
+        return new, states
+
+    _, traj = jax.lax.scan(jax.jit(step), jnp.asarray(crowd.x0), jnp.arange(n_steps))
+    return np.asarray(traj)
+
+
+def _in_square(p, margin=1.0):
+    return np.all(np.abs(p) <= HALF + margin, axis=-1)
+
+
+def human_norm(free_agents, dt):
+    """How much pedestrians intrude on *each other* in the robot-free rollout ``(T, N, 4)``:
+    per pedestrian, pedestrian-seconds in others' intimate / personal zones and in the front
+    cone of a walking other, divided by that pedestrian's time inside the intersection, averaged
+    over pedestrians with >= 2 s inside -- reported per 10 s inside. The robot's rates below
+    are computed the same way, so "rate ~ human rate" means "as intrusive as a pedestrian"."""
+    P, V = free_agents[:, :, :2], free_agents[:, :, 2:]
+    T, N = P.shape[:2]
+    if N < 2:
+        return dict(human_intimate_rate=0.0, human_personal_rate=0.0, human_front_rate=0.0)
+    rel = P[:, :, None, :] - P[:, None, :, :]  # i from j: (T, N, N, 2)
+    d = np.linalg.norm(rel, axis=-1)
+    eye = np.eye(N, dtype=bool)[None]
+    surf = d - 2 * PED_RADIUS
+    sp = np.linalg.norm(V, axis=-1)  # (T, N)
+    cosang = np.sum(rel * V[:, None, :, :], axis=-1) / np.maximum(d * sp[:, None, :], 1e-9)
+    front = (d < FRONT_RANGE) & (sp[:, None, :] > 0.2) & (cosang > np.cos(FRONT_HALF_ANGLE)) & ~eye
+    intimate = (surf < INTIMATE) & ~eye
+    personal = (surf >= INTIMATE) & (surf < PERSONAL) & ~eye
+    inside = _in_square(P)  # (T, N)
+    t_in = inside.sum(0) * dt
+    ok = t_in >= 2.0
+
+    def rate(mask):
+        per = (mask & inside[:, :, None]).sum(axis=(0, 2)) * dt  # per pedestrian i (as intruder)
+        return float(np.mean(per[ok] / t_in[ok]) * 10.0) if ok.any() else 0.0
+
+    return dict(
+        human_intimate_rate=rate(intimate),
+        human_personal_rate=rate(personal),
+        human_front_rate=rate(front),
+    )
+
+
+def social_metrics(com, agents, free_agents, crowd, dt, a_nom, a_safe, v_safe, slack=None):
+    """Intrusiveness and efficiency of one run (arrays truncated to the live part already).
+
+    ``com`` ``(T, 2)``, ``agents`` ``(T, N, 4)`` (what the robot saw), ``free_agents`` the same
+    crowd without the robot, ``a_nom``/``a_safe`` ``(T, 2)`` the planner's acceleration and the
+    CBF-QP's, ``v_safe`` the integrated command.
+    Pedestrian-seconds are summed over pedestrians and time; "front intrusion" counts the time
+    the robot spent within ``FRONT_RANGE`` and inside the ``+-FRONT_HALF_ANGLE`` cone ahead of a
+    walking pedestrian (speed > 0.2 m/s) -- the "cut in front" event; "ped deviation" is the
+    pedestrians' position difference to the robot-free rollout (same time index), "ped slowdown"
+    the robot-attributable speed loss (vs the robot-free rollout) within 2.5 m of the robot.
+    ``*_rate`` are the robot's intimate / personal / front pedestrian-seconds per 10 s the robot
+    spent inside the intersection, comparable to :func:`human_norm`.
+    """
+    T = len(com)
+    d = np.linalg.norm(com[:, None, :] - agents[:, :, :2], axis=2)  # centre-to-centre (T, N)
+    surf = d - R_PED
+    vp = agents[:, :, 2:]
+    sp = np.linalg.norm(vp, axis=2)
+    rel = com[:, None, :] - agents[:, :, :2]  # robot from the pedestrian
+    cosang = np.sum(rel * vp, axis=2) / np.maximum(d * sp, 1e-9)
+    front = (d < FRONT_RANGE) & (sp > 0.2) & (cosang > np.cos(FRONT_HALF_ANGLE))
+    intimate = surf < INTIMATE
+    personal = (surf >= INTIMATE) & (surf < PERSONAL)
+    near = d < 2.5
+    speed_free = np.linalg.norm(free_agents[:T, :, 2:], axis=2)
+    slow = np.maximum(speed_free - sp, 0.0) / np.maximum(np.asarray(crowd.speeds)[None], 1e-9)
+    dev = np.linalg.norm(agents[:, :, :2] - free_agents[:T, :, :2], axis=2)  # (T, N)
+    v_com = np.gradient(com, dt, axis=0) if T > 1 else np.zeros_like(com)
+    speed = np.linalg.norm(v_com, axis=1)
+    moving = speed > 0.1
+    th = np.arctan2(v_com[:, 1], v_com[:, 0])
+    dth = np.abs(np.angle(np.exp(1j * np.diff(th))))
+    path = float(np.sum(np.linalg.norm(np.diff(com, axis=0), axis=1))) if T > 1 else 0.0
+    straight = float(np.linalg.norm(com[-1] - com[0]))
+    a_cmd = np.gradient(v_safe, dt, axis=0) if T > 1 else np.zeros_like(v_safe)
+    jerk = np.gradient(a_cmd, dt, axis=0) if T > 2 else np.zeros_like(a_cmd)
+    t_in = max(float(_in_square(com).sum() * dt), 1e-9)
+    out = {
+        "crossing_time_s": T * dt,
+        "waiting_frac": float(np.mean(~moving)) if T else 0.0,
+        "path_ratio": path / max(straight, 1e-9),
+        "closest_m": float(d.min()) if d.size else np.inf,
+        "intimate_ped_s": float(np.sum(intimate) * dt),
+        "personal_ped_s": float(np.sum(personal) * dt),
+        "front_intrusion_ped_s": float(np.sum(front) * dt),
+        "front_intrusions_n": int(np.sum(front.any(0))),
+        "intimate_rate": float(np.sum(intimate) * dt / t_in * 10.0),
+        "personal_rate": float(np.sum(personal) * dt / t_in * 10.0),
+        "front_rate": float(np.sum(front) * dt / t_in * 10.0),
+        "robot_in_square_s": t_in,
+        "ped_deviation_mean_m": float(dev.max(0).mean()) if dev.size else 0.0,
+        "ped_deviation_max_m": float(dev.max()) if dev.size else 0.0,
+        "ped_slowdown_ped_s": float(np.sum(slow * near) * dt),
+        "robot_turn_rad": float(np.sum(dth[moving[1:] & moving[:-1]])) if T > 1 else 0.0,
+        "robot_jerk_rms": float(np.sqrt(np.mean(np.sum(jerk**2, axis=1)))) if T > 2 else 0.0,
+        "cbf_active_frac": float(np.mean(np.linalg.norm(a_safe - a_nom, axis=1) > 1e-2)),
+        "slack_frac": float(np.mean(slack.max(1) > 1e-3)) if slack is not None else 0.0,
+        "h_min": float((d / R_PED - 1.0).min()) if d.size else np.inf,
+    }
+    out.update(human_norm(free_agents[:T], dt))
+    return out
+
+
+# --------------------------------------------------------------------------- run
+def run(
+    duration=DEFAULT_DURATION,
+    seed=0,
+    robust_bound=DEFAULT_ROBUST_BOUND,
+    n_ped=N_PED,
+    relax=DEFAULT_RELAX,
+    planner=DEFAULT_PLANNER,
+    weights=DEFAULT_WEIGHTS,
+    proxy=False,
+    verbose=False,
+    mppi_kw=None,
+):
+    """Simulate one crossing; returns a dict with the metrics and the raw arrays."""
+    plant, x0, pelvis_body, nominal, controller, crowd = build(
+        seed, robust_bound, n_ped, relax, planner, weights, proxy, mppi_kw
+    )
+    steps = 5 if TEST_MODE else int(round(duration / plant.dt))
+    t0 = time.time()
+    kw = dict(plant=plant) if not proxy else dict(dynamics=plant.dynamics(), integrator=euler)
+    res = sim.execute(
+        x0=x0,
+        dt=plant.dt,
+        num_steps=steps,
+        planner_data=PlannerData.from_constant(GOAL),
+        nominal_controller=nominal,
+        controller=controller,
+        key=jax.random.PRNGKey(seed),
+        use_jit=True,
+        verbose=verbose,
+        **kw,
+    )
+    wall = time.time() - t0
+    S = np.asarray(res["states"])
+    ci = plant.com_indices
+    com = S[:, ci[0] : ci[0] + 2]
+    cd = res.controller_data
+    agents = np.asarray(cd["sub_data_agents"])  # (T, N, 4)
+    status = np.asarray(cd["sub_data_solver_status"])
+    v_nom = np.asarray(cd["sub_data_v_nom"])
+    v_safe = np.asarray(cd["sub_data_v_safe"])
+    a_nom = np.asarray(cd["sub_data_a_nom"])
+    a_safe = np.asarray(cd["sub_data_a_safe"])
+    dist_goal = np.linalg.norm(com - np.asarray(GOAL), axis=1)
+    hit = np.flatnonzero(dist_goal < GOAL_RADIUS)
+    n_live = int(hit[0]) if hit.size else len(com)
+    err_steps = np.flatnonzero(np.asarray(cd["error"]))
+    if err_steps.size:  # the simulation latches after a controller error: score the live part only
+        n_live = min(n_live, int(err_steps[0]))
+    slack = None
+    if relax and "sol" in cd:
+        slack = np.asarray(cd["sol"])[:n_live, 2:]  # slack columns follow the 2 controls
+    free = robot_free_crowd(crowd, max(n_live, 1), plant.dt)
+    m = social_metrics(
+        com[:n_live],
+        agents[:n_live],
+        free,
+        crowd,
+        plant.dt,
+        a_nom[:n_live],
+        a_safe[:n_live],
+        v_safe[:n_live],
+        slack,
+    )
+    m.update(
+        crossed=bool(hit.size),
+        dist_goal_end=float(dist_goal[-1]),
+        stopped_at_s=(float(err_steps[0] * plant.dt) if err_steps.size else None),
+        qp_nonconverged=int(np.sum(status[:n_live] != 1)),
+        wall_s=wall,
+        steps=steps,
+        n_ped=n_ped,
+        planner=planner,
+        proxy=proxy,
+    )
+    if not proxy:
+        q = S[:n_live, 3:7]
+        m["upright_min"] = float((1 - 2 * (q[:, 1] ** 2 + q[:, 2] ** 2)).min())
+        m["pelvis_z_min"] = float(S[:n_live, 2].min())
+    if "sub_data_mppi_error" in cd:
+        m["mppi_errors"] = int(np.sum(np.asarray(cd["sub_data_mppi_error"])[:n_live]))
+    return dict(
+        metrics=m,
+        states=S,
+        com=com,
+        agents=agents,
+        free_agents=free,
+        v_nom=v_nom,
+        v_safe=v_safe,
+        n_live=n_live,
+        plant=plant,
+        crowd=crowd,
+        pelvis_body=pelvis_body,
+        mppi_plans=(
+            np.asarray(cd["sub_data_mppi_x_traj"]) if "sub_data_mppi_x_traj" in cd else None
+        ),
+    )
+
+
+def print_report(m):
+    dt_txt = (
+        f"crossed at t={m['crossing_time_s']:.1f}s"
+        if m["crossed"]
+        else (f"crossing NOT completed (distance to goal at the end {m['dist_goal_end']:.2f} m)")
+    )
+    print(
+        f"{m['steps']} steps in {m['wall_s']:.1f}s  ({m['n_ped']} pedestrians, planner={m['planner']}"
+        f"{', proxy' if m['proxy'] else ''})"
+    )
+    print(
+        f"h(x) min over run: {m['h_min']:.3f}   (>= 0 means no pedestrian keep-out disc was entered)"
+    )
+    print(
+        f"closest CoM-pedestrian distance: {m['closest_m']:.2f} m (keep-out {R_PED:.2f}); {dt_txt}"
+    )
+    print(
+        f"social: intimate {m['intimate_ped_s']:.1f} ped-s, personal {m['personal_ped_s']:.1f} ped-s, "
+        f"front intrusions {m['front_intrusion_ped_s']:.1f} ped-s ({m['front_intrusions_n']} pedestrians); "
+        f"crowd deviation mean {m['ped_deviation_mean_m']:.2f} / max {m['ped_deviation_max_m']:.2f} m, "
+        f"slowdown near robot {m['ped_slowdown_ped_s']:.1f} ped-s"
+    )
+    print(
+        f"rates per 10 s inside the intersection -- robot: intimate {m['intimate_rate']:.2f}, personal "
+        f"{m['personal_rate']:.2f}, front {m['front_rate']:.2f} ped-s; a pedestrian (robot-free crowd): "
+        f"{m['human_intimate_rate']:.2f}, {m['human_personal_rate']:.2f}, {m['human_front_rate']:.2f}"
+    )
+    print(
+        f"robot: waiting {m['waiting_frac']*100:.0f}%, path ratio {m['path_ratio']:.2f}, "
+        f"turning {m['robot_turn_rad']:.1f} rad, jerk rms {m['robot_jerk_rms']:.2f} m/s^3; "
+        f"CBF active {m['cbf_active_frac']*100:.0f}%"
+        + (f", slack on {m['slack_frac']*100:.1f}%" if m["slack_frac"] else "")
+    )
+    extra = []
+    if "upright_min" in m:
+        extra.append(
+            f"pelvis height min {m['pelvis_z_min']:.2f}, upright min {m['upright_min']:.2f}"
+        )
+    extra.append(f"QP non-converged {m['qp_nonconverged']}")
+    if m.get("mppi_errors") is not None:
+        extra.append(f"MPPI errors {m['mppi_errors']}")
+    if m["stopped_at_s"] is not None:
+        extra.append(f"SIMULATION STOPPED on controller error at t={m['stopped_at_s']:.1f}s")
+    print("; ".join(extra))
+
+
 def main(
     duration=DEFAULT_DURATION,
     seed=0,
@@ -207,123 +579,56 @@ def main(
     robust_bound=None,
     n_ped=N_PED,
     relax=None,
+    planner=DEFAULT_PLANNER,
+    proxy=False,
 ):
     if robust_bound is None:
         robust_bound = DEFAULT_ROBUST_BOUND
     if relax is None:
         relax = DEFAULT_RELAX
-    plant, x0, pelvis_body, nominal, controller, crowd = build(seed, robust_bound, n_ped, relax)
-    steps = 5 if TEST_MODE else int(round(duration / plant.dt))
-    t0 = time.time()
-    res = sim.execute(
-        x0=x0,
-        dt=plant.dt,
-        num_steps=steps,
-        plant=plant,
-        planner_data=PlannerData.from_constant(GOAL),
-        nominal_controller=nominal,
-        controller=controller,
-        key=jax.random.PRNGKey(seed),
-        use_jit=True,
-        verbose=not TEST_MODE,
+    r = run(
+        duration, seed, robust_bound, n_ped, relax, planner, DEFAULT_WEIGHTS, proxy, not TEST_MODE
     )
-    wall = time.time() - t0
-    S = np.asarray(res["states"])
-    ci = plant.com_indices
-    com = S[:, ci[0] : ci[0] + 2]
-    t = np.arange(len(com)) * plant.dt
-    cd = res.controller_data
-    agents = np.asarray(cd["sub_data_agents"])  # (T, N, 4)
-    d = np.linalg.norm(com[:, None, :] - agents[:, :, :2], axis=2)  # (T, N)
-    H = d / R_PED - 1.0
-    status = np.asarray(cd["sub_data_solver_status"])
-    v_nom = np.asarray(cd["sub_data_v_nom"])
-    v_safe = np.asarray(cd["sub_data_v_safe"])
-    dist_goal = np.linalg.norm(com - np.asarray(GOAL), axis=1)
-    hit = np.flatnonzero(dist_goal < GOAL_RADIUS)
-    n_live = int(hit[0]) if hit.size else len(com)
-    err_steps = np.flatnonzero(np.asarray(cd["error"]))
-    stopped_at = int(err_steps[0]) if err_steps.size else None
-    hh, q = S[:, 2], S[:, 3:7]
-    up = 1 - 2 * (q[:, 1] ** 2 + q[:, 2] ** 2)
-    speed = np.linalg.norm(np.gradient(com[:n_live], plant.dt, axis=0), axis=1)
-    waiting = float(np.mean(speed < 0.1)) if n_live > 1 else 0.0
-    near = int(np.sum(d[:n_live].min(0) < R_PED + 0.15))
-    slack = None
-    if relax and "sol" in cd:
-        sol = np.asarray(cd["sol"])
-        slack = sol[:n_live, 2:]  # slack columns follow the 2 controls
-    ped_speed = np.linalg.norm(agents[:n_live, :, 2:], axis=2)
-    pp = np.linalg.norm(agents[:n_live, :, None, :2] - agents[:n_live, None, :, :2], axis=3)
-    pp[:, np.arange(n_ped), np.arange(n_ped)] = np.inf
-
-    print(f"{steps} steps in {wall:.1f}s  ({n_ped} pedestrians)")
-    print(
-        f"h(x) min over run: {H[:n_live].min():.3f}   (>= 0 means no pedestrian keep-out disc was entered)"
-    )
-    print(
-        f"closest CoM-pedestrian distance: {d[:n_live].min():.2f} m (keep-out {R_PED:.2f}); "
-        f"near-misses (< keep-out + 0.15 m): {near} of {n_ped}; pedestrians that came within 1.5 m: {int(np.sum(d[:n_live].min(0) < 1.5))}"
-    )
-    print(
-        f"crossed at t={n_live*plant.dt:.1f}s"
-        if hit.size
-        else "crossing NOT completed" f" (distance to goal at the end {dist_goal[-1]:.2f} m)"
-    )
-    print(
-        f"robot waiting (|v_com| < 0.1 m/s) {waiting*100:.0f}% of the live steps; "
-        f"CBF active on {np.mean(np.linalg.norm(v_safe[:n_live] - v_nom[:n_live], axis=1) > 1e-3)*100:.0f}%"
-    )
-    print(f"pelvis height min {hh[:n_live].min():.2f}, upright min {up[:n_live].min():.2f}")
-    print(
-        f"QP: {int(np.sum(status[:n_live] != 1))} non-converged steps of {n_live}"
-        + (
-            ""
-            if stopped_at is None
-            else f"; SIMULATION STOPPED on controller error at t={stopped_at*plant.dt:.1f}s"
-        )
-    )
-    if slack is not None:
-        print(
-            f"relaxed barriers: slack > 1e-3 on {np.mean(slack.max(1) > 1e-3)*100:.1f}% of steps, max slack {slack.max():.3f}"
-        )
-    print(
-        f"crowd: mean speed ratio {float((ped_speed / np.asarray(crowd.speeds)[None]).mean()):.2f}, "
-        f"min pedestrian-pedestrian distance {pp.min():.2f} m"
-    )
-    n_vio = int(np.sum((H[:n_live] < 0).any(1)))
-    if n_vio:
-        print(f"  keep-out violated on {n_vio} steps (worst h {H[:n_live].min():.3f})")
-    if v_safe is not None:
-        v_com = np.gradient(com[:n_live], plant.dt, axis=0)
-        err = np.linalg.norm(v_com - v_safe[:n_live], axis=1)
-        print(
-            f"tracking error ||v_com - v_safe||: mean {err.mean():.3f}, p95 {np.percentile(err, 95):.3f}, max {err.max():.3f} m/s"
-        )
+    m = r["metrics"]
+    print_report(m)
     if TEST_MODE:
-        return float(H[:n_live].min())
-    _TAG[0] = f"{'relaxed_' if relax else ''}{'robust' if robust_bound > 0 else 'vanilla'}"
+        return float(m["h_min"])
+    _TAG[
+        0
+    ] = f"{planner}_{'relaxed_' if relax else ''}{'robust' if robust_bound > 0 else 'vanilla'}" + (
+        "_proxy" if proxy else ""
+    )
     os.makedirs(RESULTS_DIR, exist_ok=True)
+    plant, com, agents, n_live = r["plant"], r["com"], r["agents"], r["n_live"]
+    t = np.arange(len(com)) * plant.dt
     n = min(len(com), n_live + int(1.0 / plant.dt))
-    _plot(com[:n], t[:n], H[:n], agents[:n], v_nom[:n], v_safe[:n], crowd)
+    d = np.linalg.norm(com[:, None, :] - agents[:, :, :2], axis=2)
+    H = d / R_PED - 1.0
+    plans = r["mppi_plans"][:n] if r["mppi_plans"] is not None else None
+    _plot(com[:n], t[:n], H[:n], agents[:n], r["v_nom"][:n], r["v_safe"][:n], plans)
+    if proxy:
+        return float(m["h_min"])
+    from cbfkit.systems.mujoco.viewer_utils import render_gif, replay_in_viewer
+
     markers = _make_markers(agents)
+    S = r["states"]
     if gif:
         path = os.path.join(RESULTS_DIR, f"g1_scramble_{_TAG[0]}.gif")
         render_gif(
             plant,
             S[:n],
             path,
-            track_body=pelvis_body,
+            track_body=r["pelvis_body"],
             markers=markers,
             distance=7.0,
             elevation=-35.0,
         )
     if view:
         replay_in_viewer(plant, S[:n], markers=markers)
-    return float(H[:n_live].min())
+    return float(m["h_min"])
 
 
-def _plot(com, t, H, agents, v_nom, v_safe, crowd):
+def _plot(com, t, H, agents, v_nom, v_safe, plans=None):
     import matplotlib
 
     matplotlib.use("Agg")
@@ -347,6 +652,10 @@ def _plot(com, t, H, agents, v_nom, v_safe, crowd):
                 alpha=0.6,
             )
         ax.plot(com[: k + 1, 0], com[: k + 1, 1], "-", color="tab:green", lw=2)
+        if plans is not None:
+            ax.plot(
+                plans[k, 0, :], plans[k, 1, :], "-", color="tab:orange", lw=1.5, label="MPPI plan"
+            )
         ax.add_patch(plt.Circle(com[k], ROBOT_RADIUS, color="tab:green"))
         ax.add_patch(plt.Circle(com[k], R_PED, color="tab:green", fill=False, ls=":"))
         ax.plot(*np.asarray(GOAL), "g*", ms=12)
@@ -362,12 +671,12 @@ def _plot(com, t, H, agents, v_nom, v_safe, crowd):
     ax.set_title("closest-pedestrian barrier (>= 0 safe)")
     ax.legend()
     ax = fig.add_subplot(gs[1, 2:])
-    ax.plot(t, np.linalg.norm(v_nom, axis=1), "--", label="|v_nom|")
-    ax.plot(t, np.linalg.norm(v_safe, axis=1), label="|v_safe|")
+    ax.plot(t, np.linalg.norm(v_nom, axis=1), "--", label="|v_nom| (planner)")
+    ax.plot(t, np.linalg.norm(v_safe, axis=1), label="|v_safe| (after CBF)")
     v_com = np.gradient(com, t[1] - t[0], axis=0)
     ax.plot(t, np.linalg.norm(v_com, axis=1), lw=0.6, alpha=0.6, label="|v_com| (measured)")
     ax.set_xlabel("t [s]")
-    ax.set_title("CoM speed: nominal vs certified vs measured")
+    ax.set_title("CoM speed: planner vs certified vs measured")
     ax.legend(fontsize=8)
     fig.tight_layout()
     path = os.path.join(RESULTS_DIR, f"g1_scramble_{_TAG[0]}.png")
@@ -377,6 +686,8 @@ def _plot(com, t, H, agents, v_nom, v_safe, crowd):
 
 def _make_markers(agents):
     import mujoco
+
+    from cbfkit.systems.mujoco.viewer_utils import add_marker
 
     sph, cap, cyl = (
         mujoco.mjtGeom.mjGEOM_SPHERE,
@@ -403,6 +714,8 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
+    p.add_argument("--planner", choices=("goal", "mppi"), default=DEFAULT_PLANNER)
+    p.add_argument("--proxy", action="store_true", help="2-D lagged proxy instead of the G1")
     p.add_argument("--duration", type=float, default=DEFAULT_DURATION)
     p.add_argument("--robust", type=float, default=None, help="robust bound (m/s); 0 = vanilla")
     p.add_argument("--pedestrians", type=int, default=N_PED)
@@ -419,5 +732,7 @@ if __name__ == "__main__":
     p.add_argument("--view", action="store_true")
     a = p.parse_args()
     if a.view:
+        from cbfkit.systems.mujoco.viewer_utils import relaunch_under_mjpython_if_needed
+
         relaunch_under_mjpython_if_needed()
-    main(a.duration, a.seed, a.gif, a.view, a.robust, a.pedestrians, a.relax)
+    main(a.duration, a.seed, a.gif, a.view, a.robust, a.pedestrians, a.relax, a.planner, a.proxy)
