@@ -227,7 +227,7 @@ def safe_locomotion_controller_di(
     on the augmented state ``[x | v]``; the commanded velocity is integrated,
     ``v <- clip(v + a_safe dt, |v| <= v_max)``, carried in ``sub_data["_di_v"]``,
     and handed to the locomotion controller as its command. Logged:
-    ``v_nom``, ``v_safe`` (= the integrated command), ``a_safe``.
+    ``v_nom``, ``v_safe`` (= the integrated command), ``a_nom``, ``a_safe``.
 
     ``agents`` (optional) adds tracked agents to the augmented state -- an object with
     ``x0`` (``(N, 4)`` initial ``px, py, vx, vy``) and ``step(t, robot_xy, states, dt)
@@ -286,6 +286,7 @@ def safe_locomotion_controller_di(
         sub2 = dict(d2.sub_data) if d2.sub_data is not None else {}
         sub2["v_nom"] = v_nom
         sub2["v_safe"] = v_new
+        sub2["a_nom"] = a_nom
         sub2["a_safe"] = jnp.asarray(a_safe)
         if agents is not None:
             sub2["agents"] = ag
