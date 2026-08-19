@@ -120,7 +120,9 @@ def to_markdown(summary, seeds, proxy):
 
 
 def main(seeds=(0, 1, 2, 3, 4), proxy=True, configs=("goal", "mppi-eff", "mppi"), duration=None):
-    duration = duration or sc.DEFAULT_DURATION
+    duration = duration or (90.0 if proxy else sc.DEFAULT_DURATION)
+    if TEST_MODE:
+        duration = 2.0  # smoke run: enough steps to exercise the pipeline, short JIT
     per_seed = {c: [] for c in configs}
     for c in configs:
         for s in seeds:

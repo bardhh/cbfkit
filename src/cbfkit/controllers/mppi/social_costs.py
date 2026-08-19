@@ -48,8 +48,9 @@ class SocialCostWeights:
     """Weights (and shape parameters) of the social cost. Defaults are the ones tuned on the
     G1 scramble's 2-D proxy over 5 crowd seeds (config "G_balanced" of
     ``examples/mujoco/g1_scramble_social_eval.py``): vs the goal-seeking baseline they cut the
-    intimate-zone rate 4.9 -> 1.5 and front intrusions 2.3 -> 1.0 ped-s per 10 s (the crowd's
-    own human norm is 3.5 / 2.5) for +14 s crossing time; h_min >= 0 on all seeds."""
+    intimate-zone rate 4.3 -> 1.4 and front intrusions 2.2 -> 1.0 ped-s per 10 s (the crowd's
+    own human norm is 3.5 / 2.5) for +13 s crossing time; confirmed on the MJX G1
+    (intimate 4.2/6.2 -> 1.7/2.5 on seeds 0/1)."""
 
     goal: float = 10.0  # terminal |p_H - goal|
     progress: float = 0.4  # stage |p_k - goal| (per second) -- keeps "waiting" from being free

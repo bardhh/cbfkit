@@ -242,3 +242,26 @@ def test_scramble_example_crosses_without_contact(up):
     assert S[:n, 2].min() > 0.6  # upright
     assert int(np.sum(d[:n].min(0) < 1.5)) >= 8  # it really went through the crowd
     assert not np.any(np.asarray(res.controller_data["error"])[:n])  # no QP failure
+
+
+@pytest.mark.slow
+def test_scramble_mppi_crosses_politely(up):
+    """Social-MPPI acceptance on the full 40-pedestrian scramble (seed 0, MJX G1): crosses,
+    never enters a keep-out disc, stays upright, and is measurably less intrusive than the
+    goal-seeking baseline (measured there: intimate rate 4.2, front rate 2.0, CBF active 47%)."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "mujoco" / "g1_scramble.py"
+    spec = importlib.util.spec_from_file_location("g1_scramble", path)
+    ex = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ex)
+    r = ex.run(90.0, 0, n_ped=ex.N_PED_FULL, relax=True, planner="mppi")
+    m = r["metrics"]
+    assert m["crossed"], "crossing not completed"
+    assert m["h_min"] >= 0.0  # no pedestrian keep-out disc entered (measured +0.16)
+    assert m["upright_min"] > 0.6
+    assert m["intimate_rate"] < 3.0  # measured 1.7; goal baseline 4.2; human norm 3.5
+    assert m["front_rate"] < 1.5  # measured 0.6; goal baseline 2.0; human norm 2.5
+    assert m["cbf_active_frac"] < 0.35  # measured 19%; the plan is almost feasible as-is
+    assert m["stopped_at_s"] is None and m["qp_nonconverged"] == 0

@@ -29,8 +29,26 @@ how much the crowd had to deviate from its robot-free paths and slow down near t
 how often the CBF had to override the planner -- next to crossing time, waiting and
 ``h_min``. ``--proxy`` replaces the G1 by the identified reduced model (velocity command
 through a 0.2 s first-order lag, see ``g1_model_distance.py``) for fast multi-seed tuning;
-``g1_scramble_social_eval.py`` runs the comparison table. Measured numbers: see that
-table (``results/g1_scramble_social_mppi.md``) and the docstring of the eval script.
+``g1_scramble_social_eval.py`` runs the comparison table. Measured (rates are ped-s per
+10 s the agent spent inside the intersection; the "human norm" is the same statistic for
+a pedestrian in the robot-free crowd: intimate 3.5 / front 2.5):
+
+    proxy, 5 seeds (means)   crossed  time   intimate-rate  front-rate  crowd-dev  CBF active
+    goal                     5/5      47 s   4.3            2.2         1.39 m     43 %
+    mppi, social terms off   4/5      72 s   1.0            0.6         0.55 m     15 %
+    mppi (default weights)   5/5      60 s   1.4            1.0         0.36 m     17 %
+
+    MJX G1, seeds 0/1        crossed  time     intimate-rate  front-rate  h_min        CBF active
+    goal                     2/2      49/44 s  4.2 / 6.2      2.0 / 3.0   +0.08/-0.23  47/34 %
+    mppi                     2/2      65/56 s  1.7 / 2.5      0.6 / 1.1   +0.16/-0.11  19/23 %
+
+Read it this way: the goal-seeking baseline is *more* intrusive than an average pedestrian
+(intimate rate 4.3 vs the human norm 3.5) and lives on the CBF; the social MPPI is ~2.5x
+less intrusive than that norm, disturbs the crowd 4x less, hands the CBF an almost-feasible
+plan (interventions halve) and even shrinks the worst-case keep-out penetration on the hard
+seed -- for ~+13 s of crossing time. The ablation (social terms zeroed) shows the proxemics/
+TTC/slow terms are what buy *reliability at speed*: without them the planner is similarly
+polite but timid (4/5 crossings, +10 s, 14 % waiting).
 
     python examples/mujoco/g1_scramble.py [--planner goal|mppi] [--proxy] [--robust B] [--pedestrians N]
                                           [--relax|--hard] [--duration T] [--seed S] [--gif] [--view]
@@ -447,7 +465,7 @@ def run(
     plant, x0, pelvis_body, nominal, controller, crowd = build(
         seed, robust_bound, n_ped, relax, planner, weights, proxy, mppi_kw
     )
-    steps = 5 if TEST_MODE else int(round(duration / plant.dt))
+    steps = int(round(duration / plant.dt))
     t0 = time.time()
     kw = dict(plant=plant) if not proxy else dict(dynamics=plant.dynamics(), integrator=euler)
     res = sim.execute(
@@ -590,6 +608,8 @@ def main(
         robust_bound = DEFAULT_ROBUST_BOUND
     if relax is None:
         relax = DEFAULT_RELAX
+    if TEST_MODE:
+        duration = min(duration, 5 * CONTROL_DT)  # the smoke run keeps the JIT short
     r = run(
         duration, seed, robust_bound, n_ped, relax, planner, DEFAULT_WEIGHTS, proxy, not TEST_MODE
     )

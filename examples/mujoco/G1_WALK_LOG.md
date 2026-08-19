@@ -146,3 +146,31 @@ steps, 16 pedestrians within 1.5 m, no contact — a safety *filter* outcome, no
 are eaten by slack in a crush (robust 0.15 soft: more slack, h_min −0.05, 65 s). First attempt released everyone
 at t = 0 and the square was empty before the 0.5 m/s robot reached it — release depth matters. Default: soft
 vanilla.
+
+## Social MPPI in the scramble (2026-08-19, night)
+
+"Use our MPPI in the scramble, tuned so the behavior is not intrusive to humans" — planner swap, same CBF filter.
+`controllers/mppi/social_costs.py` + `--planner mppi` in `g1_scramble.py`: `vanilla_mppi` over the compact
+`[p | v | 40 pedestrians]` state (5 Hz, 5 s horizon, constant-velocity prediction = "assume nobody yields"),
+cost = Kirby asymmetric-Gaussian proxemics (front of a walking pedestrian is expensive, behind is cheap),
+Karamouzas TTC power law, **progress as a terminal cost** (waiting 1 s costs only the metre not walked — so
+"let her pass" is a plan, not a failure), jerk/turn/back/speed/slow legibility terms, optional keep-left.
+Wired through `safe_locomotion_controller_di(local_planner=mppi_local_planner(...))`; plan held between solves
+(`lax.cond`), P-law fallback on MPPI NaN. Tuned on a 2-D proxy (0.2 s lag model from `g1_model_distance`),
+4 configs × 5 seeds × 90 s ≈ 30 s/run; validated on the MJX G1 (~2 min/run).
+
+Measured (intrusiveness rates = ped-s per 10 s inside the intersection; human norm for this crowd 3.5 intimate / 2.5 front):
+proxy 5-seed means — goal: 5/5 crossings, 47 s, intimate 4.9, front 2.3, crowd-dev 1.33 m, CBF 43 %;
+social MPPI: 5/5, 61 s, intimate 1.5, front 1.0, dev 0.35 m, CBF 19 %; ablation (social terms off): 4/5, 71 s,
+intimate 0.9 — polite but timid; the social terms buy reliability at speed, not just politeness.
+G1 seeds 0/1 — goal: 49/44 s, intimate 4.2/6.2, h_min +0.08/−0.23; MPPI: 65/56 s, intimate 1.7/2.5,
+h_min +0.16/−0.11. The baseline is more intrusive than an average pedestrian; the MPPI is ~2.5× less.
+
+Two solver defects found (both fixed + regression-tested with a captured QP fixture):
+(1) a warm-started fast-PDIPM can exhaust max_iter at an MPPI replan boundary (a_nom jump → stale active set)
+while a cold start solves in 16 — `get_solver("fast")` now cold-restarts when the warm solve fails or returns
+non-finite; (2) on a degenerate-optimal QP (optimum on the control bound, 42 var/124 row relaxable scramble QP)
+Mehrotra's late iterations *degrade*: residual 2.8e-6 at iter 15, NaN at 18 — the loop now tracks the best
+iterate and rejects non-finite steps, so raising max_iter can no longer turn a good answer into NaN. The
+scramble uses tol 1e-5 (slack penalty 1e3 sets the residual scale; freeze-on-converge then avoids the
+blow-up region entirely).
