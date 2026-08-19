@@ -45,3 +45,9 @@ Harness: `examples/mujoco/g1_walk_trial.py` (one JSON line per trial). Compile �
 | t24 | t22 + friction DR ×4 (128 samples) | (0.52, 0.01) | (2.14, 0.33) | 0.07 | deep tips, recovers | 159 s wall |
 
 **Checkpoint after 24 trials (2026-08-18):** forward locomotion at ~0.5 m/s is reproducible; a *clean, sustained, steerable* gait is not, at 128-256 samples / 2 iterations on CPU. Best runs: t14 (cleanest first 2 s), t11/t13 (sustained with stumbles), t20/t23 (fastest). Recommendation recorded in the session: move the search to GPU (2048 samples, DIAL-MPC regime) or accept the current gait for the CBF demo. Everything needed is in the harness; `--update cma`, `--iterations`, per-actuator noise, gait prior all available.
+
+**End-to-end (g1_navigate.py, 8 s, CBF + t14/t20-class gait, 2026-08-18):** CBF active on 83 % of steps,
+CoM path deflects left around the obstacle; but h(x) dips to -0.50 at t≈6 s (CoM 0.50 m from the obstacle
+centre vs 0.70 m keep-out; physical clearance ≈0.15 m) — the gait's tracking error is far larger than any
+small robust bound. Torso height min 0.33 (stumble); ends 2.5 m short of the goal. Qualitatively right,
+quantitatively violated: a better gait (GPU-scale sampling or a trained policy) is what turns this into a demo.
