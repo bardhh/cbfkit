@@ -82,3 +82,17 @@ Added a command-side double integrator (`embedded_double_integrator`, `com_obsta
 acceleration; the velocity command is its integral. Its smooth commands cut the gait's *max* tracking error
 from 0.49 to 0.17 m/s, so the robust bound can be set above the observed maximum (0.18) — the
 self-consistent claim. Table of all runs is in `g1_navigate.py`'s docstring; DI + robust 0.18 is the default.
+
+## Plaza crossing (2026-08-19)
+
+`g1_plaza.py`: 3-waypoint route, 2 pillars, 3 constant-velocity pedestrians (kinematic, certificate-only),
+DI HOCBFs incl. time-varying ones (`com_moving_obstacle_hocbfs`; `dh/dt` enters through the rectifier), a
+stateless waypoint planner (`cbfkit.planners.waypoint_route`). Every obstacle is a real encounter (the
+nominal legs pass inside each keep-out). All rows walk upright and complete the route (SI robust 0.25 did
+not within 40 s — too conservative; SI uses the p95 bound 0.18). Full table in the example's docstring.
+
+Found while measuring: the robust CBF-QP took the Frobenius norm of the *stacked* barrier Jacobians as the
+margin for every constraint, so five barriers made the QP infeasible at δ = 0.25 and pushed the robot
+backwards at 0.2, before it had moved. One barrier (g1_navigate) was unaffected. Fixed row-wise
+(`robustness_terms.py`) with a regression test; `examples/unicycle/reach_goal/robust_cbf.py` (2 obstacles)
+is less conservative than before as a result.

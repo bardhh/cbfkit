@@ -220,7 +220,7 @@ python tutorials/multi_robot_3d_reachavoid.py
   </tr>
 </table>
 
-*Also available: code generation for custom systems (`tutorials/code_generation_tutorial.ipynb`), ROS2 node generation, risk-aware CVaR-CBF, adaptive CVaR-CBF, parameter sweeps, quadrotor attitude control, and MuJoCo/MJX plants (`pip install cbfkit[mujoco]`) via `sim.execute(plant=MujocoPlant(model))` — including a Unitree G1 humanoid walking around an obstacle under a reduced-order CBF (`examples/mujoco/g1_navigate.py`).*
+*Also available: code generation for custom systems (`tutorials/code_generation_tutorial.ipynb`), ROS2 node generation, risk-aware CVaR-CBF, adaptive CVaR-CBF, parameter sweeps, quadrotor attitude control, and MuJoCo/MJX plants (`pip install cbfkit[mujoco]`) via `sim.execute(plant=MujocoPlant(model))` — including a Unitree G1 humanoid walking around an obstacle under a reduced-order CBF (`examples/mujoco/g1_navigate.py`) and crossing a plaza with pillars and walking pedestrians under time-varying high-order CBFs (`examples/mujoco/g1_plaza.py`).*
 
 <p align="center">
   <strong>Batched safety filtering for robot-policy commands</strong><br>
