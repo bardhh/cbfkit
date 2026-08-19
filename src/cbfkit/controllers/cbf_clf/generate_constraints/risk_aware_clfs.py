@@ -142,7 +142,9 @@ def generate_compute_estimate_feedback_ra_clf_constraints(
             assert ra_params.lambda_h is not None
             assert ra_params.epsilon is not None
             estimate_feedback_term = (
-                ra_params.lambda_h * ra_params.epsilon * jnp.linalg.norm(jnp.matmul(lj_x, k_mat))
+                ra_params.lambda_h
+                * ra_params.epsilon
+                * jnp.linalg.norm(jnp.matmul(lj_x, k_mat), axis=-1)
             )
 
             a_clf = a_clf.at[:, :n_con].set(jnp.matmul(lj_x, dyn_g))

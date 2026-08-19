@@ -5,6 +5,11 @@ simulator's ``resolve_nominal_control`` hands it to the nominal controller as ``
 extra planner state is needed: the current index is recovered as the waypoint nearest to
 the previously published one, and advanced when the tracked position is within ``radius``.
 Waypoints must therefore be distinct.
+
+``data.x_traj is None`` (a bare ``PlannerData()``) is accepted and treated as "start at
+waypoint 0". Inside a ``lax.scan`` the carry's pytree structure must not change, so start
+the loop with ``PlannerData.from_constant(waypoints[0])``; ``sim.execute`` primes the planner
+once before its JIT loop, so either works there.
 """
 
 from typing import Optional, Sequence, Tuple
