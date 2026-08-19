@@ -1,0 +1,108 @@
+"""Reduced-order CBF safety on top of a MuJoCo plant.
+
+The certificate lives on a 2-D single integrator on the robot's centre of mass,
+``d/dt com_xy = v``, and filters the planar velocity *command* that a
+locomotion controller (sampling MPC, learned policy, ...) tracks. Nothing here
+knows about the humanoid's 71 states -- the QP sees the plant's flat state only
+through ``plant.com_indices``.
+
+Two tricks make this work with CBFKit's stock CBF-QP generator and barriers:
+
+* :func:`embedded_single_integrator` writes the reduced dynamics in the *full*
+  state's coordinates (``f = 0``, ``g`` = unit columns at the CoM indices), so
+  ``∂h/∂x · g`` in the QP is exactly the 2-D barrier gradient at the CoM and no
+  projection hook is needed.
+* :func:`com_obstacle_barriers` points ``ellipsoidal_barrier_factory`` at the
+  CoM entries of the flat state (``[qpos | qvel | com_xyz]``) instead of its
+  default ``(0, 1)`` -- which on a floating-base robot would be the pelvis
+  free-joint position, not the CoM.
+"""
+
+from typing import Any, Sequence, Tuple
+
+import jax.numpy as jnp
+from jax import Array
+
+from cbfkit.certificates import certificate_package, concatenate_certificates
+from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
+from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
+from cbfkit.utils.user_types import ControllerCallable, DynamicsCallable
+
+
+def embedded_single_integrator(state_dim: int, indices: Tuple[int, int]) -> DynamicsCallable:
+    """``ẋ = g u`` with ``g`` the two unit columns at ``indices``; ``f = 0``. Control is (vx, vy)."""
+    g = jnp.zeros((state_dim, 2)).at[indices[0], 0].set(1.0).at[indices[1], 1].set(1.0)
+    f = jnp.zeros(state_dim)
+
+    def dynamics(x: Array):
+        return f, g
+
+    return dynamics
+
+
+def com_obstacle_barriers(
+    plant: Any,
+    obstacles: Sequence[Sequence[float]],
+    ellipsoids: Sequence[Sequence[float]],
+    class_k_gain: float = 1.0,
+):
+    """Ellipsoidal keep-out barriers around planar obstacles, evaluated at the plant's CoM.
+
+    ``obstacles`` are ``(x, y)`` centres, ``ellipsoids`` are ``(a, b)`` semi-axes
+    (already inflated by the robot's planar radius). ``h = ((cx-x)/a)^2 +
+    ((cy-y)/b)^2 - 1 >= 0`` is safe. Returns a ``CertificateCollection`` for
+    ``vanilla_cbf_clf_qp_controller(barriers=...)``.
+    """
+    cbf, cbf_grad, cbf_hess = ellipsoidal_barrier_factory(
+        system_position_indices=tuple(plant.com_indices),
+        obstacle_position_indices=(0, 1),
+        ellipsoid_axis_indices=(0, 1),
+    )
+    package = certificate_package(cbf, cbf_grad, cbf_hess, plant.state_dim)
+    conditions = zeroing_barriers.linear_class_k(class_k_gain)
+    return concatenate_certificates(
+        *[
+            package(
+                certificate_conditions=conditions,
+                obstacle=jnp.asarray(o, dtype=float),
+                ellipsoid=jnp.asarray(e, dtype=float),
+            )
+            for o, e in zip(obstacles, ellipsoids)
+        ]
+    )
+
+
+def safe_locomotion_controller(
+    cbf_qp: ControllerCallable, locomotion: ControllerCallable
+) -> ControllerCallable:
+    """Compose ``v_safe = cbf_qp(x, v_nom)`` then ``u = locomotion(x, v_safe)``.
+
+    Both parts are ``ControllerCallable``s. The CBF-QP acts on the 2-D velocity
+    command; the locomotion controller receives it as its ``u_nom`` (for
+    ``SamplingMpc.as_controller()`` that is the ``aux`` its costs track) and
+    returns the actuator command. Per-step state of both lives in one
+    ``ControllerData.sub_data``: the CBF's entries plus the locomotion
+    controller's carry-only ``"_..."`` keys; ``"v_nom"``/``"v_safe"`` are logged.
+    """
+
+    def controller(t, x, v_nom, key, data):
+        prev = data.sub_data if data.sub_data is not None else {}
+        v_safe, d1 = cbf_qp(t, x, v_nom, key, data)
+        sub = dict(d1.sub_data) if d1.sub_data is not None else {}
+        for k, v in prev.items():  # keep the locomotion controller's carry-only state
+            if k.startswith("_") and k not in sub:
+                sub[k] = v
+        u, d2 = locomotion(t, x, v_safe, key, d1._replace(sub_data=sub))
+        sub2 = dict(d2.sub_data) if d2.sub_data is not None else {}
+        sub2["v_nom"] = jnp.asarray(v_nom)
+        sub2["v_safe"] = jnp.asarray(v_safe)
+        # A QP failure is a controller error; goal completion is the CBF's call.
+        return u, d2._replace(
+            sub_data=sub2, u=u, u_nom=jnp.asarray(v_nom), error=d1.error | d2.error
+        )
+
+    controller.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+    return controller
+
+
+__all__ = ["com_obstacle_barriers", "embedded_single_integrator", "safe_locomotion_controller"]
