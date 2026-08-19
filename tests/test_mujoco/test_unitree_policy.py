@@ -154,3 +154,44 @@ def test_command_frame_and_heading_follower(up):
     body_ctrl(0.0, x, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), ControllerData())
     assert np.allclose(np.asarray(seen["cmd"]), [0.5, 0.0, 0.0])
     pol.step = orig_step
+
+
+@pytest.mark.slow
+def test_plaza_example_certificate_holds(up):
+    """Plaza acceptance: static + time-varying HOCBFs keep h >= 0 for every obstacle while the
+    G1 completes the waypoint route upright (robust bound = the example's measured default)."""
+    import importlib.util
+    from pathlib import Path
+
+    from cbfkit.utils.user_types import PlannerData
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "mujoco" / "g1_plaza.py"
+    spec = importlib.util.spec_from_file_location("g1_plaza", path)
+    ex = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ex)
+    plant, x0, _pb, planner, nominal, controller = ex.build(
+        robust_bound=ex.DEFAULT_ROBUST_BOUND["di"], reduced_model="di"
+    )
+    res = sim.execute(
+        x0=x0,
+        dt=plant.dt,
+        num_steps=int(round(ex.DEFAULT_DURATION / plant.dt)),
+        plant=plant,
+        planner=planner,
+        planner_data=PlannerData.from_constant(ex.WAYPOINTS[0]),
+        nominal_controller=nominal,
+        controller=controller,
+        use_jit=True,
+        verbose=False,
+    )
+    S = np.asarray(res["states"])
+    ci = plant.com_indices
+    com = S[:, ci[0] : ci[0] + 2]
+    H = ex.barrier_values(com, np.arange(len(com)) * plant.dt)
+    assert H.min() >= 0.0, H.min(axis=0)  # every pillar and pedestrian keep-out respected
+    assert S[:, 2].min() > 0.6  # never falls
+    arrivals = ex.waypoint_arrivals(com)
+    assert all(a is not None for a in arrivals), arrivals  # route completed
+    v_safe = np.asarray(res.controller_data["sub_data_v_safe"])
+    v_nom = np.asarray(res.controller_data["sub_data_v_nom"])
+    assert np.any(np.linalg.norm(v_safe - v_nom, axis=1) > 1e-3)  # the CBF intervened

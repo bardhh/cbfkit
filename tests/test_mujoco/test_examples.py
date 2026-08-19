@@ -12,6 +12,7 @@ EXAMPLES = [
     "examples/mujoco/cart_pole_swingup.py",
     "examples/mujoco/g1_standup.py",
     "examples/mujoco/g1_navigate.py",
+    "examples/mujoco/g1_plaza.py",
 ]
 
 
