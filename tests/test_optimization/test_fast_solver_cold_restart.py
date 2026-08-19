@@ -36,6 +36,18 @@ def test_fast_solver_recovers_via_cold_restart():
     assert jnp.allclose(sol.primal, jnp.ones(2), atol=1e-5)
 
 
+def test_fast_solver_recovers_from_nonfinite_warm_state():
+    """A warm state that NaNs the iterate must also trigger the cold restart, even if the
+    residual check misreports convergence."""
+    solver = get_solver("fast", max_iter=8)
+    nan_warm = PdipmState(
+        x=jnp.full(2, jnp.nan), s=jnp.full(2, jnp.nan), dual=jnp.full(2, jnp.nan), iter_num=0
+    )
+    sol = solver(H, F, G, HV, None, None, init_params=(jnp.zeros(2), nan_warm))
+    assert int(sol.status) == 1
+    assert jnp.allclose(sol.primal, jnp.ones(2), atol=1e-5)
+
+
 def test_fast_solver_cold_restart_is_jittable():
     solver = get_solver("fast", max_iter=8)
 

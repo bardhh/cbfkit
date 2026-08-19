@@ -273,8 +273,12 @@ def build(
         barriers=barriers,
         # 32 PDIPM iterations (default 16): at an MPPI replan boundary a_nom jumps and the
         # warm-started active set can need a few extra iterations (measured: 16 fails on
-        # seed 1 at t = 12.4 s, 32 converges; cold start also solves it in 16).
-        solver=get_solver("fast", max_iter=32),
+        # seed 1 at t = 12.4 s, 32 converges; cold start also solves it in 16). tol 1e-5
+        # (default 1e-6): with a slack penalty of 1e3 the combined KKT residual of a
+        # degenerate-optimal QP stalls just above 1e-6 (measured 2.8e-6, seed 1 t = 13.2 s)
+        # while the control is already exact to ~1e-6 -- 1e-5 accepts it and the solver's
+        # freeze-on-converge then prevents the late-stage Mehrotra blow-up.
+        solver=get_solver("fast", max_iter=32, tol=1e-5),
     )
     if relax:
         kw.update(relaxable_cbf=True, slack_penalty_cbf=1e3, slack_bound_cbf=10.0)

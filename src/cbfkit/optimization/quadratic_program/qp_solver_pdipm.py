@@ -190,6 +190,13 @@ def solve_qp_pdipm(
     fixed for the remaining iterations rather than stepping further. This
     prevents a degenerate (s ≈ 0, lam ≈ 0) post-convergence state from
     propagating NaN through ``lam/s`` divisions in subsequent iterations.
+
+    The loop additionally tracks the **best iterate** (lowest combined
+    residual seen) and rejects non-finite steps. On degenerate-optimal QPs
+    Mehrotra's late iterations can *degrade* — measured on a 42-var/124-row
+    relaxable CBF-QP from the G1 scramble: residual 2.8e-6 at iteration 15,
+    rising afterwards and NaN at 18 — so the returned solution is the best
+    iterate, not the last one, and a step to a non-finite point is skipped.
     The total flop count is still ``max_iter`` Newton solves per call, which
     is why ``max_iter`` defaults to the tight ``DEFAULT_MAX_ITER`` rather than
     a loose upper bound; raise it for QPs harder than the CBF-QP shapes it was
@@ -226,26 +233,49 @@ def solve_qp_pdipm(
         # clamp suffices to keep the barrier well-defined.
         lam0 = jnp.maximum(warm_start.dual, 1e-2)
 
-    # --- Outer loop (fixed iterations, freeze-on-converge) ---
+    # --- Outer loop (fixed iterations, freeze-on-converge, best-iterate tracking) ---
     def body(_, carry):
-        x_, s_, lam_ = carry
-        # One residual evaluation feeds both the convergence test and the step.
+        x_, s_, lam_, bx, bs, blam, bres = carry
+        # One residual evaluation feeds the convergence test, the best-iterate
+        # update and the step.
         r_d, r_p = _residuals(P, q, G, h, x_, s_, lam_)
-        already_converged = _combined_residual(r_d, r_p, s_, lam_) < tol
+        res = _combined_residual(r_d, r_p, s_, lam_)
+        better = res < bres
+        bx = jnp.where(better, x_, bx)
+        bs = jnp.where(better, s_, bs)
+        blam = jnp.where(better, lam_, blam)
+        bres = jnp.where(better, res, bres)
+        already_converged = res < tol
         x_new, s_new, lam_new = _pdipm_iteration(P, G, x_, s_, lam_, r_d, r_p)
-        # If already converged, keep current (good) state rather than stepping.
-        # Both branches of jnp.where are traced; the step is cheap relative to
-        # the cost of NaN propagation if we let lam/s explode after convergence.
-        x_out = jnp.where(already_converged, x_, x_new)
-        s_out = jnp.where(already_converged, s_, s_new)
-        lam_out = jnp.where(already_converged, lam_, lam_new)
-        return x_out, s_out, lam_out
+        # Reject a step to a non-finite point (late-stage Mehrotra breakdown on a
+        # degenerate active set): keep the current iterate instead.
+        finite = (
+            jnp.all(jnp.isfinite(x_new))
+            & jnp.all(jnp.isfinite(s_new))
+            & jnp.all(jnp.isfinite(lam_new))
+        )
+        # If already converged (or the step broke), keep current state rather than
+        # stepping. Both branches of jnp.where are traced; the step is cheap relative
+        # to the cost of NaN propagation if we let lam/s explode after convergence.
+        keep = already_converged | ~finite
+        x_out = jnp.where(keep, x_, x_new)
+        s_out = jnp.where(keep, s_, s_new)
+        lam_out = jnp.where(keep, lam_, lam_new)
+        return x_out, s_out, lam_out, bx, bs, blam, bres
 
-    x_final, s_final, lam_final = lax.fori_loop(0, max_iter, body, (x0, s0, lam0))
+    init = (x0, s0, lam0, x0, s0, lam0, jnp.asarray(jnp.inf))
+    x_last, s_last, lam_last, bx, bs, blam, bres = lax.fori_loop(0, max_iter, body, init)
 
-    # --- Status: solved if final residual norm below tol ---
-    r_d_final, r_p_final = _residuals(P, q, G, h, x_final, s_final, lam_final)
-    res_norm = _combined_residual(r_d_final, r_p_final, s_final, lam_final)
+    # Fold the final iterate into the best (its residual was never checked in-loop).
+    r_d_last, r_p_last = _residuals(P, q, G, h, x_last, s_last, lam_last)
+    res_last = _combined_residual(r_d_last, r_p_last, s_last, lam_last)
+    better = res_last < bres
+    x_final = jnp.where(better, x_last, bx)
+    s_final = jnp.where(better, s_last, bs)
+    lam_final = jnp.where(better, lam_last, blam)
+    res_norm = jnp.where(better, res_last, bres)
+
+    # --- Status: solved if the best residual norm is below tol ---
     status = jnp.where(res_norm < tol, jnp.int32(1), jnp.int32(2))
 
     state = PdipmState(x=x_final, s=s_final, dual=lam_final, iter_num=max_iter)

@@ -263,8 +263,10 @@ def fast_solver(max_iter: Optional[int] = None, tol: float = 1e-6) -> QpSolverCa
             # Cold-restart fallback: a warm start from the previous step is occasionally a
             # *bad* starting point -- e.g. when the nominal input or the active set jumps
             # (an MPPI replan boundary) the carried (s, lam) can be nearly degenerate and
-            # the budget runs out before recovery, while the cold start converges. Runtime
-            # cost is one extra solve only on failing steps (lax.cond executes one branch).
+            # the budget runs out before recovery, while the cold start converges. Fire on
+            # a non-finite "solution" too (a degenerate warm start can NaN the iterate in a
+            # way the residual check misclassifies). Runtime cost is one extra solve only on
+            # failing steps (lax.cond executes one branch).
             def _cold(_):
                 return solve_qp_pdipm(
                     2.0 * h_mat, f_vec, g_mat, h_vec, warm_start=None, max_iter=max_iter, tol=tol
@@ -273,7 +275,8 @@ def fast_solver(max_iter: Optional[int] = None, tol: float = 1e-6) -> QpSolverCa
             def _keep(_):
                 return sol, status, state
 
-            sol, status, state = jax.lax.cond(status != 1, _cold, _keep, None)
+            bad = (status != 1) | ~jnp.all(jnp.isfinite(sol))
+            sol, status, state = jax.lax.cond(bad, _cold, _keep, None)
         return QpSolution(primal=sol, status=status, params=(sol, state))
 
     solve_with_details.jit_compatible = True
