@@ -158,8 +158,9 @@ def test_command_frame_and_heading_follower(up):
 
 @pytest.mark.slow
 def test_plaza_example_certificate_holds(up):
-    """Plaza acceptance: static + time-varying HOCBFs keep h >= 0 for every obstacle while the
-    G1 completes the waypoint route upright (robust bound = the example's measured default)."""
+    """Plaza acceptance: pillar + reactive-pedestrian HOCBFs keep h >= 0 for every obstacle while
+    the G1 completes the waypoint route upright (robust bound = the example's measured default),
+    and the pedestrians demonstrably interact (come close, react)."""
     import importlib.util
     from pathlib import Path
 
@@ -169,9 +170,7 @@ def test_plaza_example_certificate_holds(up):
     spec = importlib.util.spec_from_file_location("g1_plaza", path)
     ex = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ex)
-    plant, x0, _pb, planner, nominal, controller = ex.build(
-        robust_bound=ex.DEFAULT_ROBUST_BOUND["di"], reduced_model="di"
-    )
+    plant, x0, _pb, planner, nominal, controller = ex.build(robust_bound=ex.DEFAULT_ROBUST_BOUND)
     res = sim.execute(
         x0=x0,
         dt=plant.dt,
@@ -187,11 +186,17 @@ def test_plaza_example_certificate_holds(up):
     S = np.asarray(res["states"])
     ci = plant.com_indices
     com = S[:, ci[0] : ci[0] + 2]
-    H = ex.barrier_values(com, np.arange(len(com)) * plant.dt)
+    agents = np.asarray(res.controller_data["sub_data_agents"])
+    H = ex.barrier_values(com, agents)
     assert H.min() >= 0.0, H.min(axis=0)  # every pillar and pedestrian keep-out respected
     assert S[:, 2].min() > 0.6  # never falls
     arrivals = ex.waypoint_arrivals(com)
     assert all(a is not None for a in arrivals), arrivals  # route completed
+    n = arrivals[-1]
+    ped_d = np.linalg.norm(com[:n, None, :] - agents[:n, :, :2], axis=2)
+    assert ped_d.min(axis=0).max() < 1.6  # every pedestrian actually came close
+    sidestep = np.abs(np.gradient(agents[:n, :, 2:], plant.dt, axis=0)).max()
+    assert sidestep > 0.1  # and at least one of them reacted (accelerated) to the robot
     v_safe = np.asarray(res.controller_data["sub_data_v_safe"])
     v_nom = np.asarray(res.controller_data["sub_data_v_nom"])
     assert np.any(np.linalg.norm(v_safe - v_nom, axis=1) > 1e-3)  # the CBF intervened

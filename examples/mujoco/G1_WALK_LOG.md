@@ -96,3 +96,19 @@ margin for every constraint, so five barriers made the QP infeasible at δ = 0.2
 backwards at 0.2, before it had moved. One barrier (g1_navigate) was unaffected. Fixed row-wise
 (`robustness_terms.py`) with a regression test; `examples/unicycle/reach_goal/robust_cbf.py` (2 obstacles)
 is less conservative than before as a result.
+
+### Plaza, round 2: reactive pedestrians (2026-08-19, later)
+
+Bardh: "the dynamic obstacles appear non-interacting." Two causes: open-loop pedestrians, and the quadratic
+barrier's distance-growing gradient kept the robust robot ≥ 1.3 m from everything. Changes: (1) pedestrians are
+social-force agents (`SocialForceCrowd`, reusing `systems/pedestrian/behaviors`) stepped in the safety wrapper;
+the CBF sees them as tracked agents `[p_i, v_i]` in the augmented state with `ṗ_i = v_i` (`com_agent_hocbfs`) —
+constant-velocity prediction, accelerations unmodelled (reported: up to 2.4 m/s²); (2) `shape="distance"` barrier
+`h = |c − p|/r − 1` so robust margins are distance-independent; (3) encounters built to collide (head-on just past
+W1, cut-across on leg 1, overtake on leg 3). Two more things surfaced: with the quadratic barrier + robust 0.31 the
+QP is infeasible at 6 s (far pedestrians' margins), and jaxopt-OSQP stalls (10 000 it, NaN) on a *feasible*
+2-variable QP when the robot is wedged between pillar 2 and the oncoming P1 with both margins active — the
+in-repo PDIPM solves it in 16 iterations, so the example uses `get_solver("fast")`. A scenario fault also showed
+up as a freezing-robot standoff (P1's intended line went through pillar 2 → both stopped facing each other for
+30 s); fixed by moving P1's meeting point before pillar 2. Final: robust 0.31 (≥ max 0.298): h_min +0.59, closest
+pedestrian 1.18 m, route 39.4 s, P1/P3 stop and step aside, the robot swings around the far side of pillar 2.
