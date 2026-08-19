@@ -174,3 +174,20 @@ Mehrotra's late iterations *degrade*: residual 2.8e-6 at iter 15, NaN at 18 — 
 iterate and rejects non-finite steps, so raising max_iter can no longer turn a good answer into NaN. The
 scramble uses tol 1e-5 (slack penalty 1e3 sets the residual scale; freeze-on-converge then avoids the
 blow-up region entirely).
+
+## AMO whole-body policy port (2026-08-19, late night)
+
+Bardh asked for "more agile policies that can move the torso to the side while moving forward" → ported UCSD's AMO
+(RSS 2025, `OpenTeleVision/AMO`, Apache-2.0): 23-DoF G1, command = [vx, target_yaw, vy, Δheight, torso yaw, pitch,
+roll]. `systems/mujoco/amo_policy.py`: weights read torch-free (TorchScript reader + restricted numpy unpickler for
+the norm stats), JAX forwards parity-tested vs torch at 1e-4 (dev-only oracle; the TorchScript top-level graph has a
+baked cuda zeros so the parity test drives the sub-modules); history conv strides (2,1) recovered numerically. Plant
+= their deployment XML (already collision-trimmed to 8 foot spheres + pelvis) at 2 ms × 10 PD with play_amo's gains;
+PGS→Newton for MJX. Two play_amo subtleties preserved: the 10-frame proprio history EXCLUDES the current frame while
+the 25-frame extra history INCLUDES it, and dyaw is gated by the PREVIOUS step's stand flag.
+
+`g1_amo_demo.py` (40 s, vx 0.4): torso yaw ±1.2 → waist ±1.05/1.17 rad, lean ±0.5 → ±0.34 (rest from hip lean),
+duck to CoM 0.48 m, bow 0.8 → 0.56, upright min 0.97 — all *while walking*. Honest gap: forward speed realises
+~0.3 of the commanded 0.4 m/s in MJX (trained IsaacGym, authors demo MuJoCo-CPU; gait transfers, speed calibration
+partly doesn't). Next steps if wanted: measure the tracking bound δ for the robust CBF (g1_model_distance battery on
+AMO), and use torso yaw/lean as CBF decision variables in the scramble (shoulder-turn ≈ 0.35 → 0.25 m swept radius).

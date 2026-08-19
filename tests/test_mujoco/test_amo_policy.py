@@ -131,3 +131,46 @@ def test_amo_stands_in_mjx(assets):
     quat = np.asarray(x[3:7])
     upright = 1 - 2 * (quat[1] ** 2 + quat[2] ** 2)
     assert upright > 0.9
+
+
+@pytest.mark.slow
+def test_amo_walks_with_torso_commands_in_mjx(assets):
+    """Acceptance: AMO walks forward in MJX while yawing the torso 1.2 rad, without falling.
+
+    Thresholds from the measured demo run (examples/mujoco/g1_amo_demo.py): waist yaw
+    settles at ~1.05 rad, forward speed ~0.3 of the commanded 0.4 m/s (MJX sim2sim gap).
+    """
+    import cbfkit.simulation.simulator as sim
+    from cbfkit.utils.user_types import PlannerData
+
+    plant = amo.make_g1_23dof_plant()
+    policy = amo.AmoWholeBodyPolicy()
+
+    def torso(t):
+        return jnp.where(t > 5.0, jnp.array([0.0, 1.2, 0.0, 0.0]), jnp.zeros(4))
+
+    controller = policy.as_controller(torso_command=torso)
+
+    def nominal(t, x, key, ref):
+        return jnp.array([0.4, 0.0]), ControllerData()
+
+    res = sim.execute(
+        x0=amo.x0_standing(plant),
+        dt=plant.dt,
+        num_steps=int(round(15.0 / plant.dt)),
+        plant=plant,
+        planner_data=PlannerData.from_constant(jnp.array([1e3, 0.0])),
+        nominal_controller=nominal,
+        controller=controller,
+        use_jit=True,
+        verbose=False,
+    )
+    S = np.asarray(res["states"])
+    up = 1 - 2 * (S[:, 4] ** 2 + S[:, 5] ** 2)
+    assert S[:, 2].min() > 0.5 and up.min() > 0.9  # upright throughout
+    assert S[-1, 0] > 2.0, f"only walked {S[-1, 0]:.2f} m"  # made forward progress
+    t = np.arange(len(S)) * plant.dt
+    late = t > 8.0  # torso command settled
+    assert (
+        S[late, 19].mean() > 0.8
+    ), f"waist yaw {S[late, 19].mean():.2f}"  # torso turned while walking

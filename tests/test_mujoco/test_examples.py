@@ -14,6 +14,7 @@ EXAMPLES = [
     ("examples/mujoco/g1_scramble_social_eval.py", "--configs", "mppi", "--seeds", "0"),
     "examples/mujoco/g1_standup.py",
     "examples/mujoco/g1_navigate.py",
+    "examples/mujoco/g1_amo_demo.py",
     "examples/mujoco/g1_plaza.py",
     "examples/mujoco/g1_model_distance.py",
     "examples/mujoco/g1_scramble.py",
