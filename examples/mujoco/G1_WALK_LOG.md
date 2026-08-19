@@ -112,3 +112,25 @@ in-repo PDIPM solves it in 16 iterations, so the example uses `get_solver("fast"
 up as a freezing-robot standoff (P1's intended line went through pillar 2 → both stopped facing each other for
 30 s); fixed by moving P1's meeting point before pillar 2. Final: robust 0.31 (≥ max 0.298): h_min +0.59, closest
 pedestrian 1.18 m, route 39.4 s, P1/P3 stop and step aside, the robot swings around the far side of pillar 2.
+
+## Model distance: DI/SI reduced model vs the G1 + policy (2026-08-19)
+
+`g1_model_distance.py`: 6 × 20 s open-loop command runs per class (DI: random |a| ≤ 1 accelerations with stops; SI:
+piecewise-constant velocity jumps), no CBF. Results (`results/g1_model_distance.md`):
+
+| | DI-class commands | SI-class commands |
+|---|---|---|
+| residual ‖v_com − v_cmd‖ mean | 0.130 m/s | 0.101 m/s |
+| δ_0.05 / δ_0.01 (pooled quantile) | 0.283 / 0.361 | 0.268 / 0.479 |
+| per-run max median / worst | 0.386 / 0.447 | 0.543 / 0.685 |
+| ε(H) p95 at H = 0.02 / 0.5 / 1 / 2 s | 0.006 / 0.126 / 0.216 / 0.316 m | 0.005 / 0.109 / 0.169 / 0.246 m |
+| identified v_com = k e^{−sL}/(τs+1) v_cmd | k 0.95, τ 0.20 s, L 0.12 s (RMS 0.066 vs 0.107 for v_com = v_cmd) | — |
+| ν-gap(1/s, G_id/s) | 0.247 at 2.7 rad/s; \|G_id − 1\| > 0.3 above 1 rad/s | — |
+
+Readings: (a) the in-scenario plaza bound 0.31 covers ~95 % of the general envelope but not its worst case
+(0.45 under DI commands) — the residual grows with command turn rate (mean 0.11 → 0.19) and is worst at
+0.2–0.35 m/s; (b) SI commands have a lower mean but a fat tail (jumps: worst 0.69) — the DI's smoothness buys
+the tail, not the mean; (c) the reduced model is trustworthy for ≲ 0.25 s (ε p95 < 7 cm) and off by 0.2–0.3 m
+at 1–2 s, which is the horizon a HOCBF with α = 1 implicitly reasons over; (d) the gait is a ~0.3 s lag
+(τ + L); the DI assumption holds below ~1 rad/s. Natural next step: a first-order-lag reduced model
+(v̇_com = (k v_cmd − v_com)/τ, relative degree 3) should shrink δ by ~40 % (RMS 0.107 → 0.066).

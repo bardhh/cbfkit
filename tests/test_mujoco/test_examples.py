@@ -13,6 +13,7 @@ EXAMPLES = [
     "examples/mujoco/g1_standup.py",
     "examples/mujoco/g1_navigate.py",
     "examples/mujoco/g1_plaza.py",
+    "examples/mujoco/g1_model_distance.py",
 ]
 
 
@@ -28,4 +29,7 @@ def test_example_runs_in_test_mode(script):
         timeout=600,
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
-    assert any(k in proc.stdout for k in ("mean upright-distance", "torso height", "h(x) min"))
+    assert any(
+        k in proc.stdout
+        for k in ("mean upright-distance", "torso height", "h(x) min", "Disturbance bound")
+    )
