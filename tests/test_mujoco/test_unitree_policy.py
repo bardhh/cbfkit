@@ -195,8 +195,8 @@ def test_plaza_example_certificate_holds(up):
     n = arrivals[-1]
     ped_d = np.linalg.norm(com[:n, None, :] - agents[:n, :, :2], axis=2)
     assert ped_d.min(axis=0).max() < 1.6  # every pedestrian actually came close
-    sidestep = np.abs(np.gradient(agents[:n, :, 2:], plant.dt, axis=0)).max()
-    assert sidestep > 0.1  # and at least one of them reacted (accelerated) to the robot
+    max_ped_acc = np.abs(np.gradient(agents[:n, :, 2:], plant.dt, axis=0)).max()
+    assert max_ped_acc > 0.1  # and at least one of them reacted (accelerated) to the robot
     v_safe = np.asarray(res.controller_data["sub_data_v_safe"])
     v_nom = np.asarray(res.controller_data["sub_data_v_nom"])
     assert np.any(np.linalg.norm(v_safe - v_nom, axis=1) > 1e-3)  # the CBF intervened
