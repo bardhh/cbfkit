@@ -31,6 +31,7 @@ _RAW = "https://raw.githubusercontent.com/google-deepmind/mujoco_menagerie/{comm
 MODELS_DIR = Path(__file__).parent / "models"
 G1_MANIFEST = MODELS_DIR / "g1" / "assets_manifest.json"
 UNITREE_RL_GYM_MANIFEST = MODELS_DIR / "g1" / "unitree_rl_gym_manifest.json"
+AMO_MANIFEST = MODELS_DIR / "g1" / "amo_manifest.json"
 _RAW_GH = "https://raw.githubusercontent.com/{repo}/{commit}/{path}"
 
 
@@ -176,3 +177,12 @@ def ensure_repo_files(manifest: Path, *, offline: bool = False) -> Path:
 def unitree_rl_gym_dir(offline: bool = False) -> Path:
     """Root of the cached ``unitree_rl_gym`` files (12-DoF G1 MJCF + meshes, deploy config, policy)."""
     return ensure_repo_files(UNITREE_RL_GYM_MANIFEST, offline=offline)
+
+
+def amo_dir(offline: bool = False) -> Path:
+    """Root of the cached AMO files (23-DoF G1 MJCF + meshes, whole-body policy + adapter weights).
+
+    UCSD's AMO (Li, Cheng, Huang, Yang, Qiu, Wang -- RSS 2025, Apache-2.0), pinned by commit
+    with per-file SHA-256; see ``models/g1/amo_manifest.json``.
+    """
+    return ensure_repo_files(AMO_MANIFEST, offline=offline)
