@@ -189,3 +189,98 @@ def test_moving_obstacle_hocbf_reacts_to_approaching_pedestrian(g1_plant):
     h0 = float(walking.functions[0](0.0, xa))
     h1 = float(walking.functions[0](1.0, xa))
     assert h1 < h0
+
+
+# --------------------------------------------------------------------------- tracked agents
+def test_embedded_double_integrator_with_agents_propagates_agent_velocity(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import agent_slice, embedded_double_integrator
+
+    plant, _ = g1_plant
+    n_ag = 2
+    dyn = embedded_double_integrator(plant.state_dim, plant.com_indices, n_agents=n_ag)
+    agents = jnp.array([[1.0, 2.0, 0.3, -0.1], [5.0, 5.0, 0.0, 0.7]])
+    xa = jnp.concatenate([jnp.zeros(plant.state_dim), jnp.array([0.2, 0.1]), agents.reshape(-1)])
+    f, g = dyn(xa)
+    assert f.shape == (plant.state_dim + 2 + 4 * n_ag,) and g.shape == (f.shape[0], 2)
+    assert float(f[plant.com_indices[0]]) == pytest.approx(0.2)
+    s0, s1 = agent_slice(plant.state_dim, 0), agent_slice(plant.state_dim, 1)
+    assert jnp.allclose(f[s0][:2], agents[0, 2:]) and jnp.allclose(f[s0][2:], 0.0)
+    assert jnp.allclose(f[s1][:2], agents[1, 2:])
+    assert float(jnp.abs(g).sum()) == 2.0  # control enters only the commanded velocity
+
+
+def test_agent_hocbf_reacts_to_approaching_agent_and_distance_shape(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import (
+        com_agent_hocbfs,
+        embedded_double_integrator,
+    )
+
+    plant, g1mod = g1_plant
+    x = g1mod.G1(plant.mj_model).x_stand(plant)
+    com = x[plant.com_indices[0] : plant.com_indices[0] + 2]
+    dyn = embedded_double_integrator(plant.state_dim, plant.com_indices, n_agents=1)
+    barriers = com_agent_hocbfs(plant, 1, [(0.65, 0.65)], shape="distance")
+    cbf_qp = vanilla_cbf_clf_qp_controller(
+        control_limits=jnp.array([1.0, 1.0]), dynamics_func=dyn, barriers=barriers
+    )
+    ahead = com + jnp.array([1.4, 0.0])
+    for v_agent, expect_brake in ((jnp.zeros(2), False), (jnp.array([-0.6, 0.0]), True)):
+        xa = jnp.concatenate([x, jnp.zeros(2), ahead, v_agent])
+        a, d = cbf_qp(0.0, xa, jnp.zeros(2), jax.random.PRNGKey(0), ControllerData())
+        assert not bool(d.error)
+        if expect_brake:
+            assert float(a[0]) < -0.05  # agent walking at the standing robot: back away
+        else:
+            assert float(jnp.abs(a).max()) < 1e-6
+    # distance shape: h = |com - p| / r - 1, unit-norm gradient (times 1/r) -- the property
+    # that keeps the robust margin from growing with distance.
+    from cbfkit.systems.mujoco.reduced_order import com_obstacle_hocbfs
+
+    for far in (1.0, 4.0):
+        b = com_obstacle_hocbfs(
+            plant, [com + jnp.array([far, 0.0])], [(0.65, 0.65)], shape="distance"
+        )
+        xa = jnp.concatenate([x, jnp.zeros(2)])
+        assert float(b.functions[0](0.0, xa)) == pytest.approx(far / 0.65 - 1.0, rel=1e-6)
+        J = b.jacobians[0](0.0, xa)
+        assert float(
+            jnp.linalg.norm(J[plant.com_indices[0] : plant.com_indices[0] + 2])
+        ) == pytest.approx(1 / 0.65, rel=1e-6)
+
+
+def test_di_wrapper_steps_and_logs_agents(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import (
+        com_agent_hocbfs,
+        embedded_double_integrator,
+        safe_locomotion_controller_di,
+    )
+
+    plant, g1mod = g1_plant
+    x = g1mod.G1(plant.mj_model).x_stand(plant)
+
+    class Drift:  # minimal agents object: one agent drifting at constant velocity
+        x0 = jnp.array([[3.0, 0.0, -0.5, 0.0]])
+
+        def step(self, t, robot_xy, states, dt):
+            return states.at[:, :2].add(states[:, 2:] * dt)
+
+    dyn = embedded_double_integrator(plant.state_dim, plant.com_indices, n_agents=1)
+    cbf_qp = vanilla_cbf_clf_qp_controller(
+        control_limits=jnp.array([1.0, 1.0]),
+        dynamics_func=dyn,
+        barriers=com_agent_hocbfs(plant, 1, [(0.65, 0.65)]),
+    )
+    seen = {}
+
+    def fake_loco(t, xx, cmd, key, d):
+        seen["cmd"] = cmd
+        return jnp.zeros(plant.nu), d
+
+    ctrl = safe_locomotion_controller_di(cbf_qp, fake_loco, plant, 0.02, agents=Drift())
+    _, d1 = ctrl(0.0, x, jnp.array([0.3, 0.0]), jax.random.PRNGKey(0), ControllerData())
+    assert jnp.allclose(d1.sub_data["agents"], Drift.x0)  # the states the QP saw this step
+    assert float(d1.sub_data["_agents"][0, 0]) == pytest.approx(
+        3.0 - 0.5 * 0.02
+    )  # carried, stepped
+    _, d2 = ctrl(0.02, x, jnp.array([0.3, 0.0]), jax.random.PRNGKey(0), d1)
+    assert jnp.allclose(d2.sub_data["agents"], d1.sub_data["_agents"])
