@@ -95,8 +95,8 @@ _TAG = ["run"]
 MPPI_DT = 0.2  # s -- replanned at 5 Hz
 MPPI_HORIZON = 25  # 5 s
 MPPI_SAMPLES = 64 if TEST_MODE else 1024
-MPPI_LAMBDA = 10.0  # temperature, relative to costs of O(10-100)
-MPPI_CONTROL_STD = 0.5  # m/s^2 sampling std (bound A_MAX = 1)
+MPPI_LAMBDA = 5.0  # temperature, relative to costs of O(10-100)
+MPPI_CONTROL_STD = 0.3  # m/s^2 sampling std (bound A_MAX = 1)
 PASS_SIDE = "left"  # Japan: keep left in head-on encounters
 DEFAULT_WEIGHTS = SocialCostWeights(pass_side=0.5, v_max=V_MAX)
 PROXY_TAU = 0.20  # s, identified first-order lag of the G1 + walking policy (g1_model_distance)

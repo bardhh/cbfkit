@@ -7,7 +7,8 @@ and writes ``results/g1_scramble_social_mppi.{md,json}``. Configurations:
 * ``mppi-eff``  -- MPPI with *only* progress / collision / smoothness terms (no proxemics,
                    no time-to-collision, no slow-near-people, no pass side): what a
                    collision-aware but socially blind planner does;
-* ``mppi``      -- the social MPPI (``g1_scramble.DEFAULT_WEIGHTS``).
+* ``mppi``      -- the social MPPI (``g1_scramble.DEFAULT_WEIGHTS`` = the tuned
+                   ``SocialCostWeights`` defaults + keep-left).
 
 ``--proxy`` (default here) uses the identified 2-D reduced model of the G1 + policy for fast
 multi-seed statistics; ``--g1`` runs the MJX humanoid (minutes per run). Measured numbers

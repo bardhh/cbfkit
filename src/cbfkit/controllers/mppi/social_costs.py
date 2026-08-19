@@ -45,19 +45,22 @@ __all__ = [
 
 @dataclass(frozen=True)
 class SocialCostWeights:
-    """Weights (and shape parameters) of the social cost. Defaults are the ones tuned for the
-    G1 scramble (``examples/mujoco/g1_scramble.py --planner mppi``)."""
+    """Weights (and shape parameters) of the social cost. Defaults are the ones tuned on the
+    G1 scramble's 2-D proxy over 5 crowd seeds (config "G_balanced" of
+    ``examples/mujoco/g1_scramble_social_eval.py``): vs the goal-seeking baseline they cut the
+    intimate-zone rate 4.9 -> 1.5 and front intrusions 2.3 -> 1.0 ped-s per 10 s (the crowd's
+    own human norm is 3.5 / 2.5) for +14 s crossing time; h_min >= 0 on all seeds."""
 
     goal: float = 10.0  # terminal |p_H - goal|
-    progress: float = 0.2  # stage |p_k - goal| (per second) -- keeps "waiting" from being free
-    proxemics: float = 6.0  # asymmetric-Gaussian personal-space intrusion (per agent-second)
-    ttc: float = 2.0  # time-to-collision power law (per agent-second)
+    progress: float = 0.4  # stage |p_k - goal| (per second) -- keeps "waiting" from being free
+    proxemics: float = 15.0  # asymmetric-Gaussian personal-space intrusion (per agent-second)
+    ttc: float = 5.0  # time-to-collision power law (per agent-second)
     collision: float = 200.0  # hinge^2 on the contact distance (per agent-second)
-    jerk: float = 0.5  # |a_k - a_{k-1}|^2 (per step)
-    turn: float = 1.0  # heading change, speed-weighted (per step)
+    jerk: float = 5.0  # |a_k - a_{k-1}|^2 (per step)
+    turn: float = 5.0  # heading change, speed-weighted (per step)
     back: float = 2.0  # velocity component *away* from the goal (per second)
-    speed: float = 20.0  # relu(|v| - v_max)^2 (per second)
-    slow: float = 1.0  # |v|^2 weighted by proximity to people (per agent-second)
+    speed: float = 200.0  # relu(|v| - v_max)^2 (per second)
+    slow: float = 2.0  # |v|^2 weighted by proximity to people (per agent-second)
     pass_side: float = 0.0  # wrong-side penalty for oncoming pedestrians (per agent-second)
     # shape parameters
     sigma_front: float = 0.7  # m, personal space ahead of a standing pedestrian
