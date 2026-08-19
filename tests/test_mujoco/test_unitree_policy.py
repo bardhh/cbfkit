@@ -82,3 +82,41 @@ def test_policy_walks_forward_in_mjx(up):
     assert S[:, 2].min() > 0.6  # never falls (pelvis stays up)
     assert 0.35 < vx.mean() < 0.65  # tracks 0.5 m/s
     assert S[-1, 0] - S[0, 0] > 1.0  # actually travelled
+
+
+@pytest.mark.slow
+def test_navigate_example_certificate_holds(up):
+    """Milestone 4/4b acceptance: robust CBF on the CoM + policy gait keeps h >= 0 and stays upright."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "mujoco" / "g1_navigate.py"
+    spec = importlib.util.spec_from_file_location("g1_navigate", path)
+    ex = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ex)
+    sim_plant, _loco, x0, _pb, (controller, nominal) = ex.build("policy", robust_bound=0.25)
+    res = sim.execute(
+        x0=x0,
+        dt=sim_plant.dt,
+        num_steps=300,
+        plant=sim_plant,
+        nominal_controller=nominal,
+        controller=controller,
+        use_jit=True,
+        verbose=False,
+    )  # 6 s: enough to reach the obstacle and start skirting it
+    S = np.asarray(res["states"])
+    ci = sim_plant.com_indices
+    com = S[:, ci[0] : ci[0] + 2]
+    r = ex.OBSTACLE_RADIUS + ex.ROBOT_RADIUS
+    h = (
+        ((com[:, 0] - float(ex.OBSTACLE[0])) / r) ** 2
+        + ((com[:, 1] - float(ex.OBSTACLE[1])) / r) ** 2
+        - 1
+    )
+    assert h.min() >= 0.0  # certificate holds throughout
+    assert S[:, 2].min() > 0.6  # never falls
+    assert com[-1, 0] > 1.0  # actually walked toward the goal
+    v_safe = np.asarray(res.controller_data["sub_data_v_safe"])
+    v_nom = np.asarray(res.controller_data["sub_data_v_nom"])
+    assert np.any(np.linalg.norm(v_safe - v_nom, axis=1) > 1e-3)  # the CBF intervened

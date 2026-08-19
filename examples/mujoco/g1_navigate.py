@@ -14,10 +14,16 @@ Locomotion layers (``--locomotion``):
   mpc               the in-repo MJX sampling MPC on the 29-DoF model (G1_WALK_LOG.md): forward
                     locomotion with stumbles; kept for comparison.
 
-The CBF certifies the *commanded* CoM velocity; the gait's tracking error is what the robust
-variant's disturbance bound must cover (spec milestone 4b).
+The CBF certifies the *commanded* CoM velocity. The gait tracks it only approximately, so the
+default is the **robust** CBF-QP with a disturbance bound equal to the measured tracking error
+of the policy gait in this scenario (p95 of ||v_com - v_safe|| = 0.25 m/s, from a vanilla run;
+mean 0.12, max 0.49). Measured outcomes (CPU):
 
-    python examples/mujoco/g1_navigate.py [--locomotion policy|mpc] [--gif] [--view] [--duration 12]
+    vanilla (--robust 0):   h_min = -0.010 (rides the keep-out boundary), goal at 14.4 s
+    robust  0.25 (default): h_min = +0.99  (never near the boundary), wider berth, goal ~20 s
+    robust  0.49 (max err): h_min = +2.6   (over-conservative)
+
+    python examples/mujoco/g1_navigate.py [--robust 0.25] [--locomotion policy|mpc] [--gif] [--view]
 """
 
 import argparse
@@ -34,7 +40,7 @@ import jax.numpy as jnp
 import numpy as np
 
 import cbfkit.simulation.simulator as sim
-from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+from cbfkit.controllers.cbf_clf import robust_cbf_clf_qp_controller, vanilla_cbf_clf_qp_controller
 from cbfkit.controllers.mjx_sampling_mpc import SamplingMpc
 from cbfkit.systems.mujoco import MujocoPlant
 from cbfkit.systems.mujoco.g1 import G1, load_g1, walk_costs
@@ -60,15 +66,22 @@ OBSTACLE = jnp.array([2.0, 0.0])  # centre, on the straight line to the goal
 OBSTACLE_RADIUS = 0.35
 ROBOT_RADIUS = 0.35  # planar inflation so "CoM outside the ellipse" => "body clear"
 V_MAX = 0.5
+GOAL_RADIUS = 0.3
 
 
-def build(locomotion: str = "policy", num_samples: int = 256, iterations: int = 2, seed: int = 0):
+def build(
+    locomotion: str = "policy",
+    num_samples: int = 256,
+    iterations: int = 2,
+    seed: int = 0,
+    robust_bound: float = 0.0,
+):
     if locomotion == "policy":
         sim_plant = make_g1_12dof_plant()  # 12-DoF legs, PD at 500 Hz, dt 0.02
         loco = UnitreeG1WalkPolicy().as_controller()
         x0 = x0_standing(sim_plant)
         pelvis_body = int(sim_plant.mj_model.body("pelvis").id)
-        return sim_plant, loco, x0, pelvis_body, _finish(sim_plant, loco)
+        return sim_plant, loco, x0, pelvis_body, _finish(sim_plant, loco, robust_bound)
 
     sim_plant = MujocoPlant(load_g1(sim=True), substeps=2)
     mpc_plant = MujocoPlant(load_g1())
@@ -110,20 +123,41 @@ def build(locomotion: str = "policy", num_samples: int = 256, iterations: int = 
         mpc.as_controller(),
         x0,
         g1.pelvis_body,
-        _finish(sim_plant, mpc.as_controller()),
+        _finish(sim_plant, mpc.as_controller(), robust_bound),
     )
 
 
-def _finish(sim_plant, loco):
-    """Safety layer + nominal, identical for every locomotion layer."""
+def _finish(sim_plant, loco, robust_bound: float = 0.0):
+    """Safety layer + nominal, identical for every locomotion layer.
+
+    ``robust_bound > 0`` uses the robust CBF-QP with that 2-norm disturbance
+    bound on the CoM velocity -- the measured tracking error of the gait.
+    """
     r = OBSTACLE_RADIUS + ROBOT_RADIUS
     dyn = embedded_single_integrator(sim_plant.state_dim, sim_plant.com_indices)
     barriers = com_obstacle_barriers(sim_plant, [OBSTACLE], [(r, r)], class_k_gain=1.0)
-    cbf_qp = vanilla_cbf_clf_qp_controller(
-        control_limits=jnp.array([V_MAX, V_MAX]), dynamics_func=dyn, barriers=barriers
-    )
-    controller = safe_locomotion_controller(cbf_qp, loco)
+    limits = jnp.array([V_MAX, V_MAX])
+    if robust_bound > 0.0:
+        cbf_qp = robust_cbf_clf_qp_controller(
+            control_limits=limits,
+            dynamics_func=dyn,
+            barriers=barriers,
+            disturbance_norm=2,
+            disturbance_norm_bound=float(robust_bound),
+        )
+    else:
+        cbf_qp = vanilla_cbf_clf_qp_controller(
+            control_limits=limits, dynamics_func=dyn, barriers=barriers
+        )
+    safe = safe_locomotion_controller(cbf_qp, loco)
     ci = sim_plant.com_indices
+
+    def controller(t, x, v_nom, key, data):  # + goal-reached completion (early stop)
+        u, d = safe(t, x, v_nom, key, data)
+        reached = jnp.linalg.norm(x[ci[0] : ci[0] + 2] - GOAL) < GOAL_RADIUS
+        return u, d._replace(complete=d.complete | reached)
+
+    controller.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
 
     def nominal(t, x, key, ref):  # proportional to goal on the CoM, saturated
         com = x[ci[0] : ci[0] + 2]
@@ -136,12 +170,19 @@ def _finish(sim_plant, loco):
 
 
 def main(
-    duration=12.0, locomotion="policy", num_samples=256, iterations=2, seed=0, gif=False, view=False
+    duration=20.0,
+    locomotion="policy",
+    num_samples=256,
+    iterations=2,
+    seed=0,
+    gif=False,
+    view=False,
+    robust_bound=0.25,
 ):
     if TEST_MODE:
         num_samples, iterations = 16, 1
     sim_plant, _loco, x0, pelvis_body, (controller, nominal) = build(
-        locomotion, num_samples, iterations, seed
+        locomotion, num_samples, iterations, seed, robust_bound
     )
     steps = 5 if TEST_MODE else int(round(duration / sim_plant.dt))
     t0 = time.time()
@@ -185,9 +226,25 @@ def main(
         f"distance to goal: start {dist_goal[0]:.2f} -> end {dist_goal[-1]:.2f} (min {dist_goal.min():.2f})"
     )
     print(f"pelvis height min {hh.min():.2f}, upright min {up.min():.2f}")
+    reached_at = np.flatnonzero(dist_goal < GOAL_RADIUS)
+    print(
+        f"goal reached at t={reached_at[0]*sim_plant.dt:.1f}s"
+        if reached_at.size
+        else "goal not reached within the horizon"
+    )
     if v_nom is not None and v_safe is not None:
         print(
             f"CBF active (|v_safe - v_nom| > 1e-3) on {np.mean(np.linalg.norm(v_safe - v_nom, axis=1) > 1e-3)*100:.0f}% of steps"
+        )
+        # Tracking error of the gait: measured CoM velocity (finite difference of the
+        # logged CoM) vs the commanded v_safe. This is the disturbance bound the
+        # robust CBF needs (spec milestone 4b) -- measured in the avoidance regime.
+        n_live = int(reached_at[0]) if reached_at.size else len(com)
+        v_com = np.gradient(com[:n_live], sim_plant.dt, axis=0)
+        err = np.linalg.norm(v_com - v_safe[:n_live], axis=1)
+        print(
+            f"tracking error ||v_com - v_safe||: mean {err.mean():.3f}, p95 {np.percentile(err, 95):.3f}, "
+            f"max {err.max():.3f} m/s  (use as --robust bound)"
         )
     if TEST_MODE:
         return float(h.min())
@@ -257,6 +314,46 @@ def _replay(plant, states):
         yield d, k
 
 
+def _add_markers(scn):
+    """Visual-only obstacle / keep-out ring / goal in a mjvScene (renderer or viewer)."""
+    import mujoco
+
+    r = OBSTACLE_RADIUS + ROBOT_RADIUS
+    specs = [
+        (
+            mujoco.mjtGeom.mjGEOM_CYLINDER,
+            [OBSTACLE_RADIUS, 0.5, 0],
+            [*OBSTACLE, 0.5],
+            [0.85, 0.15, 0.2, 1.0],
+        ),
+        (
+            mujoco.mjtGeom.mjGEOM_CYLINDER,
+            [r, 0.005, 0],
+            [*OBSTACLE, 0.005],
+            [0.85, 0.15, 0.2, 0.25],
+        ),
+        (
+            mujoco.mjtGeom.mjGEOM_SPHERE,
+            [GOAL_RADIUS, 0, 0],
+            [*GOAL, GOAL_RADIUS],
+            [0.1, 0.8, 0.2, 0.6],
+        ),
+    ]
+    for gtype, size, pos, rgba in specs:
+        if scn.ngeom >= scn.maxgeom:
+            break
+        g = scn.geoms[scn.ngeom]
+        mujoco.mjv_initGeom(
+            g,
+            gtype,
+            np.asarray(size, float),
+            np.asarray(pos, float),
+            np.eye(3).flatten(),
+            np.asarray(rgba, np.float32),
+        )
+        scn.ngeom += 1
+
+
 def _render_gif(plant, pelvis_body, states, fps=25):
     import matplotlib
     import mujoco
@@ -272,15 +369,16 @@ def _render_gif(plant, pelvis_body, states, fps=25):
     cam = mujoco.MjvCamera()
     cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
     cam.trackbodyid = pelvis_body
-    cam.distance = 4.0
-    cam.azimuth = 160
-    cam.elevation = -20
+    cam.distance = 4.5
+    cam.azimuth = 135
+    cam.elevation = -25
     every = max(1, int(round(1.0 / (fps * plant.dt))))
     frames = []
     for d, k in _replay(plant, states):
         if k % every:
             continue
         renderer.update_scene(d, camera=cam)
+        _add_markers(renderer.scene)
         frames.append(renderer.render().copy())
     fig = plt.figure(figsize=(6.4, 3.6))
     ax = fig.add_axes([0, 0, 1, 1])
@@ -306,6 +404,8 @@ def _replay_in_viewer(plant, states):
     m = plant.mj_model
     d = mujoco.MjData(m)
     with mujoco.viewer.launch_passive(m, d) as viewer:
+        viewer.user_scn.ngeom = 0
+        _add_markers(viewer.user_scn)
         while viewer.is_running():
             for dd, _ in _replay(plant, states):
                 if not viewer.is_running():
@@ -321,7 +421,13 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("--duration", type=float, default=12.0)
+    p.add_argument("--duration", type=float, default=20.0)
+    p.add_argument(
+        "--robust",
+        type=float,
+        default=0.25,
+        help="robust CBF with this ||v_com - v_safe|| bound in m/s (default 0.25 = measured p95); 0 = vanilla",
+    )
     p.add_argument("--locomotion", default="policy", choices=["policy", "mpc"])
     p.add_argument("--samples", type=int, default=256)
     p.add_argument("--iterations", type=int, default=2)
@@ -331,4 +437,4 @@ if __name__ == "__main__":
     a = p.parse_args()
     if a.view:
         relaunch_under_mjpython_if_needed()
-    main(a.duration, a.locomotion, a.samples, a.iterations, a.seed, a.gif, a.view)
+    main(a.duration, a.locomotion, a.samples, a.iterations, a.seed, a.gif, a.view, a.robust)
