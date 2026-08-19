@@ -14,16 +14,29 @@ Locomotion layers (``--locomotion``):
   mpc               the in-repo MJX sampling MPC on the 29-DoF model (G1_WALK_LOG.md): forward
                     locomotion with stumbles; kept for comparison.
 
-The CBF certifies the *commanded* CoM velocity. The gait tracks it only approximately, so the
-default is the **robust** CBF-QP with a disturbance bound equal to the measured tracking error
-of the policy gait in this scenario (p95 of ||v_com - v_safe|| = 0.25 m/s, from a vanilla run;
-mean 0.12, max 0.49). Measured outcomes (CPU):
+Reduced-order models (``--reduced-model``):
+  di  (default) command-side double integrator on the CoM: the CBF-QP filters an *acceleration*
+                (high-order barrier via ``rectify_relative_degree``); the velocity command is its
+                integral -- smooth, |a| <= 1 m/s^2. Sounder model of a walking CoM; its smooth
+                commands cut the gait's worst-case tracking error 3x (max 0.17 vs 0.49 m/s).
+  si            single integrator: the CBF-QP filters the velocity command directly (the stock
+                ellipsoidal barrier, unmodified, pointed at plant.com_indices).
 
-    vanilla (--robust 0):   h_min = -0.010 (rides the keep-out boundary), goal at 14.4 s
-    robust  0.25 (default): h_min = +0.99  (never near the boundary), wider berth, goal ~20 s
-    robust  0.49 (max err): h_min = +2.6   (over-conservative)
+The CBF certifies the *commanded* CoM velocity; the gait tracks it approximately. The default is
+therefore the **robust** CBF-QP with a disturbance bound taken from the measured tracking error
+||v_com - v_safe|| of the policy gait *in this scenario* (``--robust`` picks it: di 0.18 = above the
+observed max, si 0.16 = p95 since its max 0.49 is a startup spike; 0 = vanilla). The robot turns
+to face its commanded velocity (heading follower in the policy adapter), so it walks around the
+obstacle rather than sidestepping. Measured (CPU, 20 s, goal radius 0.3 m):
 
-    python examples/mujoco/g1_navigate.py [--robust 0.25] [--locomotion policy|mpc] [--gif] [--view]
+    model  CBF      bound   h_min   closest [m]  goal [s]   tracking err mean/p95/max [m/s]
+    si     vanilla  --      -0.037  0.69         14.1       0.088 / 0.156 / 0.488
+    si     robust   0.16    +0.481  0.85         16.1       0.084 / 0.148 / 0.488
+    di     vanilla  --      -0.051  0.68         15.5       0.078 / 0.140 / 0.174
+    di     robust   0.14    +0.724  0.92         18.3       0.074 / 0.131 / 0.162
+    di     robust   0.18*   +1.007  0.99         19.3       0.073 / 0.129 / 0.165   (* default)
+
+    python examples/mujoco/g1_navigate.py [--reduced-model di|si] [--robust B] [--locomotion policy|mpc] [--gif] [--view]
 """
 
 import argparse
@@ -51,8 +64,11 @@ from cbfkit.systems.mujoco.unitree_policy import (
 )
 from cbfkit.systems.mujoco.reduced_order import (
     com_obstacle_barriers,
+    com_obstacle_hocbfs,
+    embedded_double_integrator,
     embedded_single_integrator,
     safe_locomotion_controller,
+    safe_locomotion_controller_di,
 )
 from cbfkit.systems.mujoco.viewer_utils import relaunch_under_mjpython_if_needed, under_mjpython
 from cbfkit.utils.user_types import ControllerData
@@ -66,7 +82,9 @@ OBSTACLE = jnp.array([2.0, 0.0])  # centre, on the straight line to the goal
 OBSTACLE_RADIUS = 0.35
 ROBOT_RADIUS = 0.35  # planar inflation so "CoM outside the ellipse" => "body clear"
 V_MAX = 0.5
+A_MAX = 1.0  # double-integrator model: acceleration limit [m/s^2]
 GOAL_RADIUS = 0.3
+_TAG = ["run"]  # results filename tag, set per run
 
 
 def build(
@@ -75,13 +93,20 @@ def build(
     iterations: int = 2,
     seed: int = 0,
     robust_bound: float = 0.0,
+    reduced_model: str = "si",
 ):
     if locomotion == "policy":
         sim_plant = make_g1_12dof_plant()  # 12-DoF legs, PD at 500 Hz, dt 0.02
         loco = UnitreeG1WalkPolicy().as_controller()
         x0 = x0_standing(sim_plant)
         pelvis_body = int(sim_plant.mj_model.body("pelvis").id)
-        return sim_plant, loco, x0, pelvis_body, _finish(sim_plant, loco, robust_bound)
+        return (
+            sim_plant,
+            loco,
+            x0,
+            pelvis_body,
+            _finish(sim_plant, loco, robust_bound, reduced_model),
+        )
 
     sim_plant = MujocoPlant(load_g1(sim=True), substeps=2)
     mpc_plant = MujocoPlant(load_g1())
@@ -123,20 +148,29 @@ def build(
         mpc.as_controller(),
         x0,
         g1.pelvis_body,
-        _finish(sim_plant, mpc.as_controller(), robust_bound),
+        _finish(sim_plant, mpc.as_controller(), robust_bound, reduced_model),
     )
 
 
-def _finish(sim_plant, loco, robust_bound: float = 0.0):
+def _finish(sim_plant, loco, robust_bound: float = 0.0, reduced_model: str = "si"):
     """Safety layer + nominal, identical for every locomotion layer.
 
-    ``robust_bound > 0`` uses the robust CBF-QP with that 2-norm disturbance
-    bound on the CoM velocity -- the measured tracking error of the gait.
+    ``reduced_model``: ``"si"`` -- single integrator on the CoM, the CBF-QP filters
+    the velocity command directly; ``"di"`` -- command-side double integrator, the
+    CBF-QP (high-order barrier via ``rectify_relative_degree``) filters an
+    acceleration and the velocity command is its integral (smooth, bounded by
+    ``A_MAX``). ``robust_bound > 0`` uses the robust CBF-QP with that 2-norm
+    disturbance bound -- the measured tracking error of the gait.
     """
     r = OBSTACLE_RADIUS + ROBOT_RADIUS
-    dyn = embedded_single_integrator(sim_plant.state_dim, sim_plant.com_indices)
-    barriers = com_obstacle_barriers(sim_plant, [OBSTACLE], [(r, r)], class_k_gain=1.0)
-    limits = jnp.array([V_MAX, V_MAX])
+    if reduced_model == "di":
+        dyn = embedded_double_integrator(sim_plant.state_dim, sim_plant.com_indices)
+        barriers = com_obstacle_hocbfs(sim_plant, [OBSTACLE], [(r, r)], class_k_gain=1.0)
+        limits = jnp.array([A_MAX, A_MAX])
+    else:
+        dyn = embedded_single_integrator(sim_plant.state_dim, sim_plant.com_indices)
+        barriers = com_obstacle_barriers(sim_plant, [OBSTACLE], [(r, r)], class_k_gain=1.0)
+        limits = jnp.array([V_MAX, V_MAX])
     if robust_bound > 0.0:
         cbf_qp = robust_cbf_clf_qp_controller(
             control_limits=limits,
@@ -149,7 +183,10 @@ def _finish(sim_plant, loco, robust_bound: float = 0.0):
         cbf_qp = vanilla_cbf_clf_qp_controller(
             control_limits=limits, dynamics_func=dyn, barriers=barriers
         )
-    safe = safe_locomotion_controller(cbf_qp, loco)
+    if reduced_model == "di":
+        safe = safe_locomotion_controller_di(cbf_qp, loco, sim_plant, sim_plant.dt, v_max=V_MAX)
+    else:
+        safe = safe_locomotion_controller(cbf_qp, loco)
     ci = sim_plant.com_indices
 
     def controller(t, x, v_nom, key, data):  # + goal-reached completion (early stop)
@@ -177,12 +214,15 @@ def main(
     seed=0,
     gif=False,
     view=False,
-    robust_bound=0.25,
+    robust_bound=None,
+    reduced_model="di",
 ):
+    if robust_bound is None:  # measured per model in this scenario, see the module docstring
+        robust_bound = {"di": 0.18, "si": 0.16}[reduced_model]
     if TEST_MODE:
         num_samples, iterations = 16, 1
     sim_plant, _loco, x0, pelvis_body, (controller, nominal) = build(
-        locomotion, num_samples, iterations, seed, robust_bound
+        locomotion, num_samples, iterations, seed, robust_bound, reduced_model
     )
     steps = 5 if TEST_MODE else int(round(duration / sim_plant.dt))
     t0 = time.time()
@@ -248,6 +288,7 @@ def main(
         )
     if TEST_MODE:
         return float(h.min())
+    _TAG[0] = f"{reduced_model}_{'robust' if robust_bound > 0 else 'vanilla'}"
     os.makedirs(RESULTS_DIR, exist_ok=True)
     _plot(com, h, v_nom, v_safe, hh, sim_plant.dt)
     if gif:
@@ -297,7 +338,7 @@ def _plot(com, h, v_nom, v_safe, hh, dt):
         axes[2].set_title("commanded CoM velocity")
         axes[2].set_xlabel("t [s]")
     fig.tight_layout()
-    path = os.path.join(RESULTS_DIR, "g1_navigate.png")
+    path = os.path.join(RESULTS_DIR, f"g1_navigate_{_TAG[0]}.png")
     fig.savefig(path, dpi=140)
     print(f"saved {path}")
 
@@ -387,7 +428,7 @@ def _render_gif(plant, pelvis_body, states, fps=25):
     anim = animation.FuncAnimation(
         fig, lambda i: (im.set_data(frames[i]),), frames=len(frames), interval=1000 / fps
     )
-    path = os.path.join(RESULTS_DIR, "g1_navigate.gif")
+    path = os.path.join(RESULTS_DIR, f"g1_navigate_{_TAG[0]}.gif")
     anim.save(path, writer=animation.PillowWriter(fps=fps))
     plt.close(fig)
     print(f"saved {path}")
@@ -425,10 +466,16 @@ if __name__ == "__main__":
     p.add_argument(
         "--robust",
         type=float,
-        default=0.25,
-        help="robust CBF with this ||v_com - v_safe|| bound in m/s (default 0.25 = measured p95); 0 = vanilla",
+        default=None,
+        help="robust CBF with this ||v_com - v_safe|| bound in m/s (default: measured per model, di 0.18 / si 0.16); 0 = vanilla",
     )
     p.add_argument("--locomotion", default="policy", choices=["policy", "mpc"])
+    p.add_argument(
+        "--reduced-model",
+        default="di",
+        choices=["si", "di"],
+        help="CBF reduced-order model: single integrator (velocity command) or double integrator (acceleration, HOCBF)",
+    )
     p.add_argument("--samples", type=int, default=256)
     p.add_argument("--iterations", type=int, default=2)
     p.add_argument("--seed", type=int, default=0)
@@ -437,4 +484,14 @@ if __name__ == "__main__":
     a = p.parse_args()
     if a.view:
         relaunch_under_mjpython_if_needed()
-    main(a.duration, a.locomotion, a.samples, a.iterations, a.seed, a.gif, a.view, a.robust)
+    main(
+        a.duration,
+        a.locomotion,
+        a.samples,
+        a.iterations,
+        a.seed,
+        a.gif,
+        a.view,
+        a.robust,
+        a.reduced_model,
+    )

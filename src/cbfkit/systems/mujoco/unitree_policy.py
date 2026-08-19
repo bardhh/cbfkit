@@ -211,6 +211,16 @@ class PolicyState(NamedTuple):
     last_action: Array  # (12,)
 
 
+def _yaw(quat: Array) -> Array:
+    """Yaw of a (w, x, y, z) quaternion (ZYX convention)."""
+    qw, qx, qy, qz = quat
+    return jnp.arctan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
+
+
+def _wrap(a: Array) -> Array:
+    return jnp.arctan2(jnp.sin(a), jnp.cos(a))
+
+
 def _gravity_in_body(quat: Array) -> Array:
     """``deploy_mujoco.get_gravity_orientation``: world -z expressed in the body frame."""
     qw, qx, qy, qz = quat
@@ -275,14 +285,39 @@ class UnitreeG1WalkPolicy:
         action, state = self.forward(obs, state)
         return self.action_scale * action + self.q_default, state
 
-    def as_controller(self):
+    def as_controller(
+        self,
+        *,
+        world_frame: bool = True,
+        heading_gain: float = 2.0,
+        max_yaw_rate: float = 1.0,
+        min_speed_for_heading: float = 0.05,
+    ):
         """``(t, x, u_nom, key, data) -> (q_target, data)``; ``u_nom[:2]`` is the (vx, vy) command.
 
-        A third command entry (yaw rate) is used when ``u_nom`` has 3 entries,
-        otherwise 0. State lives in ``sub_data["_policy"]`` (carry-only).
+        The policy's command is in the *body* frame (vx forward, vy left, wz yaw
+        rate). With ``world_frame=True`` (default) ``u_nom[:2]`` is a world-frame
+        planar velocity -- what a CoM-level CBF emits -- and is rotated into the
+        body frame using the pelvis yaw. ``heading_gain > 0`` adds a heading
+        follower: ``wz = gain * wrap(atan2(vy, vx) - yaw)`` (clipped to
+        ``max_yaw_rate``, zero below ``min_speed_for_heading``), so the robot turns
+        to face where it is going instead of strafing; the residual lateral
+        component is still commanded, so the world-frame velocity is realised
+        during the turn. ``heading_gain=0`` (or a 3-entry ``u_nom``) leaves yaw to
+        the caller. State lives in ``sub_data["_policy"]`` (carry-only). Memoised
+        per argument set.
         """
-        if getattr(self, "_controller", None) is not None:
-            return self._controller
+        key_ = (
+            bool(world_frame),
+            float(heading_gain),
+            float(max_yaw_rate),
+            float(min_speed_for_heading),
+        )
+        cache = getattr(self, "_controllers", None)
+        if cache is None:
+            cache = self._controllers = {}
+        if key_ in cache:
+            return cache[key_]
 
         def controller(t, x, u_nom, key, data):
             sub = dict(data.sub_data) if data.sub_data is not None else {}
@@ -290,13 +325,30 @@ class UnitreeG1WalkPolicy:
             if state is None:
                 state = self.init_state()
             u_nom = jnp.asarray(u_nom, dtype=float)
-            cmd = jnp.zeros(3).at[: min(3, u_nom.shape[0])].set(u_nom[:3])
+            v = u_nom[:2]
+            yaw = _yaw(x[3:7])
+            if world_frame:
+                c, sn = jnp.cos(yaw), jnp.sin(yaw)
+                v_body = jnp.array([c * v[0] + sn * v[1], -sn * v[0] + c * v[1]])
+            else:
+                v_body = v
+            if u_nom.shape[0] >= 3:
+                wz = u_nom[2]
+            elif heading_gain > 0.0:
+                speed = jnp.linalg.norm(v)
+                heading = jnp.arctan2(v[1], v[0])
+                wz = heading_gain * _wrap(heading - yaw)
+                wz = jnp.clip(wz, -max_yaw_rate, max_yaw_rate)
+                wz = jnp.where(speed > min_speed_for_heading, wz, 0.0)
+            else:
+                wz = 0.0
+            cmd = jnp.array([v_body[0], v_body[1], wz])
             u, state = self.step(x, cmd, t, state)
             sub["_policy"] = state
             return u, data._replace(sub_data=sub, u=u, u_nom=u_nom)
 
         controller.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
-        self._controller = controller
+        cache[key_] = controller
         return controller
 
 

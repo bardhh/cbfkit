@@ -68,3 +68,17 @@ cylinder–mesh pair; body meshes collide with the floor only).
 | (−0.3, 0) | (−0.26, −0.01) | (−1.50, −0.05) | 0.775 | backward ok |
 
 The MPC line (t01–t24) stays in the repo as the in-house alternative; the demo uses the policy.
+
+## Heading follower + double-integrator reduced model (2026-08-18, late)
+
+Bardh noticed the robot walked-sidestepped-walked instead of turning. Two causes: the CoM certificate is a
+holonomic point (no heading), and the policy adapter fed the *world*-frame v_safe as a *body*-frame command
+(right only while yaw ≈ 0 — a latent bug). Fixed both in `UnitreeG1WalkPolicy.as_controller`: world→body
+rotation by pelvis yaw + heading follower `wz = 2·wrap(atan2(v) − yaw)`. Check: world cmd (0, 0.4) → yaw
+reaches +90° in 2 s and the robot walks forward along +y at 0.38 m/s (was: strafing).
+
+Added a command-side double integrator (`embedded_double_integrator`, `com_obstacle_hocbfs` via
+`rectify_relative_degree(form="high-order")`, `safe_locomotion_controller_di`): the CBF filters an
+acceleration; the velocity command is its integral. Its smooth commands cut the gait's *max* tracking error
+from 0.49 to 0.17 m/s, so the robust bound can be set above the observed maximum (0.18) — the
+self-consistent claim. Table of all runs is in `g1_navigate.py`'s docstring; DI + robust 0.18 is the default.

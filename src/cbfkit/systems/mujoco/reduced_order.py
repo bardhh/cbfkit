@@ -106,3 +106,111 @@ def safe_locomotion_controller(
 
 
 __all__ = ["com_obstacle_barriers", "embedded_single_integrator", "safe_locomotion_controller"]
+
+
+# --------------------------------------------------------------------------- double integrator
+def embedded_double_integrator(state_dim: int, indices: Tuple[int, int]) -> DynamicsCallable:
+    """Command-side double integrator on the CoM, in *augmented* coordinates ``[x | v]``.
+
+    ``x`` is the plant's flat state (``state_dim`` entries) and ``v`` (2 entries,
+    appended) is the *commanded* planar CoM velocity that the locomotion layer
+    tracks. Dynamics: ``d/dt com = v``, ``d/dt v = a`` (control), everything else 0.
+    Position barriers then have relative degree 2 in ``a`` and go through
+    ``rectify_relative_degree`` (high-order CBF).
+    """
+    n = state_dim + 2
+    g = jnp.zeros((n, 2)).at[state_dim, 0].set(1.0).at[state_dim + 1, 1].set(1.0)
+
+    def dynamics(xa: Array):
+        f = jnp.zeros(n).at[indices[0]].set(xa[state_dim]).at[indices[1]].set(xa[state_dim + 1])
+        return f, g
+
+    return dynamics
+
+
+def com_obstacle_hocbfs(
+    plant: Any,
+    obstacles: Sequence[Sequence[float]],
+    ellipsoids: Sequence[Sequence[float]],
+    class_k_gain: float = 1.0,
+    roots: Any = None,
+):
+    """High-order (relative-degree-2) CoM keep-out barriers for :func:`embedded_double_integrator`.
+
+    Same ellipsoids as :func:`com_obstacle_barriers`, lifted to the augmented
+    ``[x | v]`` state with ``rectify_relative_degree(form="high-order")``.
+    """
+    from cbfkit.certificates import rectify_relative_degree
+
+    cbf, _, _ = ellipsoidal_barrier_factory(
+        system_position_indices=tuple(plant.com_indices),
+        obstacle_position_indices=(0, 1),
+        ellipsoid_axis_indices=(0, 1),
+    )
+    n = plant.state_dim + 2
+    dyn = embedded_double_integrator(plant.state_dim, plant.com_indices)
+    conditions = zeroing_barriers.linear_class_k(class_k_gain)
+    return concatenate_certificates(
+        *[
+            rectify_relative_degree(
+                function=cbf(jnp.asarray(o, dtype=float), jnp.asarray(e, dtype=float)),
+                system_dynamics=dyn,
+                state_dim=n,
+                roots=roots,
+                form="high-order",
+                certificate_conditions=conditions,
+            )
+            for o, e in zip(obstacles, ellipsoids)
+        ]
+    )
+
+
+def safe_locomotion_controller_di(
+    cbf_qp: ControllerCallable,
+    locomotion: ControllerCallable,
+    plant: Any,
+    dt: float,
+    *,
+    v_max: float = 0.5,
+    velocity_gain: float = 2.0,
+) -> ControllerCallable:
+    """Double-integrator variant of :func:`safe_locomotion_controller`.
+
+    The nominal ``v_nom`` (2-D velocity) is turned into a nominal acceleration
+    ``a_nom = velocity_gain * (v_nom - v)`` toward it; ``cbf_qp`` (built on
+    :func:`embedded_double_integrator` + :func:`com_obstacle_hocbfs`) filters it
+    on the augmented state ``[x | v]``; the commanded velocity is integrated,
+    ``v <- clip(v + a_safe dt, |v| <= v_max)``, carried in ``sub_data["_di_v"]``,
+    and handed to the locomotion controller as its command. Logged:
+    ``v_nom``, ``v_safe`` (= the integrated command), ``a_safe``.
+    """
+
+    def controller(t, x, v_nom, key, data):
+        prev = data.sub_data if data.sub_data is not None else {}
+        v = prev.get("_di_v")
+        if v is None:
+            v = jnp.zeros(2)
+        v_nom = jnp.asarray(v_nom, dtype=float)[:2]
+        xa = jnp.concatenate([x, v])
+        a_nom = velocity_gain * (v_nom - v)
+        a_safe, d1 = cbf_qp(t, xa, a_nom, key, data)
+        v_new = v + jnp.asarray(a_safe) * dt
+        speed = jnp.linalg.norm(v_new)
+        v_new = jnp.where(speed > v_max, v_new * (v_max / (speed + 1e-9)), v_new)
+        sub = dict(d1.sub_data) if d1.sub_data is not None else {}
+        for k, val in prev.items():
+            if k.startswith("_") and k not in sub:
+                sub[k] = val
+        sub["_di_v"] = v_new
+        u, d2 = locomotion(t, x, v_new, key, d1._replace(sub_data=sub))
+        sub2 = dict(d2.sub_data) if d2.sub_data is not None else {}
+        sub2["v_nom"] = v_nom
+        sub2["v_safe"] = v_new
+        sub2["a_safe"] = jnp.asarray(a_safe)
+        return u, d2._replace(sub_data=sub2, u=u, u_nom=v_nom, error=d1.error | d2.error)
+
+    controller.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+    return controller
+
+
+__all__ += ["com_obstacle_hocbfs", "embedded_double_integrator", "safe_locomotion_controller_di"]

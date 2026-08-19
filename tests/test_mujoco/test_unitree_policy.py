@@ -120,3 +120,37 @@ def test_navigate_example_certificate_holds(up):
     v_safe = np.asarray(res.controller_data["sub_data_v_safe"])
     v_nom = np.asarray(res.controller_data["sub_data_v_nom"])
     assert np.any(np.linalg.norm(v_safe - v_nom, axis=1) > 1e-3)  # the CBF intervened
+
+
+def test_command_frame_and_heading_follower(up):
+    """World-frame command is rotated into the body frame; heading follower commands yaw toward it."""
+    plant = up.make_g1_12dof_plant()
+    pol = up.UnitreeG1WalkPolicy()
+    x = up.x0_standing(plant)
+    # Rotate the pelvis to yaw = +90 deg: quaternion (cos45, 0, 0, sin45).
+    x = x.at[3:7].set(jnp.array([jnp.cos(jnp.pi / 4), 0.0, 0.0, jnp.sin(jnp.pi / 4)]))
+    seen = {}
+    orig_step = pol.step
+
+    def spy(xx, cmd, t, state):
+        seen["cmd"] = cmd
+        return orig_step(xx, cmd, t, state)
+
+    pol.step = spy
+    ctrl = pol.as_controller(world_frame=True, heading_gain=2.0)
+    ctrl(0.0, x, jnp.array([0.0, 0.5]), jax.random.PRNGKey(0), ControllerData())  # world +y
+    cmd = np.asarray(seen["cmd"])
+    assert (
+        cmd[0] == pytest.approx(0.5, abs=1e-6) and abs(cmd[1]) < 1e-6
+    )  # +y world == forward in body
+    assert cmd[2] == pytest.approx(0.0, abs=1e-6)  # already facing the command: no yaw rate
+    ctrl(
+        0.0, x, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), ControllerData()
+    )  # world +x = body right
+    cmd = np.asarray(seen["cmd"])
+    assert cmd[1] == pytest.approx(-0.5, abs=1e-6)  # strafe right in body frame
+    assert cmd[2] < -0.5  # turn right (negative yaw rate) toward +x, clipped at max_yaw_rate
+    body_ctrl = pol.as_controller(world_frame=False, heading_gain=0.0)
+    body_ctrl(0.0, x, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), ControllerData())
+    assert np.allclose(np.asarray(seen["cmd"]), [0.5, 0.0, 0.0])
+    pol.step = orig_step

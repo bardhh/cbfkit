@@ -99,3 +99,43 @@ def test_safe_locomotion_wrapper_composes_and_logs(g1_plant):
         float(d2.sub_data["_loco"]) == 2.0
     )  # carry-only state survived the CBF's sub_data rewrite
     assert not bool(d2.error)
+
+
+def test_double_integrator_hocbf_brakes_toward_obstacle(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import (
+        com_obstacle_hocbfs,
+        embedded_double_integrator,
+        safe_locomotion_controller_di,
+    )
+
+    plant, g1mod = g1_plant
+    g1 = g1mod.G1(plant.mj_model)
+    x = g1.x_stand(plant)
+    com = x[plant.com_indices[0] : plant.com_indices[0] + 2]
+    obstacle = com + jnp.array([0.9, 0.0])  # ahead; keep-out radius 0.6 -> h = 1.25
+    dyn = embedded_double_integrator(plant.state_dim, plant.com_indices)
+    f, g = dyn(jnp.concatenate([x, jnp.array([0.3, 0.1])]))
+    assert f.shape == (plant.state_dim + 2,) and g.shape == (plant.state_dim + 2, 2)
+    assert float(f[plant.com_indices[0]]) == pytest.approx(0.3)  # d/dt com = v
+    barriers = com_obstacle_hocbfs(plant, [obstacle], [(0.6, 0.6)], class_k_gain=1.0)
+    cbf_qp = vanilla_cbf_clf_qp_controller(
+        control_limits=jnp.array([2.0, 2.0]), dynamics_func=dyn, barriers=barriers
+    )
+    # Already moving fast at the obstacle: nominal wants to hold 0.5 m/s; the HOCBF must brake.
+    xa = jnp.concatenate([x, jnp.array([0.5, 0.0])])
+    a_safe, data = cbf_qp(0.0, xa, jnp.array([0.0, 0.0]), jax.random.PRNGKey(0), ControllerData())
+    assert not bool(data.error)
+    assert float(a_safe[0]) < -0.05  # decelerating along x
+    # Through the wrapper: integrated command shrinks toward the obstacle and is carried in _di_v.
+    seen = {}
+
+    def fake_locomotion(t, xx, cmd, key, d):
+        seen["cmd"] = cmd
+        return jnp.zeros(plant.nu), d
+
+    ctrl = safe_locomotion_controller_di(cbf_qp, fake_locomotion, plant, 0.02, v_max=0.5)
+    d = ControllerData(sub_data={"_di_v": jnp.array([0.5, 0.0])})
+    _, d1 = ctrl(0.0, x, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), d)
+    assert float(d1.sub_data["_di_v"][0]) < 0.5
+    assert jnp.allclose(seen["cmd"], d1.sub_data["v_safe"])
+    assert "a_safe" in d1.sub_data
