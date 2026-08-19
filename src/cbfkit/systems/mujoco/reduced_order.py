@@ -217,6 +217,7 @@ def safe_locomotion_controller_di(
     v_max: float = 0.5,
     velocity_gain: float = 2.0,
     agents: Any = None,
+    local_planner: Any = None,
 ) -> ControllerCallable:
     """Double-integrator variant of :func:`safe_locomotion_controller`.
 
@@ -235,6 +236,14 @@ def safe_locomotion_controller_di(
     them at constant velocity); they are stepped after the QP with the robot's CoM,
     carried in ``sub_data["_agents"]`` and the states the QP used are logged as
     ``"agents"``.
+
+    ``local_planner`` (optional) replaces the P-law on ``v_nom`` by a planner that sees the
+    *compact* augmented state ``[com | v | agents]`` (``4 + 4 N`` entries, the
+    :func:`cbfkit.controllers.mppi.social_costs.pack_state` layout):
+    ``local_planner(t, xa_compact, v_nom, key, sub) -> (a_nom, v_plan, sub_updates)`` --
+    ``a_nom`` goes to the QP, ``v_plan`` is logged as ``v_nom`` and ``sub_updates`` is merged
+    into the controller carry (``_``-prefixed keys persist across steps, others are logged).
+    See :func:`mppi_local_planner`.
     """
     ci = plant.com_indices
 
@@ -249,9 +258,18 @@ def safe_locomotion_controller_di(
             if ag is None:
                 ag = jnp.asarray(agents.x0, dtype=float)
             xa = jnp.concatenate([x, v, ag.reshape(-1)])
+            ag_flat = ag.reshape(-1)
         else:
             xa = jnp.concatenate([x, v])
-        a_nom = velocity_gain * (v_nom - v)
+            ag_flat = jnp.zeros(0)
+        sub_lp: dict = {}
+        if local_planner is not None:
+            xa_c = jnp.concatenate([x[ci[0] : ci[0] + 2], v, ag_flat])
+            a_nom, v_nom, sub_lp = local_planner(t, xa_c, v_nom, key, prev)
+            a_nom = jnp.asarray(a_nom, dtype=float)[:2]
+            v_nom = jnp.asarray(v_nom, dtype=float)[:2]
+        else:
+            a_nom = velocity_gain * (v_nom - v)
         a_safe, d1 = cbf_qp(t, xa, a_nom, key, data)
         v_new = v + jnp.asarray(a_safe) * dt
         speed = jnp.linalg.norm(v_new)
@@ -261,6 +279,7 @@ def safe_locomotion_controller_di(
             if k.startswith("_") and k not in sub:
                 sub[k] = val
         sub["_di_v"] = v_new
+        sub.update(sub_lp)
         if agents is not None:
             sub["_agents"] = agents.step(t, x[ci[0] : ci[0] + 2], ag, dt)
         u, d2 = locomotion(t, x, v_new, key, d1._replace(sub_data=sub))
@@ -419,3 +438,76 @@ def com_agent_hocbfs(
 
 
 __all__ += ["agent_slice", "com_agent_hocbfs"]
+
+
+# --------------------------------------------------------------------------- local planners
+def mppi_local_planner(
+    mppi: Any,
+    n_agents: int,
+    *,
+    horizon: int,
+    replan_every: int,
+    velocity_gain: float = 2.0,
+) -> Any:
+    """Adapt a ``cbfkit.controllers.mppi`` planner to the ``local_planner`` hook of
+    :func:`safe_locomotion_controller_di`.
+
+    ``mppi`` is the ``PlannerCallable`` from ``vanilla_mppi(...)`` built on
+    ``embedded_double_integrator(2, (0, 1), n_agents)`` (the compact layout) with a
+    ``trajectory_cost`` such as :func:`cbfkit.controllers.mppi.social_costs.social_trajectory_cost`.
+    It is re-solved every ``replan_every`` controller steps (``= mppi time step / controller
+    dt``, so the warm-start shift of one MPPI step per solve is exact) and its first planned
+    acceleration is held in between; the QP receives it as ``a_nom``. The warm start
+    ``_mppi_u_traj`` ``(horizon, 2)``, the held acceleration ``_mppi_a``, the plan
+    ``_mppi_x_traj`` ``(4 + 4 N, horizon + 1)`` and a step counter ``_mppi_k`` ride in the
+    controller carry; the plan is also logged as ``mppi_x_traj`` and the solver flag as
+    ``mppi_error``. On an MPPI failure (NaN) the P-law ``velocity_gain (v_nom - v)`` is used.
+    """
+    from jax import lax
+
+    from cbfkit.utils.user_types import PlannerData
+
+    dim = 4 + 4 * n_agents
+
+    def planner(t, xa, v_nom, key, sub):
+        U = sub.get("_mppi_u_traj")
+        if U is None:
+            U = jnp.zeros((horizon, 2))
+        a_hold = sub.get("_mppi_a")
+        if a_hold is None:
+            a_hold = jnp.zeros(2)
+        X_hold = sub.get("_mppi_x_traj")
+        if X_hold is None:
+            X_hold = jnp.zeros((dim, horizon + 1))
+        k = sub.get("_mppi_k")
+        if k is None:
+            k = jnp.zeros((), dtype=jnp.int32)
+
+        def solve(_):
+            u, d = mppi(t, xa, None, key, PlannerData(u_traj=U))
+            return jnp.asarray(u, dtype=float)[:2], d.u_traj, d.x_traj, jnp.asarray(d.error)
+
+        def hold(_):
+            return a_hold, U, X_hold, jnp.asarray(False)
+
+        a, U_new, X_new, err = lax.cond(k % replan_every == 0, solve, hold, None)
+        v = xa[2:4]
+        a_nom = jnp.where(err, velocity_gain * (jnp.asarray(v_nom)[:2] - v), a)
+        v_plan = X_new[2:4, 1]
+        return (
+            a_nom,
+            v_plan,
+            {
+                "_mppi_u_traj": U_new,
+                "_mppi_a": a,
+                "_mppi_x_traj": X_new,
+                "_mppi_k": k + 1,
+                "mppi_x_traj": X_new,
+                "mppi_error": err,
+            },
+        )
+
+    return planner
+
+
+__all__ += ["mppi_local_planner"]

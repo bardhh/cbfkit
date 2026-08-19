@@ -256,6 +256,7 @@ class MppiParameters(TypedDict, total=False):
     costs_lambda: float
     cost_perturbation: float
     plot_samples: int
+    control_std: float  # sampling std of the control perturbations (default 2.0)
 
 
 class MppiGenerator(Protocol):

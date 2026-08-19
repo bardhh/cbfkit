@@ -284,3 +284,95 @@ def test_di_wrapper_steps_and_logs_agents(g1_plant):
     )  # carried, stepped
     _, d2 = ctrl(0.02, x, jnp.array([0.3, 0.0]), jax.random.PRNGKey(0), d1)
     assert jnp.allclose(d2.sub_data["agents"], d1.sub_data["_agents"])
+
+
+def test_di_wrapper_local_planner_hook_overrides_a_nom_and_carries_state(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import (
+        com_obstacle_hocbfs,
+        embedded_double_integrator,
+        safe_locomotion_controller_di,
+    )
+
+    plant, g1mod = g1_plant
+    x = g1mod.G1(plant.mj_model).x_stand(plant)
+    ci = plant.com_indices
+    seen = {}
+
+    def local_planner(t, xa_c, v_nom, key, sub):
+        seen["xa_c"] = xa_c
+        n = sub.get("_lp_calls")
+        n = jnp.zeros((), dtype=jnp.int32) if n is None else n
+        return jnp.array([0.25, -0.25]), jnp.array([0.1, 0.0]), {"_lp_calls": n + 1, "lp_flag": 1.0}
+
+    dyn = embedded_double_integrator(plant.state_dim, ci)
+    cbf_qp = vanilla_cbf_clf_qp_controller(
+        control_limits=jnp.array([1.0, 1.0]),
+        dynamics_func=dyn,
+        barriers=com_obstacle_hocbfs(plant, [[50.0, 50.0]], [[0.5, 0.5]]),  # far away: inactive
+    )
+
+    def fake_loco(t, xx, cmd, key, d):
+        return jnp.zeros(plant.nu), d
+
+    ctrl = safe_locomotion_controller_di(
+        cbf_qp, fake_loco, plant, 0.02, local_planner=local_planner
+    )
+    _, d1 = ctrl(0.0, x, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), ControllerData())
+    assert seen["xa_c"].shape == (4,)  # [com | v], no agents
+    assert jnp.allclose(seen["xa_c"][:2], x[ci[0] : ci[0] + 2])
+    assert jnp.allclose(
+        d1.sub_data["a_safe"], jnp.array([0.25, -0.25]), atol=1e-3
+    )  # planner a_nom, unfiltered
+    assert jnp.allclose(d1.sub_data["v_nom"], jnp.array([0.1, 0.0]))  # logged v_nom is the plan's
+    assert int(d1.sub_data["_lp_calls"]) == 1 and float(d1.sub_data["lp_flag"]) == 1.0
+    _, d2 = ctrl(0.02, x, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), d1)
+    assert int(d2.sub_data["_lp_calls"]) == 2  # carried
+
+
+def test_mppi_local_planner_replans_on_schedule_and_holds_in_between():
+    from cbfkit.controllers.mppi import vanilla_mppi
+    from cbfkit.controllers.mppi.social_costs import SocialCostWeights, social_trajectory_cost
+    from cbfkit.systems.mujoco.reduced_order import embedded_double_integrator, mppi_local_planner
+
+    n, H, dt_plan = 1, 8, 0.2
+    goal = jnp.array([5.0, 0.0])
+    mppi = vanilla_mppi(
+        control_limits=jnp.array([1.0, 1.0]),
+        dynamics_func=embedded_double_integrator(2, (0, 1), n_agents=n),
+        trajectory_cost=social_trajectory_cost(
+            n_agents=n, goal=goal, weights=SocialCostWeights(), dt=dt_plan
+        ),
+        mppi_args={
+            "robot_state_dim": 4 + 4 * n,
+            "robot_control_dim": 2,
+            "prediction_horizon": H,
+            "num_samples": 64,
+            "time_step": dt_plan,
+            "use_GPU": False,
+            "costs_lambda": 5.0,
+            "cost_perturbation": 0.0,
+            "control_std": 0.5,
+        },
+    )
+    planner = mppi_local_planner(mppi, n, horizon=H, replan_every=10)
+    xa = jnp.array([0.0, 0.0, 0.0, 0.0, 3.0, 0.0, -1.0, 0.0])  # pedestrian 3 m ahead, coming
+    key = jax.random.PRNGKey(0)
+    a0, v0, s0 = planner(0.0, xa, jnp.array([0.5, 0.0]), key, {})
+    assert a0.shape == (2,) and jnp.all(jnp.isfinite(a0)) and not bool(s0["mppi_error"])
+    assert s0["_mppi_u_traj"].shape == (H, 2) and s0["mppi_x_traj"].shape == (4 + 4 * n, H + 1)
+    assert float(a0[0]) > 0.0  # the goal is ahead: it starts walking (the pedestrian is 3 m away)
+    # the next 9 calls hold the acceleration and the plan, whatever the state/key
+    a1, v1, s1 = planner(0.02, xa + 0.1, jnp.zeros(2), jax.random.PRNGKey(9), s0)
+    assert jnp.allclose(a1, a0) and jnp.allclose(s1["mppi_x_traj"], s0["mppi_x_traj"])
+    s = s1
+    for i in range(2, 10):
+        _, _, s = planner(i * 0.02, xa, jnp.zeros(2), key, s)
+    a10, _, s10 = planner(0.2, xa, jnp.zeros(2), jax.random.PRNGKey(1), s)
+    assert int(s10["_mppi_k"]) == 11
+    assert not jnp.allclose(
+        s10["_mppi_u_traj"], s0["_mppi_u_traj"]
+    )  # re-solved (shifted warm start)
+    # and it is jit-compatible with a fixed carry structure (the simulator scans it)
+    jitted = jax.jit(lambda t, xa, v, k, s: planner(t, xa, v, k, s))
+    aj, vj, sj = jitted(0.4, xa, jnp.zeros(2), key, s10)
+    assert jnp.all(jnp.isfinite(aj)) and sj["_mppi_u_traj"].shape == (H, 2)

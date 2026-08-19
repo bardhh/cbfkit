@@ -19,6 +19,7 @@ def setup_mppi(
     use_GPU=True,
     costs_lambda=0.03,
     cost_perturbation_coeff=0.1,
+    control_std=2.0,
 ):
     if dyn_func is None:
         raise ValueError("Dynamics function must be provided")
@@ -45,7 +46,9 @@ def setup_mppi(
             terminal_cost_takes_action = True
 
     control_mu = jnp.zeros(robot_control_dim)  # .reshape(-1,1)
-    control_cov = 4.0 * jnp.eye(robot_control_dim)
+    # Sampling std of the control perturbations (per control); the historical default is 2.0
+    # (covariance 4 I). Pass ``control_std`` < the control bound to get non-saturated samples.
+    control_cov = float(control_std) ** 2 * jnp.eye(robot_control_dim)
     control_cov_inv = jnp.linalg.inv(control_cov)
     control_cov_inv_diag = jnp.diag(control_cov_inv)
     control_bound = control_bound
@@ -126,7 +129,9 @@ def setup_mppi(
         # pert_final_col = pert_final.reshape(-1, 1)
 
         diff_final = u_final - pert_final
-        delta_cost_final = cost_perturbation_coeff * jnp.sum(diff_final * control_cov_inv_diag * pert_final)
+        delta_cost_final = cost_perturbation_coeff * jnp.sum(
+            diff_final * control_cov_inv_diag * pert_final
+        )
 
         cost_sample = accumulated_cost + delta_cost_final
 
@@ -192,9 +197,10 @@ def setup_mppi(
         # Optimized sampling for diagonal covariance
         # Avoids Cholesky decomposition and matrix multiplication
         std = jnp.sqrt(jnp.diag(control_cov))
-        perturbation = control_mu + jax.random.normal(
-            subkey, shape=(samples, horizon, robot_control_dim)
-        ) * std
+        perturbation = (
+            control_mu
+            + jax.random.normal(subkey, shape=(samples, horizon, robot_control_dim)) * std
+        )
 
         perturbation = jnp.clip(perturbation, -3.0, 3.0)
         perturbed_control = U + perturbation
