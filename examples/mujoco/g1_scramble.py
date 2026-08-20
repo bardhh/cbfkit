@@ -43,8 +43,9 @@ a pedestrian in the robot-free crowd: intimate 3.5 / front 2.5):
     mppi                     2/2      65/56 s  1.7 / 2.5      0.6 / 1.1   +0.16/-0.11  19/23 %
 
 ``--robot amo`` swaps the tracking layer for AMO's 23-DoF whole-body policy
-(``systems/mujoco/amo_policy.py``); ``--torso`` adds a reactive shoulder-turn/lean toward
-the pedestrian being passed. Measured (MJX, mppi planner, seeds 0/1, 100 s; "upper
+(``systems/mujoco/amo_policy.py``); ``--robot groot`` for NVIDIA's GEAR-WBC
+(``systems/mujoco/groot_policy.py``); ``--torso`` (AMO only) adds a reactive
+shoulder-turn/lean toward the pedestrian being passed. Measured (MJX, mppi planner, seeds 0/1, 100 s; "upper
 clearance" = min distance of the shoulder/elbow/hand bodies to the pedestrian discs via
 offline forward kinematics):
 
@@ -52,9 +53,13 @@ offline forward kinematics):
     unitree      --     2/2       65/56 s  1.7 / 2.5      +0.16/-0.11  (no arm bodies)
     amo          off    2/2       82/80 s  1.2 / 0.8      -0.12/-0.02  0.11 / 0.16 m
     amo          on     2/2       86/81 s  1.6 / 1.0      -0.14/-0.02  0.08 / 0.14 m
+    groot        --     2/2       74/60 s  1.5 / 0.2      -0.06/+0.45  0.21 / 0.52 m
 
-AMO is the gentlest configuration measured (intimate rate ~1.0, CBF active 10-17 %) --
-partly *because* it realises a lower speed in MJX, hence the ~20 s longer crossing. The
+AMO is the gentlest-but-slowest (intimate rate ~1.0; it realises the lowest speed in
+MJX); GR00T is the best whole-body compromise -- faster than AMO with comparable
+politeness, the largest upper-body clearances (its tracking is closer to the DI command,
+so the CBF's model holds better: h stays near or above 0), and on seed 1 it threads the
+crowd almost without disturbing it (deviation 0.03 m, intimate rate 0.19). The
 reactive shoulder-turn is a measured NEGATIVE result kept as an off-by-default experiment:
 in two tuning rounds (engage < 2.0 m / yaw 1.2, then < 1.2 m / yaw 0.6) the torso twist
 perturbed the walking policy's tracking by more than the ~8 cm of profile it freed --
@@ -318,6 +323,7 @@ def build(
 ):
     if torso and (proxy or robot != "amo"):
         raise ValueError("--torso needs the AMO robot (--robot amo, not proxy)")
+    # --robot groot: NVIDIA GEAR-WBC (see g1_walk_compare.py -- flattest ride of the three)
     if proxy:
         plant = ProxyPlant()
         loco = plant.locomotion()
@@ -330,6 +336,14 @@ def build(
         torso_cmd = shoulder_turn_torso(plant.com_indices) if torso else None
         loco = amo.AmoWholeBodyPolicy().as_controller(torso_command=torso_cmd)
         x0 = amo.x0_standing(plant)
+        x0 = x0.at[0:2].add(START).at[plant.com_indices[0] : plant.com_indices[0] + 2].add(START)
+        pelvis_body = int(plant.mj_model.body("pelvis").id)
+    elif robot == "groot":
+        from cbfkit.systems.mujoco import groot_policy as groot
+
+        plant = groot.make_g1_29dof_plant()
+        loco = groot.GrootGearWbcPolicy().as_controller()
+        x0 = groot.x0_standing(plant)
         x0 = x0.at[0:2].add(START).at[plant.com_indices[0] : plant.com_indices[0] + 2].add(START)
         pelvis_body = int(plant.mj_model.body("pelvis").id)
     elif robot == "unitree":
@@ -346,7 +360,7 @@ def build(
         x0 = x0.at[0:2].add(START).at[plant.com_indices[0] : plant.com_indices[0] + 2].add(START)
         pelvis_body = int(plant.mj_model.body("pelvis").id)
     else:
-        raise ValueError(f"unknown robot {robot!r} (unitree | amo)")
+        raise ValueError(f"unknown robot {robot!r} (unitree | amo | groot)")
     ci = plant.com_indices
     starts, goals, speeds = make_crowd(n_ped, seed)
     crowd = SocialForceCrowd(
@@ -892,7 +906,7 @@ if __name__ == "__main__":
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("--planner", choices=("goal", "mppi"), default=DEFAULT_PLANNER)
-    p.add_argument("--robot", choices=("unitree", "amo"), default=DEFAULT_ROBOT)
+    p.add_argument("--robot", choices=("unitree", "amo", "groot"), default=DEFAULT_ROBOT)
     p.add_argument(
         "--torso",
         action="store_true",

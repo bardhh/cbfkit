@@ -252,3 +252,13 @@ Bardh's call (`results/g1_walk_{unitree,amo,groot}.gif`). GR00T's command carrie
 slots into the same posture hooks; ωz is a RATE (unitree-style), unlike AMO's absolute heading. Full SONIC
 (kinematic planner with styles: run/stealth/happy/injured) is a separate, much heavier port — HF checkpoints
 + C++ runtime; the decoupled WBC here is the tractable slice.
+
+## GR00T in the scramble (2026-08-20)
+
+`g1_scramble.py --robot groot --planner mppi` (seeds 0/1, 120 s cap): crossed 74/60 s, h_min −0.06/+0.45,
+intimate rate 1.5/0.2, front 0.63/0.30, CBF active 14 %, slack ≤ 3 %, upper-body clearance min 0.21/0.52 m,
+upright ≥ 0.98. Verdict across the three tracking layers under the same social MPPI + soft CBF: unitree =
+fastest but most intrusive (2.5 intimate rate on s1, h −0.11); AMO = gentlest but slowest (80 s crossings);
+**GR00T = best compromise** — its better velocity tracking keeps the CBF's command-side model honest (h near
+or above 0), and on the easy seed it threads 40 pedestrians with 0.03 m crowd deviation. GIF:
+`results/g1_scramble_mppi_relaxed_vanilla_groot.gif`.
