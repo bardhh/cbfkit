@@ -42,6 +42,25 @@ a pedestrian in the robot-free crowd: intimate 3.5 / front 2.5):
     goal                     2/2      49/44 s  4.2 / 6.2      2.0 / 3.0   +0.08/-0.23  47/34 %
     mppi                     2/2      65/56 s  1.7 / 2.5      0.6 / 1.1   +0.16/-0.11  19/23 %
 
+``--robot amo`` swaps the tracking layer for AMO's 23-DoF whole-body policy
+(``systems/mujoco/amo_policy.py``); ``--torso`` adds a reactive shoulder-turn/lean toward
+the pedestrian being passed. Measured (MJX, mppi planner, seeds 0/1, 100 s; "upper
+clearance" = min distance of the shoulder/elbow/hand bodies to the pedestrian discs via
+offline forward kinematics):
+
+    robot        torso  crossed   time     intimate-rate  h_min        upper clearance min
+    unitree      --     2/2       65/56 s  1.7 / 2.5      +0.16/-0.11  (no arm bodies)
+    amo          off    2/2       82/80 s  1.2 / 0.8      -0.12/-0.02  0.11 / 0.16 m
+    amo          on     2/2       86/81 s  1.6 / 1.0      -0.14/-0.02  0.08 / 0.14 m
+
+AMO is the gentlest configuration measured (intimate rate ~1.0, CBF active 10-17 %) --
+partly *because* it realises a lower speed in MJX, hence the ~20 s longer crossing. The
+reactive shoulder-turn is a measured NEGATIVE result kept as an off-by-default experiment:
+in two tuning rounds (engage < 2.0 m / yaw 1.2, then < 1.2 m / yaw 0.6) the torso twist
+perturbed the walking policy's tracking by more than the ~8 cm of profile it freed --
+upper clearance and h_min got slightly worse, never better. Body agility helps where the
+*command* needs it (duck under, turn in place, reach); mid-gait twisting is not free.
+
 Read it this way: the goal-seeking baseline is *more* intrusive than an average pedestrian
 (intimate rate 4.3 vs the human norm 3.5) and lives on the CBF; the social MPPI is ~2.5x
 less intrusive than that norm, disturbs the crowd 4x less, hands the CBF an almost-feasible
@@ -73,7 +92,9 @@ from cbfkit.controllers.mppi import vanilla_mppi
 from cbfkit.controllers.mppi.social_costs import SocialCostWeights, social_trajectory_cost
 from cbfkit.integration import forward_euler as euler
 from cbfkit.optimization.quadratic_program.solver_registry import get_solver
+from cbfkit.systems.mujoco.amo_policy import _rpy
 from cbfkit.systems.mujoco.crowd import SocialForceCrowd
+from cbfkit.systems.mujoco.unitree_policy import _wrap
 from cbfkit.systems.mujoco.reduced_order import (
     com_agent_hocbfs,
     embedded_double_integrator,
@@ -106,6 +127,17 @@ DEFAULT_ROBUST_BOUND = 0.0  # in a crush robust margins are eaten by slack (see 
 DEFAULT_RELAX = True  # hard barrier constraints are infeasible within ~10 s in this crowd
 DEFAULT_DURATION = 60.0
 DEFAULT_PLANNER = "goal"
+DEFAULT_ROBOT = "unitree"
+# reactive torso layer (--torso, AMO only): shoulder-turn toward the pedestrian being
+# passed (torso depth ~0.16 m presented toward them instead of shoulder half-width
+# ~0.24 m) plus a slight lean away; pure body language, the CBF keep-out is unchanged.
+# First round (engage < 2.0 m, yaw <= 1.2, roll 0.25) HURT: 23-27% engagement with large
+# twists degraded the gait tracking more than the geometry bought (upper clearance and
+# h_min got worse, +14 s crossing). Tuned: engage only in an actual close pass, gently.
+TORSO_TURN_RANGE = 1.2  # m: engage when the closest pedestrian is nearer than this
+TORSO_YAW_MAX = 0.6  # rad (AMO tolerates 1.57, but large yaw costs gait accuracy)
+TORSO_ROLL_AWAY = 0.15  # rad lean away from the pedestrian
+TORSO_SMOOTH = 0.95  # first-order smoothing of the torso command per 20 ms step
 CONTROL_DT = 0.02  # the G1 plant's step (policy at 50 Hz); the proxy uses the same
 _TAG = ["run"]
 
@@ -242,6 +274,36 @@ def build_social_mppi(
     )
 
 
+def shoulder_turn_torso(ci):
+    """State-aware torso command for ``AmoWholeBodyPolicy.as_controller``: yaw the torso
+    toward the closest tracked pedestrian while passing (slims the profile toward them),
+    lean slightly away; upright when nobody is near or the robot stands. Smoothed and
+    carried in ``sub["_torso"]``."""
+
+    def torso(t, x, sub):
+        prev = sub.get("_torso")
+        if prev is None:
+            prev = jnp.zeros(4)
+        ag = sub.get("_agents")
+        if ag is None:
+            return prev
+        com = x[ci[0] : ci[0] + 2]
+        rel = jnp.asarray(ag)[:, :2] - com
+        d = jnp.linalg.norm(rel, axis=1)
+        i = jnp.argmin(d)
+        yaw = _rpy(x[3:7])[2]
+        bearing = _wrap(jnp.arctan2(rel[i, 1], rel[i, 0]) - yaw)
+        gain = jnp.clip((TORSO_TURN_RANGE - d[i]) / 0.4, 0.0, 1.0)
+        tyaw = gain * jnp.clip(bearing, -TORSO_YAW_MAX, TORSO_YAW_MAX)
+        troll = -gain * TORSO_ROLL_AWAY * jnp.sign(bearing)
+        target = jnp.array([0.0, tyaw, 0.0, troll])
+        new = TORSO_SMOOTH * prev + (1.0 - TORSO_SMOOTH) * target
+        sub["_torso"] = new
+        return new
+
+    return torso
+
+
 def build(
     seed: int = 0,
     robust_bound: float = 0.0,
@@ -251,13 +313,26 @@ def build(
     weights: SocialCostWeights = DEFAULT_WEIGHTS,
     proxy: bool = False,
     mppi_kw: dict = None,
+    robot: str = DEFAULT_ROBOT,
+    torso: bool = False,
 ):
+    if torso and (proxy or robot != "amo"):
+        raise ValueError("--torso needs the AMO robot (--robot amo, not proxy)")
     if proxy:
         plant = ProxyPlant()
         loco = plant.locomotion()
         x0 = jnp.concatenate([START, jnp.zeros(2)])
         pelvis_body = None
-    else:
+    elif robot == "amo":
+        from cbfkit.systems.mujoco import amo_policy as amo
+
+        plant = amo.make_g1_23dof_plant()
+        torso_cmd = shoulder_turn_torso(plant.com_indices) if torso else None
+        loco = amo.AmoWholeBodyPolicy().as_controller(torso_command=torso_cmd)
+        x0 = amo.x0_standing(plant)
+        x0 = x0.at[0:2].add(START).at[plant.com_indices[0] : plant.com_indices[0] + 2].add(START)
+        pelvis_body = int(plant.mj_model.body("pelvis").id)
+    elif robot == "unitree":
         from cbfkit.systems.mujoco.unitree_policy import (
             UnitreeG1WalkPolicy,
             make_g1_12dof_plant,
@@ -270,6 +345,8 @@ def build(
         # Place the robot at START (the XML puts it at the origin): shift the pelvis x, y.
         x0 = x0.at[0:2].add(START).at[plant.com_indices[0] : plant.com_indices[0] + 2].add(START)
         pelvis_body = int(plant.mj_model.body("pelvis").id)
+    else:
+        raise ValueError(f"unknown robot {robot!r} (unitree | amo)")
     ci = plant.com_indices
     starts, goals, speeds = make_crowd(n_ped, seed)
     crowd = SocialForceCrowd(
@@ -334,6 +411,48 @@ def build(
 
 
 # --------------------------------------------------------------------------- metrics
+def upper_body_clearance(plant, states, agents):
+    """True clearance between the robot's *upper body* and the pedestrian discs.
+
+    CPU-mujoco forward kinematics on the logged qpos: min over the shoulder / elbow /
+    wrist(hand) body positions (XY) of the distance to the closest pedestrian centre,
+    minus ``PED_RADIUS``. This is where a shoulder-turn shows up: the CoM keep-out disc
+    is unchanged, but the body carried through it clears the pedestrians by more.
+    Returns ``upper_clearance_min`` and ``upper_clearance_p05`` (metres, surface-to-centre
+    minus pedestrian radius; > 0 means no upper-body contact with the disc).
+    """
+    import mujoco
+
+    m = plant.mj_model
+    d = mujoco.MjData(m)
+    names = []
+    for side in ("left", "right"):
+        for part in ("shoulder_roll_link", "elbow_link", "wrist_yaw_link", "rubber_hand"):
+            bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f"{side}_{part}")
+            if bid >= 0:
+                names.append(bid)
+        # the 12-DoF model has no arm bodies; fall back to the torso/pelvis
+    if not names:
+        for part in ("torso_link", "pelvis"):
+            bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, part)
+            if bid >= 0:
+                names.append(bid)
+    S = np.asarray(states)
+    A = np.asarray(agents)
+    mins = np.empty(len(S))
+    for k in range(len(S)):
+        d.qpos[:] = S[k, : plant.nq]
+        mujoco.mj_kinematics(m, d)
+        pts = d.xpos[names][:, :2]  # (B, 2)
+        dist = np.linalg.norm(pts[:, None, :] - A[k, None, :, :2], axis=2)  # (B, N)
+        mins[k] = dist.min()
+    clear = mins - PED_RADIUS
+    return {
+        "upper_clearance_min": float(clear.min()),
+        "upper_clearance_p05": float(np.percentile(clear, 5)),
+    }
+
+
 def robot_free_crowd(crowd: SocialForceCrowd, n_steps: int, dt: float) -> np.ndarray:
     """The crowd's trajectory ``(n_steps, N, 4)`` with the robot absent (parked far away)."""
     far = jnp.array([1e4, 1e4])
@@ -460,10 +579,12 @@ def run(
     proxy=False,
     verbose=False,
     mppi_kw=None,
+    robot=DEFAULT_ROBOT,
+    torso=False,
 ):
     """Simulate one crossing; returns a dict with the metrics and the raw arrays."""
     plant, x0, pelvis_body, nominal, controller, crowd = build(
-        seed, robust_bound, n_ped, relax, planner, weights, proxy, mppi_kw
+        seed, robust_bound, n_ped, relax, planner, weights, proxy, mppi_kw, robot, torso
     )
     steps = int(round(duration / plant.dt))
     t0 = time.time()
@@ -522,6 +643,8 @@ def run(
         n_ped=n_ped,
         planner=planner,
         proxy=proxy,
+        robot=None if proxy else robot,
+        torso=torso,
     )
     if not proxy:
         q = S[:n_live, 3:7]
@@ -529,6 +652,12 @@ def run(
         m["pelvis_z_min"] = float(S[:n_live, 2].min())
     if "sub_data_mppi_error" in cd:
         m["mppi_errors"] = int(np.sum(np.asarray(cd["sub_data_mppi_error"])[:n_live]))
+    if not proxy:
+        m.update(upper_body_clearance(plant, S[:n_live], agents[:n_live]))
+    if "sub_data_amo_cmd" in cd:
+        ac = np.asarray(cd["sub_data_amo_cmd"])[:n_live]
+        m["torso_yaw_p95"] = float(np.percentile(np.abs(ac[:, 4]), 95))
+        m["torso_yaw_frac"] = float(np.mean(np.abs(ac[:, 4]) > 0.2))
     return dict(
         metrics=m,
         states=S,
@@ -580,6 +709,16 @@ def print_report(m):
         f"CBF active {m['cbf_active_frac']*100:.0f}%"
         + (f", slack on {m['slack_frac']*100:.1f}%" if m["slack_frac"] else "")
     )
+    if "upper_clearance_min" in m:
+        print(
+            f"upper-body clearance to the pedestrian discs: min {m['upper_clearance_min']:.2f} m, "
+            f"p05 {m['upper_clearance_p05']:.2f} m"
+            + (
+                f"; torso yaw p95 {m['torso_yaw_p95']:.2f} rad, engaged {m['torso_yaw_frac']*100:.0f}%"
+                if "torso_yaw_p95" in m
+                else ""
+            )
+        )
     extra = []
     if "upright_min" in m:
         extra.append(
@@ -603,6 +742,8 @@ def main(
     relax=None,
     planner=DEFAULT_PLANNER,
     proxy=False,
+    robot=DEFAULT_ROBOT,
+    torso=False,
 ):
     if robust_bound is None:
         robust_bound = DEFAULT_ROBUST_BOUND
@@ -611,16 +752,28 @@ def main(
     if TEST_MODE:
         duration = min(duration, 5 * CONTROL_DT)  # the smoke run keeps the JIT short
     r = run(
-        duration, seed, robust_bound, n_ped, relax, planner, DEFAULT_WEIGHTS, proxy, not TEST_MODE
+        duration,
+        seed,
+        robust_bound,
+        n_ped,
+        relax,
+        planner,
+        DEFAULT_WEIGHTS,
+        proxy,
+        not TEST_MODE,
+        None,
+        robot,
+        torso,
     )
     m = r["metrics"]
     print_report(m)
     if TEST_MODE:
         return float(m["h_min"])
-    _TAG[
-        0
-    ] = f"{planner}_{'relaxed_' if relax else ''}{'robust' if robust_bound > 0 else 'vanilla'}" + (
-        "_proxy" if proxy else ""
+    _TAG[0] = (
+        f"{planner}_{'relaxed_' if relax else ''}{'robust' if robust_bound > 0 else 'vanilla'}"
+        + ("_proxy" if proxy else "")
+        + (f"_{robot}" if not proxy and robot != "unitree" else "")
+        + ("_torso" if torso else "")
     )
     os.makedirs(RESULTS_DIR, exist_ok=True)
     plant, com, agents, n_live = r["plant"], r["com"], r["agents"], r["n_live"]
@@ -739,6 +892,12 @@ if __name__ == "__main__":
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("--planner", choices=("goal", "mppi"), default=DEFAULT_PLANNER)
+    p.add_argument("--robot", choices=("unitree", "amo"), default=DEFAULT_ROBOT)
+    p.add_argument(
+        "--torso",
+        action="store_true",
+        help="reactive shoulder-turn/lean while passing (needs --robot amo)",
+    )
     p.add_argument("--proxy", action="store_true", help="2-D lagged proxy instead of the G1")
     p.add_argument("--duration", type=float, default=DEFAULT_DURATION)
     p.add_argument("--robust", type=float, default=None, help="robust bound (m/s); 0 = vanilla")
@@ -759,4 +918,16 @@ if __name__ == "__main__":
         from cbfkit.systems.mujoco.viewer_utils import relaunch_under_mjpython_if_needed
 
         relaunch_under_mjpython_if_needed()
-    main(a.duration, a.seed, a.gif, a.view, a.robust, a.pedestrians, a.relax, a.planner, a.proxy)
+    main(
+        a.duration,
+        a.seed,
+        a.gif,
+        a.view,
+        a.robust,
+        a.pedestrians,
+        a.relax,
+        a.planner,
+        a.proxy,
+        a.robot,
+        a.torso,
+    )

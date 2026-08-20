@@ -191,3 +191,19 @@ duck to CoM 0.48 m, bow 0.8 → 0.56, upright min 0.97 — all *while walking*. 
 ~0.3 of the commanded 0.4 m/s in MJX (trained IsaacGym, authors demo MuJoCo-CPU; gait transfers, speed calibration
 partly doesn't). Next steps if wanted: measure the tracking bound δ for the robust CBF (g1_model_distance battery on
 AMO), and use torso yaw/lean as CBF decision variables in the scramble (shoulder-turn ≈ 0.35 → 0.25 m swept radius).
+
+## AMO in the scramble + the shoulder-turn negative result (2026-08-20)
+
+`g1_scramble.py --robot amo [--torso]`: AMO replaces the Unitree tracking layer under the same social-MPPI +
+soft-CBF stack (drop-in via `safe_locomotion_controller_di`; AMO's native target-yaw heading following). New
+metric: *upper-body clearance* — offline mujoco forward kinematics on the logged qpos, min distance of the
+shoulder/elbow/hand bodies to the pedestrian discs (the CoM keep-out can't see arms).
+
+Measured (mppi, seeds 0/1, 100 s): AMO crosses 2/2 at 82/80 s with intimate rate 1.2/0.8 (unitree: 65/56 s at
+1.7/2.5) — the gentlest configuration yet, partly because AMO realises a lower speed in MJX. Upper clearance
+min 0.11/0.16 m. **Negative result, kept as an off-by-default flag:** the reactive shoulder-turn/lean toward
+the passed pedestrian (torso_command hook, `(t, x, sub)`-aware, smoothed) HURT in two tuning rounds — engage
+<2 m/yaw 1.2: clearance 0.13/−0.03, h −0.01/−0.26, +14 s; engage <1.2 m/yaw 0.6: 0.08/0.14, still ≤ plain AMO.
+Mid-gait torso twists cost more tracking accuracy than the ~8 cm of profile they free (consistent with the
+demo's measured speed drop at large yaw). Torso agility pays on *command-level* needs (duck, turn in place),
+not as a reactive reflex layered on a walking gait.

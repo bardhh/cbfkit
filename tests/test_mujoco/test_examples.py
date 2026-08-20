@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = [
     "examples/mujoco/cart_pole_swingup.py",
     ("examples/mujoco/g1_scramble.py", "--planner", "mppi", "--proxy"),
+    ("examples/mujoco/g1_scramble.py", "--robot", "amo", "--planner", "mppi", "--torso"),
     ("examples/mujoco/g1_scramble_social_eval.py", "--configs", "mppi", "--seeds", "0"),
     "examples/mujoco/g1_standup.py",
     "examples/mujoco/g1_navigate.py",

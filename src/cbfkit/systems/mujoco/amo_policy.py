@@ -284,7 +284,7 @@ def _rpy(quat: Array) -> Array:
     return jnp.array([roll, pitch, yaw])
 
 
-TorsoCommand = Union[None, Tuple[float, float, float, float], Callable[[Array], Array]]
+TorsoCommand = Union[None, Tuple[float, float, float, float], Callable[..., Array]]
 
 
 class AmoWholeBodyPolicy:
@@ -395,17 +395,26 @@ class AmoWholeBodyPolicy:
         speed is sent as body-frame ``(vx, vy)``, so the commanded world velocity is
         realised while the robot turns. ``torso_command`` adds the whole-body part:
         ``None`` (upright), a constant ``(height_delta, torso_yaw, torso_pitch,
-        torso_roll)``, or a callable ``t -> (4,)`` for scheduled motions. Commands are
+        torso_roll)``, a callable ``t -> (4,)`` for scheduled motions, or a 3-argument
+        callable ``(t, x, sub) -> (4,)`` for state/carry-aware behaviors (``sub`` is the
+        controller's ``sub_data`` -- e.g. tracked pedestrians live in ``sub["_agents"]``
+        when running under ``safe_locomotion_controller_di(agents=...)``). Commands are
         clipped to the in-distribution ranges (``AMO_COMMAND_RANGES``). The carry lives in
         ``sub_data["_amo"]``; the assembled 7-command is logged as ``amo_cmd``.
         """
+        import inspect
+
         if torso_command is None:
-            torso_fn = lambda t: jnp.zeros(4)  # noqa: E731
+            torso_fn = lambda t, x, sub: jnp.zeros(4)  # noqa: E731
         elif callable(torso_command):
-            torso_fn = torso_command
+            n_args = len(inspect.signature(torso_command).parameters)
+            if n_args >= 3:
+                torso_fn = torso_command
+            else:
+                torso_fn = lambda t, x, sub: torso_command(t)  # noqa: E731
         else:
             const = jnp.asarray(torso_command, dtype=float)
-            torso_fn = lambda t: const  # noqa: E731
+            torso_fn = lambda t, x, sub: const  # noqa: E731
         r = AMO_COMMAND_RANGES
 
         def controller(t, x, u_nom, key, data):
@@ -427,7 +436,7 @@ class AmoWholeBodyPolicy:
                 target_yaw = jnp.where(
                     speed > min_speed_for_heading, yaw + jnp.arctan2(v[1], v[0]), state.target_yaw
                 )
-            torso = jnp.asarray(torso_fn(t), dtype=float)
+            torso = jnp.asarray(torso_fn(t, x, sub), dtype=float)
             cmd = jnp.array(
                 [
                     jnp.clip(v_body[0], *r["vx"]),
