@@ -1,5 +1,14 @@
-"""AMO whole-body policy: torch-free loading, JAX-vs-torch parity, plant, and controller."""
+"""AMO whole-body policy: torch-free loading, JAX-vs-torch parity, plant, and controller.
 
+The parity oracle (torch) runs in a SUBPROCESS: importing torch into the pytest process
+makes a later ``kvxopt`` import abort on macOS (two OpenMP runtimes in one process), and
+the runtime is torch-free by design anyway. The subprocess prints golden outputs as JSON.
+"""
+
+import importlib.util
+import json
+import subprocess
+import sys
 import urllib.error
 
 import jax
@@ -10,7 +19,41 @@ import pytest
 from cbfkit.utils.user_types import ControllerData
 
 amo = pytest.importorskip("cbfkit.systems.mujoco.amo_policy")
-torch = pytest.importorskip("torch", reason="parity tests need torch as the oracle")
+
+_ORACLE = r"""
+import json, sys
+import numpy as np
+import torch
+
+assets = sys.argv[1]
+rng = np.random.default_rng(0)
+x = rng.standard_normal((5, 12)).astype(np.float32)
+ns = torch.load(assets + "/adapter_norm_stats.pt", map_location="cpu", weights_only=False)
+ad = torch.jit.load(assets + "/adapter_jit.pt", map_location="cpu")
+xin = (torch.tensor(x) - torch.tensor(ns["input_mean"], dtype=torch.float32)) / (
+    torch.tensor(ns["input_std"], dtype=torch.float32) + 1e-8
+)
+adapter_want = (ad(xin).detach().numpy() * ns["output_std"] + ns["output_mean"]).tolist()
+
+pol = torch.jit.load(assets + "/amo_jit.pt", map_location="cpu")
+oa = pol._orig_actor
+elu = torch.nn.ELU()
+rng = np.random.default_rng(1)
+prop = rng.standard_normal(93).astype(np.float32)
+demo = rng.standard_normal(17).astype(np.float32)
+hist = rng.standard_normal((10, 93)).astype(np.float32)
+extra = rng.standard_normal((25, 93)).astype(np.float32)
+# Drive the sub-modules exactly as the TorchScript top-level graph does (its own
+# forward has a baked cuda zeros and cannot run on CPU).
+with torch.no_grad():
+    feat = oa.text_feat_merger(elu, oa.text_feat_encoder(elu, torch.tensor(hist[-4:])).view(1, -1))
+    hist_enc = oa.history_encoder(elu, torch.tensor(hist).unsqueeze(0))
+    inp = torch.cat(
+        [torch.tensor(extra.reshape(1, -1)), feat, torch.tensor(prop[None]),
+         torch.tensor(demo[None]), torch.zeros(1, 3), hist_enc], 1)
+    policy_want = pol.student_actor_backbone(inp).numpy().squeeze().tolist()
+print(json.dumps({"adapter": adapter_want, "policy": policy_want}))
+"""
 
 
 @pytest.fixture(scope="module")
@@ -28,53 +71,38 @@ def params(assets):
     return amo.load_amo_params()
 
 
+@pytest.fixture(scope="module")
+def golden(assets):
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("parity tests need torch as the oracle")
+    proc = subprocess.run(
+        [sys.executable, "-c", _ORACLE, str(assets)], capture_output=True, text=True, timeout=300
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    return json.loads(proc.stdout.strip().splitlines()[-1])
+
+
 def test_torch_free_readers_recover_all_tensors(assets, params):
     assert params.policy["student_actor_backbone.0.weight"].shape == (1024, 2474)
     assert params.adapter["model.1.running_mean"].shape == (512,)
     assert params.input_mean.shape == (12,) and params.output_std.shape == (15,)
 
 
-def test_adapter_matches_torch(assets, params):
-    ad = torch.jit.load(str(assets / "adapter_jit.pt"), map_location="cpu")
+def test_adapter_matches_torch(params, golden):
     rng = np.random.default_rng(0)
     x = rng.standard_normal((5, 12)).astype(np.float32)
-    ns = torch.load(str(assets / "adapter_norm_stats.pt"), map_location="cpu", weights_only=False)
-    xin = (torch.tensor(x) - torch.tensor(ns["input_mean"], dtype=torch.float32)) / (
-        torch.tensor(ns["input_std"], dtype=torch.float32) + 1e-8
-    )
-    want = ad(xin).detach().numpy() * ns["output_std"] + ns["output_mean"]
+    want = np.asarray(golden["adapter"])
     got = np.stack([np.asarray(amo.adapter_forward(params, jnp.asarray(r))) for r in x])
     assert np.allclose(got, want, atol=1e-4), np.abs(got - want).max()
 
 
-def test_policy_matches_torch(assets, params):
-    """Drive the torch sub-modules exactly as the TorchScript top-level graph does
-    (its own forward has a baked cuda zeros and cannot run on CPU) and compare."""
-    pol = torch.jit.load(str(assets / "amo_jit.pt"), map_location="cpu")
-    oa = pol._orig_actor
-    elu = torch.nn.ELU()
+def test_policy_matches_torch(params, golden):
     rng = np.random.default_rng(1)
     prop = rng.standard_normal(93).astype(np.float32)
     demo = rng.standard_normal(17).astype(np.float32)
     hist = rng.standard_normal((10, 93)).astype(np.float32)
     extra = rng.standard_normal((25, 93)).astype(np.float32)
-    with torch.no_grad():
-        feat = oa.text_feat_merger(
-            elu, oa.text_feat_encoder(elu, torch.tensor(hist[-4:])).view(1, -1)
-        )
-        hist_enc = oa.history_encoder(elu, torch.tensor(hist).unsqueeze(0))
-        inp = torch.cat(
-            [
-                torch.tensor(extra.reshape(1, -1)),
-                feat,
-                torch.tensor(prop[None]),
-                torch.tensor(demo[None]),
-                torch.zeros(1, 3),
-                hist_enc,
-            ],
-            1,
-        )
-        want = pol.student_actor_backbone(inp).numpy().squeeze()
+    want = np.asarray(golden["policy"])
     got = np.asarray(
         amo.policy_forward(
             params, jnp.asarray(prop), jnp.asarray(demo), jnp.asarray(hist), jnp.asarray(extra)
