@@ -602,3 +602,32 @@ def test_hdi_wrapper_local_planner_hook_overrides_a_nom_and_carries_state(g1_pla
     assert int(d1.sub_data["_lp_calls"]) == 1 and float(d1.sub_data["lp_flag"]) == 1.0
     _, d2 = ctrl(0.02, x, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), d1)
     assert int(d2.sub_data["_lp_calls"]) == 2  # carried
+
+
+def test_heading_social_cost_slices_the_layout_and_rewards_the_slim_profile():
+    from cbfkit.controllers.mppi.social_costs import SocialCostWeights
+    from cbfkit.systems.mujoco.reduced_order import heading_social_trajectory_cost
+
+    H, dt, n = 15, 0.2, 1
+    goal = jnp.array([5.0, 0.0])
+    cost = heading_social_trajectory_cost(
+        n, goal, SocialCostWeights(), dt, (0.16, 0.28), 0.30, robot_radius=0.35
+    )
+    xs = jnp.linspace(-0.7, 0.7, H)
+    P = jnp.stack([xs, jnp.zeros(H)], axis=1)
+    V = jnp.broadcast_to(jnp.array([0.5, 0.0]), (H, 2))
+    ped = jnp.array([0.0, 0.35, 0.0, 0.0])  # standing 0.35 m to the side of the path
+
+    def traj(th):
+        rows = [P.T, V.T, th[None, :], jnp.zeros((1, H))]
+        rows.append(jnp.broadcast_to(ped[:, None], (4, H)))
+        return jnp.concatenate(rows, axis=0)
+
+    U = jnp.zeros((3, H))
+    c_fwd = float(cost(0.0, traj(jnp.zeros(H)), U))  # wide lateral axis toward the pedestrian
+    c_side = float(cost(0.0, traj(jnp.full(H, jnp.pi / 2)), U))  # narrow axis toward her
+    assert jnp.isfinite(c_fwd) and jnp.isfinite(c_side)
+    # Passing 0.35 m from a person: facing forward points the 0.58 m lateral semi-axis at
+    # her (deep ellipse violation); turned side-on the 0.46 m longitudinal axis does
+    # (shallow). The ellipse clearance term must dominate the mild align/spin terms.
+    assert c_side < c_fwd

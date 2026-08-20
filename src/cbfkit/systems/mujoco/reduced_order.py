@@ -549,6 +549,7 @@ class EllipseCostWeights:
     lane: float = 100.0  # (|y| - lane_halfwidth)^2 outside the lane (per second)
     align: float = 0.5  # (1 - cos(th - travel)) |v| -- prefer facing the walk (per second)
     spin: float = 0.5  # omega^2 (per second)
+    overturn: float = 40.0  # (|wrap(th - travel)| - pi/2)^2 beyond the +-90 deg band (per second)
     speed: float = 200.0  # relu(|v| - v_max)^2 (per second)
 
 
@@ -603,20 +604,113 @@ def ellipse_trajectory_cost(
         sp = jnp.linalg.norm(V, axis=-1)
         c = c + w.speed * jnp.sum(jnp.maximum(sp - v_max, 0.0) ** 2) * dt
         if heading:
-            travel = jnp.arctan2(V[:, 1], V[:, 0])
-            # Saturated speed gate: raw-speed scaling lets the heading wander freely on a
-            # slow robot (measured: the G1 at 0.2 m/s pirouetted a full turn mid-crossing);
-            # the gate keeps full align pressure at walking speeds while still fading out
-            # near standstill, where the travel direction is numerical noise.
-            gate = jnp.clip(sp / 0.2, 0.0, 1.0)
-            c = c + w.align * jnp.sum((1.0 - jnp.cos(th - travel)) * gate) * dt
+            # Heading reference: velocity blended with a small goal-direction bias. Gating
+            # by raw speed instead lets the heading wander whenever the robot slows -- the
+            # G1 pirouetted a full turn mid-corridor, and in the crowd every stop wound the
+            # heading further (measured 5-7 revolutions). With the blend the reference is
+            # always defined: standing, prefer facing the goal; walking, face the travel.
+            to_goal = goal - P
+            gdir = to_goal / (jnp.linalg.norm(to_goal, axis=-1, keepdims=True) + 1e-6)
+            refv = V + 0.15 * gdir
+            ref = jnp.arctan2(refv[:, 1], refv[:, 0])
+            c = c + w.align * jnp.sum(1.0 - jnp.cos(th - ref)) * dt
             c = c + w.spin * jnp.sum(st[5, :] ** 2) * dt
+            # +-90 deg heading band around the reference: by the ellipse's pi-symmetry
+            # every slimming profile already exists inside the band, so leaving it buys
+            # nothing -- it is exactly how the heading winds into a pirouette when threats
+            # alternate sides. The fold is 2pi-periodic, so a wound plan is priced until
+            # it unwinds.
+            fold = jnp.abs(jnp.arctan2(jnp.sin(th - ref), jnp.cos(th - ref)))
+            over = jnp.maximum(fold - jnp.pi / 2, 0.0)
+            c = c + w.overturn * jnp.sum(over**2) * dt
         return c
 
     return cost
 
 
-__all__ += ["EllipseCostWeights", "ellipse_trajectory_cost", "mppi_local_planner"]
+def heading_social_trajectory_cost(
+    n_agents: int,
+    goal: Any,
+    weights: Any,
+    dt: float,
+    axes: Tuple[float, float],
+    ped_radius: float,
+    *,
+    robot_radius: float = 0.35,
+    pass_side: Optional[str] = None,
+    ellipse_weights: Optional[EllipseCostWeights] = None,
+):
+    """The social MPPI cost re-hosted on the heading-augmented layout ``[p v th om | peds]``.
+
+    The person-centred terms of :func:`cbfkit.controllers.mppi.social_costs.social_cost_terms`
+    (proxemics, ttc, goal/progress, legibility, pass side) are evaluated on the sliced DI
+    sub-state -- they know nothing about the robot's shape. The circular collision hinge is
+    zeroed and replaced by the rotating-ellipse clearance preference of
+    :func:`ellipse_trajectory_cost` (saturated quadratic in absolute h-units), so *rotating
+    to slim the profile pays inside the plan* -- the planner can aim a shoulder-turn at a gap
+    in the crowd before it opens. The ttc term keeps the circular ``robot_radius`` as a
+    conservative closing-speed shaping. ``ellipse_weights.goal``/``progress``/``lane``/
+    ``speed`` are ignored here (the social cost owns those); only ``clearance*``, ``align``
+    and ``spin`` are used, with the align term speed-gated as in
+    :func:`ellipse_trajectory_cost`.
+    """
+    import dataclasses
+
+    from cbfkit.controllers.mppi.social_costs import social_cost_terms
+
+    ew = ellipse_weights if ellipse_weights is not None else EllipseCostWeights()
+    w_social = dataclasses.replace(weights, collision=0.0)
+    goal = jnp.asarray(goal, dtype=float)[:2]
+    a_lon = float(axes[0]) + float(ped_radius)
+    a_lat = float(axes[1]) + float(ped_radius)
+
+    def cost(time, states, controls, prev_robustness=None):
+        st = jnp.asarray(states)
+        H = st.shape[1]
+        di = jnp.concatenate([st[0:4], st[6:]], axis=0)
+        terms = social_cost_terms(
+            di,
+            jnp.asarray(controls)[:2],
+            n_agents=n_agents,
+            goal=goal,
+            weights=w_social,
+            dt=dt,
+            robot_radius=robot_radius,
+            ped_radius=ped_radius,
+            pass_side=pass_side,
+        )
+        c = sum(terms.values())
+        P = st[0:2, :].T
+        V = st[2:4, :].T
+        th = st[4, :]
+        Pp = st[6 : 6 + 4 * n_agents, :].T.reshape(H, n_agents, 4)[..., :2]
+        diff = P[:, None, :] - Pp
+        cth, sth = jnp.cos(th)[:, None], jnp.sin(th)[:, None]
+        lon = (cth * diff[..., 0] + sth * diff[..., 1]) / a_lon
+        lat = (-sth * diff[..., 0] + cth * diff[..., 1]) / a_lat
+        h = jnp.sqrt(lon**2 + lat**2 + 1e-12) - 1.0
+        viol = jnp.clip(ew.clearance_margin - h, 0.0, ew.clearance_cap)
+        c = c + ew.clearance * jnp.sum(viol**2) * dt
+        to_goal = goal - P
+        gdir = to_goal / (jnp.linalg.norm(to_goal, axis=-1, keepdims=True) + 1e-6)
+        refv = V + 0.15 * gdir
+        ref = jnp.arctan2(refv[:, 1], refv[:, 0])
+        c = c + ew.align * jnp.sum(1.0 - jnp.cos(th - ref)) * dt
+        c = c + ew.spin * jnp.sum(st[5, :] ** 2) * dt
+        fold = jnp.abs(jnp.arctan2(jnp.sin(th - ref), jnp.cos(th - ref)))
+        over = jnp.maximum(fold - jnp.pi / 2, 0.0)
+        c = c + ew.overturn * jnp.sum(over**2) * dt
+        return c
+
+    return cost
+
+
+__all__ += [
+    "EllipseCostWeights",
+    "ellipse_trajectory_cost",
+    "heading_social_trajectory_cost",
+    "mppi_local_planner",
+]
 
 
 # --------------------------------------------------------------------------- anisotropic footprint

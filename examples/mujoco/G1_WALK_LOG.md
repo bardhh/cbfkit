@@ -294,3 +294,39 @@ Two lessons, both measured:
 Library additions: `EllipseCostWeights`/`ellipse_trajectory_cost` (heading and disc layouts),
 `mppi_local_planner(control_dim=, state_head=)` generalisation, `local_planner=` hook on
 `safe_locomotion_controller_hdi`. GIF: `results/g1_corridor_ellipse_mppi.gif`.
+
+## Anisotropic footprint in the scramble + the heading wind-up (2026-08-21)
+
+`g1_scramble.py --footprint ellipse`: the corridor's rotating-ellipse certificate + the social MPPI
+re-hosted on the heading-augmented model (`heading_social_trajectory_cost`: circular collision hinge
+→ ellipse clearance preference, so the plan owns the rotation). Supported on `--proxy` and
+`--robot amo` (absolute target-yaw command).
+
+**The wind-up disease and two rounds of treatment.** First proxy runs: politer than the disc
+(intimate 1.1/0.6 vs 1.6/3.0) but theta wound 5–7 full revolutions — with 40 pedestrians the
+profile-slimming pull alternates sides and ratchets the pi-symmetric heading around; on a real robot
+that is a pirouette. Round 1 (speed-gated align) had a hole: every slow-down freed the heading — the
+G1 corridor pirouetted 388 deg. Round 2 (final): reference = velocity blended with a small goal bias
+(always defined; standing robots prefer facing their goal) + a ±90 deg `overturn` band around it
+(by pi-symmetry every slimming profile exists inside the band, so leaving it buys nothing). Weight
+sweeps (overturn 40/80/150, align/spin variants) show the band tames but cannot eliminate winding:
+once the warm-started plan carries rotation momentum, continuing through theta+pi is dynamically
+cheaper than braking — a *pi-roll*. Certificate-safe and cosmetic on good seeds; on hard seeds the
+rolls chain into wind-up.
+
+**Final measured (mppi, soft CBF, seeds 0/1).** Proxy: disc 70/54 s intimate 1.6/3.0; ellipse
+52/108 s intimate 1.1/0.4, h +0.49/+0.82, travel 483/2215 deg. AMO: disc 82/80 s intimate 1.2/0.8,
+h −0.12/−0.02; ellipse s0 crossed 97.8 s, intimate 0.92, h +0.12, slack 0, upper-body clearance
+0.15/0.54 m (branch best p05); s1 politely pirouetted and did not cross in 120 s (intimate 0.38,
+h +0.05 — fails by not arriving, never by contact). Corridor under the same final config: proxy
+still crosses 3/3 (h ≥ +0.03; some seeds exit the squeeze by rolling through theta+pi), offset
+diagonal better than ever (theta 68/35 deg, h +0.21..0.31); G1 s0 a clean 95 deg squeeze (107.6 s),
+G1 s1 winds and stalls (h −0.22) — supersedes the 2026-08-20 corridor numbers (heading-reference
+rework changed the config).
+
+**Verdict.** The rotating footprint + heading-MPPI is measurably politer at better-certified safety
+(h positive where the disc drooped negative) and the lookahead does aim shoulder-turns at gaps —
+but heading wind-up under model mismatch is the open failure mode on hard seeds (2/4 G1 runs).
+Designated follow-up: plan-commitment smoothing in `mppi_local_planner` (blend successive solutions
+so a replan cannot reverse or re-excite the rotation for free), or a pi-folded heading channel.
+GIFs: `results/g1_scramble_mppi_relaxed_vanilla_amo_ellipse.gif`, `results/g1_corridor_ellipse_mppi.gif`.

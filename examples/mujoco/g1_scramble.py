@@ -66,6 +66,32 @@ perturbed the walking policy's tracking by more than the ~8 cm of profile it fre
 upper clearance and h_min got slightly worse, never better. Body agility helps where the
 *command* needs it (duck under, turn in place, reach); mid-gait twisting is not free.
 
+``--footprint ellipse`` runs the whole stack on the anisotropic footprint: the corridor's
+rotating measured ellipse as the certificate (``com_agent_ellipse_hocbfs`` +
+``safe_locomotion_controller_hdi``) and the social MPPI re-hosted on the heading-augmented
+model (``reduced_order.heading_social_trajectory_cost`` -- circular collision hinge
+replaced by the ellipse clearance preference, so the *plan* owns the rotation and can aim
+a shoulder-turn at a gap before it opens). ``--proxy`` or ``--robot amo`` only (the hdi
+wrapper hands an absolute target yaw). Measured (mppi planner, soft CBF, seeds 0/1):
+
+    config          crossed   time       intimate   front      h_min        theta travel
+    proxy disc      2/2       70/54 s    1.6 / 3.0  0.6 / 2.5  +0.19/+0.01  --
+    proxy ellipse   2/2       52/108 s   1.1 / 0.4  0.5 / 0.3  +0.49/+0.82  483/2215 deg
+    amo   disc      2/2       82/80 s    1.2 / 0.8  --         -0.12/-0.02  --
+    amo   ellipse   1/2       98/(>120)  0.9 / 0.4  0.4 / 0.2  +0.12/+0.05  757/2523 deg
+
+Reading: the rotating footprint is measurably POLITER at better-certified safety -- its
+h stays positive where the disc AMO rows droop negative, intimate rates drop, slack is
+~0, and the AMO crossing posts the branch's best upper-body clearance p05 (0.54 m). The
+open failure mode is heading WIND-UP on the hard seed: threats alternating sides ratchet
+the pi-symmetric profile around (theta travel 2200-2500 deg) and the robot politely
+pirouettes instead of arriving (amo/s1 did not cross in 120 s; safe and gentle
+throughout -- it fails by not getting there). The ``overturn`` +-90 deg band and the
+goal-biased heading reference (``reduced_order.EllipseCostWeights``) tame it on seed 0,
+but cost weights cannot reliably beat the warm-started rotation momentum at a replan
+boundary; plan-commitment smoothing in ``mppi_local_planner`` is the designated
+follow-up.
+
 Read it this way: the goal-seeking baseline is *more* intrusive than an average pedestrian
 (intimate rate 4.3 vs the human norm 3.5) and lives on the CBF; the social MPPI is ~2.5x
 less intrusive than that norm, disturbs the crowd 4x less, hands the CBF an almost-feasible
@@ -74,7 +100,8 @@ seed -- for ~+13 s of crossing time. The ablation (social terms zeroed) shows th
 TTC/slow terms are what buy *reliability at speed*: without them the planner is similarly
 polite but timid (4/5 crossings, +10 s, 14 % waiting).
 
-    python examples/mujoco/g1_scramble.py [--planner goal|mppi] [--proxy] [--robust B] [--pedestrians N]
+    python examples/mujoco/g1_scramble.py [--planner goal|mppi] [--footprint disc|ellipse]
+                                          [--proxy] [--robust B] [--pedestrians N]
                                           [--relax|--hard] [--duration T] [--seed S] [--gif] [--view]
 """
 
@@ -101,10 +128,15 @@ from cbfkit.systems.mujoco.amo_policy import _rpy
 from cbfkit.systems.mujoco.crowd import SocialForceCrowd
 from cbfkit.systems.mujoco.unitree_policy import _wrap
 from cbfkit.systems.mujoco.reduced_order import (
+    G1_FOOTPRINT,
+    com_agent_ellipse_hocbfs,
     com_agent_hocbfs,
     embedded_double_integrator,
+    embedded_heading_double_integrator,
+    heading_social_trajectory_cost,
     mppi_local_planner,
     safe_locomotion_controller_di,
+    safe_locomotion_controller_hdi,
 )
 from cbfkit.utils.user_types import ControllerData, PlannerData
 
@@ -127,6 +159,7 @@ ROBOT_RADIUS = 0.35
 R_PED = PED_RADIUS + ROBOT_RADIUS
 V_MAX = 0.5
 A_MAX = 1.0
+ALPHA_MAX = 2.0  # heading acceleration bound of the --footprint ellipse variant
 BARRIER_SHAPE = "distance"
 DEFAULT_ROBUST_BOUND = 0.0  # in a crush robust margins are eaten by slack (see the eval table)
 DEFAULT_RELAX = True  # hard barrier constraints are infeasible within ~10 s in this crowd
@@ -245,26 +278,48 @@ def build_social_mppi(
     costs_lambda: float = MPPI_LAMBDA,
     control_std: float = MPPI_CONTROL_STD,
     samples: int = MPPI_SAMPLES,
+    footprint: str = "disc",
+    ellipse_weights=None,
 ):
     """MPPI planner over the compact ``[p | v | pedestrians]`` state with the social cost, plus
-    the adapter for :func:`safe_locomotion_controller_di`."""
-    dyn = embedded_double_integrator(2, (0, 1), n_agents=n_ped)
-    cost = social_trajectory_cost(
-        n_agents=n_ped,
-        goal=GOAL,
-        weights=weights,
-        dt=MPPI_DT,
-        robot_radius=ROBOT_RADIUS,
-        ped_radius=PED_RADIUS,
-        pass_side=PASS_SIDE if weights.pass_side > 0 else None,
-    )
+    the adapter for :func:`safe_locomotion_controller_di`. ``footprint="ellipse"`` re-hosts the
+    social cost on the heading-augmented layout (:func:`heading_social_trajectory_cost`): the
+    plan then owns the rotation and can aim a shoulder-turn at a gap before it opens."""
+    if footprint == "ellipse":
+        dyn = embedded_heading_double_integrator(2, (0, 1), n_agents=n_ped)
+        limits = jnp.array([A_MAX, A_MAX, ALPHA_MAX])
+        cost = heading_social_trajectory_cost(
+            n_ped,
+            GOAL,
+            weights,
+            MPPI_DT,
+            (G1_FOOTPRINT["lon"], G1_FOOTPRINT["lat"]),
+            PED_RADIUS,
+            robot_radius=ROBOT_RADIUS,
+            pass_side=PASS_SIDE if weights.pass_side > 0 else None,
+            ellipse_weights=ellipse_weights,
+        )
+        cdim, shead = 3, 6
+    else:
+        dyn = embedded_double_integrator(2, (0, 1), n_agents=n_ped)
+        limits = jnp.array([A_MAX, A_MAX])
+        cost = social_trajectory_cost(
+            n_agents=n_ped,
+            goal=GOAL,
+            weights=weights,
+            dt=MPPI_DT,
+            robot_radius=ROBOT_RADIUS,
+            ped_radius=PED_RADIUS,
+            pass_side=PASS_SIDE if weights.pass_side > 0 else None,
+        )
+        cdim, shead = 2, 4
     mppi = vanilla_mppi(
-        control_limits=jnp.array([A_MAX, A_MAX]),
+        control_limits=limits,
         dynamics_func=dyn,
         trajectory_cost=cost,
         mppi_args={
-            "robot_state_dim": 4 + 4 * n_ped,
-            "robot_control_dim": 2,
+            "robot_state_dim": shead + 4 * n_ped,
+            "robot_control_dim": cdim,
             "prediction_horizon": MPPI_HORIZON,
             "num_samples": samples,
             "time_step": MPPI_DT,
@@ -275,7 +330,12 @@ def build_social_mppi(
         },
     )
     return mppi_local_planner(
-        mppi, n_ped, horizon=MPPI_HORIZON, replan_every=int(round(MPPI_DT / CONTROL_DT))
+        mppi,
+        n_ped,
+        horizon=MPPI_HORIZON,
+        replan_every=int(round(MPPI_DT / CONTROL_DT)),
+        control_dim=cdim,
+        state_head=shead,
     )
 
 
@@ -320,9 +380,17 @@ def build(
     mppi_kw: dict = None,
     robot: str = DEFAULT_ROBOT,
     torso: bool = False,
+    footprint: str = "disc",
 ):
     if torso and (proxy or robot != "amo"):
         raise ValueError("--torso needs the AMO robot (--robot amo, not proxy)")
+    if footprint not in ("disc", "ellipse"):
+        raise ValueError(f"unknown footprint {footprint!r} (disc | ellipse)")
+    if footprint == "ellipse" and not (proxy or robot == "amo"):
+        raise ValueError(
+            "--footprint ellipse needs --proxy or --robot amo: the hdi wrapper hands an "
+            "absolute target yaw and only the AMO adapter takes one (GR00T/Unitree take rates)"
+        )
     # --robot groot: NVIDIA GEAR-WBC (see g1_walk_compare.py -- flattest ride of the three)
     if proxy:
         plant = ProxyPlant()
@@ -372,12 +440,20 @@ def build(
         repulsion_range=PED_REPULSION_RANGE,
         arrive_radius=ARRIVE_RADIUS,
     )
-    dyn = embedded_double_integrator(plant.state_dim, ci, n_agents=n_ped)
-    barriers = com_agent_hocbfs(
-        plant, n_ped, [(R_PED, R_PED)] * n_ped, class_k_gain=1.0, shape=BARRIER_SHAPE
-    )
+    if footprint == "ellipse":
+        dyn = embedded_heading_double_integrator(plant.state_dim, ci, n_agents=n_ped)
+        barriers = com_agent_ellipse_hocbfs(
+            plant, n_ped, (G1_FOOTPRINT["lon"], G1_FOOTPRINT["lat"]), ped_radius=PED_RADIUS
+        )
+        control_limits = jnp.array([A_MAX, A_MAX, ALPHA_MAX])
+    else:
+        dyn = embedded_double_integrator(plant.state_dim, ci, n_agents=n_ped)
+        barriers = com_agent_hocbfs(
+            plant, n_ped, [(R_PED, R_PED)] * n_ped, class_k_gain=1.0, shape=BARRIER_SHAPE
+        )
+        control_limits = jnp.array([A_MAX, A_MAX])
     kw = dict(
-        control_limits=jnp.array([A_MAX, A_MAX]),
+        control_limits=control_limits,
         dynamics_func=dyn,
         barriers=barriers,
         # 32 PDIPM iterations (default 16): at an MPPI replan boundary a_nom jumps and the
@@ -398,12 +474,17 @@ def build(
     else:
         cbf_qp = vanilla_cbf_clf_qp_controller(**kw)
     if planner == "mppi":
-        local_planner = build_social_mppi(n_ped, weights, seed, **(mppi_kw or {}))
+        local_planner = build_social_mppi(
+            n_ped, weights, seed, footprint=footprint, **(mppi_kw or {})
+        )
     elif planner == "goal":
         local_planner = None
     else:
         raise ValueError(f"unknown planner {planner!r} (goal | mppi)")
-    safe = safe_locomotion_controller_di(
+    wrapper = (
+        safe_locomotion_controller_hdi if footprint == "ellipse" else safe_locomotion_controller_di
+    )
+    safe = wrapper(
         cbf_qp, loco, plant, plant.dt, v_max=V_MAX, agents=crowd, local_planner=local_planner
     )
 
@@ -595,10 +676,11 @@ def run(
     mppi_kw=None,
     robot=DEFAULT_ROBOT,
     torso=False,
+    footprint="disc",
 ):
     """Simulate one crossing; returns a dict with the metrics and the raw arrays."""
     plant, x0, pelvis_body, nominal, controller, crowd = build(
-        seed, robust_bound, n_ped, relax, planner, weights, proxy, mppi_kw, robot, torso
+        seed, robust_bound, n_ped, relax, planner, weights, proxy, mppi_kw, robot, torso, footprint
     )
     steps = int(round(duration / plant.dt))
     t0 = time.time()
@@ -634,7 +716,8 @@ def run(
         n_live = min(n_live, int(err_steps[0]))
     slack = None
     if relax and "sol" in cd:
-        slack = np.asarray(cd["sol"])[:n_live, 2:]  # slack columns follow the 2 controls
+        n_u = 3 if footprint == "ellipse" else 2
+        slack = np.asarray(cd["sol"])[:n_live, n_u:]  # slack columns follow the controls
     free = robot_free_crowd(crowd, max(n_live, 1), plant.dt)
     m = social_metrics(
         com[:n_live],
@@ -659,7 +742,23 @@ def run(
         proxy=proxy,
         robot=None if proxy else robot,
         torso=torso,
+        footprint=footprint,
     )
+    if footprint == "ellipse" and "sub_data_theta_cmd" in cd:
+        thc = np.asarray(cd["sub_data_theta_cmd"])[:n_live]
+        # The certificate quantity: rotating-ellipse h on the measured com + commanded theta
+        # (replaces the disc h_min; closest_m and the person-centred rates stay comparable).
+        a_lon = G1_FOOTPRINT["lon"] + PED_RADIUS
+        a_lat = G1_FOOTPRINT["lat"] + PED_RADIUS
+        rel = com[:n_live, None, :] - agents[:n_live, :, :2]
+        c_, s_ = np.cos(thc)[:, None], np.sin(thc)[:, None]
+        lon = (c_ * rel[..., 0] + s_ * rel[..., 1]) / a_lon
+        lat = (-s_ * rel[..., 0] + c_ * rel[..., 1]) / a_lat
+        m["h_min"] = float((np.sqrt(lon**2 + lat**2) - 1.0).min()) if rel.size else np.inf
+        m["theta_cmd_max_deg"] = float(np.rad2deg(np.abs(thc).max())) if thc.size else 0.0
+        m["theta_travel_deg"] = (
+            float(np.rad2deg(np.abs(np.diff(thc)).sum())) if thc.size > 1 else 0.0
+        )
     if not proxy:
         q = S[:n_live, 3:7]
         m["upright_min"] = float((1 - 2 * (q[:, 1] ** 2 + q[:, 2] ** 2)).min())
@@ -741,6 +840,10 @@ def print_report(m):
     extra.append(f"QP non-converged {m['qp_nonconverged']}")
     if m.get("mppi_errors") is not None:
         extra.append(f"MPPI errors {m['mppi_errors']}")
+    if m.get("theta_travel_deg") is not None:
+        extra.append(
+            f"heading: theta max {m['theta_cmd_max_deg']:.0f} deg, travel {m['theta_travel_deg']:.0f} deg"
+        )
     if m["stopped_at_s"] is not None:
         extra.append(f"SIMULATION STOPPED on controller error at t={m['stopped_at_s']:.1f}s")
     print("; ".join(extra))
@@ -758,6 +861,7 @@ def main(
     proxy=False,
     robot=DEFAULT_ROBOT,
     torso=False,
+    footprint="disc",
 ):
     if robust_bound is None:
         robust_bound = DEFAULT_ROBUST_BOUND
@@ -778,6 +882,7 @@ def main(
         None,
         robot,
         torso,
+        footprint,
     )
     m = r["metrics"]
     print_report(m)
@@ -788,6 +893,7 @@ def main(
         + ("_proxy" if proxy else "")
         + (f"_{robot}" if not proxy and robot != "unitree" else "")
         + ("_torso" if torso else "")
+        + ("_ellipse" if footprint == "ellipse" else "")
     )
     os.makedirs(RESULTS_DIR, exist_ok=True)
     plant, com, agents, n_live = r["plant"], r["com"], r["agents"], r["n_live"]
@@ -924,6 +1030,12 @@ if __name__ == "__main__":
         help="soft barrier constraints (slack, penalised) -- the default here",
     )
     p.add_argument("--hard", dest="relax", action="store_false", help="hard barrier constraints")
+    p.add_argument(
+        "--footprint",
+        choices=("disc", "ellipse"),
+        default="disc",
+        help="robot keep-out: 0.35 m disc or the rotating measured ellipse (heading-augmented)",
+    )
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--gif", action="store_true")
     p.add_argument("--view", action="store_true")
@@ -943,5 +1055,6 @@ if __name__ == "__main__":
         a.planner,
         a.proxy,
         a.robot,
-        a.torso,
+        torso=a.torso,
+        footprint=a.footprint,
     )

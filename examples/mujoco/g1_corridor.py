@@ -32,10 +32,17 @@ x stalls at -0.23). The rotation must come from a layer with lookahead. Two are 
   *preference*. Normalising it by the margin makes every violation infinite, the best
   sample is always "wait", and the robot freezes in front of the gap; random shooting
   cannot thread a +-4 cm tube -- proposing "through, sideways-ish" and letting the hard
-  QP do the threading is the split that works. ``--offset`` shifts the gap off the
-  start-goal line: the scripted ramp does not know and squeezes at h ~ +0.04; the MPPI
-  plans a diagonal through the actual gap with ~40% less heading travel and ~6x the
-  margin -- lookahead replaces the tuned maneuver instead of imitating it.
+  QP do the threading is the split that works. Two more measured shaping lessons: the
+  align/overturn heading reference must blend velocity with a small goal bias (gating by
+  raw speed lets the heading wander whenever the robot slows -- the G1 pirouetted a full
+  turn), and the +-90 deg ``overturn`` band prices out heading wind-up. Residual: the
+  pi-symmetric footprint sometimes exits a squeeze by rolling forward through theta+pi
+  instead of rotating back -- certificate-safe and cosmetic (weights cannot reliably beat
+  the warm-started rotation momentum; a plan-commitment knob is the follow-up).
+  ``--offset`` shifts the gap off the start-goal line: the scripted ramp does not know
+  and squeezes at h ~ +0.04; the MPPI plans a diagonal through the actual gap with less
+  rotation (68 vs 90 deg) at ~8x the margin -- lookahead replaces the tuned maneuver
+  instead of imitating it.
 
 The tracking layer is AMO (``--g1``; lateral gait realises ~0.13 m/s in MJX, so the
 squeeze is slow) or the 2-D lagged proxy (default; fast, exercises the QP mechanism).
@@ -57,26 +64,28 @@ Measured (hard constraints; proxy gap 1.0 m, G1 gap 1.25 m):
     G1     disc                     refuses (needs 1.30 m; correct)
 
     proxy, --planner mppi (no suggestion anywhere; seeds 0/1/2):
-    ellipse, centred gap 1.0       crossed 34.8/27.7/33.6 s, theta_max 84-94 deg
-                                    (discovered), heading travel 203-259 deg, h >= +0.07
+    ellipse, centred gap 1.0       crossed 47.9/56.8/49.3 s, h >= +0.03 hard; rotates
+                                    ~90 deg to squeeze, on some seeds exits by rolling
+                                    forward through theta+pi (theta_max 190-404 -- the
+                                    documented cosmetic residual)
     disc, identical planner        refuses: parks at x -0.83 (the plan itself keeps the
                                     0.68 m preference distance; certificate isolation holds)
-    ellipse, offset -0.35          suggest: crossed 22.6 s, travel 179 deg, h_min +0.04
-                                    mppi:    crossed 27-28 s, theta_max 38-51 deg only,
-                                    travel 108-116 deg, h_min +0.21..0.26 -- plans the
-                                    diagonal: less rotation, 5-6x the margin; the ramp
+    ellipse, offset -0.35          suggest: crossed 22.6 s, theta_max 90, h_min +0.04
+                                    mppi:    crossed 31.4/31.4/41.4 s, theta_max
+                                    68/35/175 deg, h_min +0.21..0.31 -- plans the
+                                    diagonal: less rotation, 5-8x the margin; the ramp
                                     survives only because the hard QP drags it through
                                     at its scripted 90 deg
 
-    G1, --planner mppi (vanilla, gap 1.25; seeds 0/1): crossed 107.8/111.8 s,
-    theta_max 125/134 deg, upright 0.999, h_min +0.01/-0.14 on the measured com --
-    bounded by the same measured tracking droop as the ramp (-0.16); on the good seed
-    the lookahead's planned buffer absorbs the slop entirely. Residual honesty:
-    ~1.2-1.5 deg/replan of heading jitter (smooth between replans by construction --
-    successive replans disagree because the G1 does not track the plan exactly). The
-    align term is speed-GATED (clip(|v|/0.2)): scaling by raw speed lets the heading
-    wander freely on a slow robot -- the first G1 run pirouetted a full 388 deg
-    mid-crossing.
+    G1, --planner mppi (vanilla, gap 1.25; seeds 0/1): s0 crossed 107.6 s with a
+    CLEAN 95 deg rotation (no pirouette, no roll -- the band + goal-biased reference
+    at work), h_min -0.01, upright 1.00; the residual ~1.3 deg/replan heading jitter
+    remains (successive replans disagree because the G1 does not track the plan
+    exactly). s1 is the honest failure: the heading winds up (486 deg max, 2316 deg
+    travel), h droops to -0.22 (the measured tracking-error class) and the robot
+    reaches x = 2.50 without entering the goal disc in 150 s -- heading wind-up under
+    model mismatch is the open item (see the scramble docstring; plan-commitment
+    smoothing is the designated follow-up).
 
 So the anisotropic gain certified end-to-end on the real robot is 1.25 m vs the disc's
 1.30 m -- modest, because the G1's *tracking*, not its geometry, is the binding
