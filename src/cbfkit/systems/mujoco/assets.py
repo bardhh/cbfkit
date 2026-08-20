@@ -32,7 +32,9 @@ MODELS_DIR = Path(__file__).parent / "models"
 G1_MANIFEST = MODELS_DIR / "g1" / "assets_manifest.json"
 UNITREE_RL_GYM_MANIFEST = MODELS_DIR / "g1" / "unitree_rl_gym_manifest.json"
 AMO_MANIFEST = MODELS_DIR / "g1" / "amo_manifest.json"
+GROOT_MANIFEST = MODELS_DIR / "g1" / "groot_manifest.json"
 _RAW_GH = "https://raw.githubusercontent.com/{repo}/{commit}/{path}"
+_MEDIA_GH = "https://media.githubusercontent.com/media/{repo}/{commit}/{path}"  # git-lfs
 
 
 def asset_cache_root() -> Path:
@@ -135,15 +137,20 @@ def ensure_repo_files(manifest: Path, *, offline: bool = False) -> Path:
     """Fetch (once) and verify every file listed in a GitHub-repo manifest; return the cache root.
 
     Manifest: ``{"repo": "owner/name", "commit": "<sha>", "files": {"<relpath>": "<sha256>", ...}}``.
+    A file entry may also be ``{"sha256": "...", "lfs": true}`` -- LFS-tracked files are
+    fetched from ``media.githubusercontent.com`` (the raw endpoint serves only the pointer).
     Files land at ``<cache>/<name>/<commit>/<relpath>``. Same offline/checksum
     rules as :func:`ensure_menagerie_assets`.
     """
+    from urllib.parse import quote
     man = json.loads(Path(manifest).read_text())
     repo, commit = man["repo"], man["commit"]
     offline = offline or bool(os.environ.get("CBFKIT_ASSETS_OFFLINE"))
     root = asset_cache_root() / repo.split("/")[-1] / commit
     missing = []
-    for rel, digest in man["files"].items():
+    for rel, entry in man["files"].items():
+        digest = entry["sha256"] if isinstance(entry, dict) else entry
+        lfs = bool(entry.get("lfs")) if isinstance(entry, dict) else False
         dest = root / rel
         if dest.exists() and _sha256(dest) == digest:
             continue
@@ -151,7 +158,8 @@ def ensure_repo_files(manifest: Path, *, offline: bool = False) -> Path:
             missing.append(rel)
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
-        url = _RAW_GH.format(repo=repo, commit=commit, path=rel)
+        base = _MEDIA_GH if lfs else _RAW_GH
+        url = base.format(repo=repo, commit=commit, path=quote(rel))
         with tempfile.NamedTemporaryFile(dir=dest.parent, delete=False) as tmp:
             tmp_path = Path(tmp.name)
         try:
@@ -186,3 +194,14 @@ def amo_dir(offline: bool = False) -> Path:
     with per-file SHA-256; see ``models/g1/amo_manifest.json``.
     """
     return ensure_repo_files(AMO_MANIFEST, offline=offline)
+
+
+def groot_dir(offline: bool = False) -> Path:
+    """Root of the cached GR00T-WholeBodyControl files (29-DoF G1 MJCF + meshes + the
+    released GEAR-WBC Balance/Walk ONNX policies).
+
+    NVIDIA GR00T-WholeBodyControl (NVlabs, dual license: Apache-2.0 code + NVIDIA Open
+    Model License for the checkpoints), pinned by commit with per-file SHA-256; LFS files
+    fetched from the media endpoint. See ``models/g1/groot_manifest.json``.
+    """
+    return ensure_repo_files(GROOT_MANIFEST, offline=offline)

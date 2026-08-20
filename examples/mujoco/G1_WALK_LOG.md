@@ -233,3 +233,22 @@ Findings (corridor, `g1_corridor.py`, hard constraints):
 
 Net: certified anisotropic gain on the real robot 1.25 vs 1.30 m (tracking-bound, not geometry-bound); the proxy
 shows the full 1.00 vs 1.30. GIF: `results/g1_corridor_ellipse.gif` — walk up, turn sideways, sidestep, turn back.
+
+## GR00T GEAR-WBC port + three-policy gait comparison (2026-08-20)
+
+"Can we try the NVIDIA GR00T model, perhaps it moves more naturally" → ported the released decoupled-WBC
+checkpoints (NVlabs/GR00T-WholeBodyControl sim2mujoco: Balance + Walk ONNX, NVIDIA Open Model License).
+`groot_policy.py`: ONNX read by a hand-rolled protobuf wire parser (no onnx/onnxruntime/torch at runtime;
+onnxruntime as subprocess parity oracle — exact to 1e-4); estimator 516→256→256→35 (v̂(3) + L2-normalized
+latent(32)) + actor 121→512→256→256→15, ELU; Balance/Walk switched at |cmd| ≤ 0.05. Two repo-drift traps:
+the shipped sim2mujoco XML has 43 actuated joints (hands) which overflows the scripts' hard-coded 86-dim obs
+→ used the same repo's `g1_29dof_old.xml` (order verified); that file is robot-only → ground plane injected
+at load (first run fell through the world to z = −122). assets.py now handles git-LFS manifest entries.
+
+Measured (g1_walk_compare.py, vx 0.4, 12 s): unitree 0.38 realised / 4 mm bounce / gyro 0.36 (best tracker);
+amo 0.24 / 5 mm / roll 0.4° (least sway, slowest); **groot 0.31 / 2 mm bounce / roll 3.0°** — flattest ride,
+arms hang naturally (zero pose), visible side-to-side weight shift; naturalness verdict from the GIFs is
+Bardh's call (`results/g1_walk_{unitree,amo,groot}.gif`). GR00T's command carries height + torso rpy, so it
+slots into the same posture hooks; ωz is a RATE (unitree-style), unlike AMO's absolute heading. Full SONIC
+(kinematic planner with styles: run/stealth/happy/injured) is a separate, much heavier port — HF checkpoints
++ C++ runtime; the decoupled WBC here is the tractable slice.
