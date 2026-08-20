@@ -512,3 +512,216 @@ def mppi_local_planner(
 
 
 __all__ += ["mppi_local_planner"]
+
+
+# --------------------------------------------------------------------------- anisotropic footprint
+# Adopted rotating-ellipse footprint of the G1 under the AMO whole-body policy, measured by
+# examples/mujoco/g1_footprint_measure.py (MJX, stand / walk vx 0.4 / sidestep vy 0.3):
+# upper-body (z > 0.6 m) extents from the CoM in the pelvis-yaw frame. The disc it replaces
+# is 0.35 m. Legs exceed the longitudinal extent during forward stride (documented choice:
+# pedestrian discs describe whole people too, and feet interleave when humans squeeze).
+G1_FOOTPRINT = {"lon": 0.16, "lat": 0.28}
+
+
+def heading_slice(state_dim: int) -> slice:
+    """Slots of ``(theta, omega)`` in the heading-augmented DI state."""
+    return slice(state_dim + 2, state_dim + 4)
+
+
+def hd_agent_slice(state_dim: int, i: int) -> slice:
+    """Agent ``i``'s ``(px, py, vx, vy)`` in the heading-augmented DI state."""
+    start = state_dim + 4 + 4 * i
+    return slice(start, start + 4)
+
+
+def embedded_heading_double_integrator(
+    state_dim: int, indices: Tuple[int, int], n_agents: int = 0
+) -> DynamicsCallable:
+    """Command-side double integrator *with a heading channel*: ``[x | v | theta omega | agents]``.
+
+    ``d/dt com = v``, ``d/dt v = a``, ``d/dt theta = omega``, ``d/dt omega = alpha`` --
+    controls ``u = [ax, ay, alpha]``. Making the heading second order keeps every barrier
+    uniformly relative degree 2, so :func:`cbfkit.certificates.rectify_relative_degree`
+    applies unchanged (a direct ``omega`` input would create mixed-degree barriers).
+    Agents as in :func:`embedded_double_integrator` (constant-velocity prediction).
+    """
+    n = state_dim + 4 + 4 * n_agents
+    g = (
+        jnp.zeros((n, 3))
+        .at[state_dim, 0]
+        .set(1.0)
+        .at[state_dim + 1, 1]
+        .set(1.0)
+        .at[state_dim + 3, 2]
+        .set(1.0)
+    )
+
+    def dynamics(xa: Array):
+        f = (
+            jnp.zeros(n)
+            .at[indices[0]]
+            .set(xa[state_dim])
+            .at[indices[1]]
+            .set(xa[state_dim + 1])
+            .at[state_dim + 2]
+            .set(xa[state_dim + 3])
+        )
+        for i in range(n_agents):
+            sl = hd_agent_slice(state_dim, i)
+            f = f.at[sl.start : sl.start + 2].set(xa[sl.start + 2 : sl.stop])
+        return f, g
+
+    return dynamics
+
+
+def com_agent_ellipse_hocbfs(
+    plant: Any,
+    n_agents: int,
+    axes: Tuple[float, float],
+    ped_radius: float,
+    class_k_gain: float = 1.0,
+    roots: Any = None,
+):
+    """Rotating-ellipse keep-out barriers around tracked agents (heading-augmented state).
+
+    ``h_i = || diag(1/(lon + r), 1/(lat + r)) R(theta)^T (com - p_i) || - 1`` with
+    ``axes = (lon, lat)`` the footprint semi-axes in the *body* frame (longitudinal =
+    facing direction, lateral = shoulder line) and ``r`` the pedestrian radius. Rotating
+    the body so the *longitudinal* (narrow) axis spans a gap raises ``h`` -- the QP can
+    trade heading acceleration against braking and discovers sidestepping on its own.
+    Distance shaping (norm - 1), relative degree 2 in ``[a, alpha]`` via the rectifier.
+    """
+    from cbfkit.certificates import rectify_relative_degree
+
+    ci = plant.com_indices
+    sd = plant.state_dim
+    n = sd + 4 + 4 * n_agents
+    dyn = embedded_heading_double_integrator(sd, ci, n_agents)
+    conditions = zeroing_barriers.linear_class_k(class_k_gain)
+    a_lon = float(axes[0]) + float(ped_radius)
+    a_lat = float(axes[1]) + float(ped_radius)
+
+    def barrier(i):
+        sl = hd_agent_slice(sd, i)
+
+        def h(xa):
+            xa = jnp.asarray(xa)
+            diff = xa[ci[0] : ci[0] + 2] - xa[sl.start : sl.start + 2]
+            th = xa[sd + 2]
+            c, s = jnp.cos(th), jnp.sin(th)
+            lon = (c * diff[0] + s * diff[1]) / a_lon
+            lat = (-s * diff[0] + c * diff[1]) / a_lat
+            return jnp.sqrt(lon**2 + lat**2 + 1e-12) - 1.0
+
+        return h
+
+    return concatenate_certificates(
+        *[
+            rectify_relative_degree(
+                function=barrier(i),
+                system_dynamics=dyn,
+                state_dim=n,
+                roots=roots,
+                form="high-order",
+                certificate_conditions=conditions,
+                input_style="state",
+            )
+            for i in range(n_agents)
+        ]
+    )
+
+
+def safe_locomotion_controller_hdi(
+    cbf_qp: ControllerCallable,
+    locomotion: ControllerCallable,
+    plant: Any,
+    dt: float,
+    *,
+    v_max: float = 0.5,
+    omega_max: float = 1.0,
+    velocity_gain: float = 2.0,
+    heading_gain: float = 2.0,
+    agents: Any = None,
+    face_velocity: bool = True,
+) -> ControllerCallable:
+    """Heading-augmented variant of :func:`safe_locomotion_controller_di`.
+
+    The commanded state is ``[v (2) | theta | omega]``: the nominal acceleration is
+    ``velocity_gain (v_nom - v)`` and the nominal heading acceleration turns toward the
+    direction of travel (``face_velocity=True``; a 3-entry ``v_nom`` overrides the target
+    heading with ``v_nom[2]``). ``cbf_qp`` -- built on
+    :func:`embedded_heading_double_integrator` + :func:`com_agent_ellipse_hocbfs` --
+    filters ``[a, alpha]`` jointly, so rotating the footprint is a *control choice* the
+    QP makes only when it pays. The integrated ``[v, theta]`` command goes to the
+    locomotion layer as ``[vx, vy, target_yaw]`` (the AMO adapter accepts the 3rd entry).
+    Carry: ``_hdi_v`` (2), ``_hdi_th`` (2: theta, omega), ``_agents`` as in the DI
+    wrapper; logged: ``v_nom``, ``v_safe``, ``theta_cmd``, ``a_nom``, ``a_safe`` (3).
+    """
+    ci = plant.com_indices
+
+    def controller(t, x, v_nom, key, data):
+        prev = data.sub_data if data.sub_data is not None else {}
+        v = prev.get("_hdi_v")
+        if v is None:
+            v = jnp.zeros(2)
+        th = prev.get("_hdi_th")
+        if th is None:
+            th = jnp.zeros(2)
+        v_nom = jnp.asarray(v_nom, dtype=float)
+        if agents is not None:
+            ag = prev.get("_agents")
+            if ag is None:
+                ag = jnp.asarray(agents.x0, dtype=float)
+            xa = jnp.concatenate([x, v, th, ag.reshape(-1)])
+        else:
+            xa = jnp.concatenate([x, v, th])
+        a_v = velocity_gain * (v_nom[:2] - v)
+        if v_nom.shape[0] >= 3:
+            th_des = v_nom[2]
+        elif face_velocity:
+            speed = jnp.linalg.norm(v_nom[:2])
+            th_des = jnp.where(speed > 0.05, jnp.arctan2(v_nom[1], v_nom[0]), th[0])
+        else:
+            th_des = th[0]
+        dth = jnp.arctan2(jnp.sin(th_des - th[0]), jnp.cos(th_des - th[0]))
+        a_th = heading_gain * dth - 2.0 * jnp.sqrt(heading_gain) * th[1]  # critically damped
+        a_nom = jnp.concatenate([a_v, jnp.array([a_th])])
+        a_safe, d1 = cbf_qp(t, xa, a_nom, key, data)
+        a_safe = jnp.asarray(a_safe)
+        v_new = v + a_safe[:2] * dt
+        speed = jnp.linalg.norm(v_new)
+        v_new = jnp.where(speed > v_max, v_new * (v_max / (speed + 1e-9)), v_new)
+        om_new = jnp.clip(th[1] + a_safe[2] * dt, -omega_max, omega_max)
+        th_new = jnp.array([th[0] + om_new * dt, om_new])
+        sub = dict(d1.sub_data) if d1.sub_data is not None else {}
+        for k, val in prev.items():
+            if k.startswith("_") and k not in sub:
+                sub[k] = val
+        sub["_hdi_v"] = v_new
+        sub["_hdi_th"] = th_new
+        if agents is not None:
+            sub["_agents"] = agents.step(t, x[ci[0] : ci[0] + 2], ag, dt)
+        cmd = jnp.array([v_new[0], v_new[1], th_new[0]])
+        u, d2 = locomotion(t, x, cmd, key, d1._replace(sub_data=sub))
+        sub2 = dict(d2.sub_data) if d2.sub_data is not None else {}
+        sub2["v_nom"] = v_nom[:2]
+        sub2["v_safe"] = v_new
+        sub2["theta_cmd"] = th_new[0]
+        sub2["a_nom"] = a_nom
+        sub2["a_safe"] = a_safe
+        if agents is not None:
+            sub2["agents"] = ag
+        return u, d2._replace(sub_data=sub2, u=u, u_nom=v_nom[:2], error=d1.error | d2.error)
+
+    controller.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+    return controller
+
+
+__all__ += [
+    "G1_FOOTPRINT",
+    "com_agent_ellipse_hocbfs",
+    "embedded_heading_double_integrator",
+    "hd_agent_slice",
+    "heading_slice",
+    "safe_locomotion_controller_hdi",
+]

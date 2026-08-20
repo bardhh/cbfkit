@@ -207,3 +207,29 @@ the passed pedestrian (torso_command hook, `(t, x, sub)`-aware, smoothed) HURT i
 Mid-gait torso twists cost more tracking accuracy than the ~8 cm of profile they free (consistent with the
 demo's measured speed drop at large yaw). Torso agility pays on *command-level* needs (duck, turn in place),
 not as a reactive reflex layered on a walking gait.
+
+## Anisotropic footprint: certified sidestepping (2026-08-20)
+
+Bardh's idea: model the footprint as an ellipse that gets narrow side-on, CBF-certify the squeeze, sidestep when
+possible. Built: `embedded_heading_double_integrator` (state `[p v θ ω | peds]`, controls `[a, α]` — heading made
+second-order so every barrier stays uniformly rel-deg 2 for the rectifier), `com_agent_ellipse_hocbfs`
+(`h = ‖diag(1/a_lon,1/a_lat) R(θ)ᵀ(p−p_i)‖ − 1`), `safe_locomotion_controller_hdi` (integrates v and θ, hands
+`[vx, vy, target_yaw]` to AMO), `G1_FOOTPRINT` measured by `g1_footprint_measure.py` (upper body: 0.11 lon ×
+0.22 lat vs the 0.35 disc; per-axis tracking: lateral p95 ≈ 0.30 at vy 0.3 — the lateral gait realises ~0.43×).
+
+Findings (corridor, `g1_corridor.py`, hard constraints):
+1. **The myopic QP never invents the rotation** (measured: stalls facing forward, θ 1.4°) — rotation costs now,
+   pays later. The rotation must come from the layer with lookahead; here a nominal *suggestion* given identically
+   to both footprints, so the comparison isolates the certificate: disc refuses (correct), ellipse certifies.
+2. **Proxy (exact model): the mechanism works fully** — gap 1.00 m (disc needs 1.30): crossed 20.5 s, θ→90°,
+   h ≥ +0.08 throughout.
+3. **G1 + AMO: crossed gap 1.25 m sideways in 102 s** (upright 0.997, no contact, min centre dist 0.40); h_min
+   −0.16 = the measured tracking droop. Two tracking traps found and fixed: play_amo's stand flag keys on |vx|
+   only → pure sidestep realises 0.00 m/s (gait-alive vx bump added); a *constant* bump is a systematic drift the
+   CBF can't model → walked 0.6 m into the keep-out (h −0.90) → made zero-mean (2 s square wave), droop −0.16.
+4. **Robust-HOCBF conservatism finding**: bound 0.12 applied to the full-state ψ-row norm (incl. exactly-known
+   agent channels) ≈ 2× the h-level margin → refuses even gap 1.25. Per-channel disturbance structure is the
+   next modelling step; robust 0.05 behaves like vanilla here.
+
+Net: certified anisotropic gain on the real robot 1.25 vs 1.30 m (tracking-bound, not geometry-bound); the proxy
+shows the full 1.00 vs 1.30. GIF: `results/g1_corridor_ellipse.gif` — walk up, turn sideways, sidestep, turn back.

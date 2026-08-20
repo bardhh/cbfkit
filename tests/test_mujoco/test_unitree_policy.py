@@ -265,3 +265,27 @@ def test_scramble_mppi_crosses_politely(up):
     assert m["front_rate"] < 1.5  # measured 0.6; goal baseline 2.0; human norm 2.5
     assert m["cbf_active_frac"] < 0.35  # measured 19%; the plan is almost feasible as-is
     assert m["stopped_at_s"] is None and m["qp_nonconverged"] == 0
+
+
+@pytest.mark.slow
+def test_corridor_g1_sidesteps_through_a_gap_the_disc_refuses(up):
+    """Anisotropic-footprint acceptance on the MJX G1 + AMO: at gap 1.25 m the ellipse
+    CBF turns the robot sideways and it sidesteps through (measured: 102 s, theta 90 deg,
+    h_min -0.16 = lateral tracking droop, upright 0.997); the disc CBF refuses the same
+    gap (needs 1.30 m)."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "mujoco" / "g1_corridor.py"
+    spec = importlib.util.spec_from_file_location("g1_corridor", path)
+    ex = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ex)
+    m, S, cd, plant = ex.run("ellipse", gap=ex.GAP_G1, g1=True, duration=120.0)
+    assert m["crossed"], m
+    assert m["theta_cmd_max_deg"] > 60.0  # turned sideways
+    assert m["h_min"] > -0.30  # droop bounded by the measured tracking error
+    assert m["min_centre_dist"] > ex.PED_RADIUS + 0.05  # no contact with the pedestrian disc
+    assert m["upright_min"] > 0.9 and m["qp_errors"] == 0
+    md, *_ = ex.run("disc", gap=ex.GAP_G1, g1=True, duration=60.0)
+    # the disc certificate refuses the gap: parks before the gap line (x = 0), no crossing
+    assert not md["crossed"] and md["x_max"] < 0.0

@@ -385,13 +385,17 @@ class AmoWholeBodyPolicy:
         torso_command: TorsoCommand = None,
         world_frame: bool = True,
         min_speed_for_heading: float = 0.1,
+        keep_gait_alive: bool = True,
     ):
         """``(t, x, u_nom, key, data) -> (q_target(23), data)``.
 
         ``u_nom[:2]`` is a planar velocity command -- world-frame by default (what the
         CoM-level CBF layer emits). Heading following is *native* to AMO: the command
         carries an absolute ``target_yaw``, set here to the command's direction (held at
-        its last value below ``min_speed_for_heading``, where AMO stands in place); the
+        its last value below ``min_speed_for_heading``, where AMO stands in place). A
+        3-entry ``u_nom`` overrides it: ``u_nom[2]`` is the absolute target yaw, which
+        decouples facing from travel (e.g. sidestepping through a gap with the heading
+        held across it); the
         speed is sent as body-frame ``(vx, vy)``, so the commanded world velocity is
         realised while the robot turns. ``torso_command`` adds the whole-body part:
         ``None`` (upright), a constant ``(height_delta, torso_yaw, torso_pitch,
@@ -401,6 +405,15 @@ class AmoWholeBodyPolicy:
         when running under ``safe_locomotion_controller_di(agents=...)``). Commands are
         clipped to the in-distribution ranges (``AMO_COMMAND_RANGES``). The carry lives in
         ``sub_data["_amo"]``; the assembled 7-command is logged as ``amo_cmd``.
+
+        ``keep_gait_alive`` (default on): play_amo's in-place-stand flag keys on
+        ``|vx| < 0.1`` *only*, so a pure lateral command latches the gait to standing and
+        realises zero motion (measured in MJX: vy = 0.3 alone -> 0.00 m/s). When the
+        commanded body-frame speed is significant but ``|vx|`` is below the flag
+        threshold, ``vx`` is bumped to +-0.12 with a 2 s square wave -- zero-mean, so the
+        stepping continues (measured: ~0.13 m/s lateral) without a *systematic* drift
+        along the facing that the safety layer cannot model (a constant bump walked the
+        corridor robot 0.6 m into a pedestrian's keep-out).
         """
         import inspect
 
@@ -422,12 +435,16 @@ class AmoWholeBodyPolicy:
             state = sub.get("_amo")
             if state is None:
                 state = self.init_state()
-            v = jnp.asarray(u_nom, dtype=float)[:2]
+            u_nom = jnp.asarray(u_nom, dtype=float)
+            v = u_nom[:2]
             yaw = _yaw(x[3:7])
             speed = jnp.linalg.norm(v)
-            target_yaw = jnp.where(
-                speed > min_speed_for_heading, jnp.arctan2(v[1], v[0]), state.target_yaw
-            )
+            if u_nom.shape[0] >= 3:
+                target_yaw = u_nom[2]
+            else:
+                target_yaw = jnp.where(
+                    speed > min_speed_for_heading, jnp.arctan2(v[1], v[0]), state.target_yaw
+                )
             if world_frame:
                 cs, sn = jnp.cos(yaw), jnp.sin(yaw)
                 v_body = jnp.array([cs * v[0] + sn * v[1], -sn * v[0] + cs * v[1]])
@@ -435,6 +452,13 @@ class AmoWholeBodyPolicy:
                 v_body = v
                 target_yaw = jnp.where(
                     speed > min_speed_for_heading, yaw + jnp.arctan2(v[1], v[0]), state.target_yaw
+                )
+            if keep_gait_alive:
+                bump = 0.12 * jnp.sign(jnp.sin(jnp.pi * t + 1e-6))  # 2 s square wave, zero-mean
+                v_body = jnp.where(
+                    (jnp.linalg.norm(v_body) > 0.15) & (jnp.abs(v_body[0]) < 0.12),
+                    v_body.at[0].set(bump),
+                    v_body,
                 )
             torso = jnp.asarray(torso_fn(t, x, sub), dtype=float)
             cmd = jnp.array(
@@ -451,7 +475,7 @@ class AmoWholeBodyPolicy:
             u, state = self.step(x, cmd, state._replace(target_yaw=target_yaw))
             sub["_amo"] = state
             sub["amo_cmd"] = cmd
-            return u, data._replace(sub_data=sub, u=u, u_nom=jnp.asarray(u_nom, dtype=float))
+            return u, data._replace(sub_data=sub, u=u, u_nom=u_nom)
 
         controller.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
         return controller

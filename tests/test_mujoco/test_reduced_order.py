@@ -376,3 +376,89 @@ def test_mppi_local_planner_replans_on_schedule_and_holds_in_between():
     jitted = jax.jit(lambda t, xa, v, k, s: planner(t, xa, v, k, s))
     aj, vj, sj = jitted(0.4, xa, jnp.zeros(2), key, s10)
     assert jnp.all(jnp.isfinite(aj)) and sj["_mppi_u_traj"].shape == (H, 2)
+
+
+def test_heading_di_dynamics_and_ellipse_barrier_rotation(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import (
+        com_agent_ellipse_hocbfs,
+        embedded_heading_double_integrator,
+        hd_agent_slice,
+    )
+
+    plant, g1mod = g1_plant
+    sd = plant.state_dim
+    dyn = embedded_heading_double_integrator(sd, plant.com_indices, n_agents=1)
+    xa = jnp.zeros(sd + 4 + 4)
+    xa = xa.at[sd : sd + 2].set(jnp.array([0.3, 0.1]))  # v
+    xa = xa.at[sd + 3].set(0.5)  # omega
+    sl = hd_agent_slice(sd, 0)
+    xa = xa.at[sl.start : sl.stop].set(jnp.array([2.0, 0.0, -1.0, 0.0]))
+    f, g = dyn(xa)
+    assert float(f[plant.com_indices[0]]) == pytest.approx(0.3)  # com' = v
+    assert float(f[sd + 2]) == pytest.approx(0.5)  # theta' = omega
+    assert float(f[sl.start]) == pytest.approx(-1.0)  # p_i' = v_i
+    assert g.shape == (sd + 8, 3)
+    assert float(g[sd + 3, 2]) == pytest.approx(1.0)  # alpha -> omega'
+
+    # The rotating ellipse: pedestrian dead ahead at 0.55 m; facing it (theta=0) presents
+    # the narrow longitudinal axis (0.16+0.3=0.46): h > 0. Turned side-on (theta=pi/2)
+    # the wide lateral axis (0.28+0.3=0.58) points at it: h < 0. That sign flip is what
+    # lets the QP trade rotation against braking. On a fully static scene the rectified
+    # psi equals h, so barriers.functions[0] probes the raw geometry.
+    barriers = com_agent_ellipse_hocbfs(plant, 1, (0.16, 0.28), ped_radius=0.30)
+    x = g1mod.G1(plant.mj_model).x_stand(plant)
+    com = x[plant.com_indices[0] : plant.com_indices[0] + 2]
+
+    def h_at(theta):
+        z = jnp.concatenate(
+            [x, jnp.zeros(2), jnp.array([theta, 0.0]), com + jnp.array([0.55, 0.0]), jnp.zeros(2)]
+        )
+        return float(barriers.functions[0](0.0, z))
+
+    h_facing = h_at(0.0)
+    h_sideon = h_at(jnp.pi / 2)
+    assert h_facing > 0.0 > h_sideon
+    assert h_at(jnp.pi) == pytest.approx(h_facing, abs=1e-9)  # 180-degree symmetry
+
+
+def test_hdi_wrapper_integrates_heading_and_commands_target_yaw(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import (
+        com_agent_ellipse_hocbfs,
+        embedded_heading_double_integrator,
+        safe_locomotion_controller_hdi,
+    )
+
+    plant, g1mod = g1_plant
+    x = g1mod.G1(plant.mj_model).x_stand(plant)
+
+    class Drift:
+        x0 = jnp.array([[30.0, 0.0, 0.0, 0.0]])  # far away: barriers inactive
+
+        def step(self, t, robot_xy, states, dt):
+            return states
+
+    dyn = embedded_heading_double_integrator(plant.state_dim, plant.com_indices, n_agents=1)
+    cbf_qp = vanilla_cbf_clf_qp_controller(
+        control_limits=jnp.array([1.0, 1.0, 2.0]),
+        dynamics_func=dyn,
+        barriers=com_agent_ellipse_hocbfs(plant, 1, (0.16, 0.28), ped_radius=0.30),
+    )
+    seen = {}
+
+    def fake_loco(t, xx, cmd, key, d):
+        seen["cmd"] = cmd
+        return jnp.zeros(plant.nu), d
+
+    ctrl = safe_locomotion_controller_hdi(cbf_qp, fake_loco, plant, 0.02, agents=Drift())
+    d = ControllerData()
+    for k in range(5):
+        _, d = ctrl(k * 0.02, x, jnp.array([0.0, 0.4]), jax.random.PRNGKey(0), d)
+    assert seen["cmd"].shape == (3,)
+    th = float(d.sub_data["theta_cmd"])
+    assert 0.0 < th <= jnp.pi / 2 + 1e-6  # turning toward +y (the travel direction)
+    assert float(d.sub_data["v_safe"][1]) > 0.0  # accelerating along the command
+    assert d.sub_data["a_safe"].shape == (3,)
+    # 3-entry command overrides the heading target
+    _, d2 = ctrl(0.1, x, jnp.array([0.0, 0.4, -1.0]), jax.random.PRNGKey(0), d)
+    a_nom = jnp.asarray(d2.sub_data["a_nom"])
+    assert a_nom[2] < 0.0  # steering toward the override, not the velocity direction
