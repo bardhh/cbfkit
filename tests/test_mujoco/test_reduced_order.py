@@ -462,3 +462,143 @@ def test_hdi_wrapper_integrates_heading_and_commands_target_yaw(g1_plant):
     _, d2 = ctrl(0.1, x, jnp.array([0.0, 0.4, -1.0]), jax.random.PRNGKey(0), d)
     a_nom = jnp.asarray(d2.sub_data["a_nom"])
     assert a_nom[2] < 0.0  # steering toward the override, not the velocity direction
+
+
+def _cost_traj(P, V, th=None, peds=((0.0, 0.5), (0.0, -0.5))):
+    """(dim, H) states in the compact MPPI layout: [p v (th om)? | (p_i v_i) x N]."""
+    H = P.shape[0]
+    rows = [P.T, V.T]
+    if th is not None:
+        rows += [th[None, :], jnp.zeros((1, H))]
+    for p in peds:
+        rows.append(jnp.broadcast_to(jnp.array([p[0], p[1], 0.0, 0.0])[:, None], (4, H)))
+    return jnp.concatenate(rows, axis=0)
+
+
+def test_ellipse_trajectory_cost_ranks_the_homotopies():
+    from cbfkit.systems.mujoco.reduced_order import ellipse_trajectory_cost
+
+    H, dt = 21, 0.2
+    goal = jnp.array([3.0, 0.0])
+    xs = jnp.linspace(-1.5, 1.5, H)
+    P = jnp.stack([xs, jnp.zeros(H)], axis=1)
+    V = jnp.broadcast_to(jnp.array([0.3, 0.0]), (H, 2))
+    U = jnp.zeros((3, H))
+    kw = dict(heading=True, v_max=0.3)
+    cost = ellipse_trajectory_cost(2, goal, (0.16, 0.28), 0.30, dt, lane_halfwidth=0.9, **kw)
+    forward = float(cost(0.0, _cost_traj(P, V, th=jnp.zeros(H)), U))
+    sideways = float(
+        cost(0.0, _cost_traj(P, V, th=jnp.where(jnp.abs(xs) < 0.6, jnp.pi / 2, 0.0)), U)
+    )
+    # Turning sideways through the gap beats pushing through facing forward: the clearance
+    # violation (the rotation signal) dominates the mild align/spin legibility terms.
+    assert sideways < forward
+    # A detour outside the lane loses to the sideways squeeze even without the lane term
+    # (goal geometry alone), and the lane term prices it further up.
+    P_det = jnp.stack([xs, jnp.full(H, 1.2)], axis=1)
+    cost_nolane = ellipse_trajectory_cost(2, goal, (0.16, 0.28), 0.30, dt, **kw)
+    det_nolane = float(cost_nolane(0.0, _cost_traj(P_det, V, th=jnp.zeros(H)), U))
+    side_nolane = float(
+        cost_nolane(0.0, _cost_traj(P, V, th=jnp.where(jnp.abs(xs) < 0.6, jnp.pi / 2, 0.0)), U)
+    )
+    assert side_nolane < det_nolane
+    det_lane = float(cost(0.0, _cost_traj(P_det, V, th=jnp.zeros(H)), U))
+    assert det_lane > det_nolane
+
+
+def test_ellipse_cost_disc_variant_prices_the_tight_gap():
+    from cbfkit.systems.mujoco.reduced_order import ellipse_trajectory_cost
+
+    H, dt = 21, 0.2
+    xs = jnp.linspace(-1.5, 1.5, H)
+    P = jnp.stack([xs, jnp.zeros(H)], axis=1)
+    V = jnp.broadcast_to(jnp.array([0.3, 0.0]), (H, 2))
+    U = jnp.zeros((2, H))
+    cost = ellipse_trajectory_cost(
+        2, jnp.array([3.0, 0.0]), (0.35, 0.35), 0.30, dt, heading=False, v_max=0.3
+    )
+    tight = float(cost(0.0, _cost_traj(P, V), U))  # 1.0 m gap: dist 0.5 < 0.65 keep-out
+    wide = float(cost(0.0, _cost_traj(P, V, peds=((0.0, 1.0), (0.0, -1.0))), U))
+    assert jnp.isfinite(tight) and tight > wide  # the clearance term prices the tight gap
+
+
+def test_mppi_local_planner_generalises_to_heading_dims():
+    from cbfkit.systems.mujoco.reduced_order import mppi_local_planner
+    from cbfkit.utils.user_types import PlannerData
+
+    H = 6
+
+    def fake_mppi(err):
+        def mppi(t, xa, u, key, data):
+            return jnp.array([0.1, 0.2, 0.3]), PlannerData(
+                u_traj=jnp.ones((H, 3)), x_traj=jnp.ones((10, H + 1)), error=jnp.asarray(err)
+            )
+
+        return mppi
+
+    planner = mppi_local_planner(
+        fake_mppi(False), 1, horizon=H, replan_every=5, control_dim=3, state_head=6
+    )
+    xa = jnp.zeros(10).at[2].set(0.1)  # v = (0.1, 0)
+    a0, v0, s0 = planner(0.0, xa, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), {})
+    assert a0.shape == (3,) and jnp.allclose(a0, jnp.array([0.1, 0.2, 0.3]))
+    assert s0["_mppi_u_traj"].shape == (H, 3) and s0["mppi_x_traj"].shape == (10, H + 1)
+    assert v0.shape == (2,)
+    # solver failure -> the P-law fallback, padded with a zero alpha channel
+    p_fail = mppi_local_planner(
+        fake_mppi(True), 1, horizon=H, replan_every=5, control_dim=3, state_head=6
+    )
+    a, _, _ = p_fail(0.0, xa, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), {})
+    assert jnp.allclose(a, jnp.array([2.0 * (0.5 - 0.1), 0.0, 0.0]))
+
+
+def test_hdi_wrapper_local_planner_hook_overrides_a_nom_and_carries_state(g1_plant):
+    from cbfkit.systems.mujoco.reduced_order import (
+        com_agent_ellipse_hocbfs,
+        embedded_heading_double_integrator,
+        safe_locomotion_controller_hdi,
+    )
+
+    plant, g1mod = g1_plant
+    x = g1mod.G1(plant.mj_model).x_stand(plant)
+    ci = plant.com_indices
+
+    class Drift:
+        x0 = jnp.array([[30.0, 0.0, 0.0, 0.0]])  # far away: barriers inactive
+
+        def step(self, t, robot_xy, states, dt):
+            return states
+
+    seen = {}
+
+    def local_planner(t, xa_c, v_nom, key, sub):
+        seen["xa_c"] = xa_c
+        n = sub.get("_lp_calls")
+        n = jnp.zeros((), dtype=jnp.int32) if n is None else n
+        return (
+            jnp.array([0.25, -0.25, 0.5]),
+            jnp.array([0.1, 0.0]),
+            {"_lp_calls": n + 1, "lp_flag": 1.0},
+        )
+
+    dyn = embedded_heading_double_integrator(plant.state_dim, ci, n_agents=1)
+    cbf_qp = vanilla_cbf_clf_qp_controller(
+        control_limits=jnp.array([1.0, 1.0, 2.0]),
+        dynamics_func=dyn,
+        barriers=com_agent_ellipse_hocbfs(plant, 1, (0.16, 0.28), ped_radius=0.30),
+    )
+
+    def fake_loco(t, xx, cmd, key, d):
+        return jnp.zeros(plant.nu), d
+
+    ctrl = safe_locomotion_controller_hdi(
+        cbf_qp, fake_loco, plant, 0.02, agents=Drift(), local_planner=local_planner
+    )
+    _, d1 = ctrl(0.0, x, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), ControllerData())
+    assert seen["xa_c"].shape == (10,)  # [com | v | th om | one agent]
+    assert jnp.allclose(seen["xa_c"][:2], x[ci[0] : ci[0] + 2])
+    assert jnp.allclose(d1.sub_data["a_safe"], jnp.array([0.25, -0.25, 0.5]), atol=1e-3)
+    assert jnp.allclose(d1.sub_data["v_nom"], jnp.array([0.1, 0.0]))
+    assert int(d1.sub_data["_lp_calls"]) == 1 and float(d1.sub_data["lp_flag"]) == 1.0
+    _, d2 = ctrl(0.02, x, jnp.array([0.5, 0.0]), jax.random.PRNGKey(0), d1)
+    assert int(d2.sub_data["_lp_calls"]) == 2  # carried

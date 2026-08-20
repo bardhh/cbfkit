@@ -18,7 +18,8 @@ Two tricks make this work with CBFKit's stock CBF-QP generator and barriers:
   free-joint position, not the CoM.
 """
 
-from typing import Any, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Any, Optional, Sequence, Tuple
 
 import jax.numpy as jnp
 from jax import Array
@@ -449,6 +450,8 @@ def mppi_local_planner(
     horizon: int,
     replan_every: int,
     velocity_gain: float = 2.0,
+    control_dim: int = 2,
+    state_head: int = 4,
 ) -> Any:
     """Adapt a ``cbfkit.controllers.mppi`` planner to the ``local_planner`` hook of
     :func:`safe_locomotion_controller_di`.
@@ -460,23 +463,29 @@ def mppi_local_planner(
     dt``, so the warm-start shift of one MPPI step per solve is exact) and its first planned
     acceleration is held in between; the QP receives it as ``a_nom``. The warm start
     ``_mppi_u_traj`` ``(horizon, 2)``, the held acceleration ``_mppi_a``, the plan
-    ``_mppi_x_traj`` ``(4 + 4 N, horizon + 1)`` and a step counter ``_mppi_k`` ride in the
-    controller carry; the plan is also logged as ``mppi_x_traj`` and the solver flag as
-    ``mppi_error``. On an MPPI failure (NaN) the P-law ``velocity_gain (v_nom - v)`` is used.
+    ``_mppi_x_traj`` ``(state_head + 4 N, horizon + 1)`` and a step counter ``_mppi_k`` ride
+    in the controller carry; the plan is also logged as ``mppi_x_traj`` and the solver flag as
+    ``mppi_error``. On an MPPI failure (NaN) the P-law ``velocity_gain (v_nom - v)`` is used
+    (padded with zeros beyond the two acceleration channels).
+
+    ``control_dim`` / ``state_head`` generalise the layout: the default ``(2, 4)`` is the
+    planar DI hook of :func:`safe_locomotion_controller_di`; ``(3, 6)`` adapts an MPPI built
+    on :func:`embedded_heading_double_integrator` (controls ``[ax, ay, alpha]``, compact
+    state ``[p v th om | agents]``) to the hook of :func:`safe_locomotion_controller_hdi`.
     """
     from jax import lax
 
     from cbfkit.utils.user_types import PlannerData
 
-    dim = 4 + 4 * n_agents
+    dim = state_head + 4 * n_agents
 
     def planner(t, xa, v_nom, key, sub):
         U = sub.get("_mppi_u_traj")
         if U is None:
-            U = jnp.zeros((horizon, 2))
+            U = jnp.zeros((horizon, control_dim))
         a_hold = sub.get("_mppi_a")
         if a_hold is None:
-            a_hold = jnp.zeros(2)
+            a_hold = jnp.zeros(control_dim)
         X_hold = sub.get("_mppi_x_traj")
         if X_hold is None:
             X_hold = jnp.zeros((dim, horizon + 1))
@@ -486,14 +495,22 @@ def mppi_local_planner(
 
         def solve(_):
             u, d = mppi(t, xa, None, key, PlannerData(u_traj=U))
-            return jnp.asarray(u, dtype=float)[:2], d.u_traj, d.x_traj, jnp.asarray(d.error)
+            return (
+                jnp.asarray(u, dtype=float)[:control_dim],
+                d.u_traj,
+                d.x_traj,
+                jnp.asarray(d.error),
+            )
 
         def hold(_):
             return a_hold, U, X_hold, jnp.asarray(False)
 
         a, U_new, X_new, err = lax.cond(k % replan_every == 0, solve, hold, None)
         v = xa[2:4]
-        a_nom = jnp.where(err, velocity_gain * (jnp.asarray(v_nom)[:2] - v), a)
+        fallback = jnp.concatenate(
+            [velocity_gain * (jnp.asarray(v_nom, dtype=float)[:2] - v), jnp.zeros(control_dim - 2)]
+        )
+        a_nom = jnp.where(err, fallback, a)
         v_plan = X_new[2:4, 1]
         return (
             a_nom,
@@ -511,7 +528,95 @@ def mppi_local_planner(
     return planner
 
 
-__all__ += ["mppi_local_planner"]
+@dataclass(frozen=True)
+class EllipseCostWeights:
+    """Weights of :func:`ellipse_trajectory_cost`. The clearance term is a *preference*,
+    not a wall: quadratic in the violation ``clearance_margin - h`` in absolute h-units,
+    saturated at ``clearance_cap``. Random shooting cannot thread the exact centimetres of
+    a tight squeeze -- the hard QP downstream owns h >= 0 and does the threading -- so a
+    slightly sloppy pass must cost a scrape, a facing-forward push ~10x more (depth is the
+    rotation signal), and a deep push through a person the saturated maximum (worse than
+    waiting). Normalising the violation by the margin instead (the obvious hinge) makes
+    every violation effectively infinite and the planner freezes in front of the gap
+    (measured). ``align``/``spin`` are mild legibility terms: face the direction of travel
+    when it costs nothing, do not thrash the heading."""
+
+    goal: float = 10.0  # terminal |p_H - goal|
+    progress: float = 1.0  # stage |p_k - goal| (per second) -- waiting costs only progress
+    clearance: float = 200.0  # x violation^2 (absolute h-units, per agent-second)
+    clearance_margin: float = 0.05  # h-units above 0 where the violation starts
+    clearance_cap: float = 0.6  # h-units: saturation depth of the violation
+    lane: float = 100.0  # (|y| - lane_halfwidth)^2 outside the lane (per second)
+    align: float = 0.5  # (1 - cos(th - travel)) |v| -- prefer facing the walk (per second)
+    spin: float = 0.5  # omega^2 (per second)
+    speed: float = 200.0  # relu(|v| - v_max)^2 (per second)
+
+
+def ellipse_trajectory_cost(
+    n_agents: int,
+    goal: Any,
+    axes: Tuple[float, float],
+    ped_radius: float,
+    dt: float,
+    *,
+    heading: bool = True,
+    lane_halfwidth: Optional[float] = None,
+    v_max: float = 0.5,
+    weights: Optional[EllipseCostWeights] = None,
+):
+    """``TrajectoryCostCallable`` for MPPI over the compact heading-augmented DI state
+    ``[p v th om | agents]`` (``heading=True``) or the plain DI state ``[p v | agents]``
+    (``heading=False``, circular ``axes``): goal progress, a clearance hinge on the same
+    rotating-ellipse ``h`` as :func:`com_agent_ellipse_hocbfs`, an optional lane cost
+    (keeps the plan inside ``|y| <= lane_halfwidth`` -- a corridor the planner respects
+    without a wall barrier), and mild align/spin legibility terms. With a horizon of a
+    few seconds the planner *discovers* that rotating early pays -- the myopic QP cannot
+    (measured: it parks facing forward), and a hand-coded suggestion dithers."""
+    w = weights if weights is not None else EllipseCostWeights()
+    goal = jnp.asarray(goal, dtype=float)[:2]
+    a_lon = float(axes[0]) + float(ped_radius)
+    a_lat = float(axes[1]) + float(ped_radius)
+    head = 6 if heading else 4
+
+    def cost(time, states, controls, prev_robustness=None):
+        st = jnp.asarray(states)
+        H = st.shape[1]
+        P = st[0:2, :].T  # (H, 2)
+        V = st[2:4, :].T
+        Pp = st[head : head + 4 * n_agents, :].T.reshape(H, n_agents, 4)[..., :2]
+        d_goal = jnp.linalg.norm(P - goal, axis=-1)
+        c = w.goal * d_goal[-1] + w.progress * jnp.sum(d_goal) * dt
+        diff = P[:, None, :] - Pp  # (H, N, 2)
+        if heading:
+            th = st[4, :]
+            cth, sth = jnp.cos(th)[:, None], jnp.sin(th)[:, None]
+            lon = (cth * diff[..., 0] + sth * diff[..., 1]) / a_lon
+            lat = (-sth * diff[..., 0] + cth * diff[..., 1]) / a_lat
+            h = jnp.sqrt(lon**2 + lat**2 + 1e-12) - 1.0
+        else:
+            h = jnp.linalg.norm(diff, axis=-1) / a_lon - 1.0
+        viol = jnp.clip(w.clearance_margin - h, 0.0, w.clearance_cap)
+        c = c + w.clearance * jnp.sum(viol**2) * dt
+        if lane_halfwidth is not None:
+            over = jnp.maximum(jnp.abs(P[:, 1]) - lane_halfwidth, 0.0)
+            c = c + w.lane * jnp.sum(over**2) * dt
+        sp = jnp.linalg.norm(V, axis=-1)
+        c = c + w.speed * jnp.sum(jnp.maximum(sp - v_max, 0.0) ** 2) * dt
+        if heading:
+            travel = jnp.arctan2(V[:, 1], V[:, 0])
+            # Saturated speed gate: raw-speed scaling lets the heading wander freely on a
+            # slow robot (measured: the G1 at 0.2 m/s pirouetted a full turn mid-crossing);
+            # the gate keeps full align pressure at walking speeds while still fading out
+            # near standstill, where the travel direction is numerical noise.
+            gate = jnp.clip(sp / 0.2, 0.0, 1.0)
+            c = c + w.align * jnp.sum((1.0 - jnp.cos(th - travel)) * gate) * dt
+            c = c + w.spin * jnp.sum(st[5, :] ** 2) * dt
+        return c
+
+    return cost
+
+
+__all__ += ["EllipseCostWeights", "ellipse_trajectory_cost", "mppi_local_planner"]
 
 
 # --------------------------------------------------------------------------- anisotropic footprint
@@ -643,6 +748,7 @@ def safe_locomotion_controller_hdi(
     heading_gain: float = 2.0,
     agents: Any = None,
     face_velocity: bool = True,
+    local_planner: Any = None,
 ) -> ControllerCallable:
     """Heading-augmented variant of :func:`safe_locomotion_controller_di`.
 
@@ -656,6 +762,14 @@ def safe_locomotion_controller_hdi(
     locomotion layer as ``[vx, vy, target_yaw]`` (the AMO adapter accepts the 3rd entry).
     Carry: ``_hdi_v`` (2), ``_hdi_th`` (2: theta, omega), ``_agents`` as in the DI
     wrapper; logged: ``v_nom``, ``v_safe``, ``theta_cmd``, ``a_nom``, ``a_safe`` (3).
+
+    ``local_planner`` (optional) replaces the P-laws on ``v_nom`` by a planner with real
+    lookahead over the *compact* heading-augmented state ``[com | v | theta omega | agents]``
+    (``6 + 4 N`` entries): ``local_planner(t, xa_compact, v_nom, key, sub) ->
+    (a_nom (3), v_plan, sub_updates)`` -- ``a_nom = [ax, ay, alpha]`` goes to the QP, so the
+    *rotation itself is planned* (the myopic QP alone never invents it; measured in
+    ``examples/mujoco/g1_corridor.py``). See :func:`mppi_local_planner` with
+    ``control_dim=3, state_head=6`` and :func:`ellipse_trajectory_cost`.
     """
     ci = plant.com_indices
 
@@ -673,19 +787,28 @@ def safe_locomotion_controller_hdi(
             if ag is None:
                 ag = jnp.asarray(agents.x0, dtype=float)
             xa = jnp.concatenate([x, v, th, ag.reshape(-1)])
+            ag_flat = ag.reshape(-1)
         else:
             xa = jnp.concatenate([x, v, th])
-        a_v = velocity_gain * (v_nom[:2] - v)
-        if v_nom.shape[0] >= 3:
-            th_des = v_nom[2]
-        elif face_velocity:
-            speed = jnp.linalg.norm(v_nom[:2])
-            th_des = jnp.where(speed > 0.05, jnp.arctan2(v_nom[1], v_nom[0]), th[0])
+            ag_flat = jnp.zeros(0)
+        sub_lp: dict = {}
+        if local_planner is not None:
+            xa_c = jnp.concatenate([x[ci[0] : ci[0] + 2], v, th, ag_flat])
+            a_nom, v_nom, sub_lp = local_planner(t, xa_c, v_nom, key, prev)
+            a_nom = jnp.asarray(a_nom, dtype=float)[:3]
+            v_nom = jnp.asarray(v_nom, dtype=float)[:2]
         else:
-            th_des = th[0]
-        dth = jnp.arctan2(jnp.sin(th_des - th[0]), jnp.cos(th_des - th[0]))
-        a_th = heading_gain * dth - 2.0 * jnp.sqrt(heading_gain) * th[1]  # critically damped
-        a_nom = jnp.concatenate([a_v, jnp.array([a_th])])
+            a_v = velocity_gain * (v_nom[:2] - v)
+            if v_nom.shape[0] >= 3:
+                th_des = v_nom[2]
+            elif face_velocity:
+                speed = jnp.linalg.norm(v_nom[:2])
+                th_des = jnp.where(speed > 0.05, jnp.arctan2(v_nom[1], v_nom[0]), th[0])
+            else:
+                th_des = th[0]
+            dth = jnp.arctan2(jnp.sin(th_des - th[0]), jnp.cos(th_des - th[0]))
+            a_th = heading_gain * dth - 2.0 * jnp.sqrt(heading_gain) * th[1]  # critically damped
+            a_nom = jnp.concatenate([a_v, jnp.array([a_th])])
         a_safe, d1 = cbf_qp(t, xa, a_nom, key, data)
         a_safe = jnp.asarray(a_safe)
         v_new = v + a_safe[:2] * dt
@@ -699,6 +822,7 @@ def safe_locomotion_controller_hdi(
                 sub[k] = val
         sub["_hdi_v"] = v_new
         sub["_hdi_th"] = th_new
+        sub.update(sub_lp)
         if agents is not None:
             sub["_agents"] = agents.step(t, x[ci[0] : ci[0] + 2], ag, dt)
         cmd = jnp.array([v_new[0], v_new[1], th_new[0]])

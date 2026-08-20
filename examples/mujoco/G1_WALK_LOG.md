@@ -262,3 +262,35 @@ fastest but most intrusive (2.5 intimate rate on s1, h −0.11); AMO = gentlest 
 **GR00T = best compromise** — its better velocity tracking keeps the CBF's command-side model honest (h near
 or above 0), and on the easy seed it threads 40 pedestrians with 0.03 m crowd deviation. GIF:
 `results/g1_scramble_mppi_relaxed_vanilla_groot.gif`.
+
+## MPPI lookahead replaces the hand-coded sidestep suggestion (2026-08-20)
+
+`g1_corridor.py --planner mppi`: 6 s of MPPI over the *same* heading-augmented DI the QP certifies
+(`reduced_order.ellipse_trajectory_cost`, 5 Hz replan, 1024 samples), no heading hint anywhere — the
+planner discovers the rotation the myopic QP cannot invent, hands `[ax, ay, alpha]` to the hard QP as
+the nominal. Proxy, centred 1.0 m gap (seeds 0/1/2): crossed 34.8/27.7/33.6 s, theta_max 84–94°,
+h ≥ +0.07 throughout; the disc under the *identical* planner still refuses (parks at −0.83 m).
+
+Two lessons, both measured:
+1. **The planner's clearance cost must be a preference, not a wall.** A margin-normalised hinge makes
+   every violation effectively infinite; the best MPPI sample is then always "wait" and the robot
+   freezes in front of the gap (60 s, x_max −0.7, 250–2300° of heading dither — the exact "silly
+   situation"). Random shooting cannot thread a ±4 cm tube. Saturated quadratic in absolute h-units
+   (clearance 200, cap 0.6) lets MPPI propose "through, sideways-ish" and the hard QP does the exact
+   threading. Weight sweep: cl100–250 all cross; cl≥400 freezes; std 0.5 fails 2/3 seeds (chaos), 0.4
+   robust.
+2. **Lookahead generalises where the script only survives.** `--offset -0.35` shifts the gap off the
+   start-goal line: the fixed ramp still "works" (22.6 s) but only because the QP drags it through at
+   h ≈ +0.04 with the full scripted 90° turn (179° travel); MPPI plans a diagonal through the actual
+   gap — 38–51° theta_max, 108–116° travel (~40 % less rotation) at h ≥ +0.21 (5–6× margin), 27–28 s.
+3. **Align must be speed-gated.** Scaling the face-the-travel term by raw speed lets the heading
+   wander freely on a slow robot: the first G1 run (0.2 m/s) pirouetted a full 388° mid-crossing.
+   With `clip(|v|/0.2, 0, 1)` instead: G1 crossed 107.8/111.8 s (seeds 0/1), theta_max 125/134°,
+   h_min +0.01/−0.14 on the *measured* com — bounded by the same tracking droop as the scripted
+   ramp (−0.16); on the good seed the lookahead's planned buffer absorbs the slop entirely.
+   Residual: ~1.2–1.5°/replan heading jitter under model mismatch (smooth between replans; a
+   plan-commitment/smoothing knob is the obvious follow-up if the GIF shows it).
+
+Library additions: `EllipseCostWeights`/`ellipse_trajectory_cost` (heading and disc layouts),
+`mppi_local_planner(control_dim=, state_head=)` generalisation, `local_planner=` hook on
+`safe_locomotion_controller_hdi`. GIF: `results/g1_corridor_ellipse_mppi.gif`.

@@ -18,6 +18,7 @@ EXAMPLES = [
     "examples/mujoco/g1_navigate.py",
     "examples/mujoco/g1_amo_demo.py",
     ("examples/mujoco/g1_corridor.py", "--footprint", "ellipse"),
+    ("examples/mujoco/g1_corridor.py", "--planner", "mppi", "--offset", "-0.35"),
     "examples/mujoco/g1_footprint_measure.py",
     "examples/mujoco/g1_walk_compare.py",
     "examples/mujoco/g1_plaza.py",
