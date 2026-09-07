@@ -57,11 +57,6 @@ from cbfkit.controllers.cbf_clf import robust_cbf_clf_qp_controller, vanilla_cbf
 from cbfkit.controllers.mjx_sampling_mpc import SamplingMpc
 from cbfkit.systems.mujoco import MujocoPlant
 from cbfkit.systems.mujoco.g1 import G1, load_g1, walk_costs
-from cbfkit.systems.mujoco.unitree_policy import (
-    UnitreeG1WalkPolicy,
-    make_g1_12dof_plant,
-    x0_standing,
-)
 from cbfkit.systems.mujoco.reduced_order import (
     com_obstacle_barriers,
     com_obstacle_hocbfs,
@@ -69,6 +64,11 @@ from cbfkit.systems.mujoco.reduced_order import (
     embedded_single_integrator,
     safe_locomotion_controller,
     safe_locomotion_controller_di,
+)
+from cbfkit.systems.mujoco.unitree_policy import (
+    UnitreeG1WalkPolicy,
+    make_g1_12dof_plant,
+    x0_standing,
 )
 from cbfkit.systems.mujoco.viewer_utils import (
     add_marker,

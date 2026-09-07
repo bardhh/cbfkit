@@ -143,6 +143,7 @@ def ensure_repo_files(manifest: Path, *, offline: bool = False) -> Path:
     rules as :func:`ensure_menagerie_assets`.
     """
     from urllib.parse import quote
+
     man = json.loads(Path(manifest).read_text())
     repo, commit = man["repo"], man["commit"]
     offline = offline or bool(os.environ.get("CBFKIT_ASSETS_OFFLINE"))

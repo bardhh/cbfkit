@@ -126,7 +126,6 @@ from cbfkit.integration import forward_euler as euler
 from cbfkit.optimization.quadratic_program.solver_registry import get_solver
 from cbfkit.systems.mujoco.amo_policy import _rpy
 from cbfkit.systems.mujoco.crowd import SocialForceCrowd
-from cbfkit.systems.mujoco.unitree_policy import _wrap
 from cbfkit.systems.mujoco.reduced_order import (
     G1_FOOTPRINT,
     com_agent_ellipse_hocbfs,
@@ -138,6 +137,7 @@ from cbfkit.systems.mujoco.reduced_order import (
     safe_locomotion_controller_di,
     safe_locomotion_controller_hdi,
 )
+from cbfkit.systems.mujoco.unitree_policy import _wrap
 from cbfkit.utils.user_types import ControllerData, PlannerData
 
 TEST_MODE = bool(os.getenv("CBFKIT_TEST_MODE"))

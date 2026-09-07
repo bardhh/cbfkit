@@ -431,9 +431,9 @@ def main(
     if TEST_MODE:
         return m
     if g1 and (gif or view):
-        from cbfkit.systems.mujoco.viewer_utils import add_marker, render_gif, replay_in_viewer
-
         import mujoco
+
+        from cbfkit.systems.mujoco.viewer_utils import add_marker, render_gif, replay_in_viewer
 
         peds = np.asarray(Static(gap, offset).x0)[:, :2]
 
