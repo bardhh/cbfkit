@@ -187,7 +187,7 @@ def walk_costs(
         )
         feet = jnp.sum(jnp.square(jnp.maximum(0.0, feet_z - foot_z_max)))
         joint_vel = jnp.sum(jnp.square(data.qvel[6:]))  # energy-like smoothing of the flailing
-        gait = 0.0
+        gait: Array = jnp.zeros(())
         if w_gait > 0.0:
 
             def z_ref(offset):

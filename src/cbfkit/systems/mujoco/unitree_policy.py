@@ -38,6 +38,8 @@ import mujoco
 import numpy as np
 from jax import Array
 
+from cbfkit.utils.user_types import ControllerCallable
+
 from .assets import unitree_rl_gym_dir
 from .plant import MujocoPlant
 
@@ -313,9 +315,12 @@ class UnitreeG1WalkPolicy:
             float(max_yaw_rate),
             float(min_speed_for_heading),
         )
-        cache = getattr(self, "_controllers", None)
+        cache: Optional[Dict[Tuple[bool, float, float, float], ControllerCallable]] = getattr(
+            self, "_controllers", None
+        )
         if cache is None:
-            cache = self._controllers = {}
+            cache = {}
+            self._controllers = cache
         if key_ in cache:
             return cache[key_]
 

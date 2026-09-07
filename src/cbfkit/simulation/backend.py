@@ -28,8 +28,8 @@ from cbfkit.utils.user_types import (
 
 def stepper(
     dt: float,
-    dynamics: DynamicsCallable,
-    integrator: IntegratorCallable,
+    dynamics: Optional[DynamicsCallable],
+    integrator: Optional[IntegratorCallable],
     planner: Optional[PlannerCallable],
     nominal_controller: Optional[NominalControllerCallable],
     controller: Optional[ControllerCallable],
@@ -101,6 +101,7 @@ def stepper(
 
         nonlocal plant_state
         if plant is None:
+            assert dynamics is not None  # guaranteed by execute(): no plant means dynamics
             f, g = dynamics(x)
         else:
             if plant_state is None or not bool(jnp.array_equal(plant.to_state(plant_state), x)):
@@ -171,6 +172,7 @@ def stepper(
             controller_data = ControllerData()
 
         if plant is None:
+            assert f is not None and dynamics is not None and integrator is not None
             p = perturbation(x, u, f, g)
             p_val = p(pert_key)
             x = integrate_with_cached_dynamics(

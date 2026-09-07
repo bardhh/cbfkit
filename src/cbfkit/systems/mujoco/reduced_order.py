@@ -19,7 +19,7 @@ Two tricks make this work with CBFKit's stock CBF-QP generator and barriers:
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence, Tuple, cast
 
 import jax.numpy as jnp
 from jax import Array
@@ -27,7 +27,7 @@ from jax import Array
 from cbfkit.certificates import certificate_package, concatenate_certificates
 from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
-from cbfkit.utils.user_types import ControllerCallable, DynamicsCallable
+from cbfkit.utils.user_types import CertificateCollection, ControllerCallable, DynamicsCallable
 
 
 def embedded_single_integrator(state_dim: int, indices: Tuple[int, int]) -> DynamicsCallable:
@@ -195,14 +195,17 @@ def com_obstacle_hocbfs(
     conditions = zeroing_barriers.linear_class_k(class_k_gain)
     return concatenate_certificates(
         *[
-            rectify_relative_degree(
-                function=_com_static_barrier(plant, o, e, shape),
-                system_dynamics=dyn,
-                state_dim=n,
-                roots=roots,
-                form="high-order",
-                certificate_conditions=conditions,
-                input_style="state",
+            cast(
+                CertificateCollection,
+                rectify_relative_degree(
+                    function=_com_static_barrier(plant, o, e, shape),
+                    system_dynamics=dyn,
+                    state_dim=n,
+                    roots=roots,
+                    form="high-order",
+                    certificate_conditions=conditions,
+                    input_style="state",
+                ),
             )
             for o, e in zip(obstacles, ellipsoids)
         ]
@@ -367,14 +370,17 @@ def com_moving_obstacle_hocbfs(
     conditions = zeroing_barriers.linear_class_k(class_k_gain)
     return concatenate_certificates(
         *[
-            rectify_relative_degree(
-                function=_com_moving_barrier(plant, p0, v, e, shape),
-                system_dynamics=dyn,
-                state_dim=n,
-                roots=roots,
-                form="high-order",
-                certificate_conditions=conditions,
-                input_style="separated",
+            cast(
+                CertificateCollection,
+                rectify_relative_degree(
+                    function=_com_moving_barrier(plant, p0, v, e, shape),
+                    system_dynamics=dyn,
+                    state_dim=n,
+                    roots=roots,
+                    form="high-order",
+                    certificate_conditions=conditions,
+                    input_style="separated",
+                ),
             )
             for p0, v, e in zip(positions, velocities, ellipsoids)
         ]
@@ -425,14 +431,17 @@ def com_agent_hocbfs(
 
     return concatenate_certificates(
         *[
-            rectify_relative_degree(
-                function=barrier(i, e),
-                system_dynamics=dyn,
-                state_dim=n,
-                roots=roots,
-                form="high-order",
-                certificate_conditions=conditions,
-                input_style="state",
+            cast(
+                CertificateCollection,
+                rectify_relative_degree(
+                    function=barrier(i, e),
+                    system_dynamics=dyn,
+                    state_dim=n,
+                    roots=roots,
+                    form="high-order",
+                    certificate_conditions=conditions,
+                    input_style="state",
+                ),
             )
             for i, e in zip(range(n_agents), ellipsoids)
         ]
@@ -816,14 +825,17 @@ def com_agent_ellipse_hocbfs(
 
     return concatenate_certificates(
         *[
-            rectify_relative_degree(
-                function=barrier(i),
-                system_dynamics=dyn,
-                state_dim=n,
-                roots=roots,
-                form="high-order",
-                certificate_conditions=conditions,
-                input_style="state",
+            cast(
+                CertificateCollection,
+                rectify_relative_degree(
+                    function=barrier(i),
+                    system_dynamics=dyn,
+                    state_dim=n,
+                    roots=roots,
+                    form="high-order",
+                    certificate_conditions=conditions,
+                    input_style="state",
+                ),
             )
             for i in range(n_agents)
         ]

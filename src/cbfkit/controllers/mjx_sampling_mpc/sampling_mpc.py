@@ -160,6 +160,7 @@ class SamplingMpc:
 
         # Sample knots.
         if self.update == "cma":
+            assert state.cov is not None  # init_state fills cov whenever update == "cma"
             noise = jax.random.multivariate_normal(
                 key,
                 mean=jnp.zeros(self.plant.nu),
@@ -183,6 +184,7 @@ class SamplingMpc:
         new_mean = jnp.sum(weights[:, None, None] * knots, axis=0)
         new_cov = state.cov
         if self.update == "cma":
+            assert state.cov is not None
             dev = knots - new_mean[None]  # (N, K, nu)
             sample_cov = jnp.einsum("n,nki,nkj->kij", weights, dev, dev)
             cov = (1.0 - self.alpha) * state.cov + self.alpha * sample_cov

@@ -89,8 +89,8 @@ _JIT_PROGRESS_HOOK = _JitProgressHook()
 def simulator(
     dt: float,
     num_steps: int,
-    dynamics: DynamicsCallable,
-    integrator: IntegratorCallable,
+    dynamics: Optional[DynamicsCallable],
+    integrator: Optional[IntegratorCallable],
     planner: Optional[PlannerCallable],
     nominal_controller: Optional[NominalControllerCallable],
     controller: Optional[ControllerCallable],
@@ -561,6 +561,7 @@ def execute(
 
         if controller is not None:
             if plant is None:
+                assert g_check is not None  # set alongside f_check on the dynamics path
                 u_nom_dummy = jnp.zeros((g_check.shape[1],))
             else:
                 # On the plant path u_nom need not have plant.nu entries (a

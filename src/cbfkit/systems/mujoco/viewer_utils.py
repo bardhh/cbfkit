@@ -150,6 +150,7 @@ def render_gif(
     matplotlib.use("Agg")
     from matplotlib import animation
     from matplotlib import pyplot as plt
+    from matplotlib.artist import Artist
 
     try:
         renderer = mujoco.Renderer(plant.mj_model, height=height, width=width)
@@ -170,12 +171,15 @@ def render_gif(
             markers(renderer.scene, k, k * plant.dt)
         frames.append(renderer.render().copy())
     fig = plt.figure(figsize=(width / 100, height / 100))
-    ax = fig.add_axes([0, 0, 1, 1])
+    ax = fig.add_axes((0.0, 0.0, 1.0, 1.0))
     ax.axis("off")
     im = ax.imshow(frames[0])
-    anim = animation.FuncAnimation(
-        fig, lambda i: (im.set_data(frames[i]),), frames=len(frames), interval=1000 / fps
-    )
+
+    def _draw(i: int) -> Tuple[Artist, ...]:
+        im.set_data(frames[i])
+        return (im,)
+
+    anim = animation.FuncAnimation(fig, _draw, frames=len(frames), interval=1000 / fps)
     anim.save(path, writer=animation.PillowWriter(fps=fps))
     plt.close(fig)
     print(f"saved {path}")

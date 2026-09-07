@@ -156,6 +156,8 @@ def load_onnx_tensors(path: Path) -> Dict[str, np.ndarray]:
             arr = np.frombuffer(raw, dtype=dtypes[dtype])
         else:
             arr = np.asarray(fdata, dtype=np.float32)
+        if name is None:  # pragma: no cover - every exporter names its initializers
+            raise ValueError(f"{path}: initializer without a name")
         out[name] = arr.reshape(dims) if dims else arr
     return out
 
