@@ -12,18 +12,6 @@ CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barr
   <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/warehouse-safety.gif" width="100%" alt="ANYmal warehouse delivery with and without CBFKit's batched safety filter">
 </p>
 <p align="center">
-  <strong>Batched safety filtering for robot-policy commands</strong><br>
-  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/isaac_lab/README.md">Use the optional PyTorch integration</a> ·
-  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/isaac_lab/WAREHOUSE.md">Reproduce the Isaac Lab demo</a> ·
-  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/isaac_lab/validation/REPORT.md">Measurements and limitations</a>
-</p>
-
-The warehouse example filters planar velocity requests before a frozen ANYmal-C
-walking policy, using simulator obstacle state. The integration keeps controller
-history and resets independent across environments. PyTorch is optional; the
-bridge is for inference and does not propagate training gradients.
-
-<p align="center">
   <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/ped_mppi.gif" width="48%" alt="MPPI navigation among pedestrians">
   <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/pedestrian_head_on.gif" width="48%" alt="CBF safety with head-on encounter">
 </p>
@@ -35,6 +23,18 @@ bridge is for inference and does not propagate training gradients.
   <em>MPPI among pedestrians &nbsp;|&nbsp; CBF head-on safety</em><br>
   <em>MPPI rollout sampling &nbsp;|&nbsp; EKF state estimation</em>
 </p>
+
+<p align="center">
+  <strong>Batched safety filtering for robot-policy commands</strong><br>
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/isaac_lab/README.md">Use the optional PyTorch integration</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/isaac_lab/WAREHOUSE.md">Reproduce the Isaac Lab demo</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/isaac_lab/validation/REPORT.md">Measurements and limitations</a>
+</p>
+
+The warehouse example filters planar velocity requests before a frozen ANYmal-C
+walking policy, using simulator obstacle state. The integration keeps controller
+history and resets independent across environments. PyTorch is optional; the
+bridge is for inference and does not propagate training gradients.
 
 Supported dynamics:
 
