@@ -61,6 +61,7 @@ manim = ["manim>=0.18,<1.0"]
 optuna = ["optuna>=3.0"]
 neural = ["flax>=0.8", "optax>=0.2"]
 gymnasium = ["gymnasium>=1.0"]
+torch = ["torch>=2.8", "jax>=0.6.2"]
 plotly = ["plotly>=5.18,<7.0"]
 casadi = ["casadi>=3.6.4,<4.0"]
 cvxopt = [
@@ -75,8 +76,8 @@ codegen = ["black>=23.12.1,<27.0"]
 # --- Convenience umbrella extras ---
 solvers = ["cbfkit[casadi]", "cbfkit[cvxopt]"]
 vis = ["cbfkit[plotly]"]
-# Everything installable without system-level dependencies. Excludes `manim`,
-# which additionally requires ffmpeg and a LaTeX toolchain.
+# General-purpose extras. Excludes `manim` (ffmpeg/LaTeX required) and the
+# explicitly selected `torch` bridge (large, platform-specific runtime).
 all = [
     "cbfkit[optuna]",
     "cbfkit[neural]",

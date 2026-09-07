@@ -1,0 +1,45 @@
+{
+  "seeds": [
+    7,
+    123,
+    2026
+  ],
+  "modes": {
+    "filtered": {
+      "cases": 24,
+      "contacts": 0,
+      "falls": 2,
+      "goals": 22,
+      "successful": 22,
+      "median_successful_goal_s": 11.050000190734863,
+      "filter_ms_p50": 2.7700399987224955,
+      "filter_ms_p95": 4.934635751487804,
+      "intervention_fraction": 0.2851666666666666,
+      "min_command_residual": -1.7830754783787484e-07
+    },
+    "nominal": {
+      "cases": 24,
+      "contacts": 23,
+      "falls": 19,
+      "goals": 5,
+      "successful": 0,
+      "median_successful_goal_s": null,
+      "filter_ms_p50": null,
+      "filter_ms_p95": null,
+      "intervention_fraction": 0.0,
+      "min_command_residual": null
+    },
+    "stop": {
+      "cases": 24,
+      "contacts": 0,
+      "falls": 3,
+      "goals": 21,
+      "successful": 21,
+      "median_successful_goal_s": 11.420000076293945,
+      "filter_ms_p50": null,
+      "filter_ms_p95": null,
+      "intervention_fraction": 0.23194444444444443,
+      "min_command_residual": null
+    }
+  }
+}

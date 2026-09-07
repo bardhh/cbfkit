@@ -93,11 +93,45 @@ jobs:
         import sys
         import cbfkit
         from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+        from cbfkit.wrappers import BatchedSafetyFilter
         from cbfkit.optimization.quadratic_program import get_solver
         get_solver("fast")
         get_solver("jaxopt")
-        heavy = {"casadi", "cvxopt", "kvxopt", "plotly"}
+        heavy = {"casadi", "cvxopt", "kvxopt", "plotly", "torch", "gymnasium", "isaaclab"}
         leaked = sorted(m for m in sys.modules if m.split(".")[0] in heavy)
         assert not leaked, f"Heavy optional deps leaked into the default import: {leaked}"
-        print("OK: default import surface is lean (no casadi/cvxopt/plotly).")
+        print("OK: default import surface does not load heavy optional runtimes.")
         PY
+
+  jax-floor:
+    name: Core JAX minimum version
+    runs-on: ubuntu-latest
+    env:
+      JAX_PLATFORM_NAME: cpu
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.10"
+    - name: Install the supported JAX floor
+      run: pip install -e . pytest 'jax==0.4.23' 'jaxlib==0.4.23' 'numpy<2' 'scipy<1.13'
+    - name: Test scalar and batched filters on the minimum version
+      run: pytest -q tests/test_wrappers/test_safety_filter.py tests/test_wrappers/test_batched_safety_filter.py tests/test_wrappers/test_warehouse_model.py
+
+  torch-bridge:
+    name: Optional PyTorch bridge (CPU)
+    runs-on: ubuntu-latest
+    env:
+      JAX_PLATFORM_NAME: cpu
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+    - name: Install optional CPU runtime
+      run: |
+        pip install 'torch>=2.8' --index-url https://download.pytorch.org/whl/cpu
+        pip install -e '.[torch]' pytest
+    - name: Test batch isolation, bridge ownership, and command mappings
+      run: |
+        pytest -q tests/test_wrappers/test_batched_safety_filter.py tests/test_wrappers/test_torch_safety_filter.py tests/test_wrappers/test_warehouse_model.py tests/test_wrappers/test_isaac_quaternion_conventions.py tests/test_wrappers/test_warehouse_video.py

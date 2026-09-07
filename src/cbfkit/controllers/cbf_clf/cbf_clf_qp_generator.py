@@ -28,8 +28,8 @@ Examples
 
 from typing import Any, Dict, Optional, Tuple, Union, cast
 
-import jax.numpy as jnp
 import jax.debug as jdebug
+import jax.numpy as jnp
 from jax import Array, jit, lax, tree_util
 
 from cbfkit.certificates import concatenate_certificates
@@ -583,7 +583,7 @@ def cbf_clf_qp_generator(
             u = lax.cond(
                 success,
                 lambda _fake: sol[:n_con],
-                lambda _fake: jnp.full_like(u_nom[:n_con], jnp.nan),
+                lambda _fake: jnp.full_like(sol[:n_con], jnp.nan),
                 0,
             )
 

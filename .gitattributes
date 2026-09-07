@@ -1,0 +1,3 @@
+
+# Measured outputs are retained for audit; focus default code review on sources.
+examples/isaac_lab/validation/*.json* linguist-generated=true
