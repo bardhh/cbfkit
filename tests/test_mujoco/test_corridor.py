@@ -10,6 +10,10 @@ _path = Path(__file__).resolve().parents[2] / "examples" / "mujoco" / "g1_corrid
 _spec = importlib.util.spec_from_file_location("g1_corridor", _path)
 ex = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ex)
+# These certificate checks run the measured configuration even under CBFKIT_TEST_MODE,
+# whose smoke defaults cut the run to 5 steps and the MPPI planner to 64 samples.
+ex.TEST_MODE = False
+ex.MPPI_SAMPLES = 1024
 
 
 def test_disc_refuses_the_gap_and_parks_at_the_boundary():
