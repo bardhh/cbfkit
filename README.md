@@ -220,7 +220,7 @@ python tutorials/multi_robot_3d_reachavoid.py
   </tr>
 </table>
 
-*Also available: code generation for custom systems (`tutorials/code_generation_tutorial.ipynb`), ROS2 node generation, risk-aware CVaR-CBF, adaptive CVaR-CBF, parameter sweeps, quadrotor attitude control, and MuJoCo/MJX plants (`pip install cbfkit[mujoco]`) via `sim.execute(plant=MujocoPlant(model))` — including a Unitree G1 humanoid walking around an obstacle under a reduced-order CBF (`examples/mujoco/g1_navigate.py`) and crossing a plaza among pillars and reactive social-force pedestrians under high-order CBFs on tracked agents (`examples/mujoco/g1_plaza.py`), threading a 40-pedestrian scramble crossing (`examples/mujoco/g1_scramble.py`) — with a socially tuned MPPI planner option — walking with commanded torso yaw/lean/height via UCSD's AMO whole-body policy (`examples/mujoco/g1_amo_demo.py`), sidestepping through gaps under a rotating-ellipse footprint CBF (`examples/mujoco/g1_corridor.py`), and a three-policy gait comparison including NVIDIA's GR00T GEAR-WBC (`examples/mujoco/g1_walk_compare.py`).*
+*Also available: code generation for custom systems (`tutorials/code_generation_tutorial.ipynb`), ROS2 node generation, risk-aware CVaR-CBF, adaptive CVaR-CBF, parameter sweeps, and quadrotor attitude control.*
 
 <p align="center">
   <strong>Batched safety filtering for robot-policy commands</strong><br>
@@ -233,6 +233,29 @@ The warehouse example filters planar velocity requests before a frozen ANYmal-C
 walking policy, using simulator obstacle state. The integration keeps controller
 history and resets independent across environments. PyTorch is optional; the
 bridge is for inference and does not propagate training gradients.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_scramble.gif" width="48%" alt="Unitree G1 crossing a 40-pedestrian scramble under tracked-agent HOCBFs with a social MPPI planner">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_corridor_sidestep.gif" width="48%" alt="Unitree G1 turning sideways to pass a gap certified by a rotating-ellipse footprint CBF">
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_plaza.gif" width="48%" alt="Unitree G1 crossing a plaza among pillars and reactive pedestrians under high-order CBFs">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_navigate.gif" width="48%" alt="Unitree G1 walking to a goal around an obstacle under a robust CoM CBF">
+</p>
+<p align="center">
+  <strong>Humanoid locomotion under reduced-order CBFs (MuJoCo/MJX)</strong><br>
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/mujoco/g1_scramble.py">Scramble crossing</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/mujoco/g1_corridor.py">Certified sidestep</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/mujoco/g1_plaza.py">Plaza among pedestrians</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/mujoco/g1_navigate.py">Goal past an obstacle</a>
+</p>
+
+A Unitree G1 runs in MJX through `sim.execute(plant=MujocoPlant(...))`
+(`pip install cbfkit[mujoco]`), with a pretrained walking policy underneath and a
+CBF-QP on the centre-of-mass command above it: keep-out barriers on obstacles and
+tracked pedestrians, a rotating-ellipse footprint for squeezing through gaps, and an
+optional socially tuned MPPI planner in front of the filter. The certificate covers
+the command-side reduced model; tracking error enters as a measured disturbance bound.
 
 ## Simulation Architecture
 
