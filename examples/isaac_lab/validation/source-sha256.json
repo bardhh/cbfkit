@@ -1,0 +1,29 @@
+{
+  "tested_snapshot": "b1c867645863e76cdad3f085887b8d23bf63a3da",
+  "base": "2c2bfab",
+  "jax_default_matmul_precision": null,
+  "controller_input_dtype": "float64",
+  "sources": {
+    "benchmarks/batched_safety_filter.py": "6062a9e66b94725c1f6b63f875172ff1a71b1a687f1848c3fdec643e957e0d67",
+    "examples/isaac_lab/docker/Dockerfile.sim6": "7eaa535b7a0d3adfc5e3b30da889de261cacb3e1a83821c3ba68a42b703b7169",
+    "examples/isaac_lab/docker/compose.sim6.yaml": "b7d9ea793060c598d2c0c04c8afdb4e5e121ef8a62644d8a8321f165f680e8a5",
+    "examples/isaac_lab/docker/python-sim6.sh": "ddac917aed66a5a9b43c02fac63ed8c071cc356d8e56f621f51f013011b95f9d",
+    "examples/isaac_lab/docker/warehouse-hd.sh": "2d0698c4df4b10c569a3f812b660ba3ca3cb5e4dcbd0b08e7d1edce757a2c76a",
+    "examples/isaac_lab/docker/warehouse.sh": "ee1d68425cbe74d7d41285ce900a4b533f8fd347373c6666d8b746afcbcddd94",
+    "examples/isaac_lab/isaac_quaternion.py": "b89b4758265a0229e58103770e0787c14efee7d2a061cb89f702f30a1478c206",
+    "examples/isaac_lab/render_smoke.py": "8ac527f22be57799c7fd73f5983309a9e20c2895b69c9d48129f588d2adbea10",
+    "examples/isaac_lab/warehouse.py": "8dbfc8b16e576d4147c6fe9734bdf1cc6b08d82770684673835af8dc5a654eb6",
+    "examples/isaac_lab/warehouse_model.py": "6d566e13910039485375f6972a2f3eb28cdece21d8718a337d7be5ac55778749",
+    "examples/isaac_lab/warehouse_report.py": "153a232e24dc620151feb93c51375b5cd054f4c872e3db59fab50b9f281628eb",
+    "examples/isaac_lab/warehouse_video.py": "d1d68c72001e5a7e799efafa168e592eccfc0a24c4afaaed2c197cef49cd8cf4",
+    "src/cbfkit/controllers/cbf_clf/cbf_clf_qp_generator.py": "35795884fd6585b01e42f75ac31d5efa3cea00dc289555437dba61dca96693d9",
+    "src/cbfkit/wrappers/__init__.py": "19ff13dceee16166f332c3ec159efbc7f47a1ec315f5a2dee577c469bb871ead",
+    "src/cbfkit/wrappers/batched.py": "dab7f89f5d49197174b9574f220605cc0124edb8bd7471f014d1282882f9b1b9",
+    "src/cbfkit/wrappers/torch.py": "7d0229a6d309c23f7ba10ac8145b85be07d067dcdbcbdde0301ab490252eb0f1",
+    "tests/test_wrappers/test_batched_safety_filter.py": "b117c1cc48de41befd6e7492157f2f66f272eb538f4802d04de5ac132372ffe4",
+    "tests/test_wrappers/test_isaac_quaternion_conventions.py": "2c7f0936ade64443b01daa64c1a7a67bce19c6751c319d55f3eaa3a7b800c5bd",
+    "tests/test_wrappers/test_torch_safety_filter.py": "e524e4efe3cf3fc18c65165a1d613a6b0102bc47139e9b5df968cd168478b822",
+    "tests/test_wrappers/test_warehouse_model.py": "70e709ebbdcac375a3cf4ad7c8d91f06c60aba56df0bffdd8b83cf2670c8f5cc",
+    "tests/test_wrappers/test_warehouse_video.py": "abbfc9f3b43b5dc0bcbd4fa144756540c90b36e28f0aadb8c510f965c001fb49"
+  }
+}

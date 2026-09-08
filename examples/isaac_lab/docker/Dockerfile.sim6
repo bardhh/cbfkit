@@ -1,0 +1,31 @@
+# Isaac Sim 6 fixes the RTX scene-database startup crash observed on driver 595.
+FROM nvcr.io/nvidia/isaac-sim:6.0.1@sha256:783444c706538aa76cf5126e911ddc5e618779e6105305ad4af4260362a30aa9
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates build-essential libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace/isaaclab
+# Isaac Lab v3.0.0-beta2.patch1: the release paired with Isaac Sim 6.0.1.
+RUN git init && git remote add origin https://github.com/isaac-sim/IsaacLab.git \
+    && git fetch --depth 1 origin ffff603eafc6b74264a5261cc0183d6a65390d78 \
+    && git checkout --detach FETCH_HEAD && ln -s /isaac-sim _isaac_sim
+RUN /isaac-sim/python.sh -m pip install --no-cache-dir \
+    'torch==2.10.0' 'torchvision==0.25.0' --index-url https://download.pytorch.org/whl/cu128
+RUN /isaac-sim/python.sh -m pip install --no-cache-dir \
+    -e source/isaaclab -e source/isaaclab_assets -e source/isaaclab_tasks \
+    -e source/isaaclab_physx -e source/isaaclab_ov -e 'source/isaaclab_rl[rsl-rl]' \
+    'torch==2.10.0' 'torchvision==0.25.0' 'jax[cuda12]==0.6.2'
+WORKDIR /opt/cbfkit
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+RUN /isaac-sim/python.sh -m pip install --no-cache-dir 'jax==0.6.2' -e .
+COPY --chmod=755 examples/isaac_lab/docker/python-sim6.sh /usr/local/bin/cbfkit-python
+# Navigation configs import this backend's configuration types even when the
+# experiment uses the default PhysX backend. The optional ovphysx extra is not needed.
+RUN /isaac-sim/python.sh -m pip install --no-cache-dir -e /workspace/isaaclab/source/isaaclab_ovphysx
+ENV XLA_PYTHON_CLIENT_PREALLOCATE=false \
+    JAX_PLATFORMS=cuda,cpu \
+    JAX_PLATFORM_NAME=gpu \
+    PYTHONUNBUFFERED=1 \
+    NVIDIA_DRIVER_CAPABILITIES=all
+WORKDIR /workspace/isaaclab
+ENTRYPOINT ["/usr/local/bin/cbfkit-python"]

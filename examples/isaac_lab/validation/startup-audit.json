@@ -1,0 +1,223 @@
+{
+  "note": "Observed sampled startup behavior in the original sequential-mode evaluation; this is not a causal attribution of falls. Trajectories are sampled every five control steps (0.1 s), so unlogged intermediate commands and exact onset times cannot be recovered.",
+  "source_snapshot": "b1c867645863e76cdad3f085887b8d23bf63a3da",
+  "stop_distance_threshold_m": 1.9,
+  "cases": [
+    {
+      "seed": 123,
+      "environment_index": 2,
+      "modes": {
+        "nominal": {
+          "trajectory_sha256": "20094fc49568c66cd41826ad3c22622c42ecb1857d5e7bf5075d120758dcbe5c",
+          "first_logged_fall_s": 3.5,
+          "base_xy_at_first_logged_fall": [
+            1.8284721374511719,
+            0.6921939849853516
+          ],
+          "cart_distance_m_at_first_logged_fall": 0.9588923088569715,
+          "obstacle_contact_by_first_logged_fall": true,
+          "startup_samples_with_intervention": [],
+          "startup_samples_applied_differs_from_own_nominal": []
+        },
+        "stop": {
+          "trajectory_sha256": "0ebd60b0e0d133c5ca6c720fff297f2c6a044f056a07b1b3e155368244067ede",
+          "first_logged_fall_s": 1.1,
+          "base_xy_at_first_logged_fall": [
+            0.6163654327392578,
+            -0.3211822509765625
+          ],
+          "cart_distance_m_at_first_logged_fall": 2.3388399460293883,
+          "obstacle_contact_by_first_logged_fall": false,
+          "startup_samples_with_intervention": [],
+          "startup_samples_applied_differs_from_own_nominal": []
+        },
+        "filtered": {
+          "trajectory_sha256": "32423cef7c2d54f60c7de58f8e25a93e8df4a1ff693c704fa93dc18d8bebcaaf",
+          "first_logged_fall_s": 1.1,
+          "base_xy_at_first_logged_fall": [
+            0.6557102203369141,
+            -0.41126060485839844
+          ],
+          "cart_distance_m_at_first_logged_fall": 2.2555248213449044,
+          "obstacle_contact_by_first_logged_fall": false,
+          "startup_samples_with_intervention": [
+            0.9,
+            1.0,
+            1.1
+          ],
+          "startup_samples_applied_differs_from_own_nominal": [
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7000000000000001,
+            0.8,
+            0.9,
+            1.0,
+            1.1
+          ]
+        }
+      },
+      "comparison_with_nominal_mode": {
+        "stop": {
+          "xy": {
+            "first_different_logged_time_s": 0.1,
+            "nominal_mode_value": [
+              0.018236160278320312,
+              -0.009967803955078125
+            ],
+            "other_mode_value": [
+              0.0062274932861328125,
+              -0.010831832885742188
+            ]
+          },
+          "applied": {
+            "first_different_logged_time_s": 0.1,
+            "nominal_mode_value": [
+              0.7999991774559021,
+              0.0011930683394894004
+            ],
+            "other_mode_value": [
+              0.7999985814094543,
+              0.0014928593300282955
+            ]
+          }
+        },
+        "filtered": {
+          "xy": {
+            "first_different_logged_time_s": 0.1,
+            "nominal_mode_value": [
+              0.018236160278320312,
+              -0.009967803955078125
+            ],
+            "other_mode_value": [
+              0.005889892578125,
+              -0.010433197021484375
+            ]
+          },
+          "applied": {
+            "first_different_logged_time_s": 0.1,
+            "nominal_mode_value": [
+              0.7999991774559021,
+              0.0011930683394894004
+            ],
+            "other_mode_value": [
+              0.7996267080307007,
+              0.0014281519688665867
+            ]
+          }
+        }
+      }
+    },
+    {
+      "seed": 2026,
+      "environment_index": 7,
+      "modes": {
+        "nominal": {
+          "trajectory_sha256": "0c9e6819b7cd0dd034644f50b82461b8b33fd36de2be1dbe7bd2d2a9e758167a",
+          "first_logged_fall_s": 4.2,
+          "base_xy_at_first_logged_fall": [
+            2.8563671112060547,
+            0.9929102063179016
+          ],
+          "cart_distance_m_at_first_logged_fall": 1.021023391844949,
+          "obstacle_contact_by_first_logged_fall": true,
+          "startup_samples_with_intervention": [],
+          "startup_samples_applied_differs_from_own_nominal": []
+        },
+        "stop": {
+          "trajectory_sha256": "a054e94f0eac1f1dc6f0ed9b9a27b1347410c2c2a782ee192c075c3905d0e2d7",
+          "first_logged_fall_s": 1.2,
+          "base_xy_at_first_logged_fall": [
+            0.6658306121826172,
+            -0.2642379701137543
+          ],
+          "cart_distance_m_at_first_logged_fall": 2.28836473872425,
+          "obstacle_contact_by_first_logged_fall": false,
+          "startup_samples_with_intervention": [],
+          "startup_samples_applied_differs_from_own_nominal": []
+        },
+        "filtered": {
+          "trajectory_sha256": "c0b03a29277500e375bee8a5bc0a60d7225a367c8111500df20a567d87b1911f",
+          "first_logged_fall_s": 1.2,
+          "base_xy_at_first_logged_fall": [
+            0.6725578308105469,
+            -0.26194193959236145
+          ],
+          "cart_distance_m_at_first_logged_fall": 2.2843256539701127,
+          "obstacle_contact_by_first_logged_fall": false,
+          "startup_samples_with_intervention": [
+            1.0,
+            1.1
+          ],
+          "startup_samples_applied_differs_from_own_nominal": [
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7000000000000001,
+            0.8,
+            0.9,
+            1.0,
+            1.1,
+            1.2
+          ]
+        }
+      },
+      "comparison_with_nominal_mode": {
+        "stop": {
+          "xy": {
+            "first_different_logged_time_s": 0.1,
+            "nominal_mode_value": [
+              0.017490386962890625,
+              0.13128700852394104
+            ],
+            "other_mode_value": [
+              0.003910064697265625,
+              0.13482530415058136
+            ]
+          },
+          "applied": {
+            "first_different_logged_time_s": 0.1,
+            "nominal_mode_value": [
+              0.7998003959655762,
+              -0.01786552183330059
+            ],
+            "other_mode_value": [
+              0.7997995615005493,
+              -0.017908908426761627
+            ]
+          }
+        },
+        "filtered": {
+          "xy": {
+            "first_different_logged_time_s": 0.1,
+            "nominal_mode_value": [
+              0.017490386962890625,
+              0.13128700852394104
+            ],
+            "other_mode_value": [
+              0.0064945220947265625,
+              0.1348659247159958
+            ]
+          },
+          "applied": {
+            "first_different_logged_time_s": 0.1,
+            "nominal_mode_value": [
+              0.7998003959655762,
+              -0.01786552183330059
+            ],
+            "other_mode_value": [
+              0.7995139956474304,
+              -0.017979515716433525
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

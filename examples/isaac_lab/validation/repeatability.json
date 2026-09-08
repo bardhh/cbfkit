@@ -1,0 +1,145 @@
+{
+  "source_snapshot": "b1c867645863e76cdad3f085887b8d23bf63a3da",
+  "image_id": "sha256:35db1f5d5d085c0ad8d62d7623a7c86baefe67a6edb19da191feab4a5bc331cc",
+  "method": "Two independent Docker containers and Python processes, each creating a new simulator environment. One mode, one seed, no cameras; no previous modes or seeds in either process.",
+  "parameters": {
+    "mode": "stop",
+    "seed": 123,
+    "num_envs": 8,
+    "control_steps": 250,
+    "control_dt_s": 0.02,
+    "physics_dt_s": 0.005,
+    "episode_length_s": 6.0,
+    "logged_samples_per_run": 50,
+    "sample_dt_s": 0.1
+  },
+  "matching_result_fields": [
+    "mode",
+    "seed",
+    "num_envs",
+    "steps",
+    "dt_s",
+    "physics_dt_s",
+    "scenario_parameters",
+    "initial_xy",
+    "goal",
+    "policy_path",
+    "versions"
+  ],
+  "trajectory_fields": {
+    "step": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    },
+    "time_s": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    },
+    "xy": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    },
+    "cart": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    },
+    "nominal": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    },
+    "applied": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    },
+    "intervened": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    },
+    "collided": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    },
+    "reached": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    },
+    "fallen": {
+      "equal_at_all_logged_samples": true,
+      "max_absolute_difference": 0.0
+    }
+  },
+  "runs": [
+    {
+      "repetition": 1,
+      "trajectory_sha256": "b089d70d6a004f10427d9dafc2b6f07608998752a74c62d0d79124c5e5311040",
+      "result_sha256": "5578de914dc559518c0f11990ba6deffcf7635439b50a2f5b94a1b57ad9c9566",
+      "fallen": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "collided": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "reached": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "repetition": 2,
+      "trajectory_sha256": "b089d70d6a004f10427d9dafc2b6f07608998752a74c62d0d79124c5e5311040",
+      "result_sha256": "6bbbab2c5b1ad826b0ae8974792c706e96c4a0770a62b71931bbd6793b4fc5ef",
+      "fallen": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "collided": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "reached": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    }
+  ],
+  "trajectory_files_byte_identical": true,
+  "limitations": "This establishes matching logged trajectories for this one seed, mode and five-second window only. The original sequential benchmark initialized with seed 7 and a 16-second episode horizon; these fresh runs initialize with seed 123 and a six-second episode horizon. They do not isolate state carryover from initialization differences or prove general physics determinism."
+}

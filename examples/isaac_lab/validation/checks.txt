@@ -1,0 +1,35 @@
+INSTALLED_IMPORT /opt/cbfkit/src/cbfkit/__init__.py
+INSTALLED_BATCHED_SHA256 dab7f89f5d49197174b9574f220605cc0124edb8bd7471f014d1282882f9b1b9
+RENDER_PARTIAL_INTERVAL_OK [5, 7]
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+cachedir: /tmp/pytest-cache
+rootdir: /work/cbfkit
+configfile: pytest.ini
+plugins: flaky-3.8.1, mock-3.15.1, hydra-core-1.3.6, anyio-4.13.0
+collected 87 items
+
+../../work/cbfkit/tests/test_wrappers/test_batched_safety_filter.py .... [  4%]
+....                                                                     [  9%]
+../../work/cbfkit/tests/test_wrappers/test_isaac_quaternion_conventions.py . [ 10%]
+.......                                                                  [ 18%]
+../../work/cbfkit/tests/test_wrappers/test_safety_filter.py ............ [ 32%]
+.........................                                                [ 60%]
+../../work/cbfkit/tests/test_wrappers/test_torch_safety_filter.py ...... [ 67%]
+.                                                                        [ 68%]
+../../work/cbfkit/tests/test_wrappers/test_warehouse_model.py ....       [ 73%]
+../../work/cbfkit/tests/test_wrappers/test_warehouse_video.py ...        [ 77%]
+../../work/cbfkit/tests/test_optimization/test_pdipm_qp.py ............. [ 91%]
+.....                                                                    [ 97%]
+../../work/cbfkit/tests/test_optimization/test_solver_failure.py .       [ 98%]
+../../work/cbfkit/tests/test_controllers/test_cbf_clf_controllers/test_solver_failure_safety.py . [100%]
+
+============================= 87 passed in 40.40s ==============================
+BRIDGE_BENCHMARK_DONE 1 jax
+BRIDGE_BENCHMARK_DONE 1 torch
+BRIDGE_BENCHMARK_DONE 2 torch
+BRIDGE_BENCHMARK_DONE 2 jax
+BRIDGE_BENCHMARK_DONE 3 jax
+BRIDGE_BENCHMARK_DONE 3 torch
+CBFKIT_REVIEW_VALIDATION_COMPLETE
+CBFKIT_REVIEW_VALIDATION_EXIT_0

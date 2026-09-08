@@ -1,0 +1,11 @@
+{
+  "note": "Retained development-branch recordings, not rerendered from the focused PR candidate. See REPORT.md.",
+  "files": [
+    {
+      "path": "media/showcase/warehouse-safety.gif",
+      "sha256": "562841c5d63aa141b709f64b4efd37ed5e72a653cd3ca0600b675873b445f0a5",
+      "bytes": 5021026,
+      "recording_source_commit": "357733dfd01bbc98ed7613e4dcba97e9448e4f3b"
+    }
+  ]
+}

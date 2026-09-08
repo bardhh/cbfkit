@@ -1,0 +1,40 @@
+name: cbfkit-isaac6
+services:
+  render-smoke:
+    # Run isolation checks in the unmodified simulator, without Lab's Python
+    # packages or CUDA library paths affecting the result.
+    image: nvcr.io/nvidia/isaac-sim:6.0.1@sha256:783444c706538aa76cf5126e911ddc5e618779e6105305ad4af4260362a30aa9
+    user: "0:0"
+    entrypoint: /isaac-sim/python.sh
+    init: true
+    gpus: all
+    environment:
+      ACCEPT_EULA: "Y"
+      PRIVACY_CONSENT: "N"
+      NVIDIA_DRIVER_CAPABILITIES: all
+    volumes:
+      - ../../..:/work/cbfkit:ro
+      - ${CBFKIT_OUTPUT_DIR:?Set CBFKIT_OUTPUT_DIR to an existing absolute directory}:/outputs
+  lab:
+    build:
+      context: ../../..
+      dockerfile: examples/isaac_lab/docker/Dockerfile.sim6
+    image: cbfkit-isaac:sim6.0.1-lab3
+    init: true
+    gpus: all
+    shm_size: 2gb
+    environment:
+      ACCEPT_EULA: "Y"
+      PRIVACY_CONSENT: "N"
+    volumes:
+      - ../../..:/work/cbfkit:ro
+      - ${CBFKIT_OUTPUT_DIR:?Set CBFKIT_OUTPUT_DIR to an existing absolute directory}:/outputs
+      - cache:/isaac-sim/.cache
+      - compute-cache:/isaac-sim/.nv/ComputeCache
+      - logs:/isaac-sim/.nvidia-omniverse/logs
+      - data:/isaac-sim/.local/share/ov/data
+volumes:
+  cache:
+  compute-cache:
+  logs:
+  data:

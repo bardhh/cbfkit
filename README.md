@@ -9,6 +9,9 @@
 CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barrier Functions (CBFs). Built on JAX for automatic differentiation and JIT compilation, it provides formal safety guarantees for robotic systems operating in deterministic, disturbed, and stochastic environments. It also includes an efficient JAX implementation of Model Predictive Path Integral (MPPI) control with reach-avoid specifications.
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/warehouse-safety.gif" width="100%" alt="ANYmal warehouse delivery with and without CBFKit's batched safety filter">
+</p>
+<p align="center">
   <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/ped_mppi.gif" width="48%" alt="MPPI navigation among pedestrians">
   <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/pedestrian_head_on.gif" width="48%" alt="CBF safety with head-on encounter">
 </p>
@@ -21,7 +24,7 @@ CBFKit is a Python/ROS2 toolbox for safe planning and control using Control Barr
   <em>MPPI rollout sampling &nbsp;|&nbsp; EKF state estimation</em>
 </p>
 
-Supported dynamics: 
+Supported dynamics:
 
 <p align="center">
 $\dot{x} = f(x) + g(x)u$, <br>
@@ -218,6 +221,18 @@ python tutorials/multi_robot_3d_reachavoid.py
 </table>
 
 *Also available: code generation for custom systems (`tutorials/code_generation_tutorial.ipynb`), ROS2 node generation, risk-aware CVaR-CBF, adaptive CVaR-CBF, parameter sweeps, and quadrotor attitude control.*
+
+<p align="center">
+  <strong>Batched safety filtering for robot-policy commands</strong><br>
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/isaac_lab/README.md">Use the optional PyTorch integration</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/isaac_lab/WAREHOUSE.md">Reproduce the Isaac Lab demo</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/isaac_lab/validation/REPORT.md">Measurements and limitations</a>
+</p>
+
+The warehouse example filters planar velocity requests before a frozen ANYmal-C
+walking policy, using simulator obstacle state. The integration keeps controller
+history and resets independent across environments. PyTorch is optional; the
+bridge is for inference and does not propagate training gradients.
 
 ## Simulation Architecture
 
