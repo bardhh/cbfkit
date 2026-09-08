@@ -3,7 +3,7 @@
     python examples/mujoco/g1_walk_trial.py --vx 0.5 --samples 128 --randomizations 1 --duration 4
 
 Prints one JSON line of metrics (mean pelvis velocity, distance, min uprightness/height, fell?) so
-trials can be compared in examples/mujoco/G1_WALK_LOG.md. Not a polished example -- see g1_walk.py once
+trials can be compared across runs. Not a polished example -- see g1_walk.py once
 a gait works.
 """
 

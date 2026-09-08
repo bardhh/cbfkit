@@ -11,7 +11,7 @@ Pipeline (all inside one CBFKit `execute(plant=...)` call):
 Locomotion layers (``--locomotion``):
   policy  (default) Unitree's pretrained ``unitree_rl_gym`` G1 walking policy (12-DoF legs, LSTM),
                     read without torch and evaluated in JAX; PD torques at 500 Hz. Walks and steers.
-  mpc               the in-repo MJX sampling MPC on the 29-DoF model (G1_WALK_LOG.md): forward
+  mpc               the in-repo MJX sampling MPC on the 29-DoF model (in-house gait search, see g1_walk_trial.py): forward
                     locomotion with stumbles; kept for comparison.
 
 Reduced-order models (``--reduced-model``):
@@ -117,7 +117,7 @@ def build(
     mpc_plant = MujocoPlant(load_g1())
     g1 = G1(sim_plant.mj_model)
 
-    # Locomotion: best-so-far walk configuration (G1_WALK_LOG.md, t14/t20 class).
+    # Locomotion: best-so-far walk configuration (from the in-house gait search).
     running, terminal = walk_costs(
         g1,
         w_velocity=10.0,
