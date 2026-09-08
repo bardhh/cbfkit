@@ -256,7 +256,9 @@ def test_scramble_mppi_crosses_politely(up):
     spec = importlib.util.spec_from_file_location("g1_scramble", path)
     ex = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ex)
-    r = ex.run(90.0, 0, n_ped=ex.N_PED_FULL, relax=True, planner="mppi")
+    # Acceptance runs the measured configuration even under CBFKIT_TEST_MODE, whose
+    # smoke defaults would cut the social MPPI to 64 samples.
+    r = ex.run(90.0, 0, n_ped=ex.N_PED_FULL, relax=True, planner="mppi", mppi_kw=dict(samples=1024))
     m = r["metrics"]
     assert m["crossed"], "crossing not completed"
     assert m["h_min"] >= 0.0  # no pedestrian keep-out disc entered (measured +0.16)
@@ -280,6 +282,9 @@ def test_corridor_g1_sidesteps_through_a_gap_the_disc_refuses(up):
     spec = importlib.util.spec_from_file_location("g1_corridor", path)
     ex = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ex)
+    # Acceptance runs the full duration even under CBFKIT_TEST_MODE, whose smoke
+    # default would stop the corridor run after 5 steps.
+    ex.TEST_MODE = False
     m, S, cd, plant = ex.run("ellipse", gap=ex.GAP_G1, g1=True, duration=120.0)
     assert m["crossed"], m
     assert m["theta_cmd_max_deg"] > 60.0  # turned sideways
