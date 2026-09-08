@@ -143,6 +143,7 @@ def test_controller_runs_and_carries_state(assets):
 
 
 @pytest.mark.slow
+@pytest.mark.g1_mjx
 def test_amo_stands_in_mjx(assets):
     """Acceptance: the AMO policy holds the G1 upright for 5 s in MJX at zero command."""
     plant = amo.make_g1_23dof_plant()
@@ -162,6 +163,7 @@ def test_amo_stands_in_mjx(assets):
 
 
 @pytest.mark.slow
+@pytest.mark.g1_mjx
 def test_amo_walks_with_torso_commands_in_mjx(assets):
     """Acceptance: AMO walks forward in MJX while yawing the torso 1.2 rad, without falling.
 

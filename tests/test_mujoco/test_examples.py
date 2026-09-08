@@ -8,23 +8,44 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+G1 = pytest.mark.g1_mjx  # every G1 script compiles the MJX humanoid step
 EXAMPLES = [
     "examples/mujoco/cart_pole_swingup.py",
-    ("examples/mujoco/g1_scramble.py", "--planner", "mppi", "--proxy"),
-    ("examples/mujoco/g1_scramble.py", "--footprint", "ellipse", "--planner", "mppi", "--proxy"),
-    ("examples/mujoco/g1_scramble.py", "--robot", "amo", "--planner", "mppi", "--torso"),
-    ("examples/mujoco/g1_scramble.py", "--robot", "groot", "--planner", "mppi"),
-    ("examples/mujoco/g1_scramble_social_eval.py", "--configs", "mppi", "--seeds", "0"),
-    "examples/mujoco/g1_standup.py",
-    "examples/mujoco/g1_navigate.py",
-    "examples/mujoco/g1_amo_demo.py",
-    ("examples/mujoco/g1_corridor.py", "--footprint", "ellipse"),
-    ("examples/mujoco/g1_corridor.py", "--planner", "mppi", "--offset", "-0.35"),
-    "examples/mujoco/g1_footprint_measure.py",
-    "examples/mujoco/g1_walk_compare.py",
-    "examples/mujoco/g1_plaza.py",
-    "examples/mujoco/g1_model_distance.py",
-    "examples/mujoco/g1_scramble.py",
+    pytest.param(("examples/mujoco/g1_scramble.py", "--planner", "mppi", "--proxy"), marks=G1),
+    pytest.param(
+        (
+            "examples/mujoco/g1_scramble.py",
+            "--footprint",
+            "ellipse",
+            "--planner",
+            "mppi",
+            "--proxy",
+        ),
+        marks=G1,
+    ),
+    pytest.param(
+        ("examples/mujoco/g1_scramble.py", "--robot", "amo", "--planner", "mppi", "--torso"),
+        marks=G1,
+    ),
+    pytest.param(
+        ("examples/mujoco/g1_scramble.py", "--robot", "groot", "--planner", "mppi"), marks=G1
+    ),
+    pytest.param(
+        ("examples/mujoco/g1_scramble_social_eval.py", "--configs", "mppi", "--seeds", "0"),
+        marks=G1,
+    ),
+    pytest.param("examples/mujoco/g1_standup.py", marks=G1),
+    pytest.param("examples/mujoco/g1_navigate.py", marks=G1),
+    pytest.param("examples/mujoco/g1_amo_demo.py", marks=G1),
+    pytest.param(("examples/mujoco/g1_corridor.py", "--footprint", "ellipse"), marks=G1),
+    pytest.param(
+        ("examples/mujoco/g1_corridor.py", "--planner", "mppi", "--offset", "-0.35"), marks=G1
+    ),
+    pytest.param("examples/mujoco/g1_footprint_measure.py", marks=G1),
+    pytest.param("examples/mujoco/g1_walk_compare.py", marks=G1),
+    pytest.param("examples/mujoco/g1_plaza.py", marks=G1),
+    pytest.param("examples/mujoco/g1_model_distance.py", marks=G1),
+    pytest.param("examples/mujoco/g1_scramble.py", marks=G1),
 ]
 
 

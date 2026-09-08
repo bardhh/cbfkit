@@ -29,6 +29,7 @@ def test_torchscript_loader_recovers_lstm_and_actor(up):
     assert all(bool(jnp.all(jnp.isfinite(p))) for p in params)
 
 
+@pytest.mark.g1_mjx
 def test_plant_dims_and_pd_map(up):
     plant = up.make_g1_12dof_plant()
     assert (plant.nq, plant.nv, plant.nu) == (19, 18, 12)
@@ -60,6 +61,7 @@ def test_policy_step_shapes_and_state_carry(up):
 
 
 @pytest.mark.slow
+@pytest.mark.g1_mjx
 def test_policy_walks_forward_in_mjx(up):
     plant = up.make_g1_12dof_plant()
     ctrl = up.UnitreeG1WalkPolicy().as_controller()
@@ -85,6 +87,7 @@ def test_policy_walks_forward_in_mjx(up):
 
 
 @pytest.mark.slow
+@pytest.mark.g1_mjx
 def test_navigate_example_certificate_holds(up):
     """Milestone 4/4b acceptance: robust CBF on the CoM + policy gait keeps h >= 0 and stays upright."""
     import importlib.util
@@ -157,6 +160,7 @@ def test_command_frame_and_heading_follower(up):
 
 
 @pytest.mark.slow
+@pytest.mark.g1_mjx
 def test_plaza_example_certificate_holds(up):
     """Plaza acceptance: pillar + reactive-pedestrian HOCBFs keep h >= 0 for every obstacle while
     the G1 completes the waypoint route upright (robust bound = the example's measured default),
@@ -203,6 +207,7 @@ def test_plaza_example_certificate_holds(up):
 
 
 @pytest.mark.slow
+@pytest.mark.g1_mjx
 def test_scramble_example_crosses_without_contact(up):
     """Scramble acceptance (default: soft barriers, 40 pedestrians): the G1 crosses the
     intersection upright, never touches a pedestrian (CoM distance >= PED_RADIUS + 0.30, i.e.
@@ -245,6 +250,7 @@ def test_scramble_example_crosses_without_contact(up):
 
 
 @pytest.mark.slow
+@pytest.mark.g1_mjx
 def test_scramble_mppi_crosses_politely(up):
     """Social-MPPI acceptance on the full 40-pedestrian scramble (seed 0, MJX G1): crosses,
     never enters a keep-out disc, stays upright, and is measurably less intrusive than the
@@ -270,6 +276,7 @@ def test_scramble_mppi_crosses_politely(up):
 
 
 @pytest.mark.slow
+@pytest.mark.g1_mjx
 def test_corridor_g1_sidesteps_through_a_gap_the_disc_refuses(up):
     """Anisotropic-footprint acceptance on the MJX G1 + AMO: at gap 1.25 m the ellipse
     CBF turns the robot sideways and it sidesteps through (measured: 102 s, theta 90 deg,

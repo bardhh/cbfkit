@@ -103,6 +103,7 @@ def test_controller_runs_carries_history_and_switches_policies(assets):
 
 
 @pytest.mark.slow
+@pytest.mark.g1_mjx
 def test_groot_stands_in_mjx(assets):
     """Acceptance: the Balance policy holds the 29-DoF G1 upright for 5 s in MJX."""
     plant = groot.make_g1_29dof_plant()
