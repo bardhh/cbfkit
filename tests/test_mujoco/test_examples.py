@@ -28,6 +28,7 @@ EXAMPLES = [
 ]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("script", EXAMPLES, ids=lambda s: s[0] if isinstance(s, tuple) else s)
 def test_example_runs_in_test_mode(script):
     script, *args = script if isinstance(script, tuple) else (script,)
