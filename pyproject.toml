@@ -72,6 +72,9 @@ cvxopt = [
 # codegen/create_new_system/generate_model.py). jinja2 itself is a core dep,
 # so code generation works out of the box; this extra only adds the formatter.
 codegen = ["black>=23.12.1,<27.0"]
+# MuJoCo/MJX plant backend. mujoco and mujoco-mjx MUST be pinned to the same
+# version: mjx does not upper-bound mujoco and a skew crashes at import.
+mujoco = ["mujoco==3.11.0", "mujoco-mjx==3.11.0"]
 
 # --- Convenience umbrella extras ---
 solvers = ["cbfkit[casadi]", "cbfkit[cvxopt]"]
@@ -109,7 +112,16 @@ build-backend = "setuptools.build_meta"
 version = {file = "src/cbfkit/VERSION"}
 
 [tool.setuptools.package-data]
-"cbfkit" = ["codegen/templates/*.j2", "py.typed", "VERSION"]
+"cbfkit" = [
+    "codegen/templates/*.j2",
+    "py.typed",
+    "VERSION",
+    "systems/mujoco/models/**/*.xml",
+    "systems/mujoco/models/**/*.json",
+    "systems/mujoco/models/**/NOTICE",
+    "systems/mujoco/models/**/LICENSE",
+    "systems/mujoco/models/**/README.md",
+]
 
 [tool.black]
 line-length = 100

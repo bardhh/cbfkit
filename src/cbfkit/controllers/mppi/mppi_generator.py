@@ -70,6 +70,7 @@ def mppi_generator() -> MppiGenerator:
             use_GPU=mppi_args["use_GPU"],
             costs_lambda=mppi_args["costs_lambda"],
             cost_perturbation_coeff=mppi_args["cost_perturbation"],
+            control_std=mppi_args.get("control_std", 2.0),
         )
 
         def process(

@@ -234,6 +234,29 @@ walking policy, using simulator obstacle state. The integration keeps controller
 history and resets independent across environments. PyTorch is optional; the
 bridge is for inference and does not propagate training gradients.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_scramble.gif" width="48%" alt="Unitree G1 crossing a 40-pedestrian scramble under tracked-agent HOCBFs with a social MPPI planner">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_corridor_sidestep.gif" width="48%" alt="Unitree G1 turning sideways to pass a gap certified by a rotating-ellipse footprint CBF">
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_plaza.gif" width="48%" alt="Unitree G1 crossing a plaza among pillars and reactive pedestrians under high-order CBFs">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_navigate.gif" width="48%" alt="Unitree G1 walking to a goal around an obstacle under a robust CoM CBF">
+</p>
+<p align="center">
+  <strong>Humanoid locomotion under reduced-order CBFs (MuJoCo/MJX)</strong><br>
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/mujoco/g1_scramble.py">Scramble crossing</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/mujoco/g1_corridor.py">Certified sidestep</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/mujoco/g1_plaza.py">Plaza among pedestrians</a> ·
+  <a href="https://github.com/bardhh/cbfkit/blob/main/examples/mujoco/g1_navigate.py">Goal past an obstacle</a>
+</p>
+
+A Unitree G1 runs in MJX through `sim.execute(plant=MujocoPlant(...))`
+(`pip install cbfkit[mujoco]`), with a pretrained walking policy underneath and a
+CBF-QP on the centre-of-mass command above it: keep-out barriers on obstacles and
+tracked pedestrians, a rotating-ellipse footprint for squeezing through gaps, and an
+optional socially tuned MPPI planner in front of the filter. The certificate covers
+the command-side reduced model; tracking error enters as a measured disturbance bound.
+
 ## Simulation Architecture
 
 ![cbfkit_architecture](https://github.com/user-attachments/assets/9ca32a8d-4fb5-420d-8742-cb6545a65889)

@@ -49,7 +49,10 @@ def robustness_two_norm(bound: Array) -> Callable[[Array], Array]:
         -------
             Array: value
         """
-        return jnp.linalg.norm(jacobian) * bound
+        # Row-wise: ``jacobian`` is the (n_certificates x n) stack of dh/dx; each
+        # constraint gets its own margin ||dh_i/dx|| * bound. (A 1-D input -- a
+        # single certificate -- gives the same scalar as before.)
+        return jnp.linalg.norm(jacobian, axis=-1) * bound
 
     return compute
 
@@ -75,6 +78,6 @@ def robustness_sup_norm(bound: Array) -> Callable[[Array], Array]:
         -------
             Array: value
         """
-        return jnp.sum(jnp.abs(jacobian * bound))
+        return jnp.sum(jnp.abs(jacobian * bound), axis=-1)  # row-wise, see robustness_two_norm
 
     return compute

@@ -1,0 +1,163 @@
+{
+ "repo": "NVlabs/GR00T-WholeBodyControl",
+ "commit": "c374bae5b9039cd0ee71377e654d11ce1bc69e1d",
+ "license": "Apache-2.0 (code) + NVIDIA Open Model License (checkpoints)",
+ "files": {
+  "decoupled_wbc/control/robot_model/model_data/g1/g1_29dof_old.xml": "f2a9d828ad03b27d1dab21bbf28ea31aa77b87cb2100799c7fca44ae2f201b20",
+  "LICENSE": "24ab66be50d1aca4fc5e029ef76ce4ceaac6557ea21665caf4b140695a76ffee",
+  "decoupled_wbc/sim2mujoco/resources/robots/g1/policy/NVIDIA Open Model License": "a0c4f6a35dd2c858c86069d84140052831820e78f3074a2fb758bb4156b66994",
+  "decoupled_wbc/sim2mujoco/resources/robots/g1/g1_gear_wbc.yaml": "31226a224ca8450e89d9ce17d5cb31c052192a9cbfedc8d145f1cb95627ac7a2",
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/head_link.STL": {
+   "sha256": "005fb67fbd3eff94aa8bf4a6e83238174e9f91b6721f7111594322f223724411",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_ankle_pitch_link.STL": {
+   "sha256": "d49e3abc6f5b12e532062cd575b87b5ef40cd2a3fc18f54a1ca5bba4f773d51d",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_ankle_roll_link.STL": {
+   "sha256": "c4092af943141d4d9f74232f3cfa345afc6565f46a077793b8ae0e68b39dc33f",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_elbow_link.STL": {
+   "sha256": "fa752198accd104d5c4c3a01382e45165b944fbbc5acce085059223324e5bed3",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_hip_pitch_link.STL": {
+   "sha256": "4725168105ee768ee31638ef22b53f6be2d7641bfd7cfefe803488d884776fa4",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_hip_roll_link.STL": {
+   "sha256": "91f25922ee8a7c3152790051bebad17b4d9cd243569c38fe340285ff93a97acf",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_hip_yaw_link.STL": {
+   "sha256": "a16d88aa6ddac8083aa7ad55ed317bea44b1fa003d314fba88965b7ed0f3b55b",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_knee_link.STL": {
+   "sha256": "8d92b9e3d3a636761150bb8025e32514c4602b91c7028d523ee42b3e632de477",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_rubber_hand.STL": {
+   "sha256": "cff2221a690fa69303f61fce68f2d155c1517b52efb6ca9262dd56e0bc6e70fe",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_shoulder_pitch_link.STL": {
+   "sha256": "f0d1cfd02fcf0d42f95e678eeca33da3afbcc366ffba5c052847773ec4f31d52",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_shoulder_roll_link.STL": {
+   "sha256": "fb9df21687773522598dc384f1a2945c7519f11cbc8bd372a49170316d6eee88",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_shoulder_yaw_link.STL": {
+   "sha256": "1aa97e9748e924336567992181f78c7cd0652fd52a4afcca3df6b2ef6f9e712e",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_wrist_pitch_link.STL": {
+   "sha256": "b251d8e05047f695d0f536cd78c11973cfa4e78d08cfe82759336cc3471de3a9",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_wrist_roll_link.STL": {
+   "sha256": "edc387c9a0ba8c2237e9b296d32531426fabeb6f53e58df45c76106bca74148c",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/left_wrist_yaw_link.STL": {
+   "sha256": "83f8fb3a726bf9613d65dd14f0f447cb918c3c95b3938042a0c9c09749267d3b",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/logo_link.STL": {
+   "sha256": "8571a0a19bc4916fa55f91449f51d5fdefd751000054865a842449429d5f155b",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/pelvis.STL": {
+   "sha256": "5ba6bbc888e630550140d3c26763f10206da8c8bd30ed886b8ede41c61f57a31",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/pelvis_contour_link.STL": {
+   "sha256": "5cc5c2c7a312329e3feeb2b03d3fc09fc29705bd01864f6767e51be959662420",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_ankle_pitch_link.STL": {
+   "sha256": "15be426539ec1be70246d4d82a168806db64a41301af8b35c197a33348c787a9",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_ankle_roll_link.STL": {
+   "sha256": "4b66222ea56653e627711b56d0a8949b4920da5df091da0ceb343f54e884e3a5",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_elbow_link.STL": {
+   "sha256": "1be925d7aa268bb8fddf5362b9173066890c7d32092c05638608126e59d1e2ab",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_hip_pitch_link.STL": {
+   "sha256": "e4f3c99d7f4a7d34eadbef9461fc66e3486cb5442db1ec50c86317d459f1a9c6",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_hip_roll_link.STL": {
+   "sha256": "4c254ef66a356f492947f360dd931965477b631e3fcc841f91ccc46d945d54f6",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_hip_yaw_link.STL": {
+   "sha256": "e479c2936ca2057e9eb2f7dff6c189b7419d7b8484dea0b298cbb36a2a6aa668",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_knee_link.STL": {
+   "sha256": "63c4008449c9bbe701a6e2b557b7a252e90cf3a5abcf54cee46862b9a69f8ec8",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_rubber_hand.STL": {
+   "sha256": "99533b778bca6246144fa511bb9d4e555e075c641f2a0251e04372869cd99d67",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_shoulder_pitch_link.STL": {
+   "sha256": "24cdb387e0128dfe602770a81c56cdce3a0181d34d039a11d1aaf8819b7b8c02",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_shoulder_roll_link.STL": {
+   "sha256": "962b97c48f9ce9e8399f45dd9522e0865d19aa9fd299406b2d475a8fc4a53e81",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_shoulder_yaw_link.STL": {
+   "sha256": "a0b76489271da0c72461a344c9ffb0f0c6e64f019ea5014c1624886c442a2fe5",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_wrist_pitch_link.STL": {
+   "sha256": "d22f8f3b3127f15a63e5be1ee273cd5075786c3142f1c3d9f76cbf43d2a26477",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_wrist_roll_link.STL": {
+   "sha256": "a7ee9212ff5b94d6cb7f52bb1bbf3f352194d5b598acff74f4c77d340c5b344f",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/right_wrist_yaw_link.STL": {
+   "sha256": "bc9dece2d12509707e0057ba2e48df8f3d56db0c79410212963a25e8a50f61a6",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/torso_link.STL": {
+   "sha256": "e96d023f0368a4e3450b86ca5d4f10227d8141156a373e7da8cb3c93266523e0",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/waist_roll_link.STL": {
+   "sha256": "34f0aa73f41131230be4d25876c944fdf6c24d62553f199ff8b980c15e8913df",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/waist_support_link.STL": {
+   "sha256": "1fae9e1bb609848a1667d32eed8d6083ae443538a306843056a2a660f1b2926a",
+   "lfs": true
+  },
+  "decoupled_wbc/control/robot_model/model_data/g1/meshes/waist_yaw_link.STL": {
+   "sha256": "2883f20e03f09b669b5b4ce10677ee6b5191c0934b584d7cbaef2d0662856ffb",
+   "lfs": true
+  },
+  "decoupled_wbc/sim2mujoco/resources/robots/g1/policy/GR00T-WholeBodyControl-Balance.onnx": {
+   "sha256": "f645da599d4ca3d29ed273c8f4712620bb680d34977469ca3aeabe5bb9631c18",
+   "lfs": true
+  },
+  "decoupled_wbc/sim2mujoco/resources/robots/g1/policy/GR00T-WholeBodyControl-Walk.onnx": {
+   "sha256": "7c82255b6905ffcc4468fa7f8ddcf7b70db168cf1042107ccab887cb6a8e5407",
+   "lfs": true
+  }
+ }
+}

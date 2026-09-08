@@ -10,6 +10,7 @@ from .callables import (  # noqa: F401
     CbfClfQpGenerator,
     ComputeCertificateConstraintFunctionGenerator,
     ControllerCallable,
+    DiscretePlant,
     ControllerCallableReturns,
     DynamicsCallable,
     DynamicsCallableReturns,

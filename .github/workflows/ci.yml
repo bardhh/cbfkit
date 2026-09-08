@@ -48,7 +48,7 @@ jobs:
       run: |
         pip install uv
         if [ "${{ matrix.python-version }}" == "3.10" ]; then
-          uv pip install -e ".[dev]" ruff mypy
+          uv pip install -e ".[dev,mujoco]" ruff mypy
         else
           uv pip install -e ".[dev]"
         fi

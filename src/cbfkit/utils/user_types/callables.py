@@ -91,6 +91,28 @@ VectorFieldCallable = Callable[[State], Array]
 IntegratorCallable = Callable[[State, VectorFieldCallable, float], State]
 
 
+class DiscretePlant(Protocol):
+    """A plant that owns its own state object and advances it in discrete steps.
+
+    Used by ``simulator.execute(plant=...)`` in place of ``dynamics`` +
+    ``integrator``. ``MujocoPlant`` is the reference implementation. The
+    simulator carries the opaque state and logs ``to_state(state)``.
+    """
+
+    nu: int
+    state_dim: int
+    dt: float
+
+    def step(self, state: Any, u: Array) -> Any:
+        ...
+
+    def to_state(self, state: Any) -> Array:
+        ...
+
+    def from_state(self, x: Array) -> Any:
+        ...
+
+
 # QP Solver Callables
 #
 # The unified solver signature accepts an optional ``init_params`` for
@@ -234,6 +256,7 @@ class MppiParameters(TypedDict, total=False):
     costs_lambda: float
     cost_perturbation: float
     plot_samples: int
+    control_std: float  # sampling std of the control perturbations (default 2.0)
 
 
 class MppiGenerator(Protocol):
