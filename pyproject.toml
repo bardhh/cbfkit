@@ -74,7 +74,7 @@ cvxopt = [
 codegen = ["black>=23.12.1,<27.0"]
 # MuJoCo/MJX plant backend. mujoco and mujoco-mjx MUST be pinned to the same
 # version: mjx does not upper-bound mujoco and a skew crashes at import.
-mujoco = ["mujoco==3.11.0", "mujoco-mjx==3.11.0"]
+mujoco = ["mujoco==3.11.0", "mujoco-mjx==3.12.0"]
 
 # --- Convenience umbrella extras ---
 solvers = ["cbfkit[casadi]", "cbfkit[cvxopt]"]
