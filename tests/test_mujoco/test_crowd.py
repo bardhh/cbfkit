@@ -67,3 +67,19 @@ def test_vectorised_forces_match_the_library_policy():
         o = jnp.concatenate([jnp.delete(states[:, :2], i, axis=0), others], axis=0)
         ref = pol(0.0, states[i], {"others_states": o})
         assert jnp.allclose(acc[i], ref, atol=1e-6), (i, acc[i], ref)
+
+
+def test_non_reactive_crowd_ignores_the_robot_but_not_pillars_or_each_other():
+    crowd = SocialForceCrowd(
+        [[0.0, 0.0]], [[5.0, 0.0]], [1.0], obstacles=[[0.8, -0.1]], react_to_robot=False
+    )
+    s = jnp.asarray(crowd.x0)
+    with_robot = crowd.step(0.0, jnp.array([0.8, 0.1]), s, 0.1)
+    far_robot = crowd.step(0.0, jnp.array([1e4, 1e4]), s, 0.1)
+    assert jnp.allclose(with_robot, far_robot)  # the robot's position changes nothing
+    assert float(with_robot[0, 3]) > 0.0  # still sidesteps the pillar at -y
+    pair = SocialForceCrowd(
+        [[0.0, 0.0], [0.5, 0.0]], [[5.0, 0.0], [-5.0, 0.0]], [1.0, 1.0], react_to_robot=False
+    )
+    out = pair.step(0.0, jnp.array([1e4, 1e4]), jnp.asarray(pair.x0), 0.1)
+    assert float(out[0, 2]) < float(pair.x0[0, 2])  # head-on pair still slow each other
