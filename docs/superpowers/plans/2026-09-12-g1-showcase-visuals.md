@@ -188,3 +188,7 @@ clips before anything replaces the README GIFs.
   constraints; a contact-level intrusion in the crush, 12 % intervention, goal at 67.4 s);
   unfiltered nominal h_min −0.99 (walks through people, 35.7 s). New candidate GIF 6.4 MB
   replaces the reactive-crowd one; MP4s in final2/ and the review page.
+- 2026-09-12 03:30 non-reactive crowd is a crush at 40 peds on every proxy seed (h_min −0.36 to
+  −0.99) and on most seeds at 20–32. Bardh chose "smaller crowd, best seed". The proxy does NOT
+  rank the G1: G1 results n20/s1 −0.22, n20/s9 +0.43 (79.6 s), n26/s0 +0.59 (53.5 s, 13 %
+  intervention). Trying n32/s0 and n32/s1 on the G1 before settling.

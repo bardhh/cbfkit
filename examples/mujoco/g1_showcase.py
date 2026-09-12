@@ -79,6 +79,7 @@ EXAMPLES = ("navigate", "plaza", "corridor", "scramble")
 # Durations of the README configurations: long enough for the crossing to finish
 # (measured: navigate 19.3 s, plaza 39.4 s, corridor 107.6 s, scramble 65 s).
 DURATIONS = {"navigate": 20.0, "plaza": 45.0, "corridor": 150.0, "scramble": 100.0}
+OVERRIDES: Dict[str, Any] = {}  # CLI overrides consumed by the per-example simulators
 PLANT_KINDS = {19: "unitree12", 30: "amo23", 36: "groot29"}
 UNFILTERED_MODES = ("planner", "nominal")
 # Examples whose nominal is already a bare goal P-law: they have no local planner, so
@@ -551,7 +552,8 @@ def simulate_scramble(seed: int, duration: float, unfiltered: bool, mode: str) -
     from cbfkit.utils.user_types import PlannerData
     from examples.mujoco import g1_scramble as ex
 
-    n_ped, relax = ex.N_PED, ex.DEFAULT_RELAX
+    n_ped = OVERRIDES.get("n_ped") or ex.N_PED  # --n-ped: crowd size (scramble only)
+    relax = ex.DEFAULT_RELAX
     # `nominal` mode is the builder's own "goal" planner: local_planner=None and the
     # saturated P-law toward the goal as the nominal.
     planner = "goal" if (unfiltered and mode == "nominal") else "mppi"
@@ -721,6 +723,9 @@ def main(argv=None):
     s.add_argument("--out", default=SHOWCASE_DIR, help=f"output directory (default {SHOWCASE_DIR})")
     s.add_argument("--seed", type=int, default=0)
     s.add_argument(
+        "--n-ped", type=int, default=None, help="scramble only: crowd size (default N_PED)"
+    )
+    s.add_argument(
         "--duration",
         type=float,
         default=None,
@@ -737,6 +742,8 @@ def main(argv=None):
     if a.command == "simulate":
         if a.unfiltered_mode != "planner" and not a.unfiltered:
             p.error("--unfiltered-mode only applies together with --unfiltered")
+        if a.n_ped:
+            OVERRIDES["n_ped"] = int(a.n_ped)
         simulate(a.example, a.out, a.seed, a.duration, a.unfiltered, a.unfiltered_mode)
 
 
