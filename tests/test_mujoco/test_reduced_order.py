@@ -4,6 +4,7 @@ import urllib.error
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
@@ -631,3 +632,54 @@ def test_heading_social_cost_slices_the_layout_and_rewards_the_slim_profile():
     # her (deep ellipse violation); turned side-on the 0.46 m longitudinal axis does
     # (shallow). The ellipse clearance term must dominate the mild align/spin terms.
     assert c_side < c_fwd
+
+
+@pytest.mark.parametrize("smoothing", [-0.1, 1.0, float("nan")])
+def test_mppi_plan_smoothing_rejects_invalid_fraction(smoothing):
+    from cbfkit.systems.mujoco.reduced_order import mppi_local_planner
+
+    with pytest.raises(ValueError, match="plan_smoothing"):
+        mppi_local_planner(None, 0, horizon=2, replan_every=2, plan_smoothing=smoothing)
+
+
+def test_mppi_plan_smoothing_holds_nominal_and_recovers_from_failed_replan():
+    from cbfkit.systems.mujoco.reduced_order import mppi_local_planner
+    from cbfkit.utils.user_types import PlannerData
+
+    def mppi(t, xa, u, key, data):
+        value = jnp.where(t == 4, jnp.nan, t + 1)
+        return jnp.full(3, value), PlannerData(
+            u_traj=jnp.full((2, 3), value),
+            x_traj=jnp.full((6, 3), value),
+            error=t == 4,
+        )
+
+    planner = jax.jit(
+        mppi_local_planner(
+            mppi,
+            0,
+            horizon=2,
+            replan_every=2,
+            control_dim=3,
+            state_head=6,
+            plan_smoothing=0.75,
+        )
+    )
+    carry = {}
+    # First solve is unsmoothed. Replan at t=2 blends 75% of 1 with 25% of 3.
+    # Failure at t=4 uses the finite P-law through the hold, then recovers at t=6.
+    for t, expected in enumerate([1.0, 1.0, 1.5, 1.5, None, None, None]):
+        a, _, carry = planner(
+            jnp.asarray(t), jnp.zeros(6), jnp.zeros(2), jax.random.PRNGKey(0), carry
+        )
+        if t < 4:
+            np.testing.assert_allclose(a, expected)
+            np.testing.assert_allclose(carry["mppi_x_traj"], 1 if t < 2 else 3)
+        elif t < 6:
+            np.testing.assert_allclose(a, 0)
+            assert carry["mppi_error"]
+            np.testing.assert_allclose(carry["_mppi_u_traj"], 3)
+        else:
+            np.testing.assert_allclose(a, 0.25 * 7)
+            assert not carry["mppi_error"]
+        assert np.isfinite(carry["_mppi_a"]).all()

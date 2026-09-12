@@ -200,3 +200,106 @@ clips before anything replaces the README GIFs.
   +0.07 / 90.5 s, 1.5 m +0.06 / 82.7 s, both still sidestep; unfiltered −0.48 / −0.39) →
   CORRIDOR_GAP = 1.5. 4×2 README layout (no filter | CBFKit rows) drafted in the preview;
   side-by-side GIFs at 720 px: navigate 2.6, plaza 7.0, corridor 5.5, scramble 8.9 MB.
+- 2026-09-12 corridor control follow-up (Bardh: stay sideways until clear, then turn).
+  Development host is Darwin arm64; ground-truth runs are Linux x86_64 on
+  `bardhh@192.168.0.154`, `~/code/cbfkit-viz/.venv`, JAX 0.6.2, CPU, AMO 23-DoF G1
+  (the corridor uses AMO, not the Unitree 12-DoF adapter). All G1 measurements below
+  use `g1_showcase.py simulate corridor --gap 1.5 --seed N`, 150 s maximum,
+  two static pedestrians, ellipse, hard constraints, robust bound 0. No changes to
+  barriers, class-K conditions, QP, or relaxation semantics. Outputs live beneath
+  `examples/mujoco/results/showcase/commitment/` on the box; local copies and test
+  logs are in `.omc/corridor-commitment/`. README and media untouched.
+  - Reproduced baseline, seed 0 (`smooth-0/`): goal **82.70 s**, h_min **+0.064403**,
+    intervention **13%**, wall **113.8 s**. Command heading drops from 67 degrees at
+    x=-0.25 m to 18.5 degrees at x=0; h_min occurs at x=+0.250, y=+0.192 m,
+    heading 13.4 degrees. Total heading travel 530 degrees. This confirms the early
+    unwind in the screenshot; the recomputed h is positive on this configuration.
+  - Acceleration plan smoothing, retained fraction 0.8, seed 0 (`smooth-0.8/`):
+    goal **145.04 s**, h_min **+0.264210**, intervention **17%**, wall **164.8 s**.
+    **Rejected as an improvement:** heading winds to 2623 degrees in magnitude,
+    total travel 4409 degrees. Smoothing acceleration delays angular braking;
+    it does not commit a heading. The opt-in option defaults to zero. Failed MPPI
+    samples now retain a finite warm start and keep the P-law fallback active until
+    a successful replan, preventing NaNs from contaminating a smoothed nominal.
+  - New scenario-specific nominal (`--sidestep-commitment`): MPPI owns the approach
+    and chooses turn direction. When |theta| exceeds 45 degrees within 1 m before
+    the pedestrian line, a phase latch holds the sideways heading and tracks a
+    waypoint through the gap midpoint. At x>0.68 m (maximum inflated footprint
+    radius plus 0.10 m), it switches once to goal/heading tracking. Every nominal
+    still passes through the same hard CBF-QP. This is a hybrid nominal with a
+    scripted maneuver after MPPI selects the turn, **not** MPPI discovering the
+    full maneuver. The exit distance is a nominal preference, not a new certificate.
+  - First commitment trial, **90-degree** target (`hold-s0/`, `hold-s1/`):
+    seed 0 goal **85.98 s**, h_min **+0.277274**, intervention **5%**, wall **114.1 s**;
+    seed 1 goal **58.06 s**, h_min **+0.145**, intervention **1%**, wall **61.7 s**.
+    Seed 0 holds 90 degrees across the line and until clear; total heading travel
+    falls to 296 degrees. **Fails the seed-0 speed target:** sideways translation
+    realises only ~0.032 m/s, spending 36.7 s between engagement and release.
+  - Proxy screening only: commitment at gap 1.5, seed 0, goal 27.2 s, h_min +0.263,
+    wall 2.07 s, max heading 30 degrees (the latch never engages). At gap 1.0 with
+    the 90-degree target, seed 0, goal 27.9 s, h_min +0.0817, wall 2.02 s, max heading
+    89.65 degrees. No G1 performance claim is inferred from either proxy result.
+  - **Rejected 75-degree target**, keeping the original 0.68 m release
+    (`hold75-s0/`, `hold75-s1/`): seed 0 goal **99.54 s**, h_min **-0.014248**,
+    intervention **4%**, wall **83.4 s**; seed 1 goal **59.50 s**, h_min **-0.358**,
+    intervention **0%** rounded, wall **55.5 s**. Seed 0 drifted toward the lower
+    pedestrian (minimum at x=0.274, y=-0.374 m). The proxy at gap 1.0/seed 0 passed
+    in 28.14 s, h_min +0.0649, wall 1.98 s: another reminder that proxy screening is
+    not G1 validation. Restored the 90-degree target.
+  - Next trial (`clear-sN/`): retain the 90-degree target and identical translation
+    waypoint, release only when x>0.46 m (inflated longitudinal radius) **and** both
+    centre distances exceed 0.68 m (largest inflated semi-axis plus 0.10 m). This
+    prices the full rotation sweep geometrically rather than always traversing
+    another 0.22 m at the slow lateral gait. The QP remains the safety authority.
+  - **Accepted clearance-release nominal**, gap 1.5 m, two static pedestrians:
+
+    | seed | goal time | h_min (live, recomputed) | intervention | wall time |
+    | --- | --- | --- | --- | --- |
+    | 0 | 80.88 s | +0.277274 | 5% | 68.8 s |
+    | 1 | 57.78 s | +0.145 | 1% | 53.6 s |
+    | 2 | 71.16 s | +0.203 | 9% | 63.5 s |
+
+    All reach the goal with zero controller errors. Seeds 0/1 engage and release
+    the latch; seed 2 remains in phase 0 throughout (MPPI does not request a
+    >=45-degree turn before the gap), so it validates the unchanged approach path,
+    not an additional committed-sidestep maneuver. Seed 0 meets the requested
+    h_min>=+0.05 and time<82.7 s: 1.82 s faster (2.2%), with the main improvement
+    being clearance and sustained sideways motion. At x=0 and x=0.25 m, heading
+    is 90 degrees (baseline 18.5/13.4 degrees); heading travel is 300 vs 530 degrees.
+    The geometric gate releases at x>0.46, after the entire turn sweep is clear.
+    These are measured closed-loop results on the specified G1, not a new guarantee
+    against arbitrary plant tracking errors or a claim for other gaps/seeds.
+    The showcase corridor enables commitment by default; reproduce the old nominal
+    with `--no-sidestep-commitment`. The standalone corridor keeps this mode opt-in:
+    `g1_corridor.py --g1 --planner mppi --gap 1.5 --robust 0 --duration 150
+    --sidestep-commitment`. All MPPI/control/CBF limits and costs remain unchanged
+    when smoothing is zero. The command and raw MPPI plan are logged separately;
+    the raw MPPI rollout is not the committed maneuver's future trajectory.
+  - Validation: Linux `.venv/bin/pytest -m "not slow" -q`: **872 passed, 14 skipped,
+    148 deselected**, 484.29 s. Mac full-suite attempts first hit a read-only home
+    asset cache (resolved using `CBFKIT_ASSET_DIR=/tmp/cbfkit-corridor-test-assets`),
+    then the pre-existing Torch/kvxopt duplicate-OpenMP abort. No solver or tests
+    were weakened to bypass it; the full suite ran on Linux instead. Final local
+    corridor/reduced-order regressions: 33 passed, plus 8 showcase option tests.
+    Tests cover both turn directions, a pedestrian still inside the turn sweep,
+    monotone release under gait jitter, actual hard-QP proxy crossing, smoothing
+    validation/hold/fallback/recovery, and CLI routing/default/baseline selection.
+    Black and Ruff (including import sorting, 100-column configuration) pass.
+  - Final integrated check after enabling the default: **41/41 focused tests passed**
+    on Linux (61.21 s). Ran `g1_showcase.py simulate corridor --gap 1.5 --seed 0`
+    with no commitment flag (`final-default/`): goal **80.88 s**, h_min **+0.277**,
+    intervention **5%**, wall **106.7 s**, reproducing the accepted run. For the
+    original baseline/smoothing trials under today's defaults, explicitly pass
+    `--no-sidestep-commitment`. All jobs finished with exit 0; watchdog entries closed.
+  - README review preview requested: rendered the accepted `final-default` trajectory
+    against `cor_gap1.5/g1_corridor_unfiltered_nominal.npz`, window **24–68 s** so
+    the delayed turn-back is included. Existing MuJoCo renderer, grid floor, no
+    camera drift, no GIF HUD, 720 px / 48 colours / 16 fps, 2x speed: comparison
+    GIF **5,102,084 bytes**, **22.0 s**, 352 frames. Reviewed five sampled frames;
+    opened the animated GitHub-style preview in Safari at `http://127.0.0.1:8766/`.
+    Local files: `.omc/corridor-commitment/readme-preview/`; remote renders:
+    `results/showcase/commitment/readme-preview/`. README and published media unchanged.
+- 2026-09-12 06:30 Codex's committed-sidestep nominal accepted (G1 gap 1.5 seed 0: h_min +0.28,
+  goal 80.9 s, intervention 5 %, vs +0.06 / 82.7 s / 13 % pure MPPI). Corridor clips
+  re-rendered from commitment/final-default (window 24–68 s): README GIF 3.9 MB, side-by-side
+  5.8 MB. Codex's changes committed together with the media.

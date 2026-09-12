@@ -19,7 +19,7 @@ The four configurations (the README clips, see ``scripts/render_showcase.py``):
 
     navigate   --reduced-model di, robust 0.18 (the example default), 20 s
     plaza      defaults: distance barriers, robust 0.31, 45 s
-    corridor   --g1 --planner mppi, ellipse footprint, vanilla, gap 1.5 m (CORRIDOR_GAP), 150 s
+    corridor   --g1 --planner mppi --sidestep-commitment, ellipse, vanilla, gap 1.5 m, 150 s
     scramble   --robot unitree --planner mppi, disc footprint, relaxed, vanilla, 100 s,
                26 non-yielding pedestrians (SCRAMBLE_N_PED; the example's own default is 40)
 
@@ -52,6 +52,10 @@ written for every run, and ``unfiltered_mode`` in the npz says which run it was.
 ``sub_data_bfs`` is *not* the barrier value for any of these configurations (it is psi_1 of
 the rectified high-order barrier), so ``h`` in the npz is recomputed offline from the logged
 CoM and the logged agent states with each example's own geometry.
+
+The corridor now defaults to the committed sidestep nominal. Use
+``simulate corridor --no-sidestep-commitment`` for the previous pure-MPPI configuration.
+Existing media may predate this change; measured runs are recorded in the showcase plan Log.
 """
 
 import argparse
@@ -89,8 +93,10 @@ SCRAMBLE_N_PED = 26
 # README configuration of the corridor: 1.5 m between the pedestrians' centres (the example's
 # GAP_G1 is 1.25). The turned footprint needs 0.92 m including the pedestrian clearance, so at
 # 1.5 m the sidestep has visible room on both sides while walking straight through (1.16 m)
-# still has none worth taking; measured G1: h_min +0.06, goal at 82.7 s, unfiltered -0.39.
+# still has none worth taking; original MPPI G1: h_min +0.06, goal at 82.7 s,
+# unfiltered -0.39. Committed sidestep: +0.277 / 80.88 s (seed 0; see the plan Log).
 CORRIDOR_GAP = 1.5
+CORRIDOR_SIDESTEP_COMMITMENT = True
 PLANT_KINDS = {19: "unitree12", 30: "amo23", 36: "groot29"}
 UNFILTERED_MODES = ("planner", "nominal")
 # Examples whose nominal is already a bare goal P-law: they have no local planner, so
@@ -458,7 +464,7 @@ def simulate_plaza(seed: int, duration: float, unfiltered: bool, mode: str) -> D
 
 # --------------------------------------------------------------------------- corridor
 def simulate_corridor(seed: int, duration: float, unfiltered: bool, mode: str) -> Dict[str, Any]:
-    """``g1_corridor.py --g1 --planner mppi`` (ellipse footprint, vanilla, gap 1.25 m).
+    """Ellipse G1 corridor with MPPI approach and a committed sidestep nominal.
 
     The clip's configuration: the README render is ``g1_corridor_ellipse_mppi.gif`` and the
     measured G1 + MPPI crossing is the *vanilla* one (robust 0.12 refuses the gap, see the
@@ -478,6 +484,9 @@ def simulate_corridor(seed: int, duration: float, unfiltered: bool, mode: str) -
     # with `face_velocity=True`: walk at the goal, face the direction of travel, no hint
     # about the gap anywhere.
     no_planner = unfiltered and mode == "nominal"
+    commitment = (
+        bool(OVERRIDES.get("sidestep_commitment", CORRIDOR_SIDESTEP_COMMITMENT)) and not no_planner
+    )
     patches: Dict[str, Any] = {}
     if unfiltered:
         patches["com_agent_ellipse_hocbfs"] = _empty_certificates
@@ -485,7 +494,13 @@ def simulate_corridor(seed: int, duration: float, unfiltered: bool, mode: str) -
             patches["build_corridor_mppi"] = _no_local_planner
     with _patched(ex, **patches):
         plant, x0, nominal, controller, agents, goal = ex.build(
-            footprint="ellipse", gap=gap, g1=True, robust_bound=0.0, planner="mppi"
+            footprint="ellipse",
+            gap=gap,
+            g1=True,
+            robust_bound=0.0,
+            planner="mppi",
+            plan_smoothing=float(OVERRIDES.get("plan_smoothing", 0.0)),
+            sidestep_commitment=commitment,
         )
     steps = 5 if TEST_MODE else int(round(duration / plant.dt))
     t0 = time.time()
@@ -528,12 +543,16 @@ def simulate_corridor(seed: int, duration: float, unfiltered: bool, mode: str) -
         goal_radius=np.float64(ex.GOAL_RADIUS),
         v_max=np.float64(ex.V_MAX_G1),
         gap=np.float64(gap),
+        plan_smoothing=np.float64(OVERRIDES.get("plan_smoothing", 0.0)),
+        sidestep_commitment=np.bool_(commitment),
+        sidestep_heading_deg=np.float64(np.rad2deg(ex.SIDESTEP_HEADING)),
         offset=np.float64(0.0),
         barrier_shape=np.array("ellipse"),
         robust_bound=np.float64(0.0),
         config=np.array(
             "g1_corridor.py --g1 --footprint ellipse --robust 0 --planner "
             + ("goal P-law, no local planner" if no_planner else "mppi")
+            + (" + committed sidestep nominal" if commitment else "")
         ),
     )
     if not no_planner:  # layout of mppi_x_traj; absent when no plan was logged
@@ -738,6 +757,19 @@ def main(argv=None):
     )
     s.add_argument("--gap", type=float, default=None, help="corridor only: pedestrian gap in m")
     s.add_argument(
+        "--sidestep-commitment",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="corridor only (default on): hold the sideways nominal until clear; "
+        "--no-sidestep-commitment reproduces the original MPPI nominal",
+    )
+    s.add_argument(
+        "--plan-smoothing",
+        type=float,
+        default=0.0,
+        help="corridor only: retained nominal acceleration fraction in [0, 1)",
+    )
+    s.add_argument(
         "--duration",
         type=float,
         default=None,
@@ -758,6 +790,14 @@ def main(argv=None):
             OVERRIDES["n_ped"] = int(a.n_ped)
         if a.gap:
             OVERRIDES["gap"] = float(a.gap)
+        if not 0.0 <= a.plan_smoothing < 1.0:
+            p.error("--plan-smoothing must be in [0, 1)")
+        if a.example != "corridor" and (a.sidestep_commitment is not None or a.plan_smoothing):
+            p.error("--sidestep-commitment and --plan-smoothing apply only to corridor")
+        OVERRIDES["plan_smoothing"] = a.plan_smoothing
+        OVERRIDES["sidestep_commitment"] = (
+            CORRIDOR_SIDESTEP_COMMITMENT if a.sidestep_commitment is None else a.sidestep_commitment
+        )
         simulate(a.example, a.out, a.seed, a.duration, a.unfiltered, a.unfiltered_mode)
 
 

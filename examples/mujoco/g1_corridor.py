@@ -10,10 +10,10 @@ constraints -- this is a certificate demo, not a filter:
   Minimum passable gap: 1.30 m. At ``GAP`` = 1.0 m the QP has no safe way through --
   the correct certified behavior is to STOP in front of the gap.
 * ``--footprint ellipse`` : the measured G1 footprint under AMO
-  (``reduced_order.G1_FOOTPRINT``: 0.11 m longitudinal x 0.22 m lateral, upper body --
+  (``reduced_order.G1_FOOTPRINT``: 0.16 m longitudinal x 0.28 m lateral, upper body --
   ``g1_footprint_measure.py``), rotated by the heading state. Facing forward the wide
-  lateral axis spans the gap (needs 1.04 m); turned sideways the narrow longitudinal
-  axis does (needs 0.82 m). Rotation enters ``h`` through ``theta``, so rotating is a
+  lateral axis spans the gap (needs 1.16 m); turned sideways the narrow longitudinal
+  axis does (needs 0.92 m). Rotation enters ``h`` through ``theta``, so rotating is a
   control the QP can certify.
 
 **Measured honesty note -- who discovers the rotation?** Not the bare QP: a pointwise
@@ -85,7 +85,18 @@ Measured (hard constraints; proxy gap 1.0 m, G1 gap 1.25 m):
     travel), h droops to -0.22 (the measured tracking-error class) and the robot
     reaches x = 2.50 without entering the goal disc in 150 s -- heading wind-up under
     model mismatch is the open item (see the scramble docstring; plan-commitment
-    smoothing is the designated follow-up).
+  smoothing is the designated follow-up).
+
+``--planner mppi --sidestep-commitment`` adds a scenario-specific nominal maneuver:
+MPPI chooses the turn direction on approach; after a 45-degree turn near the gap,
+hold 90 degrees and track the gap midpoint until past the pedestrians with room for
+the entire turn sweep, then face the goal. This mode supplies a heading/translation
+nominal to the unchanged hard QP; it does not claim that MPPI discovers the whole
+maneuver. ``corridor_phase`` logs approach (0), sidestep (1), and departure (2).
+The raw MPPI trajectory remains diagnostic during the committed maneuver. See the
+2026-09-12 showcase plan Log for G1 measurements and rejected configurations.
+``--plan-smoothing`` is an independent experimental retained-acceleration fraction
+(default 0); 0.8 caused severe G1 heading wind-up and is not recommended for HDI.
 
 So the anisotropic gain certified end-to-end on the real robot is 1.25 m vs the disc's
 1.30 m -- modest, because the G1's *tracking*, not its geometry, is the binding
@@ -157,6 +168,7 @@ MPPI_HORIZON = 30  # x 0.2 s = 6 s: long enough to see that rotating early pays
 MPPI_SAMPLES = 64 if TEST_MODE else 1024
 MPPI_LAMBDA = 5.0
 MPPI_CONTROL_STD = 0.4  # shared std over [ax, ay, alpha] (bounds 1, 1, 2)
+SIDESTEP_HEADING = np.pi / 2
 
 
 class Static:
@@ -170,7 +182,53 @@ class Static:
         return states
 
 
-def build_corridor_mppi(footprint, v_max, dt_ctrl, weights=None):
+def committed_sidestep(planner, v_max, offset=0.0):
+    """Commit an MPPI-selected turn through this static gap, then face the goal.
+
+    This is a scenario-specific nominal maneuver, upstream of the unchanged CBF-QP.
+    MPPI chooses the turn direction on approach. Once it turns at least 45 degrees
+    within 1 m of the pedestrian line, turn to 90 degrees and keep that heading
+    until the CoM is a longitudinal inflated radius beyond the line and the entire
+    rotation sweep has 0.10 m of nominal clearance from both pedestrians. Translation
+    tracks the gap midpoint during the maneuver; after clearance it tracks the goal.
+    The phase is monotone, so tracking jitter cannot repeatedly release/re-engage it.
+    """
+    exit_x = G1_FOOTPRINT["lon"] + PED_RADIUS
+    turn_clearance = max(G1_FOOTPRINT.values()) + PED_RADIUS + 0.10
+
+    def local(t, xa, v_nom, key, sub):
+        a, v_plan, updates = planner(t, xa, v_nom, key, sub)
+        phase = sub.get("_corridor_phase", jnp.int32(0))
+        target = sub.get("_corridor_heading", jnp.asarray(0.0))
+        engage = (phase == 0) & (xa[0] > -1.0) & (xa[0] < 0.0) & (jnp.abs(xa[4]) > jnp.pi / 4)
+        target = jnp.where(engage, jnp.sign(xa[4]) * SIDESTEP_HEADING, target)
+        phase = jnp.where(engage, 1, phase)
+        peds = xa[6:].reshape(2, 4)[:, :2]
+        clear = jnp.all(jnp.linalg.norm(xa[:2] - peds, axis=1) > turn_clearance)
+        phase = jnp.where((phase == 1) & (xa[0] > exit_x) & clear, 2, phase)
+        waypoint = jnp.where(
+            phase == 1, jnp.array([turn_clearance + 0.5, offset]), jnp.array([GOAL_X, 0.0])
+        )
+        velocity = waypoint - xa[:2]
+        velocity = velocity * jnp.minimum(1.0, v_max / (jnp.linalg.norm(velocity) + 1e-9))
+        goal_heading = jnp.arctan2(velocity[1], velocity[0])
+        heading = jnp.where(phase == 1, target, goal_heading)
+        delta = jnp.arctan2(jnp.sin(heading - xa[4]), jnp.cos(heading - xa[4]))
+        nominal = jnp.concatenate(
+            [2.0 * (velocity - xa[2:4]), jnp.array([2.0 * delta - 2.0 * jnp.sqrt(2.0) * xa[5]])]
+        )
+        updates.update(
+            _corridor_phase=phase,
+            _corridor_heading=target,
+            corridor_phase=phase,
+            corridor_heading=heading,
+        )
+        return jnp.where(phase > 0, nominal, a), jnp.where(phase > 0, velocity, v_plan), updates
+
+    return local
+
+
+def build_corridor_mppi(footprint, v_max, dt_ctrl, weights=None, plan_smoothing=0.0):
     """MPPI lookahead for the ``local_planner`` hook: 6 s horizon over the compact
     heading-augmented DI (``ellipse``; it *discovers* the rotation) or the plain DI
     (``disc``; same costs minus the heading terms, so the comparison stays controlled)."""
@@ -220,6 +278,7 @@ def build_corridor_mppi(footprint, v_max, dt_ctrl, weights=None):
         replan_every=int(round(MPPI_DT / dt_ctrl)),
         control_dim=cdim,
         state_head=shead,
+        plan_smoothing=plan_smoothing,
     )
 
 
@@ -231,6 +290,8 @@ def build(
     planner="suggest",
     mppi_weights=None,
     offset=0.0,
+    plan_smoothing=0.0,
+    sidestep_commitment=False,
 ):
     if g1:
         from cbfkit.systems.mujoco import amo_policy as amo
@@ -249,8 +310,15 @@ def build(
     agents = Static(gap, offset)
     v_max = V_MAX_G1 if g1 else V_MAX
     lp = (
-        build_corridor_mppi(footprint, v_max, plant.dt, mppi_weights) if planner == "mppi" else None
+        build_corridor_mppi(footprint, v_max, plant.dt, mppi_weights, plan_smoothing)
+        if planner == "mppi"
+        else None
     )
+    if sidestep_commitment:
+        if planner != "mppi" or footprint != "ellipse":
+            raise ValueError("sidestep_commitment requires the ellipse MPPI planner")
+        if lp is not None:
+            lp = committed_sidestep(lp, v_max, offset)
     kw = dict(
         control_limits=(
             jnp.array([A_MAX, A_MAX, ALPHA_MAX])
@@ -327,9 +395,19 @@ def run(
     planner="suggest",
     mppi_weights=None,
     offset=0.0,
+    plan_smoothing=0.0,
+    sidestep_commitment=False,
 ):
     plant, x0, nominal, controller, agents, goal = build(
-        footprint, gap, g1, robust_bound, planner, mppi_weights, offset
+        footprint,
+        gap,
+        g1,
+        robust_bound,
+        planner,
+        mppi_weights,
+        offset,
+        plan_smoothing,
+        sidestep_commitment,
     )
     steps = 5 if TEST_MODE else int(round(duration / plant.dt))
     t0 = time.time()
@@ -412,6 +490,8 @@ def main(
     robust_bound=None,
     planner="suggest",
     offset=0.0,
+    plan_smoothing=0.0,
+    sidestep_commitment=False,
 ):
     if robust_bound is None:
         robust_bound = ROBUST_BOUND_G1 if g1 else 0.0
@@ -424,6 +504,8 @@ def main(
         robust_bound=robust_bound,
         planner=planner,
         offset=offset,
+        plan_smoothing=plan_smoothing,
+        sidestep_commitment=sidestep_commitment,
     )
     for k, v in m.items():
         print(f"{k}: {v:.3f}" if isinstance(v, float) else f"{k}: {v}")
@@ -496,8 +578,30 @@ if __name__ == "__main__":
         help="shift the gap centre off the start-goal line (the suggestion does not know)",
     )
     p.add_argument("--gif", action="store_true")
+    p.add_argument("--plan-smoothing", type=float, default=0.0)
+    p.add_argument(
+        "--sidestep-commitment",
+        action="store_true",
+        help="ellipse MPPI: hold the sideways nominal until clear of the gap",
+    )
     p.add_argument("--view", action="store_true")
     a = p.parse_args()
     if a.gap is None:
         a.gap = GAP_G1 if a.g1 else GAP
-    main(a.footprint, a.gap, a.g1, a.duration, a.gif, a.view, a.robust, a.planner, a.offset)
+    if not 0.0 <= a.plan_smoothing < 1.0:
+        p.error("--plan-smoothing must be in [0, 1)")
+    if a.sidestep_commitment and (a.planner != "mppi" or a.footprint != "ellipse"):
+        p.error("--sidestep-commitment requires --planner mppi --footprint ellipse")
+    main(
+        a.footprint,
+        a.gap,
+        a.g1,
+        a.duration,
+        a.gif,
+        a.view,
+        a.robust,
+        a.planner,
+        a.offset,
+        a.plan_smoothing,
+        a.sidestep_commitment,
+    )
