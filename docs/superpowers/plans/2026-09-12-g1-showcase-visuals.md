@@ -192,3 +192,6 @@ clips before anything replaces the README GIFs.
   −0.99) and on most seeds at 20–32. Bardh chose "smaller crowd, best seed". The proxy does NOT
   rank the G1: G1 results n20/s1 −0.22, n20/s9 +0.43 (79.6 s), n26/s0 +0.59 (53.5 s, 13 %
   intervention). Trying n32/s0 and n32/s1 on the G1 before settling.
+- 2026-09-12 04:05 n32 on the G1: s0 −0.37, s1 −0.68 → settled on 26 pedestrians, seed 0
+  (filtered h_min +0.59, goal 53.5 s; unfiltered nominal −0.49, 35.7 s). SCRAMBLE_N_PED = 26 in
+  the showcase driver. Rendered; candidate GIF 6.1 MB swapped in, review page refreshed.
