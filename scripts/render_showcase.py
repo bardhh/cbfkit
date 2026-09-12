@@ -336,6 +336,50 @@ def render_multi_robot_3d() -> str:
     return str(out)
 
 
+# Unitree G1 clips: (showcase name, source render in examples/mujoco/results, sim window s).
+# The sources are the 25 fps GIFs the examples write with ``--gif``; they are not committed.
+# Encoding keeps 10 frames per simulated second (20 fps at 2x speed). The G1 policy's stride
+# cycle is 0.8 s, so the earlier 5 fps / 2-4x clips sampled once per step or once per stride
+# and the legs appeared frozen (stroboscopic aliasing).
+G1_CLIPS = [
+    ("g1_navigate", "g1_navigate_di_robust.gif", 0.16, 19.4, 320, 48),
+    ("g1_plaza", "g1_plaza_di_robust.gif", 3.0, 36.0, 288, 48),
+    ("g1_corridor_sidestep", "g1_corridor_ellipse_mppi.gif", 24.0, 52.0, 320, 48),
+    ("g1_scramble", "g1_scramble_mppi_relaxed_vanilla.gif", 10.0, 38.0, 288, 32),
+]
+G1_SPEED = 2.0
+G1_FPS = 20
+
+
+@register("g1_showcase")
+def render_g1_showcase() -> str:
+    """Trim and re-encode the Unitree G1 example renders for the README (see G1_CLIPS)."""
+    import subprocess
+
+    src_dir = ROOT / "examples" / "mujoco" / "results"
+    outs = []
+    for name, src_name, t0, t1, width, colors in G1_CLIPS:
+        src = src_dir / src_name
+        if not src.exists():
+            raise FileNotFoundError(
+                f"{src} not found; run the matching examples/mujoco script with --gif first"
+            )
+        out = OUT / f"{name}.gif"
+        vf = (
+            f"trim=start={t0}:end={t1},setpts=(PTS-STARTPTS)/{G1_SPEED},fps={G1_FPS},"
+            f"scale={width}:-1:flags=lanczos,split[a][b];"
+            f"[a]palettegen=max_colors={colors}:stats_mode=diff[p];"
+            f"[b][p]paletteuse=dither=none:diff_mode=rectangle"
+        )
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vf", vf, str(out)],
+            check=True,
+            capture_output=True,
+        )
+        outs.append(str(out))
+    return outs[-1]  # the runner checks one path; all four are written
+
+
 @register("risk_aware_cvar")
 def render_risk_aware_cvar() -> str:
     """Unicycle reach-goal with risk-aware CVaR-CBF controller and one obstacle."""
