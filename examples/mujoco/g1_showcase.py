@@ -20,7 +20,8 @@ The four configurations (the README clips, see ``scripts/render_showcase.py``):
     navigate   --reduced-model di, robust 0.18 (the example default), 20 s
     plaza      defaults: distance barriers, robust 0.31, 45 s
     corridor   --g1 --planner mppi, ellipse footprint, vanilla, gap 1.25 m, 150 s
-    scramble   --robot unitree --planner mppi, disc footprint, relaxed, vanilla, 100 s
+    scramble   --robot unitree --planner mppi, disc footprint, relaxed, vanilla, 100 s,
+               26 non-yielding pedestrians (SCRAMBLE_N_PED; the example's own default is 40)
 
 ``--unfiltered`` is the comparison run: the identical stack with an **empty certificate
 collection** in the CBF-QP, so the QP reduces to the projection of the nominal command
@@ -80,6 +81,11 @@ EXAMPLES = ("navigate", "plaza", "corridor", "scramble")
 # (measured: navigate 19.3 s, plaza 39.4 s, corridor 107.6 s, scramble 65 s).
 DURATIONS = {"navigate": 20.0, "plaza": 45.0, "corridor": 150.0, "scramble": 100.0}
 OVERRIDES: Dict[str, Any] = {}  # CLI overrides consumed by the per-example simulators
+# README configuration of the scramble: 26 non-yielding pedestrians. At the example's own 40
+# (and at 32) the crowd is a crush on every seed tried on the G1 (h_min -0.37 .. -0.99); 26 with
+# seed 0 keeps h_min +0.59 with the filter and -0.49 without, so the certificate has something to
+# certify. Override with --n-ped.
+SCRAMBLE_N_PED = 26
 PLANT_KINDS = {19: "unitree12", 30: "amo23", 36: "groot29"}
 UNFILTERED_MODES = ("planner", "nominal")
 # Examples whose nominal is already a bare goal P-law: they have no local planner, so
@@ -552,7 +558,7 @@ def simulate_scramble(seed: int, duration: float, unfiltered: bool, mode: str) -
     from cbfkit.utils.user_types import PlannerData
     from examples.mujoco import g1_scramble as ex
 
-    n_ped = OVERRIDES.get("n_ped") or ex.N_PED  # --n-ped: crowd size (scramble only)
+    n_ped = OVERRIDES.get("n_ped") or (ex.N_PED if ex.TEST_MODE else SCRAMBLE_N_PED)
     relax = ex.DEFAULT_RELAX
     # `nominal` mode is the builder's own "goal" planner: local_planner=None and the
     # saturated P-law toward the goal as the nominal.
