@@ -336,79 +336,35 @@ def render_multi_robot_3d() -> str:
     return str(out)
 
 
-# Unitree G1 clips: (showcase name, source render in examples/mujoco/results, sim window s).
-# The sources are the 25 fps GIFs the examples write with ``--gif``; they are not committed.
-# Encoding keeps 10 frames per simulated second (20 fps at 2x speed). The G1 policy's stride
-# cycle is 0.8 s, so the earlier 5 fps / 2-4x clips sampled once per step or once per stride
-# and the legs appeared frozen (stroboscopic aliasing).
-G1_CLIPS = [
-    ("g1_navigate", "g1_navigate_di_robust.gif", 0.16, 19.4, 320, 48),
-    ("g1_plaza", "g1_plaza_di_robust.gif", 3.0, 36.0, 288, 48),
-    ("g1_corridor_sidestep", "g1_corridor_ellipse_mppi.gif", 24.0, 52.0, 320, 48),
-    ("g1_scramble", "g1_scramble_mppi_relaxed_vanilla.gif", 10.0, 38.0, 288, 32),
-]
-G1_SPEED = 2.0
-G1_FPS = 20
-
-
-@register("g1_showcase")
-def render_g1_showcase() -> str:
-    """Trim and re-encode the Unitree G1 example renders for the README (see G1_CLIPS)."""
-    import subprocess
-
-    src_dir = ROOT / "examples" / "mujoco" / "results"
-    outs = []
-    for name, src_name, t0, t1, width, colors in G1_CLIPS:
-        src = src_dir / src_name
-        if not src.exists():
-            raise FileNotFoundError(
-                f"{src} not found; run the matching examples/mujoco script with --gif first"
-            )
-        out = OUT / f"{name}.gif"
-        vf = (
-            f"trim=start={t0}:end={t1},setpts=(PTS-STARTPTS)/{G1_SPEED},fps={G1_FPS},"
-            f"scale={width}:-1:flags=lanczos,split[a][b];"
-            f"[a]palettegen=max_colors={colors}:stats_mode=diff[p];"
-            f"[b][p]paletteuse=dither=none:diff_mode=rectangle"
-        )
-        subprocess.run(
-            ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vf", vf, str(out)],
-            check=True,
-            capture_output=True,
-        )
-        outs.append(str(out))
-    return outs[-1]  # the runner checks one path; all four are written
-
-
-# README settings for the new showcase renderer (examples/mujoco/g1_showcase.py): the 3-D
-# panel only, grid floor, 400 px, 48 colours, 16 fps at 2x speed (8 sim-frames/s, 3.2 per
-# 0.4 s step so no gait phase lock), camera drift off. The MP4s under media/videos keep the HUD.
-G1_SHOWCASE_GIF = [
-    "--gif-width",
-    "400",
-    "--gif-colors",
-    "48",
-    "--gif-fps",
-    "16",
-    "--gif-no-hud",
-    "--no-drift",
-]
+# README settings for the G1 showcase renderer (examples/mujoco/g1_showcase.py): the four
+# unfiltered-vs-CBF side-by-side GIFs at 720 px, 48 colours, 16 fps at 2x speed (8 sim-frames/s,
+# 3.2 per 0.4 s step so no gait phase lock), grid floor, HUD kept. Needs the logged runs from
+# `g1_showcase.py simulate <example> [--unfiltered [--unfiltered-mode nominal]]` and MUJOCO_GL=egl.
+G1_SHOWCASE_GIF = ["--gif-width", "720", "--gif-colors", "48", "--gif-fps", "16"]
+G1_SHOWCASE_UNFILTERED = {
+    "navigate": "g1_navigate_unfiltered.npz",
+    "plaza": "g1_plaza_unfiltered.npz",
+    "corridor": "g1_corridor_unfiltered_nominal.npz",
+    "scramble": "g1_scramble_unfiltered_nominal.npz",
+}
 
 
 @register("g1_showcase_render")
 def render_g1_showcase_render() -> str:
-    """Render the G1 README GIFs from logged runs (needs the npz files + MUJOCO_GL=egl)."""
+    """Render the four G1 side-by-side README GIFs from logged runs (see G1_SHOWCASE_GIF)."""
     import subprocess
     import sys
 
     npz_dir = ROOT / "examples" / "mujoco" / "results" / "showcase"
     out = None
-    for name in ("navigate", "plaza", "corridor", "scramble"):
-        npz = npz_dir / f"g1_{name}.npz"
-        if not npz.exists():
-            raise FileNotFoundError(
-                f"{npz} not found; run `python examples/mujoco/g1_showcase.py simulate {name}` first"
-            )
+    for name, unfiltered in G1_SHOWCASE_UNFILTERED.items():
+        npz, unf = npz_dir / f"g1_{name}.npz", npz_dir / unfiltered
+        for path in (npz, unf):
+            if not path.exists():
+                raise FileNotFoundError(
+                    f"{path} not found; run `python examples/mujoco/g1_showcase.py simulate "
+                    f"{name}` (and its --unfiltered variant) first"
+                )
         subprocess.run(
             [
                 sys.executable,
@@ -417,14 +373,17 @@ def render_g1_showcase_render() -> str:
                 name,
                 "--npz",
                 str(npz),
+                "--unfiltered-npz",
+                str(unf),
                 "--out",
                 str(OUT),
+                "--side-by-side",
                 "--no-mp4",
                 *G1_SHOWCASE_GIF,
             ],
             check=True,
         )
-        out = OUT / f"g1_{name}.gif"
+        out = OUT / f"g1_{name}_side_by_side.gif"
     return str(out)
 
 

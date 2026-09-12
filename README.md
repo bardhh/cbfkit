@@ -242,21 +242,37 @@ and states what the experiment does and does not establish.
 
 ### MuJoCo/MJX: humanoid locomotion under reduced-order CBFs
 
+Left: the same walking policy with no safety filter. Right: CBFKit.
+
 <p align="center">
-  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_scramble.gif" width="48%" alt="Unitree G1 crossing a 40-pedestrian scramble under tracked-agent HOCBFs with a social MPPI planner">
-  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_corridor_sidestep.gif" width="48%" alt="Unitree G1 turning sideways to pass a gap certified by a rotating-ellipse footprint CBF">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_navigate_side_by_side.gif" width="100%" alt="Goal past an obstacle. Left: the walking policy alone walks through the keep-out. Right: the robust CoM CBF bends the path around it.">
 </p>
+<p align="center"><em>Goal past an obstacle. Left: the walking policy alone walks through the keep-out. Right: the robust CoM CBF bends the path around it.</em></p>
 <p align="center">
-  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_plaza.gif" width="48%" alt="Unitree G1 crossing a plaza among pillars and reactive pedestrians under high-order CBFs">
-  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_navigate.gif" width="48%" alt="Unitree G1 walking to a goal around an obstacle under a robust CoM CBF">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_plaza_side_by_side.gif" width="100%" alt="Plaza with two pillars and three pedestrians. Left: unfiltered, the robot walks through the keep-outs. Right: high-order CBFs on tracked agents keep every one clear.">
 </p>
+<p align="center"><em>Plaza with two pillars and three pedestrians. Left: unfiltered, the robot walks through the keep-outs. Right: high-order CBFs on tracked agents keep every one clear.</em></p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_corridor_side_by_side.gif" width="100%" alt="1.5 m gap between two pedestrians. Left: the goal-directed policy drives straight into them. Right: the rotating-ellipse footprint CBF with a committed sidestep turns the G1 sideways and threads the gap.">
+</p>
+<p align="center"><em>1.5 m gap between two pedestrians. Left: the goal-directed policy drives straight into them. Right: the rotating-ellipse footprint CBF with a committed sidestep turns the G1 sideways and threads the gap.</em></p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_scramble_side_by_side.gif" width="100%" alt="26 pedestrians who never yield to the robot. Left: the goal-directed policy collides in the crush. Right: social MPPI in front of a relaxed CBF-QP crosses with the barrier positive throughout.">
+</p>
+<p align="center"><em>26 pedestrians who never yield to the robot. Left: the goal-directed policy collides in the crush. Right: social MPPI in front of a relaxed CBF-QP crosses with the barrier positive throughout.</em></p>
 
 A Unitree G1 runs in MJX through `sim.execute(plant=MujocoPlant(...))` with a pretrained
 walking policy underneath and a CBF-QP on the centre-of-mass command above it: keep-out
 barriers on obstacles and tracked pedestrians, a rotating-ellipse footprint for squeezing
 through gaps, and an optional socially tuned MPPI planner in front of the filter. The
 certificate covers the command-side reduced model; tracking error enters as a measured
-disturbance bound.
+disturbance bound. In each clip the left panel runs the same walking policy with the
+certificate removed (and, in the corridor and scramble, without the MPPI planner), the floor
+discs are the keep-out sets coloured by their barrier value, and the HUD plots the minimum
+barrier value of both runs. The clips are rendered from logged runs by
+[`examples/mujoco/g1_showcase.py`](examples/mujoco/g1_showcase.py) (`simulate`, then
+`render --side-by-side`); the scramble uses 26 pedestrians and the corridor a 1.5 m gap,
+where the examples' own defaults are 40 and 1.25 m.
 
 ```bash
 pip install "cbfkit[mujoco] @ git+https://github.com/bardhh/cbfkit.git"
