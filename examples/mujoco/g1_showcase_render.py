@@ -487,22 +487,37 @@ def _overlay_plaza(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, Any])
 def _overlay_corridor(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, Any]) -> None:
     """The two static pedestrians and the rotating footprint ellipse that has to thread them.
 
-    The constraint boundary here is the ellipse *around the robot* (semi-axes already
-    inflated by the pedestrian radius), so the pedestrians carry no separate keep-out ring;
-    the thin gray ghost is the same ellipse at the realised pelvis yaw, which is how far the
-    robot's body is from the heading the certificate assumed.
+    The certificate's boundary is the robot's footprint ellipse inflated by the pedestrian
+    radius, which is nearly round (0.46 x 0.58 m) and hides the humanoid's shape. The drawing
+    splits that Minkowski sum the way a viewer reads it: the robot's *own* footprint
+    (``footprint_axes``, 0.16 x 0.28 m -- narrow along the heading, wide across the shoulders)
+    rotates under the robot and is coloured by h, and each pedestrian carries a keep-out disc
+    of the pedestrian radius coloured by its own h column. The thin gray ghost is the footprint
+    at the realised pelvis yaw, i.e. how far the body is from the heading the certificate
+    assumed.
     """
+    obstacles = run.points("obstacles")
     if run.get("agents") is None:  # the pedestrians are motionless; the metadata has them
-        for p in run.points("obstacles"):
+        for j, p in enumerate(obstacles):
             _person(scn, p, (0.0, 0.0), run.ped_radius)
+            h_j = float(run.h[k, j]) if run.h.shape[1] > j else float(run.h_min[k])
+            _keepout(scn, p, run.ped_radius, h_j)
     else:
-        _crowd(scn, run, k, h_offset=0, rings=False)
-    axes = run.get("footprint_axes_inflated")
-    axes = run.footprint_axes + run.ped_radius if axes is None else np.asarray(axes, dtype=float)
+        _crowd(scn, run, k, h_offset=0, rings=True)
+    axes = np.asarray(run.footprint_axes, dtype=float)  # the body, not the inflated boundary
     theta = run.get("theta_cmd")
     theta_k = float(theta[k]) if theta is not None else float(prep["heading"][k])
+    # the body ellipse is small (0.16 x 0.28 m) and mostly under the robot, so it gets a strong
+    # fill and sits above the pedestrians' keep-out discs
     showcase.ellipse(
-        scn, run.com[k], axes[0], axes[1], theta_k, showcase.h_rgba(float(run.h_min[k]), 0.45)
+        scn,
+        run.com[k],
+        axes[0],
+        axes[1],
+        theta_k,
+        showcase.h_rgba(float(run.h_min[k]), 0.9),
+        z=0.03,
+        thickness=0.03,  # a 6 cm puck: the rim stays visible from the low camera
     )
     showcase.ellipse(
         scn,
@@ -511,7 +526,7 @@ def _overlay_corridor(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, An
         axes[1],
         float(prep["pelvis_yaw"][k]),
         COL_GHOST,
-        z=0.0075,
+        z=0.016,
         thickness=GHOST_THICKNESS,
     )
     _goal(scn, run)
