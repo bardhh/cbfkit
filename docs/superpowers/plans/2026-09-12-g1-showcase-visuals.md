@@ -173,3 +173,10 @@ clips before anything replaces the README GIFs.
   settings: 400 px, 48 colours, 16 fps (8 sim-frames/s, 3.2 per step, no phase lock), no HUD,
   no drift; MP4s keep HUD + drift. Code review: 3 MAJOR (intervention bar scale, camera path
   depends on gif flag, pills truncated) + minors, all routed to the render executor.
+- 2026-09-12 02:05 final pass: README candidates media/showcase/g1_<ex>_showcase.gif
+  (navigate 2.1, corridor 3.7, plaza 5.4, scramble 6.8 MB = 18 MB, vs 19 MB current);
+  MP4s (single with HUD 3–11 MB; side-by-side 3–13 MB) and side-by-side GIFs (3–12 MB)
+  kept OUT of git (repo tracks no .mp4) at ~/code/cbfkit-viz/examples/mujoco/results/showcase/final
+  on the box and in the session scratchpad; review page opened for Bardh. 88 tests pass.
+  Gotcha: `render --side-by-side` also writes the single-panel GIF, so run the README GIF
+  render last. Awaiting Bardh's call on replacing the README GIFs and where MP4s live.
