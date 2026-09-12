@@ -180,3 +180,11 @@ clips before anything replaces the README GIFs.
   on the box and in the session scratchpad; review page opened for Bardh. 88 tests pass.
   Gotcha: `render --side-by-side` also writes the single-panel GIF, so run the README GIF
   render last. Awaiting Bardh's call on replacing the README GIFs and where MP4s live.
+- 2026-09-12 02:30 Bardh: README GIFs approved in principle; scramble crowd must NOT yield to
+  the robot (social forces only among pedestrians). SocialForceCrowd(react_to_robot=False),
+  g1_scramble CROWD_REACTS = False (+ --reactive-crowd). Proxy 40 s: h_min 0.38 → 0.07.
+  Re-simulating + re-rendering the scramble on the box (final2/).
+- 2026-09-12 02:55 scramble re-run with the non-reactive crowd: filtered h_min −0.43 (relaxed
+  constraints; a contact-level intrusion in the crush, 12 % intervention, goal at 67.4 s);
+  unfiltered nominal h_min −0.99 (walks through people, 35.7 s). New candidate GIF 6.4 MB
+  replaces the reactive-crowd one; MP4s in final2/ and the review page.
