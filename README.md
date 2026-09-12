@@ -446,14 +446,6 @@ describes the development setup, the pre-commit hooks, and what CI checks. Versi
 on the [releases page](https://github.com/bardhh/cbfkit/releases); the package version is read
 from `src/cbfkit/VERSION`.
 
-Related software, for orientation rather than comparison:
-[cbfpy](https://github.com/danielpmorton/cbfpy) (CBF/CLF-QPs in JAX),
-[safe-control-gym](https://github.com/utiasDSL/safe-control-gym) (PyBullet benchmarks for safe learning-based control),
-[neural_clbf](https://github.com/MIT-REALM/neural_clbf) (learning neural CLBFs in PyTorch), and
-[hj_reachability](https://github.com/StanfordASL/hj_reachability) (Hamilton–Jacobi reachability in JAX).
-CBFKit's emphasis is the filter-around-a-policy workflow with a full simulation, estimation
-and code-generation stack behind it.
-
 ## Citing CBFKit
 
 If you use CBFKit in your research, please cite the [paper](https://arxiv.org/abs/2404.07158):
