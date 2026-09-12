@@ -190,10 +190,11 @@ def fast_solver(max_iter: Optional[int] = None, tol: float = 1e-6) -> QpSolverCa
     5-30 constraints). Robust on slack-relaxed problems where dual coordinate
     descent fails to converge.
 
-    Benchmarked ~700-880x faster than ``get_solver("jaxopt")`` (OSQP) and
-    ~60-80x faster than ``get_solver("cvxopt")`` on typical CBF-QP sizes
-    (see ``benchmarks/qp_solver_comparison.py``). JIT-compatible and
-    warm-startable across consecutive control steps.
+    Under ``jax.jit`` its per-solve time is comparable to ``get_solver("jaxopt")``
+    (OSQP) on typical CBF-QP sizes (slightly slower at 2x5, ~1.6x faster at 8x20);
+    called eagerly it is ~600-800x faster only because OSQP's iterations are
+    dispatched one by one (see ``benchmarks/qp_solver_comparison.py --jit``).
+    JIT-compatible and warm-startable across consecutive control steps.
 
     Inequality constraints only: passing ``a_mat``/``b_vec`` raises
     ``NotImplementedError`` rather than dropping them.

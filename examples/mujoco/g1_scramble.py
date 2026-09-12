@@ -7,7 +7,9 @@ barriers on *tracked agents* with constant-velocity prediction, CBF-QP on the in
 PDIPM, Unitree's walking policy, MJX G1), scaled up: ``N_PED`` social-force pedestrians
 (``SocialForceCrowd``) start 0-30 m behind the kerbs of a 12 x 12 m intersection (so they
 arrive throughout the robot's crossing) and cross W<->E, S<->N and along both diagonals at
-0.8-1.3 m/s -- faster than the robot (0.5 m/s) -- reacting to the robot and to each other.
+0.8-1.3 m/s -- faster than the robot (0.5 m/s) -- reacting to each other and to the pillars
+but NOT to the robot (``CROWD_REACTS = False``; ``--reactive-crowd`` restores the old yielding
+crowd), so every bit of avoidance has to come from the robot's side.
 The robot crosses SW -> NE (17 m).
 
 Two planners (``--planner``):
@@ -162,6 +164,7 @@ A_MAX = 1.0
 ALPHA_MAX = 2.0  # heading acceleration bound of the --footprint ellipse variant
 BARRIER_SHAPE = "distance"
 DEFAULT_ROBUST_BOUND = 0.0  # in a crush robust margins are eaten by slack (see the eval table)
+CROWD_REACTS = False  # pedestrians ignore the robot (social forces only among themselves)
 DEFAULT_RELAX = True  # hard barrier constraints are infeasible within ~10 s in this crowd
 DEFAULT_DURATION = 60.0
 DEFAULT_PLANNER = "goal"
@@ -381,6 +384,7 @@ def build(
     robot: str = DEFAULT_ROBOT,
     torso: bool = False,
     footprint: str = "disc",
+    crowd_reacts: bool = CROWD_REACTS,
 ):
     if torso and (proxy or robot != "amo"):
         raise ValueError("--torso needs the AMO robot (--robot amo, not proxy)")
@@ -439,6 +443,7 @@ def build(
         agent_radius=ROBOT_RADIUS,
         repulsion_range=PED_REPULSION_RANGE,
         arrive_radius=ARRIVE_RADIUS,
+        react_to_robot=crowd_reacts,
     )
     if footprint == "ellipse":
         dyn = embedded_heading_double_integrator(plant.state_dim, ci, n_agents=n_ped)
@@ -677,10 +682,22 @@ def run(
     robot=DEFAULT_ROBOT,
     torso=False,
     footprint="disc",
+    crowd_reacts=CROWD_REACTS,
 ):
     """Simulate one crossing; returns a dict with the metrics and the raw arrays."""
     plant, x0, pelvis_body, nominal, controller, crowd = build(
-        seed, robust_bound, n_ped, relax, planner, weights, proxy, mppi_kw, robot, torso, footprint
+        seed,
+        robust_bound,
+        n_ped,
+        relax,
+        planner,
+        weights,
+        proxy,
+        mppi_kw,
+        robot,
+        torso,
+        footprint,
+        crowd_reacts,
     )
     steps = int(round(duration / plant.dt))
     t0 = time.time()
@@ -862,6 +879,7 @@ def main(
     robot=DEFAULT_ROBOT,
     torso=False,
     footprint="disc",
+    crowd_reacts=CROWD_REACTS,
 ):
     if robust_bound is None:
         robust_bound = DEFAULT_ROBUST_BOUND
@@ -883,6 +901,7 @@ def main(
         robot,
         torso,
         footprint,
+        crowd_reacts,
     )
     m = r["metrics"]
     print_report(m)
@@ -1031,6 +1050,13 @@ if __name__ == "__main__":
     )
     p.add_argument("--hard", dest="relax", action="store_false", help="hard barrier constraints")
     p.add_argument(
+        "--reactive-crowd",
+        dest="crowd_reacts",
+        action="store_true",
+        default=CROWD_REACTS,
+        help="pedestrians also yield to the robot (default: they ignore it)",
+    )
+    p.add_argument(
         "--footprint",
         choices=("disc", "ellipse"),
         default="disc",
@@ -1057,4 +1083,5 @@ if __name__ == "__main__":
         a.robot,
         torso=a.torso,
         footprint=a.footprint,
+        crowd_reacts=a.crowd_reacts,
     )

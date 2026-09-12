@@ -84,6 +84,9 @@ class SocialForceCrowd:
         obstacles: static ``(M, 2)`` points (pillars) the pedestrians also avoid.
         ped_radius / agent_radius: interaction radii (the robot counts as an agent).
         repulsion_strength / repulsion_range / relaxation_time: social-force parameters.
+        react_to_robot: if False the pedestrians ignore the robot entirely (social forces
+            act only among pedestrians and from the static obstacles), so all of the
+            avoidance has to come from the robot's side.
         speed_cap: hard cap on a pedestrian's speed (multiple of its desired speed).
         arrive_radius: slow down and stop within this distance of the goal (0 = keep walking).
     """
@@ -102,6 +105,7 @@ class SocialForceCrowd:
         relaxation_time: float = 0.5,
         speed_cap: float = 1.5,
         arrive_radius: float = 0.0,
+        react_to_robot: bool = True,
     ) -> None:
         starts_a = jnp.asarray(starts, dtype=float).reshape(-1, 2)
         goals_a = jnp.asarray(goals, dtype=float).reshape(-1, 2)
@@ -124,12 +128,17 @@ class SocialForceCrowd:
             arrive_radius=arrive_radius,
         )
         self._cap = speed_cap
+        self.react_to_robot = bool(react_to_robot)
 
     def step(self, t, robot_xy: Array, states: Array, dt: float) -> Array:
         """One Euler step of all pedestrians given the robot's planar position."""
         states = jnp.asarray(states, dtype=float).reshape(self.n, 4)
         robot_xy = jnp.asarray(robot_xy, dtype=float).reshape(1, 2)
-        others = jnp.concatenate([robot_xy, self.obstacles], axis=0)
+        others = (
+            jnp.concatenate([robot_xy, self.obstacles], axis=0)
+            if self.react_to_robot
+            else self.obstacles
+        )
         acc = social_force_accelerations(states, self.goals, self.speeds, others, **self._params)
         v = states[:, 2:] + acc * dt
         speed = jnp.linalg.norm(v, axis=1, keepdims=True)

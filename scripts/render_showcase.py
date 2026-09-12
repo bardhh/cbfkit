@@ -336,6 +336,57 @@ def render_multi_robot_3d() -> str:
     return str(out)
 
 
+# README settings for the G1 showcase renderer (examples/mujoco/g1_showcase.py): the four
+# unfiltered-vs-CBF side-by-side GIFs at 720 px, 48 colours, 16 fps at 2x speed (8 sim-frames/s,
+# 3.2 per 0.4 s step so no gait phase lock), grid floor, HUD kept. Needs the logged runs from
+# `g1_showcase.py simulate <example> [--unfiltered [--unfiltered-mode nominal]]` and MUJOCO_GL=egl.
+G1_SHOWCASE_GIF = ["--gif-width", "720", "--gif-colors", "48", "--gif-fps", "16"]
+G1_SHOWCASE_UNFILTERED = {
+    "navigate": "g1_navigate_unfiltered.npz",
+    "plaza": "g1_plaza_unfiltered.npz",
+    "corridor": "g1_corridor_unfiltered_nominal.npz",
+    "scramble": "g1_scramble_unfiltered_nominal.npz",
+}
+
+
+@register("g1_showcase_render")
+def render_g1_showcase_render() -> str:
+    """Render the four G1 side-by-side README GIFs from logged runs (see G1_SHOWCASE_GIF)."""
+    import subprocess
+    import sys
+
+    npz_dir = ROOT / "examples" / "mujoco" / "results" / "showcase"
+    out = None
+    for name, unfiltered in G1_SHOWCASE_UNFILTERED.items():
+        npz, unf = npz_dir / f"g1_{name}.npz", npz_dir / unfiltered
+        for path in (npz, unf):
+            if not path.exists():
+                raise FileNotFoundError(
+                    f"{path} not found; run `python examples/mujoco/g1_showcase.py simulate "
+                    f"{name}` (and its --unfiltered variant) first"
+                )
+        subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "examples" / "mujoco" / "g1_showcase.py"),
+                "render",
+                name,
+                "--npz",
+                str(npz),
+                "--unfiltered-npz",
+                str(unf),
+                "--out",
+                str(OUT),
+                "--side-by-side",
+                "--no-mp4",
+                *G1_SHOWCASE_GIF,
+            ],
+            check=True,
+        )
+        out = OUT / f"g1_{name}_side_by_side.gif"
+    return str(out)
+
+
 @register("risk_aware_cvar")
 def render_risk_aware_cvar() -> str:
     """Unicycle reach-goal with risk-aware CVaR-CBF controller and one obstacle."""

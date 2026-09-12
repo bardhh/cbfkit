@@ -461,6 +461,7 @@ def mppi_local_planner(
     velocity_gain: float = 2.0,
     control_dim: int = 2,
     state_head: int = 4,
+    plan_smoothing: float = 0.0,
 ) -> Any:
     """Adapt a ``cbfkit.controllers.mppi`` planner to the ``local_planner`` hook of
     :func:`safe_locomotion_controller_di`.
@@ -481,11 +482,18 @@ def mppi_local_planner(
     planar DI hook of :func:`safe_locomotion_controller_di`; ``(3, 6)`` adapts an MPPI built
     on :func:`embedded_heading_double_integrator` (controls ``[ax, ay, alpha]``, compact
     state ``[p v th om | agents]``) to the hook of :func:`safe_locomotion_controller_hdi`.
+
+    ``plan_smoothing`` in [0, 1) retains that fraction of the previous nominal
+    acceleration at each successful replan. The first solve is unsmoothed; the QP
+    still filters the resulting nominal. The MPPI warm start and logged trajectory
+    remain the optimizer's raw plan. Zero preserves the original behavior.
     """
     from jax import lax
 
     from cbfkit.utils.user_types import PlannerData
 
+    if not 0.0 <= plan_smoothing < 1.0:
+        raise ValueError("plan_smoothing must be in [0, 1)")
     dim = state_head + 4 * n_agents
 
     def planner(t, xa, v_nom, key, sub):
@@ -501,18 +509,22 @@ def mppi_local_planner(
         k = sub.get("_mppi_k")
         if k is None:
             k = jnp.zeros((), dtype=jnp.int32)
+        err_hold = sub.get("_mppi_error", jnp.asarray(False))
 
         def solve(_):
             u, d = mppi(t, xa, None, key, PlannerData(u_traj=U))
+            a = jnp.asarray(u, dtype=float)[:control_dim]
+            if plan_smoothing:
+                a = jnp.where(k > 0, plan_smoothing * a_hold + (1 - plan_smoothing) * a, a)
             return (
-                jnp.asarray(u, dtype=float)[:control_dim],
+                a,
                 d.u_traj,
                 d.x_traj,
                 jnp.asarray(d.error),
             )
 
         def hold(_):
-            return a_hold, U, X_hold, jnp.asarray(False)
+            return a_hold, U, X_hold, err_hold
 
         a, U_new, X_new, err = lax.cond(k % replan_every == 0, solve, hold, None)
         v = xa[2:4]
@@ -520,13 +532,18 @@ def mppi_local_planner(
             [velocity_gain * (jnp.asarray(v_nom, dtype=float)[:2] - v), jnp.zeros(control_dim - 2)]
         )
         a_nom = jnp.where(err, fallback, a)
+        # A failed sample must not poison either the warm start or a later smoothed
+        # nominal. Keep reporting the failure until a successful replan recovers.
+        U_new = jnp.where(err, U, U_new)
+        X_new = jnp.where(err, X_hold, X_new)
         v_plan = X_new[2:4, 1]
         return (
             a_nom,
             v_plan,
             {
                 "_mppi_u_traj": U_new,
-                "_mppi_a": a,
+                "_mppi_a": a_nom,
+                "_mppi_error": err,
                 "_mppi_x_traj": X_new,
                 "_mppi_k": k + 1,
                 "mppi_x_traj": X_new,
