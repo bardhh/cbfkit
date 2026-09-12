@@ -220,20 +220,21 @@ independent histories, clocks, random streams and resets. The optional `torch` e
 than aliasing them; it is an inference bridge and does not carry gradients back to the policy.
 
 The warehouse example filters planar velocity requests before a frozen ANYmal-C walking
-policy in Isaac Lab, using simulator obstacle state. Across 24 trials per controller with
-matching scenario settings and a crossing cart:
+policy in Isaac Lab, using simulator obstacle state. Each controller ran the same 24 scenarios
+with a crossing cart. Two of them fell within 1.2 s of startup, before any obstacle
+interaction, in both the stop and CBF runs; those two are excluded from every row below.
 
-| Controller | Obstacle contacts | Falls | Clean deliveries |
-|------------|------------------:|------:|-----------------:|
-| Unfiltered policy | 23 | 19 | 0 |
-| Distance-based stop rule | 0 | 3 | 21 |
-| CBF-QP filter | 0 | 2 | 22 |
+| Controller (22 trials each) | Obstacle contacts | Falls | Clean deliveries |
+|-----------------------------|------------------:|------:|-----------------:|
+| Unfiltered policy | 21 | 17 | 0 |
+| Distance-based stop rule | 0 | 1 | 21 |
+| CBF-QP filter | 0 | 0 | 22 |
 
-Two startup falls occurred in both the stop and CBF runs. Median filter latency for the
-eight-robot batch was 2.8 ms including the bridge. The counts are descriptive: hidden simulator
-and policy state was not held equal across modes, so they do not establish a causal advantage
-over stopping. The [validation report](examples/isaac_lab/validation/REPORT.md) states what
-the experiment does and does not establish.
+Median filter latency for the eight-robot batch was 2.8 ms including the bridge. The counts
+are descriptive: hidden simulator and policy state was not held equal across modes, so they do
+not establish a causal advantage over stopping. The
+[validation report](examples/isaac_lab/validation/REPORT.md) has the unfiltered 24-trial table
+and states what the experiment does and does not establish.
 
 [Integration guide](examples/isaac_lab/README.md) ·
 [Reproduce the warehouse demo](examples/isaac_lab/WAREHOUSE.md) ·
