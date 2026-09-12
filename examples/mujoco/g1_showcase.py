@@ -464,7 +464,7 @@ def simulate_corridor(seed: int, duration: float, unfiltered: bool, mode: str) -
     from cbfkit.utils.user_types import PlannerData
     from examples.mujoco import g1_corridor as ex
 
-    gap = ex.GAP_G1
+    gap = float(OVERRIDES.get("gap") or ex.GAP_G1)  # --gap overrides (metres, centre to centre)
     # The builder offers two planners and neither is a bare goal P-law: "suggest" is the
     # hand-coded heading ramp that *anticipates* the gap, "mppi" is the P-law nominal plus
     # the MPPI lookahead. So `nominal` mode takes the "mppi" branch -- whose nominal is
@@ -731,6 +731,7 @@ def main(argv=None):
     s.add_argument(
         "--n-ped", type=int, default=None, help="scramble only: crowd size (default N_PED)"
     )
+    s.add_argument("--gap", type=float, default=None, help="corridor only: pedestrian gap in m")
     s.add_argument(
         "--duration",
         type=float,
@@ -750,6 +751,8 @@ def main(argv=None):
             p.error("--unfiltered-mode only applies together with --unfiltered")
         if a.n_ped:
             OVERRIDES["n_ped"] = int(a.n_ped)
+        if a.gap:
+            OVERRIDES["gap"] = float(a.gap)
         simulate(a.example, a.out, a.seed, a.duration, a.unfiltered, a.unfiltered_mode)
 
 
