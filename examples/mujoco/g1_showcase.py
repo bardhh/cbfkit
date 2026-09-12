@@ -73,7 +73,7 @@ from cbfkit.certificates import concatenate_certificates
 TEST_MODE = bool(os.getenv("CBFKIT_TEST_MODE"))
 RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
 SHOWCASE_DIR = os.path.join(RESULTS_DIR, "showcase")
-jax.config.update("jax_compilation_cache_dir", os.path.expanduser("~/.cache/cbfkit/jax"))
+JAX_CACHE_DIR = os.path.expanduser("~/.cache/cbfkit/jax")
 
 EXAMPLES = ("navigate", "plaza", "corridor", "scramble")
 # Durations of the README configurations: long enough for the crossing to finish
@@ -653,7 +653,12 @@ def simulate(
     unfiltered: bool,
     mode: str = "planner",
 ):
-    """Run one example and write ``g1_<example>[_unfiltered[_nominal]].npz`` into ``out_dir``."""
+    """Run one example and write ``g1_<example>[_unfiltered[_nominal]].npz`` into ``out_dir``.
+
+    Sets the JAX compilation cache here rather than at import: it is a process-global
+    side effect, and importing this module should not impose it on the caller.
+    """
+    jax.config.update("jax_compilation_cache_dir", JAX_CACHE_DIR)
     if duration is None:
         duration = DURATIONS[example]
     if unfiltered and mode == "nominal" and example in NO_LOCAL_PLANNER:

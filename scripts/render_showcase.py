@@ -380,6 +380,54 @@ def render_g1_showcase() -> str:
     return outs[-1]  # the runner checks one path; all four are written
 
 
+# README settings for the new showcase renderer (examples/mujoco/g1_showcase.py): the 3-D
+# panel only, grid floor, 400 px, 48 colours, 16 fps at 2x speed (8 sim-frames/s, 3.2 per
+# 0.4 s step so no gait phase lock), camera drift off. The MP4s under media/videos keep the HUD.
+G1_SHOWCASE_GIF = [
+    "--gif-width",
+    "400",
+    "--gif-colors",
+    "48",
+    "--gif-fps",
+    "16",
+    "--gif-no-hud",
+    "--no-drift",
+]
+
+
+@register("g1_showcase_render")
+def render_g1_showcase_render() -> str:
+    """Render the G1 README GIFs from logged runs (needs the npz files + MUJOCO_GL=egl)."""
+    import subprocess
+    import sys
+
+    npz_dir = ROOT / "examples" / "mujoco" / "results" / "showcase"
+    out = None
+    for name in ("navigate", "plaza", "corridor", "scramble"):
+        npz = npz_dir / f"g1_{name}.npz"
+        if not npz.exists():
+            raise FileNotFoundError(
+                f"{npz} not found; run `python examples/mujoco/g1_showcase.py simulate {name}` first"
+            )
+        subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "examples" / "mujoco" / "g1_showcase.py"),
+                "render",
+                name,
+                "--npz",
+                str(npz),
+                "--out",
+                str(OUT),
+                "--no-mp4",
+                *G1_SHOWCASE_GIF,
+            ],
+            check=True,
+        )
+        out = OUT / f"g1_{name}.gif"
+    return str(out)
+
+
 @register("risk_aware_cvar")
 def render_risk_aware_cvar() -> str:
     """Unicycle reach-goal with risk-aware CVaR-CBF controller and one obstacle."""

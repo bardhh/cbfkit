@@ -26,6 +26,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from collections import OrderedDict
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -68,6 +69,16 @@ FLOOR_RGB2 = (0.46, 0.47, 0.50)
 FLOOR_MARKRGB = (0.60, 0.61, 0.64)
 FLOOR_TEXREPEAT = (8.0, 8.0)
 FLOOR_REFLECTANCE = 0.08
+
+# Floor styles. The fine checker is the single biggest contributor to GIF size: under a
+# tracking camera every one of its edges moves, so no two frames share a background and the
+# palette encoder has nothing to reuse. Measured on the scramble clip at 400 px / 48 colours:
+# checker 11 MB, grid 5.1 MB, plain 3.4 MB.
+FLOOR_STYLES: Tuple[str, ...] = ("grid", "checker", "plain")
+GRID_RGB = (0.51, 0.52, 0.53)
+GRID_LINE_RGB = (0.42, 0.42, 0.42)
+GRID_TEX_SIZE = 300  # one tile is 1 m (texuniform + texrepeat 1 1)
+GRID_LINE_PX = 4
 SKY_RGB1 = (0.70, 0.78, 0.90)
 SKY_RGB2 = (0.95, 0.97, 1.00)
 HAZE_RGBA = (0.85, 0.87, 0.90, 1.0)
@@ -131,28 +142,66 @@ def _clear_skyboxes(spec: mujoco.MjSpec) -> None:
             spec.delete(tex)
 
 
-def _add_showcase_floor(spec: mujoco.MjSpec) -> None:
-    """Add the light checker texture + material and point every plane geom at it.
+def _grid_texture_bytes() -> bytes:
+    """A ``GRID_TEX_SIZE`` square of :data:`GRID_RGB` with a darker border of ``GRID_LINE_PX``.
+
+    Tiled uniformly at one tile per metre this reads as a 1 m grid. MuJoCo's builtin marks
+    cannot set a border width, so the pixels are written directly.
+    """
+    n, w = int(GRID_TEX_SIZE), int(GRID_LINE_PX)
+    rgb = np.empty((n, n, 3), dtype=np.uint8)
+    rgb[:] = np.round(np.asarray(GRID_RGB) * 255.0).astype(np.uint8)
+    line = np.round(np.asarray(GRID_LINE_RGB) * 255.0).astype(np.uint8)
+    rgb[:w, :, :] = line
+    rgb[-w:, :, :] = line
+    rgb[:, :w, :] = line
+    rgb[:, -w:, :] = line
+    return rgb.tobytes()
+
+
+def _add_showcase_floor(spec: mujoco.MjSpec, floor: str) -> None:
+    """Add the showcase ground material and point every plane geom at it.
 
     Adding a *new* texture/material (rather than editing the source's) is what makes this
-    work uniformly for GR00T, whose injected floor has no material at all.
+    work uniformly for GR00T, whose injected floor has no material at all. ``floor`` is one
+    of :data:`FLOOR_STYLES`: ``grid`` (flat with 1 m lines, the default), ``checker`` (the
+    finer original) or ``plain`` (no texture at all). The material's reflectance is the same
+    for all three, so only the albedo pattern changes.
     """
-    spec.add_texture(
-        name=_SHOWCASE_TEX,
-        type=mujoco.mjtTexture.mjTEXTURE_2D,
-        builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
-        mark=mujoco.mjtMark.mjMARK_EDGE,
-        rgb1=list(FLOOR_RGB1),
-        rgb2=list(FLOOR_RGB2),
-        markrgb=list(FLOOR_MARKRGB),
-        width=300,
-        height=300,
-    )
+    if floor not in FLOOR_STYLES:
+        raise ValueError(f"unknown floor {floor!r}; expected one of {FLOOR_STYLES}")
     mat = spec.add_material(name=_SHOWCASE_MAT)
-    mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = _SHOWCASE_TEX
-    mat.texuniform = True
-    mat.texrepeat = list(FLOOR_TEXREPEAT)
     mat.reflectance = FLOOR_REFLECTANCE
+    if floor == "plain":
+        mat.rgba = [*GRID_RGB, 1.0]
+    elif floor == "checker":
+        spec.add_texture(
+            name=_SHOWCASE_TEX,
+            type=mujoco.mjtTexture.mjTEXTURE_2D,
+            builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
+            mark=mujoco.mjtMark.mjMARK_EDGE,
+            rgb1=list(FLOOR_RGB1),
+            rgb2=list(FLOOR_RGB2),
+            markrgb=list(FLOOR_MARKRGB),
+            width=300,
+            height=300,
+        )
+        mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = _SHOWCASE_TEX
+        mat.texuniform = True
+        mat.texrepeat = list(FLOOR_TEXREPEAT)
+    else:  # grid
+        texture = spec.add_texture(
+            name=_SHOWCASE_TEX,
+            type=mujoco.mjtTexture.mjTEXTURE_2D,
+            builtin=mujoco.mjtBuiltin.mjBUILTIN_NONE,
+            width=int(GRID_TEX_SIZE),
+            height=int(GRID_TEX_SIZE),
+            nchannel=3,
+        )
+        texture.data = _grid_texture_bytes()
+        mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = _SHOWCASE_TEX
+        mat.texuniform = True
+        mat.texrepeat = [1.0, 1.0]  # one tile per metre
     for geom in spec.geoms:
         if geom.type == mujoco.mjtGeom.mjGEOM_PLANE:
             geom.material = _SHOWCASE_MAT
@@ -199,7 +248,7 @@ def _set_showcase_visual(spec: mujoco.MjSpec) -> None:
     spec.visual.global_.offheight = OFFHEIGHT
 
 
-def render_model(plant_kind: str, *, offline: bool = False) -> mujoco.MjModel:
+def render_model(plant_kind: str, *, offline: bool = False, floor: str = "grid") -> mujoco.MjModel:
     """Compile a render-only ``MjModel`` for ``plant_kind`` with the showcase studio look.
 
     The returned model has the same ``nq``/``nv`` as the plant's own model (asserted), so
@@ -209,21 +258,28 @@ def render_model(plant_kind: str, *, offline: bool = False) -> mujoco.MjModel:
 
     ``plant_kind`` is one of :data:`PLANT_KINDS`. With ``offline=True`` (or
     ``CBFKIT_ASSETS_OFFLINE=1``) a missing asset cache raises instead of downloading.
+    ``floor`` is one of :data:`FLOOR_STYLES`; the ``grid`` default is both cleaner and much
+    cheaper to encode as a GIF than the original fine ``checker``.
     """
+    if floor not in FLOOR_STYLES:  # checked before any asset work, so a typo fails fast
+        raise ValueError(f"unknown floor {floor!r}; expected one of {FLOOR_STYLES}")
     src = source_xml(plant_kind, offline=offline)
-    reference = mujoco.MjModel.from_xml_path(str(src))
+    # One parse, two compiles: parsing the G1 pulls in 51 meshes, so the pristine model that
+    # establishes the nq/nv contract is compiled from this same spec rather than re-read.
     spec = mujoco.MjSpec.from_file(str(src))
+    reference = spec.compile()
+    source_layout = (reference.nq, reference.nv)
     _clear_lights(spec)
     _clear_skyboxes(spec)
     _add_showcase_sky(spec)
-    _add_showcase_floor(spec)
+    _add_showcase_floor(spec, floor)
     _add_showcase_lights(spec)
     _set_showcase_visual(spec)
     model = spec.compile()
-    if (model.nq, model.nv) != (reference.nq, reference.nv):
+    if (model.nq, model.nv) != source_layout:
         raise RuntimeError(
             f"showcase model for {plant_kind!r} changed the state layout: "
-            f"nq/nv {(model.nq, model.nv)} != source {(reference.nq, reference.nv)}"
+            f"nq/nv {(model.nq, model.nv)} != source {source_layout}"
         )
     return model
 
@@ -438,8 +494,8 @@ def pedestrian(
     v_xy: Vec,
     r: float,
     rgba: Vec,
-    height: float = 1.7,
-    body_scale: float = 0.6,
+    height: float = 1.65,
+    body_scale: float = 0.8,
 ) -> int:
     """A pedestrian: standing capsule body, heading arrow, and a translucent floor disc.
 
@@ -522,10 +578,16 @@ class CameraSchedule:
     ``k`` is the *logged step index* (as the markers callback receives it), so the lag is
     integrated over the actual elapsed ``dt * (k - k_prev)`` even when frames are skipped.
     The same ``MjvCamera`` instance is returned every call -- use it before the next update.
+
+    The azimuth is a filtered state like the look-at, rate-limited to
+    :data:`MAX_AZIMUTH_RATE_DEG_S`. Without that limit a heading that flips sign (a robot
+    sidestepping, or one whose velocity passes through zero) moves the *target* azimuth by
+    up to 180 deg and the shot whips around in a single frame.
     """
 
     LOOKAT_Z = 0.8
     BEHIND_LEFT_DEG = 180.0 - 35.0
+    MAX_AZIMUTH_RATE_DEG_S = 30.0
 
     def __init__(
         self,
@@ -546,6 +608,7 @@ class CameraSchedule:
         self._cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         self._cam.trackbodyid = -1
         self._lookat = np.array([0.0, 0.0, self.LOOKAT_Z])
+        self._azimuth = self.azimuth0
         self._last_k: Optional[int] = None
 
     @staticmethod
@@ -556,22 +619,31 @@ class CameraSchedule:
         """Camera for logged step ``k`` looking at ``target_xy`` (optionally heading-biased)."""
         target = np.asarray(target_xy, dtype=float).reshape(-1)[:2]
         goal = np.array([target[0], target[1], self.LOOKAT_Z])
-        if self._last_k is None or k <= self._last_k:
+        last_k = self._last_k
+        first = last_k is None or k <= last_k
+        elapsed = 0.0 if last_k is None else self.dt * (k - last_k)
+        if first:
             self._lookat = goal  # first frame (or a reset): snap, do not ease in from the origin
         else:
-            elapsed = self.dt * (k - self._last_k)
             alpha = 1.0 - float(np.exp(-elapsed / max(self.lag_s, 1e-6)))
             self._lookat = self._lookat + alpha * (goal - self._lookat)
-        self._last_k = int(k)
 
         azimuth = self.azimuth0 + self.drift_deg_per_s * self.dt * float(k)
         if heading is not None:
             behind_left = float(np.degrees(float(heading))) + self.BEHIND_LEFT_DEG
             azimuth = azimuth + 0.5 * self._wrap180(behind_left - azimuth)
+        if first:
+            self._azimuth = self._wrap180(azimuth)
+        else:
+            step = self._wrap180(azimuth - self._azimuth)
+            limit = self.MAX_AZIMUTH_RATE_DEG_S * elapsed
+            self._azimuth = self._wrap180(self._azimuth + max(-limit, min(limit, step)))
+        self._last_k = int(k)
+
         self._cam.lookat[:] = self._lookat
         self._cam.distance = self.distance
         self._cam.elevation = self.elevation
-        self._cam.azimuth = self._wrap180(azimuth)
+        self._cam.azimuth = self._azimuth
         return self._cam
 
 
@@ -590,6 +662,8 @@ _MAX_PILLS = 5
 _PILL_X0, _PILL_X1 = 0.705, 0.995  # the right block's horizontal extent
 _PILL_Y_SINGLE = 0.17  # one row of pills sits at the bottom of the band
 _PILL_Y_ROWS = (0.40, 0.13)  # two rows: below the intervention bar
+_MIN_PILL_SCALE = 0.5  # pills shrink to this fraction of the base size before giving up
+_HUD_CACHE_MAX = 2  # figures are expensive; keep the working set, close the rest
 
 
 class HudRenderer:
@@ -661,9 +735,9 @@ class HudRenderer:
         self._bar_ax.set_xlim(0.0, _INTERVENTION_FULL_SCALE)
         self._bar_ax.set_ylim(0.0, 1.0)
         self._bar_ax.axis("off")
-        self._bar_ax.add_patch(
-            Rectangle((0.0, 0.0), _INTERVENTION_FULL_SCALE, 1.0, facecolor=_PILL_BG)
-        )
+        self._bar_full_scale = _INTERVENTION_FULL_SCALE
+        self._bar_bg = Rectangle((0.0, 0.0), _INTERVENTION_FULL_SCALE, 1.0, facecolor=_PILL_BG)
+        self._bar_ax.add_patch(self._bar_bg)
         self._bar = Rectangle((0.0, 0.0), 0.0, 1.0, facecolor="#7fd4ff")
         self._bar_ax.add_patch(self._bar)
 
@@ -704,15 +778,29 @@ class HudRenderer:
         return rows
 
     def _set_pills(self, entries: List[Tuple[str, str]]) -> None:
-        """Lay the pills out in one or two rows, shrinking the font before dropping any."""
-        entries = entries[:_MAX_PILLS]
+        """Lay the pills out in one or two rows, shrinking the font until they all fit.
+
+        A pill is a status flag -- "QP not converged", a slack magnitude -- so dropping one
+        silently would hide exactly the frames a viewer is looking for. This shrinks instead,
+        and raises if even the smallest size cannot hold them.
+        """
+        if len(entries) > _MAX_PILLS:
+            raise ValueError(
+                f"{len(entries)} HUD pills requested but only {_MAX_PILLS} slots exist: "
+                f"{[text for text, _ in entries]}"
+            )
         size = self._mid
         rows = self._pack_pills(entries, size)
-        if len(rows) > 2:  # shrink once rather than silently losing a flag
-            size = self._mid * 0.78
+        while len(rows) > 2 and size > _MIN_PILL_SCALE * self._mid:
+            size *= 0.9
             rows = self._pack_pills(entries, size)
+        if len(rows) > 2:
+            raise ValueError(
+                f"HUD pills {[text for text, _ in entries]} do not fit in two rows even at "
+                f"{_MIN_PILL_SCALE:.0%} of the base font size"
+            )
         y_rows = [_PILL_Y_SINGLE] if len(rows) < 2 else _PILL_Y_ROWS
-        offsets = [(x, y_rows[r]) for r, row in enumerate(rows[: len(y_rows)]) for x in row]
+        offsets = [(x, y_rows[r]) for r, row in enumerate(rows) for x in row]
         for pill, (text, colour), (x, y) in zip(self._pills, entries, offsets):
             pill.set_position((x, y))
             pill.set_text(text)
@@ -741,6 +829,7 @@ class HudRenderer:
         intervention_caption: Optional[str] = None,
         ylim: Optional[Tuple[float, float]] = None,
         h_label: str = "h_min",
+        full_scale: Optional[float] = None,
     ) -> np.ndarray:
         """Render one HUD frame; see :func:`hud_strip` for the argument meanings."""
         colour = h_rgba(h_min, 1.0)[:3]
@@ -816,7 +905,12 @@ class HudRenderer:
             if intervention_caption is None
             else str(intervention_caption)
         )
-        self._bar.set_width(min(max(iv, 0.0), _INTERVENTION_FULL_SCALE))
+        scale = _INTERVENTION_FULL_SCALE if full_scale is None else max(float(full_scale), 1e-9)
+        if scale != self._bar_full_scale:
+            self._bar_full_scale = scale
+            self._bar_ax.set_xlim(0.0, scale)
+            self._bar_bg.set_width(scale)
+        self._bar.set_width(min(max(iv, 0.0), scale))
         self._bar.set_facecolor("#7fd4ff" if active else _GRID)
 
         entries: List[Tuple[str, str]] = []
@@ -840,7 +934,7 @@ class HudRenderer:
         plt.close(self._fig)
 
 
-_HUD_CACHE: Dict[Tuple[int, int], HudRenderer] = {}
+_HUD_CACHE: "OrderedDict[Tuple[int, int], HudRenderer]" = OrderedDict()
 
 
 def hud_strip(
@@ -859,13 +953,16 @@ def hud_strip(
     intervention_caption: Optional[str] = None,
     ylim: Optional[Tuple[float, float]] = None,
     h_label: str = "h_min",
+    full_scale: Optional[float] = None,
 ) -> np.ndarray:
     """One HUD strip as an ``(height, width, 3)`` uint8 array.
 
     ``t`` is the current time and ``h_min`` the current minimum barrier value (it colours
     the numeric readout and the plot's playhead dot). ``h_hist``/``t_hist`` are the
     history arrays, windowed here to the last 6 s. ``intervention`` is
-    ``|v_safe - v_nom|`` in m/s (bar, full scale 0.5), ``active`` lights the "CBF ACTIVE"
+    ``|v_safe - v_nom|`` in m/s, drawn as a bar of full scale ``full_scale`` (0.5 by default;
+    pass the control bound when the filtered variable is an acceleration rather than a
+    velocity, or the bar pegs through every braking manoeuvre). ``active`` lights the "CBF ACTIVE"
     pill, ``flags`` adds one amber pill per true entry (short upper-case keys fit best,
     e.g. ``{"mppi fallback": False, "qp fail": True}``), and ``slack`` adds a slack pill
     for the relaxed-QP runs. ``mode`` is the small label under the clock.
@@ -876,13 +973,17 @@ def hud_strip(
     plot's vertical range instead of autoscaling it to the visible 6 s, and ``h_label`` names
     the quantity plotted (for a caller that plots a reparametrised barrier).
 
-    The underlying figure is cached per ``(width, height)`` because this runs per frame.
+    Figures are cached per ``(width, height)`` because this runs per frame; the cache holds
+    the most recent few and closes the rest.
     """
     key = (int(width), int(height))
-    renderer = _HUD_CACHE.get(key)
+    renderer = _HUD_CACHE.pop(key, None)
     if renderer is None:
         renderer = HudRenderer(*key)
-        _HUD_CACHE[key] = renderer
+    _HUD_CACHE[key] = renderer  # re-inserted last: the dict doubles as an LRU order
+    while len(_HUD_CACHE) > _HUD_CACHE_MAX:
+        _, evicted = _HUD_CACHE.popitem(last=False)
+        evicted.close()
     return renderer.draw(
         t,
         h_min,
@@ -938,12 +1039,15 @@ def compose_panels(
     hud: Optional[np.ndarray],
     gap: int = 8,
     bg: Tuple[int, int, int] = (18, 18, 20),
+    captions: Optional[Sequence[Optional[str]]] = None,
 ) -> np.ndarray:
     """Lay panels out side by side with a label pill each, and the HUD strip underneath.
 
     Panels are concatenated horizontally with ``gap`` pixels of ``bg`` between them; the
     HUD (any width) goes below, and both rows are centred on the widest of the two.
-    Returns an ``(H, W, 3)`` uint8 array.
+    ``captions`` optionally adds a second, smaller pill under a panel's label (``None``
+    for a panel that has none) -- for example to say that one panel is frozen on its last
+    frame while the other runs on. Returns an ``(H, W, 3)`` uint8 array.
     """
     from PIL import Image, ImageDraw
 
@@ -972,13 +1076,19 @@ def compose_panels(
 
     size = max(14, int(round(row_h / 26.0)))
     font = _label_font(size)
+    small_size = max(11, int(round(size * 0.72)))
+    small_font = _label_font(small_size)
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     pad = max(6, size // 2)
-    for (px, _), text in zip(boxes, labels):
-        x0, y0 = px + pad + 2, pad + 2
+    caption_list = list(captions) if captions is not None else [None] * len(boxes)
+    if len(caption_list) != len(boxes):
+        raise ValueError(f"got {len(boxes)} panels but {len(caption_list)} captions")
+
+    def pill(x0: int, y0: int, text: str, use_font, fill) -> int:
+        """Draw one rounded label at ``(x0, y0)``; returns the bottom edge."""
         try:
-            left, top, right, bottom = draw.textbbox((x0, y0), text, font=font)
+            left, top, right, bottom = draw.textbbox((x0, y0), text, font=use_font)
         except AttributeError:  # pragma: no cover - very old Pillow
             right, bottom = x0 + size * len(text) // 2, y0 + size
             left, top = x0, y0
@@ -987,7 +1097,14 @@ def compose_panels(
             radius=pad,
             fill=(18, 20, 24, 200),
         )
-        draw.text((x0, y0), text, font=font, fill=(232, 234, 238, 255))
+        draw.text((x0, y0), text, font=use_font, fill=fill)
+        return int(bottom)
+
+    for (px, _), text, caption in zip(boxes, labels, caption_list):
+        x0, y0 = px + pad + 2, pad + 2
+        bottom = pill(x0, y0, text, font, (232, 234, 238, 255))
+        if caption:
+            pill(x0, bottom + pad + pad // 2, caption, small_font, (200, 205, 212, 255))
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     return np.asarray(canvas, dtype=np.uint8)
 
@@ -1016,7 +1133,9 @@ class FrameWriter:
     every other step you pass ``fps=25`` for a real-time MP4. ``speed`` only applies to
     GIFs: the frames are time-compressed by ``speed`` and the GIF is written at
     ``fps * speed``, i.e. ``FrameWriter(p, 10, kind="gif", speed=2.0)`` gives a 20 fps GIF
-    playing 2x faster than real time at 10 frames per simulated second.
+    playing 2x faster than real time at 10 frames per simulated second. ``gif_fps`` overrides
+    that output rate on its own (the playback speed is unchanged), so the same added frames
+    can be resampled to a smaller file.
 
     Frames must all be the same size; an odd width or height is padded by one pixel
     because ``yuv420p`` needs even dimensions.
@@ -1031,6 +1150,7 @@ class FrameWriter:
         speed: float = 1.0,
         gif_width: int = 480,
         gif_colors: int = 64,
+        gif_fps: Optional[float] = None,
     ) -> None:
         if kind not in ("mp4", "gif"):
             raise ValueError(f"kind must be 'mp4' or 'gif', got {kind!r}")
@@ -1040,6 +1160,7 @@ class FrameWriter:
         self.speed = float(speed)
         self.gif_width = int(gif_width)
         self.gif_colors = int(gif_colors)
+        self.gif_fps = None if gif_fps is None else float(gif_fps)
         self.n_frames = 0
         self._size: Optional[Tuple[int, int]] = None
         self._proc: Optional[subprocess.Popen] = None
@@ -1090,18 +1211,27 @@ class FrameWriter:
         self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 
     def _gif_pass(self, src: Path) -> None:
+        # The time-compressed stream runs at ``fps * speed``; ``gif_fps`` resamples that to a
+        # different output rate (dropping or duplicating frames) without changing the speed.
+        out_fps = self.fps * self.speed if self.gif_fps is None else self.gif_fps
         vf = (
-            f"setpts=(PTS-STARTPTS)/{self.speed:g},fps={self.fps * self.speed:g},"
+            f"setpts=(PTS-STARTPTS)/{self.speed:g},fps={out_fps:g},"
             f"scale={self.gif_width}:-1:flags=lanczos,split[a][b];"
             f"[a]palettegen=max_colors={self.gif_colors}:stats_mode=diff[p];"
             f"[b][p]paletteuse=dither=none:diff_mode=rectangle"
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            [ffmpeg_exe(), "-y", "-v", "error", "-i", str(src), "-vf", vf, str(self.path)],
-            check=True,
-            capture_output=True,
-        )
+        try:
+            subprocess.run(
+                [ffmpeg_exe(), "-y", "-v", "error", "-i", str(src), "-vf", vf, str(self.path)],
+                check=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or b"").decode(errors="replace")[:2000]
+            raise RuntimeError(
+                f"ffmpeg's GIF palette pass failed ({exc.returncode}) for {self.path}: {detail}"
+            ) from exc
 
     # -- public API --------------------------------------------------------
     def add(self, frame_rgb_uint8: np.ndarray) -> None:
@@ -1121,8 +1251,24 @@ class FrameWriter:
         elif self._size != (w, h):
             raise ValueError(f"frame size changed from {self._size} to {(w, h)}")
         assert self._proc is not None and self._proc.stdin is not None
-        self._proc.stdin.write(frame.tobytes())
+        try:
+            self._proc.stdin.write(frame.tobytes())
+        except BrokenPipeError as exc:
+            # ffmpeg died mid-stream; its stderr says why, and without it the traceback is
+            # just "broken pipe" on frame N.
+            raise RuntimeError(f"ffmpeg exited while writing {self.path}: {self._drain()}") from exc
         self.n_frames += 1
+
+    def _drain(self) -> str:
+        """Whatever ffmpeg wrote to stderr, once it has exited."""
+        if self._proc is None:
+            return ""
+        try:
+            err = self._proc.stderr.read() if self._proc.stderr is not None else b""
+            self._proc.wait(timeout=10)
+        except (OSError, ValueError, subprocess.TimeoutExpired):  # pragma: no cover - defensive
+            return ""
+        return err.decode(errors="replace")[:2000]
 
     def close(self) -> str:
         """Finish the encode (and the GIF palette pass) and return the output path."""
@@ -1132,7 +1278,10 @@ class FrameWriter:
         if self._proc is None:
             raise RuntimeError(f"no frames were added, nothing to write to {self.path}")
         assert self._proc.stdin is not None
-        self._proc.stdin.close()
+        try:
+            self._proc.stdin.close()
+        except BrokenPipeError as exc:
+            raise RuntimeError(f"ffmpeg exited while closing {self.path}: {self._drain()}") from exc
         err = self._proc.stderr.read() if self._proc.stderr is not None else b""
         code = self._proc.wait()
         if code != 0:
@@ -1152,11 +1301,17 @@ class FrameWriter:
     def __exit__(self, exc_type, exc, tb) -> None:
         if exc_type is not None:
             if self._proc is not None and self._proc.stdin is not None:
-                self._proc.stdin.close()
+                try:
+                    self._proc.stdin.close()
+                except BrokenPipeError:  # ffmpeg already gone
+                    pass
                 self._proc.wait()
             self._closed = True
             if self._tmp is not None and self._tmp.exists():
                 self._tmp.unlink()
+            # A half-written file is worse than none: a later run would read it as a result.
+            if self.path.exists():
+                self.path.unlink()
             return
         self.close()
 

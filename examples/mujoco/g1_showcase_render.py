@@ -30,7 +30,16 @@ is) and switched off entirely by ``--full-clip``. The HUD clock stays absolute.
 Frame cadence. The logs are 50 Hz (``dt`` 0.02), so the MP4 takes every 2nd logged step at
 25 fps (real time) and the GIF takes every 5th at 10 fps written out at 2x (20 fps, 10
 frames per simulated second -- the cadence of the current README clips). Both strides are
-derived from the npz's ``dt``, and the union of the two frame sets is rendered once.
+derived from the npz's ``dt``, and the union of the two frame sets is rendered once. The
+camera is stepped over *every* logged step regardless, so the move is identical whichever
+outputs are asked for.
+
+Environment. Rendering is offscreen, so a headless box needs an EGL (or OSMesa) context:
+export ``MUJOCO_GL=egl`` before running, or MuJoCo tries GLFW and fails with no display.
+The render model is compiled from the same vendored MJCF the plant uses, which means the
+asset cache must already hold it (``~/.cache/cbfkit``, or ``CBFKIT_ASSET_DIR``). Set
+``CBFKIT_ASSETS_OFFLINE=1`` to make a cold cache raise instead of downloading ~50 meshes;
+this module honours that variable for every model it builds.
 
 Two notes on what the HUD shows:
 
@@ -77,6 +86,7 @@ FPS_GIF = 10.0  # x GIF_SPEED = 20 fps output
 GIF_SPEED = 2.0
 GIF_WIDTH = 480
 GIF_COLORS = 64
+GIF_FPS_OUT = 20.0  # output rate of the GIF; the input stays FPS_GIF sim-frames per second
 STILL_FRACTIONS = (0.0, 0.25, 0.5, 0.75, 1.0)
 TAIL_S = 1.0  # rendered past the goal hit, so the clip does not cut on the last step
 
@@ -103,6 +113,7 @@ CROWD_CULL_M = 9.0  # a pedestrian farther than this from the CoM is not drawn a
 DASH_LEN = 0.25
 N_RING_NEAR = 4  # scramble: a ring is 48 geoms, so only the nearest few get one
 HEADING_TAU = 0.5  # s, smoothing of the camera heading when theta_cmd is absent
+VELOCITY_FULL_SCALE = 0.5  # m/s at the right end of the intervention bar (the SI wrapper)
 
 COL_V_NOM = (0.55, 0.55, 0.55, 0.9)
 COL_V_SAFE = (0.20, 0.75, 0.35, 1.0)
@@ -161,7 +172,7 @@ LABEL_BY_MODE = {
 }
 
 _CYL = mujoco.mjtGeom.mjGEOM_CYLINDER
-_MODEL_CACHE: Dict[Tuple[str, bool], mujoco.MjModel] = {}
+_MODEL_CACHE: Dict[Tuple[str, bool, str], mujoco.MjModel] = {}
 
 
 # --------------------------------------------------------------------------- the npz
@@ -257,16 +268,19 @@ class Run:
         return int(min(max(int(k), 0), self.T - 1))
 
 
-def _intervention(run: Run) -> Tuple[np.ndarray, str]:
-    """Per-step ``|u_safe - u_nom|`` of the variable the QP actually filters, and its caption.
+def _intervention(run: Run) -> Tuple[np.ndarray, str, float]:
+    """Per-step ``|u_safe - u_nom|`` of the variable the QP filters, its caption and bar scale.
 
     The DI/HDI wrappers certify an acceleration and integrate it into ``v_safe``, so
     ``|v_safe - v_nom|`` is the tracking error of a double integrator, not an intervention;
-    ``a`` is the honest choice wherever it was logged.
+    ``a`` is the honest choice wherever it was logged. The bar's full scale follows the
+    variable: a velocity bar at 0.5 m/s would peg through every braking manoeuvre once it
+    is fed accelerations bounded by ``a_max`` (1 m/s^2 in these scenarios).
     """
-    for nom_key, safe_key, symbol, unit in (
-        ("a_nom", "a_safe", "da", "m/s^2"),
-        ("v_nom", "v_safe", "dv", "m/s"),
+    a_max = run.scalar("a_max", 1.0)
+    for nom_key, safe_key, symbol, unit, scale in (
+        ("a_nom", "a_safe", "da", "m/s^2", 2.0 * a_max),
+        ("v_nom", "v_safe", "dv", "m/s", VELOCITY_FULL_SCALE),
     ):
         nom, safe = run.get(nom_key), run.get(safe_key)
         if nom is None or safe is None:
@@ -274,8 +288,9 @@ def _intervention(run: Run) -> Tuple[np.ndarray, str]:
         nom = np.asarray(nom, dtype=float).reshape(run.T, -1)
         safe = np.asarray(safe, dtype=float).reshape(run.T, -1)
         n = min(nom.shape[1], safe.shape[1])
-        return np.linalg.norm(safe[:, :n] - nom[:, :n], axis=1), f"|{symbol}| = {{:.2f}} {unit}"
-    return np.zeros(run.T), "|dv| = {:.2f} m/s"
+        values = np.linalg.norm(safe[:, :n] - nom[:, :n], axis=1)
+        return values, f"|{symbol}| = {{:.2f}} {unit}", float(scale)
+    return np.zeros(run.T), "|dv| = {:.2f} m/s", VELOCITY_FULL_SCALE
 
 
 def _heading(run: Run) -> np.ndarray:
@@ -545,38 +560,111 @@ def _prepare(run: Run, example: str) -> Dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- rendering
-def _model(plant_kind: str, offline: bool) -> mujoco.MjModel:
-    key = (plant_kind, bool(offline))
+def _model(plant_kind: str, offline: bool, floor: str) -> mujoco.MjModel:
+    key = (plant_kind, bool(offline), floor)
     model = _MODEL_CACHE.get(key)
     if model is None:
-        model = showcase.render_model(plant_kind, offline=offline)
+        model = showcase.render_model(plant_kind, offline=offline, floor=floor)
         _MODEL_CACHE[key] = model
     return model
 
 
-class _Panel:
-    """One 3-D view: a render-only model, its own ``MjData``/``Renderer``, and an overlay."""
+def _camera_path(run: Run, example: str, k0: int, k1: int, drift: float) -> np.ndarray:
+    """``(k1 - k0, 4)`` of look-at xyz and azimuth, one row per *logged* step.
 
-    def __init__(self, run: Run, example: str, width: int, height: int, offline: bool) -> None:
+    Stepping the schedule over every k rather than only the encoded ones keeps the camera
+    move identical whether a render writes the MP4, the GIF, both or neither -- the two
+    have different strides, so sampling the schedule at the union would otherwise make the
+    MP4's motion depend on whether a GIF was asked for.
+    """
+    distance, elevation = CAMERAS[example]
+    schedule = showcase.CameraSchedule(
+        distance,
+        elevation,
+        azimuth0=AZIMUTH0,
+        drift_deg_per_s=drift,
+        lag_s=LAG_S,
+        dt=run.dt,
+    )
+    heading = _heading(run)
+    out = np.empty((max(k1 - k0, 0), 4), dtype=float)
+    for i, k in enumerate(range(k0, k1)):
+        kk = run.clip(k)
+        cam = schedule.update(k, run.com[kk], heading=float(heading[kk]))
+        out[i] = (cam.lookat[0], cam.lookat[1], cam.lookat[2], cam.azimuth)
+    return out
+
+
+class _Panel:
+    """One 3-D view: a render-only model, its own ``MjData``/``Renderer``, camera and overlay.
+
+    Each panel follows *its own* robot. In a side-by-side the two runs diverge by metres --
+    the unfiltered one walks straight through everything and arrives early -- so a shared
+    look-at leaves one panel pointing at empty floor. The framing constants are shared so
+    the two shots stay comparable; only the target differs.
+
+    ``freeze_at`` is the last live step: past it the panel holds that frame rather than
+    replaying the latched tail the simulator wrote after the run ended.
+    """
+
+    def __init__(
+        self,
+        run: Run,
+        example: str,
+        width: int,
+        height: int,
+        offline: bool,
+        floor: str,
+        k0: int,
+        k1: int,
+        drift: float,
+    ) -> None:
         self.run = run
-        self.model = _model(run.plant_kind, offline)
+        self.model = _model(run.plant_kind, offline, floor)
         self.data = mujoco.MjData(self.model)
         self.renderer = mujoco.Renderer(self.model, height=height, width=width, max_geom=MAX_GEOM)
         self.overlay = OVERLAYS[example]
         self.prep = _prepare(run, example)
+        self.k0 = int(k0)
+        self.freeze_at = min(int(run.n_live), run.T - 1)
+        self.path = _camera_path(run, example, k0, k1, drift)
+        self._cam = mujoco.MjvCamera()
+        self._cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+        self._cam.trackbodyid = -1
+        self._cam.distance, self._cam.elevation = CAMERAS[example]
 
-    def frame(self, k: int, cam: mujoco.MjvCamera) -> np.ndarray:
-        kk = self.run.clip(k)
+    def camera(self, k: int) -> mujoco.MjvCamera:
+        row = self.path[min(max(int(k) - self.k0, 0), len(self.path) - 1)]
+        self._cam.lookat[:] = row[:3]
+        self._cam.azimuth = float(row[3])
+        return self._cam
+
+    def step(self, k: int) -> int:
+        """The step this panel actually shows for ``k`` (frozen once its run has ended)."""
+        return self.run.clip(min(int(k), self.freeze_at))
+
+    def frozen(self, k: int) -> bool:
+        return int(k) > self.freeze_at
+
+    def frame(self, k: int) -> np.ndarray:
+        kk = self.step(k)
         nq, nv = self.run.nq, self.run.nv
         self.data.qpos[:] = self.run.states[kk, :nq]
         self.data.qvel[:] = self.run.states[kk, nq : nq + nv]
         mujoco.mj_forward(self.model, self.data)
-        self.renderer.update_scene(self.data, camera=cam)
+        self.renderer.update_scene(self.data, camera=self.camera(kk))
         self.overlay(self.renderer.scene, self.run, kk, self.prep)
         return self.renderer.render()
 
     def close(self) -> None:
         self.renderer.close()
+
+
+def _end_caption(run: Run) -> str:
+    """Why this run's live part ended, for the pill under a frozen panel's label."""
+    t_end = run.clip(int(run.n_live)) * run.dt
+    reached = float(np.linalg.norm(run.com[run.clip(int(run.n_live))] - run.goal)) < run.goal_radius
+    return f"{'goal reached' if reached else 'run ended'}  t = {t_end:.1f} s"
 
 
 def _unfiltered_label(run: Run, example: str) -> str:
@@ -600,7 +688,9 @@ def _mode(run: Run, example: str) -> str:
     return "CBF-QP + MPPI" if run.get("mppi_x_traj") is not None else "CBF-QP"
 
 
-def _hud_kwargs(run: Run, example: str, k: int, iv: np.ndarray, caption: str) -> Dict[str, Any]:
+def _hud_kwargs(
+    run: Run, example: str, k: int, iv: np.ndarray, caption: str, full_scale: float
+) -> Dict[str, Any]:
     kk = run.clip(k)
     flags: Dict[str, bool] = {}
     mppi_error = run.get("mppi_error")
@@ -628,6 +718,7 @@ def _hud_kwargs(run: Run, example: str, k: int, iv: np.ndarray, caption: str) ->
         mode=_mode(run, example),
         intervention_caption="intervention  " + caption.format(value),
         h_label=H_LABEL_DISTANCE if run.distance_form else H_LABEL,
+        full_scale=full_scale,
     )
 
 
@@ -639,54 +730,72 @@ def _composites(
     *,
     panel_wh: Tuple[int, int],
     hud_wh: Tuple[int, int],
-    cam_run: Run,
     hud_run: Run,
     compare_run: Optional[Run],
     downscale: Optional[Tuple[int, int]],
     ylim: Tuple[float, float],
     offline: bool,
+    floor: str,
+    k0: int,
+    k1: int,
+    need_hud: bool = True,
+    plain_too: bool = False,
+    drift: float = DRIFT_DEG_PER_S,
 ):
-    """Yield ``(k, composite RGB frame)`` for each ``k``, rendering each frame exactly once.
+    """Yield ``(k, hud_frame, plain_frame)`` per ``k``, rendering each 3-D frame exactly once.
 
-    The camera schedule is driven by ``cam_run`` for every panel so the two side-by-side
-    shots stay comparable, and the HUD carries ``hud_run``'s readouts with ``compare_run``'s
-    ``h_min`` as the second trace.
+    Every panel tracks its own robot on a shared clock; the HUD carries ``hud_run``'s
+    readouts with ``compare_run``'s ``h_min`` as the second trace. A panel whose run ended
+    before ``k`` is frozen on its last live frame and says so in a pill under its label.
+    ``plain_too`` also composites a HUD-less variant (the same panels, the same labels) for
+    a caller that wants one output without the strip; without it both yielded frames are
+    the same array.
     """
     from PIL import Image
 
-    distance, elevation = CAMERAS[example]
-    panels = [_Panel(r, example, panel_wh[0], panel_wh[1], offline) for r in runs]
-    hud = showcase.HudRenderer(*hud_wh)
-    cam = showcase.CameraSchedule(
-        distance,
-        elevation,
-        azimuth0=AZIMUTH0,
-        drift_deg_per_s=DRIFT_DEG_PER_S,
-        lag_s=LAG_S,
-        dt=cam_run.dt,
-    )
-    heading = _heading(cam_run)
-    iv, caption = _intervention(hud_run)
-    try:
+    iv, caption, full_scale = _intervention(hud_run)
+    with contextlib.ExitStack() as stack:
+        panels = [
+            stack.enter_context(
+                contextlib.closing(
+                    _Panel(r, example, panel_wh[0], panel_wh[1], offline, floor, k0, k1, drift)
+                )
+            )
+            for r in runs
+        ]
+        hud = (
+            stack.enter_context(contextlib.closing(showcase.HudRenderer(*hud_wh)))
+            if need_hud
+            else None
+        )
         for k in ks:
-            kk = cam_run.clip(k)
-            camera = cam.update(k, cam_run.com[kk], heading=float(heading[kk]))
-            images = [p.frame(k, camera) for p in panels]
+            images = [p.frame(k) for p in panels]
             if downscale is not None:
                 images = [
                     np.asarray(Image.fromarray(im).resize(downscale, Image.LANCZOS))
                     for im in images
                 ]
-            kwargs = _hud_kwargs(hud_run, example, k, iv, caption)
-            kwargs["ylim"] = ylim
-            if compare_run is not None:
-                kk2 = compare_run.clip(k)
-                kwargs["h_hist2"] = compare_run.h_min[: kk2 + 1]
-            yield k, showcase.compose_panels(images, labels, hud.draw(**kwargs))
-    finally:
-        for panel in panels:
-            panel.close()
-        hud.close()
+            captions = [_end_caption(p.run) if p.frozen(k) else None for p in panels]
+            if not any(captions):
+                captions = None
+            plain = (
+                showcase.compose_panels(images, labels, None, captions=captions)
+                if plain_too or hud is None
+                else None
+            )
+            if hud is not None:
+                kwargs = _hud_kwargs(hud_run, example, k, iv, caption, full_scale)
+                kwargs["ylim"] = ylim
+                if compare_run is not None:
+                    kk2 = compare_run.clip(k)
+                    kwargs["h_hist2"] = compare_run.h_min[: kk2 + 1]
+                main = showcase.compose_panels(
+                    images, labels, hud.draw(**kwargs), captions=captions
+                )
+            else:
+                assert plain is not None
+                main = plain
+            yield k, main, (plain if plain_too and plain is not None else main)
 
 
 def _hud_ylim(run: Run, k0: int, k1: int) -> Tuple[float, float]:
@@ -712,17 +821,19 @@ def _live_length(runs: Sequence[Run]) -> int:
 
 def _window_indices(
     n: int, dt: float, window: Optional[Tuple[float, float]], max_seconds: Optional[float]
-) -> Tuple[int, int]:
-    """The ``[k0, k1)`` logged steps to render: the live part, narrowed by window and cap.
+) -> Tuple[int, int, bool]:
+    """``(k0, k1, windowed)``: the logged steps to render, and whether a window was applied.
 
     A window that starts past the end of a run (a smoke run, or a crossing that finished
-    early) is dropped with a note rather than producing an empty clip.
+    early) is dropped with a note rather than producing an empty clip -- and ``windowed`` is
+    then False, so callers that treat an explicit range differently from the default do not
+    act on a window that was not honoured.
     """
-    k0, k1 = 0, n
+    k0, k1, windowed = 0, n, False
     if window is not None:
         a, b = int(round(float(window[0]) / dt)), int(round(float(window[1]) / dt))
         if 0 <= a < n and b > a:
-            k0, k1 = a, min(n, b)
+            k0, k1, windowed = a, min(n, b), True
         else:
             print(
                 f"note: --window {window[0]:g} {window[1]:g} s lies outside the "
@@ -730,7 +841,7 @@ def _window_indices(
             )
     if max_seconds is not None:
         k1 = min(k1, k0 + max(1, int(round(float(max_seconds) / dt))))
-    return k0, max(k1, k0 + 1)
+    return k0, max(k1, k0 + 1), windowed
 
 
 def _strides(dt: float) -> Tuple[int, float, int, float]:
@@ -747,6 +858,9 @@ def _encode(
     ks_gif: set,
     mp4: bool,
     gif: bool,
+    gif_width: int = GIF_WIDTH,
+    gif_colors: int = GIF_COLORS,
+    gif_fps: float = GIF_FPS_OUT,
 ) -> List[str]:
     """Push each composite into whichever writers asked for that frame index.
 
@@ -771,16 +885,17 @@ def _encode(
                     fps_gif,
                     kind="gif",
                     speed=GIF_SPEED,
-                    gif_width=GIF_WIDTH,
-                    gif_colors=GIF_COLORS,
+                    gif_width=gif_width,
+                    gif_colors=gif_colors,
+                    gif_fps=gif_fps,
                 )
             )
             outputs.append(f"{out_base}.gif")
-        for k, frame in frames:
+        for k, frame, gif_frame in frames:
             if mp4_writer is not None and k in ks_mp4:
                 mp4_writer.add(frame)
             if gif_writer is not None and k in ks_gif:
-                gif_writer.add(frame)
+                gif_writer.add(gif_frame)
     return outputs
 
 
@@ -791,7 +906,7 @@ def _write_stills(
     from PIL import Image
 
     outputs = []
-    by_k = {k: frame for k, frame in frames}
+    by_k = {k: frame for k, frame, _plain in frames}
     for fraction, k in zip(fractions, ks):
         path = f"{out_base}_still_{int(round(fraction * 100)):03d}.png"
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -813,6 +928,12 @@ def render(
     stills: bool = False,
     max_seconds: Optional[float] = None,
     window: Union[Tuple[float, float], str, None] = WINDOW_DEFAULT,
+    gif_width: int = GIF_WIDTH,
+    gif_colors: int = GIF_COLORS,
+    gif_fps: float = GIF_FPS_OUT,
+    gif_no_hud: bool = False,
+    no_drift: bool = False,
+    floor: str = "grid",
 ) -> List[str]:
     """Render ``npz`` (and, with ``side_by_side``, its unfiltered twin) and return the paths.
 
@@ -827,6 +948,14 @@ def render(
 
     With ``side_by_side`` the single-panel outputs are written first and the two-panel pair
     additionally, both driven by the filtered run's camera so the shots stay comparable.
+
+    The GIF knobs exist because a tracking camera over a drifting azimuth with a scrolling
+    HUD changes every pixel of every frame, which is what makes these files large:
+    ``gif_width``, ``gif_colors`` and ``gif_fps`` trade detail for size, ``gif_no_hud``
+    gives the GIF the 3-D panel alone (the MP4 keeps its HUD), and ``no_drift`` stops the
+    azimuth drift for the whole render so consecutive frames share more of the background.
+    ``floor`` picks the ground style (see :data:`showcase.FLOOR_STYLES`): the ``grid``
+    default halves the GIF against the original fine ``checker``.
     """
     if example not in EXAMPLES:
         raise ValueError(f"unknown example {example!r}; expected one of {EXAMPLES}")
@@ -877,11 +1006,11 @@ def render(
 
     for spec in passes:
         n = _live_length(spec["length_runs"])
-        k0, k1 = _window_indices(n, cbf.dt, window, max_seconds)
+        k0, k1, windowed = _window_indices(n, cbf.dt, window, max_seconds)
         out_base = os.path.join(out_dir, f"g1_{example}{spec['suffix']}")
         if stills:
             # without a window the stills stop at the goal hit, not in the frozen tail
-            hi = k1 if window is not None else min(k1, max(k0 + 1, int(cbf.n_live)))
+            hi = k1 if windowed else min(k1, max(k0 + 1, int(cbf.n_live)))
             still_ks = [k0 + int(round(f * (hi - 1 - k0))) for f in STILL_FRACTIONS]
             ks = sorted(set(still_ks))
         else:
@@ -898,17 +1027,33 @@ def render(
             ks,
             panel_wh=spec["panel_wh"],
             hud_wh=spec["hud_wh"],
-            cam_run=cbf,
             hud_run=cbf,
             compare_run=spec["compare"],
             downscale=spec["downscale"],
             ylim=_hud_ylim(cbf, k0, k1),
             offline=offline,
+            floor=floor,
+            k0=k0,
+            k1=k1,
+            need_hud=stills or mp4 or not gif_no_hud,
+            plain_too=gif_no_hud and gif and not stills,
+            drift=0.0 if no_drift else DRIFT_DEG_PER_S,
         )
         if stills:
             outputs += _write_stills(frames, out_base, still_ks, STILL_FRACTIONS)
         else:
-            outputs += _encode(frames, out_base, cbf.dt, ks_mp4, ks_gif, mp4, gif)
+            outputs += _encode(
+                frames,
+                out_base,
+                cbf.dt,
+                ks_mp4,
+                ks_gif,
+                mp4,
+                gif,
+                gif_width=gif_width,
+                gif_colors=gif_colors,
+                gif_fps=gif_fps,
+            )
     return outputs
 
 
@@ -934,6 +1079,22 @@ def main(argv=None) -> List[str]:
     p.add_argument("--full-clip", action="store_true", help="ignore the example's default --window")
     p.add_argument("--no-mp4", action="store_true")
     p.add_argument("--no-gif", action="store_true")
+    g = p.add_argument_group("GIF size (the README clips)")
+    g.add_argument("--gif-width", type=int, default=GIF_WIDTH)
+    g.add_argument("--gif-colors", type=int, default=GIF_COLORS)
+    g.add_argument(
+        "--gif-fps", type=float, default=GIF_FPS_OUT, help="output rate; the 2x speed is unchanged"
+    )
+    g.add_argument(
+        "--gif-no-hud", action="store_true", help="GIF gets the 3-D panel only; the MP4 keeps it"
+    )
+    g.add_argument("--no-drift", action="store_true", help="hold the camera azimuth still")
+    g.add_argument(
+        "--floor",
+        choices=showcase.FLOOR_STYLES,
+        default="grid",
+        help="ground style; the fine checker is the main source of GIF size",
+    )
     a = p.parse_args(argv)
     if a.window is not None:
         window: Union[Tuple[float, float], str, None] = (a.window[0], a.window[1])
@@ -952,6 +1113,12 @@ def main(argv=None) -> List[str]:
         stills=a.stills,
         max_seconds=a.max_seconds,
         window=window,
+        gif_width=a.gif_width,
+        gif_colors=a.gif_colors,
+        gif_fps=a.gif_fps,
+        gif_no_hud=a.gif_no_hud,
+        no_drift=a.no_drift,
+        floor=a.floor,
     )
     for path in paths:
         print(f"wrote {path}")

@@ -161,3 +161,15 @@ clips before anything replaces the README GIFs.
   through the crowd). These are the left panels for those two side-by-sides. Second stills:
   moiré gone, targets/arrows/pedestrians fixed; round 3 = slimmer scramble crowd + higher
   camera, navigate HUD in distance form, HUD ymax 1.0.
+- 2026-09-12 01:05 full render pass on the box: MP4s 4.5–20 MB fine; README GIFs 7–25 MB
+  (36–70 KB/frame: tracking camera + drift + scrolling HUD defeat frame diffing; gifsicle
+  lossy only −40 %). Side-by-side defect: shared look-at loses the unfiltered robot once the
+  trajectories diverge → per-panel cameras. Knobs requested for a size sweep (width, colours,
+  no-HUD GIF, no drift, fps). Code review lane running. Code committed on
+  feat/g1-showcase-visuals (b4402ef).
+- 2026-09-12 01:30 GIF size sweep (scramble 8–36 s): 480/64/20+HUD 19 MB; 400/48/20 13 MB;
+  HUD off / drift off ≈ no gain; 16 fps 11 MB; the *floor* is the entropy: plain floor 3.4 MB,
+  flat + 1 m grid 5.1 MB (adopted as the default look; checker kept as an option). README GIF
+  settings: 400 px, 48 colours, 16 fps (8 sim-frames/s, 3.2 per step, no phase lock), no HUD,
+  no drift; MP4s keep HUD + drift. Code review: 3 MAJOR (intervention bar scale, camera path
+  depends on gif flag, pills truncated) + minors, all routed to the render executor.

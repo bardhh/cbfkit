@@ -69,6 +69,16 @@ def _has_ffmpeg() -> bool:
 needs_ffmpeg = pytest.mark.skipif(not _has_ffmpeg(), reason="no ffmpeg available")
 
 
+def _probe(path):
+    """``ffmpeg -i <path>``'s stream table (printed on stderr; ffmpeg exits 1 with no output)."""
+    import subprocess
+
+    done = subprocess.run(
+        [showcase.ffmpeg_exe(), "-hide_banner", "-i", str(path)], capture_output=True
+    )
+    return done.stderr.decode(errors="replace")
+
+
 # --------------------------------------------------------------------------- fixtures
 def _base_payload(model, example: str, *, unfiltered: bool = False) -> dict:
     """A run with the G1 standing pose translated along a gentle S, plus fake controller logs.
@@ -230,9 +240,10 @@ def test_run_reads_the_npz_layout(render_module, g1_model, tmp_path):
 def test_intervention_prefers_the_filtered_variable(render_module, g1_model, tmp_path):
     """``a`` is the certified variable for the DI wrappers, so it is what the bar reports."""
     run = render_module.Run(_write(tmp_path, g1_model, "scramble"))
-    values, caption = render_module._intervention(run)
+    values, caption, scale = render_module._intervention(run)
     assert values.shape == (N_STEPS,)
     assert "m/s^2" in caption
+    assert scale == pytest.approx(2.0)  # 2 * a_max, not the 0.5 m/s velocity scale
     expected = np.linalg.norm(run.get("a_safe") - run.get("a_nom"), axis=1)
     assert np.allclose(values, expected)
 
@@ -244,10 +255,10 @@ def test_unfiltered_relaxed_run_has_no_slack_columns(render_module, g1_model, tm
     assert filtered.relax and unfiltered.relax
     assert unfiltered.get("sol").shape == (N_STEPS, unfiltered.n_u)
     assert unfiltered.get("bfs") is None and unfiltered.get("violated") is None
-    iv, caption = render_module._intervention(unfiltered)
-    assert render_module._hud_kwargs(unfiltered, "scramble", 3, iv, caption)["slack"] is None
-    iv, caption = render_module._intervention(filtered)
-    assert render_module._hud_kwargs(filtered, "scramble", 3, iv, caption)["slack"] == 0.0
+    iv, caption, fs = render_module._intervention(unfiltered)
+    assert render_module._hud_kwargs(unfiltered, "scramble", 3, iv, caption, fs)["slack"] is None
+    iv, caption, fs = render_module._intervention(filtered)
+    assert render_module._hud_kwargs(filtered, "scramble", 3, iv, caption, fs)["slack"] == 0.0
 
 
 @pytest.mark.parametrize(
@@ -350,8 +361,8 @@ def test_quadratic_barrier_is_displayed_in_the_distance_form(render_module, g1_m
     assert np.allclose(run.h_min, run.h_display.min(axis=1))
     # the reparametrisation is monotone and keeps the zero crossing, so the sign never moves
     assert np.array_equal(np.sign(run.h_display), np.sign(run.h))
-    iv, caption = render_module._intervention(run)
-    assert render_module._hud_kwargs(run, "navigate", 5, iv, caption)["h_label"] == (
+    iv, caption, fs = render_module._intervention(run)
+    assert render_module._hud_kwargs(run, "navigate", 5, iv, caption, fs)["h_label"] == (
         "h_min (distance form)"
     )
 
@@ -361,19 +372,66 @@ def test_distance_shaped_barriers_are_left_alone(render_module, g1_model, tmp_pa
     run = render_module.Run(_write(tmp_path, g1_model, example))
     assert run.distance_form is False
     assert np.array_equal(run.h_display, run.h)
-    iv, caption = render_module._intervention(run)
-    assert render_module._hud_kwargs(run, example, 5, iv, caption)["h_label"] == "h_min"
+    iv, caption, fs = render_module._intervention(run)
+    assert render_module._hud_kwargs(run, example, 5, iv, caption, fs)["h_label"] == "h_min"
+
+
+# ------------------------------------------------------------------- side-by-side cameras
+def test_each_panel_tracks_its_own_robot(render_module, g1_model, tmp_path):
+    """A shared look-at leaves one panel on empty floor once the two runs diverge."""
+    cbf = render_module.Run(_write(tmp_path, g1_model, "scramble"))
+    other = render_module.Run(_write(tmp_path, g1_model, "scramble", unfiltered=True))
+    other.com = cbf.com + np.array([8.0, 0.0])  # the unfiltered robot walked off to the side
+    a = render_module._camera_path(cbf, "scramble", 0, N_STEPS, render_module.DRIFT_DEG_PER_S)
+    b = render_module._camera_path(other, "scramble", 0, N_STEPS, render_module.DRIFT_DEG_PER_S)
+    assert a.shape == b.shape == (N_STEPS, 4)
+    assert np.allclose(b[:, 0] - a[:, 0], 8.0)  # each look-at follows its own CoM
+    assert np.allclose(a[:, 3], b[:, 3])  # same azimuth schedule, so the shots stay comparable
+
+
+def test_camera_path_is_independent_of_which_outputs_are_written(render_module, g1_model, tmp_path):
+    """The MP4's move must not change because a GIF was also asked for."""
+    run = render_module.Run(_write(tmp_path, g1_model, "navigate"))
+    path = render_module._camera_path(run, "navigate", 0, N_STEPS, render_module.DRIFT_DEG_PER_S)
+    # sampling at the MP4 stride gives the same rows whatever else is encoded
+    assert np.allclose(path[::2], path[[k for k in range(0, N_STEPS, 2)]])
+    assert len(path) == N_STEPS  # one row per logged step, not per encoded frame
+
+
+def test_frozen_panel_reports_why_its_run_ended(render_module, g1_model, tmp_path):
+    run = render_module.Run(_write(tmp_path, g1_model, "scramble"))
+    panel_end = int(run.n_live)
+    assert run.clip(panel_end) == panel_end
+    caption = render_module._end_caption(run)
+    assert caption.startswith(("goal reached", "run ended"))
+    assert f"{panel_end * run.dt:.1f} s" in caption
+    # the CoM at n_live is 2.4 m from the goal in this fixture, so it is not a goal hit
+    assert caption.startswith("run ended")
+    run.com = np.tile(run.goal, (run.T, 1))  # now it is
+    assert render_module._end_caption(run).startswith("goal reached")
+
+
+def test_compose_panels_draws_a_caption_under_the_label():
+    panels = [np.full((200, 300, 3), 90, np.uint8), np.full((200, 300, 3), 90, np.uint8)]
+    plain = showcase.compose_panels(panels, ["a", "b"], None)
+    captioned = showcase.compose_panels(panels, ["a", "b"], None, captions=["run ended", None])
+    assert captioned.shape == plain.shape
+    assert not np.array_equal(plain, captioned)  # the left panel gained a second pill
+    assert np.array_equal(plain[:, 300:], captioned[:, 300:])  # the right one did not
+    with pytest.raises(ValueError):
+        showcase.compose_panels(panels, ["a", "b"], None, captions=["only one"])
 
 
 # --------------------------------------------------------------------------- window / ylim
 def test_window_indices_slice_clip_and_fall_back(render_module):
     w = render_module._window_indices
-    assert w(1000, 0.02, (2.0, 6.0), None) == (100, 300)
-    assert w(1000, 0.02, None, None) == (0, 1000)
-    assert w(1000, 0.02, (2.0, 60.0), None) == (100, 1000)  # clipped to the live part
-    assert w(1000, 0.02, (2.0, 6.0), 1.0) == (100, 150)  # max_seconds counts from the start
-    assert w(50, 0.02, (20.0, 56.0), None) == (0, 50)  # window past the end: render it all
-    assert w(50, 0.02, (0.4, 0.2), None) == (0, 50)  # empty window: likewise
+    assert w(1000, 0.02, (2.0, 6.0), None) == (100, 300, True)
+    assert w(1000, 0.02, None, None) == (0, 1000, False)
+    assert w(1000, 0.02, (2.0, 60.0), None) == (100, 1000, True)  # clipped to the live part
+    assert w(1000, 0.02, (2.0, 6.0), 1.0) == (100, 150, True)  # max_seconds counts from the start
+    # a window past the end is dropped, and reported as not applied so the stills clamp to n_live
+    assert w(50, 0.02, (20.0, 56.0), None) == (0, 50, False)
+    assert w(50, 0.02, (0.4, 0.2), None) == (0, 50, False)  # empty window: likewise
 
 
 def test_window_defaults_match_the_brief(render_module):
@@ -521,6 +579,60 @@ def test_render_writes_both_encodings(render_module, g1_model, tmp_path):
     assert all(os.path.getsize(p) > 0 for p in paths)
 
 
+@needs_ffmpeg
+def test_gif_size_knobs_reach_the_output(render_module, g1_model, tmp_path):
+    """--gif-width/-colors/-fps and --gif-no-hud change the GIF only; the MP4 keeps its HUD."""
+    out = tmp_path / "out"
+    paths = render_module.render(
+        "scramble",
+        _write(tmp_path, g1_model, "scramble"),
+        out_dir=str(out),
+        max_seconds=0.5,
+        gif_width=240,
+        gif_colors=32,
+        gif_fps=10.0,
+        gif_no_hud=True,
+        no_drift=True,
+    )
+    mp4_info, gif_info = _probe(paths[0]), _probe(paths[1])
+    # the MP4 keeps its 160 px HUD band; the GIF is the bare panel, scaled to 240 px
+    assert (
+        f"{render_module.PANEL_W}x{render_module.PANEL_H + GAP + render_module.HUD_H}" in mp4_info
+    )
+    assert f"240x{round(240 * render_module.PANEL_H / render_module.PANEL_W)}" in gif_info
+    assert "10 fps" in gif_info
+
+
+def test_gif_fps_default_keeps_the_20_fps_2x_contract(render_module):
+    assert render_module.GIF_FPS_OUT == 20.0
+    assert render_module.FPS_GIF * render_module.GIF_SPEED == render_module.GIF_FPS_OUT
+
+
+@needs_ffmpeg
+def test_frame_writer_gif_fps_resamples_without_changing_speed(tmp_path):
+    """The writer's output rate is independent of the added-frame rate and the speed."""
+    frames = [np.full((48, 64, 3), 10 * i, np.uint8) for i in range(20)]
+    plain, resampled = tmp_path / "a.gif", tmp_path / "b.gif"
+    for path, gif_fps in ((plain, None), (resampled, 10.0)):
+        with showcase.FrameWriter(
+            path, 10, kind="gif", speed=2.0, gif_width=32, gif_fps=gif_fps
+        ) as w:
+            for frame in frames:
+                w.add(frame)
+    assert "20 fps" in _probe(plain)  # fps * speed
+    assert "10 fps" in _probe(resampled)
+    assert resampled.stat().st_size < plain.stat().st_size
+
+
+def test_no_drift_holds_the_azimuth(render_module):
+    azimuths = []
+    for drift in (render_module.DRIFT_DEG_PER_S, 0.0):
+        cam = showcase.CameraSchedule(3.2, -18.0, azimuth0=135.0, drift_deg_per_s=drift, dt=DT)
+        azimuths.append([float(cam.update(k, (0.0, 0.0)).azimuth) for k in (0, 500)])
+    assert azimuths[0][1] != azimuths[0][0]  # drifts by default
+    assert azimuths[1][1] == pytest.approx(azimuths[1][0])  # held with --no-drift
+
+
 def test_strides_are_25_and_10_fps_at_dt_002(render_module):
     stride_mp4, fps_mp4, stride_gif, fps_gif = render_module._strides(0.02)
     assert (stride_mp4, stride_gif) == (2, 5)
@@ -565,6 +677,54 @@ def test_hud_ylim_overrides_the_per_frame_autoscale():
         renderer.close()
 
 
+# --------------------------------------------------------------------------- floor styles
+@pytest.mark.parametrize("floor", ["grid", "checker", "plain"])
+def test_every_floor_style_compiles_with_a_ground_material(floor):
+    try:
+        model = showcase.render_model("unitree12", offline=True, floor=floor)
+    except (FileNotFoundError, RuntimeError, OSError) as exc:
+        pytest.skip(f"G1 render model unavailable (asset cache): {exc}")
+    mat = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_MATERIAL, showcase._SHOWCASE_MAT)
+    assert mat >= 0
+    assert model.mat_reflectance[mat] == pytest.approx(showcase.FLOOR_REFLECTANCE)
+    planes = [g for g in range(model.ngeom) if model.geom_type[g] == mujoco.mjtGeom.mjGEOM_PLANE]
+    assert planes and all(model.geom_matid[g] == mat for g in planes)
+    tex = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TEXTURE, showcase._SHOWCASE_TEX)
+    if floor == "plain":
+        assert tex < 0  # no texture at all: a flat material is the cheapest ground to encode
+    else:
+        assert tex >= 0
+        assert model.mat_texuniform[mat]
+        expected = [1.0, 1.0] if floor == "grid" else list(showcase.FLOOR_TEXREPEAT)
+        assert list(model.mat_texrepeat[mat]) == pytest.approx(expected)
+
+
+def test_grid_texture_is_flat_with_a_darker_border():
+    n, w = showcase.GRID_TEX_SIZE, showcase.GRID_LINE_PX
+    rgb = np.frombuffer(showcase._grid_texture_bytes(), dtype=np.uint8).reshape(n, n, 3)
+    field = np.round(np.asarray(showcase.GRID_RGB) * 255).astype(np.uint8)
+    line = np.round(np.asarray(showcase.GRID_LINE_RGB) * 255).astype(np.uint8)
+    assert np.array_equal(rgb[n // 2, n // 2], field)  # uniform inside
+    assert np.array_equal(rgb[0, n // 2], line) and np.array_equal(rgb[n // 2, 0], line)
+    assert np.array_equal(rgb[w - 1, n // 2], line)  # the border is GRID_LINE_PX wide
+    assert np.array_equal(rgb[w, n // 2], field)  # and no wider
+    assert (line < field).all()  # the grid line is darker than the ground
+
+
+def test_render_model_rejects_an_unknown_floor():
+    with pytest.raises(ValueError, match="unknown floor"):
+        showcase.render_model("unitree12", offline=True, floor="parquet")
+
+
+def test_render_driver_defaults_to_the_grid_floor(render_module, g1_model, tmp_path):
+    out = tmp_path / "out"
+    paths = render_module.render(
+        "navigate", _write(tmp_path, g1_model, "navigate"), out_dir=str(out), stills=True
+    )
+    assert len(paths) == 5
+    assert ("unitree12", True, "grid") in render_module._MODEL_CACHE
+
+
 # --------------------------------------------------------------------------- primitive look
 def test_pedestrian_body_scale_widens_the_capsule(g1_model):
     scene = mujoco.MjvScene(g1_model, maxgeom=64)
@@ -573,8 +733,8 @@ def test_pedestrian_body_scale_widens_the_capsule(g1_model):
     assert float(body.size[0]) == pytest.approx(0.8 * 0.30)
     assert float(disc.size[0]) == pytest.approx(0.30)  # the footprint disc keeps radius r
     scene.ngeom = 0
-    showcase.pedestrian(scene, (0, 0), (1, 0), 0.30, (0, 0, 1, 1))  # default is unchanged
-    assert float(scene.geoms[0].size[0]) == pytest.approx(0.6 * 0.30)
+    showcase.pedestrian(scene, (0, 0), (1, 0), 0.30, (0, 0, 1, 1))  # the tuned default
+    assert float(scene.geoms[0].size[0]) == pytest.approx(0.8 * 0.30)
 
 
 def test_beacon_pole_is_a_hairline(g1_model):
@@ -585,6 +745,57 @@ def test_beacon_pole_is_a_hairline(g1_model):
     assert float(pole.size[0]) == pytest.approx(showcase.BEACON_POLE_RADIUS)
     assert float(pole.size[2]) == pytest.approx(showcase.BEACON_POLE_HEIGHT / 2.0)
     assert float(pole.rgba[3]) == pytest.approx(0.5 * 0.6)
+
+
+def test_hud_bar_full_scale_stops_the_acceleration_bar_pegging():
+    renderer = showcase.HudRenderer(640, 160)
+    try:
+        renderer.draw(1.0, 0.3, None, None, 0.9, True, {})  # 0.9 m/s^2 on a 0.5 scale: pegged
+        assert renderer._bar.get_width() == pytest.approx(0.5)
+        renderer.draw(1.0, 0.3, None, None, 0.9, True, {}, full_scale=2.0)
+        assert renderer._bar.get_width() == pytest.approx(0.9)
+        assert renderer._bar_ax.get_xlim() == pytest.approx((0.0, 2.0))
+        assert renderer._bar_bg.get_width() == pytest.approx(2.0)
+    finally:
+        renderer.close()
+
+
+def test_hud_pills_shrink_but_never_disappear():
+    renderer = showcase.HudRenderer(1280, 160)
+    try:
+        many = [
+            ("CBF ACTIVE", "#0f0"),
+            ("MPPI FALLBACK", "#fa0"),
+            ("QP NOT CONVERGED", "#fa0"),
+            ("SLACK 0.0842", "#f00"),
+            ("EXTRA FLAG HERE", "#fa0"),
+        ]
+        renderer._set_pills(many)
+        assert len([p for p in renderer._pills if p.get_visible()]) == len(many)
+        with pytest.raises(ValueError, match="only .* slots"):
+            renderer._set_pills(many + [("ONE TOO MANY", "#fa0")])
+    finally:
+        renderer.close()
+
+
+def test_hud_cache_is_bounded_and_closes_what_it_evicts():
+    showcase._HUD_CACHE.clear()
+    sizes = [(320, 120), (360, 120), (400, 120)]
+    for width, height in sizes:
+        showcase.hud_strip(width, height, 0.0, 0.0, None, None, 0.0, False, {})
+    assert len(showcase._HUD_CACHE) <= showcase._HUD_CACHE_MAX
+    assert sizes[0] not in showcase._HUD_CACHE  # the oldest was evicted, not kept forever
+    assert sizes[-1] in showcase._HUD_CACHE
+    showcase._HUD_CACHE.clear()
+
+
+def test_frame_writer_removes_a_half_written_file_on_error(tmp_path):
+    out = tmp_path / "aborted.mp4"
+    with pytest.raises(RuntimeError, match="boom"):
+        with showcase.FrameWriter(out, 25) as w:
+            w.add(np.zeros((48, 64, 3), np.uint8))
+            raise RuntimeError("boom")
+    assert not out.exists()  # a truncated clip must not survive to be read as a result
 
 
 def test_hud_intervention_caption_is_overridable():
