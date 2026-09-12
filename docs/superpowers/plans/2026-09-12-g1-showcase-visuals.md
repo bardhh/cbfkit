@@ -195,3 +195,8 @@ clips before anything replaces the README GIFs.
 - 2026-09-12 04:05 n32 on the G1: s0 −0.37, s1 −0.68 → settled on 26 pedestrians, seed 0
   (filtered h_min +0.59, goal 53.5 s; unfiltered nominal −0.49, 35.7 s). SCRAMBLE_N_PED = 26 in
   the showcase driver. Rendered; candidate GIF 6.1 MB swapped in, review page refreshed.
+- 2026-09-12 05:10 corridor: body-footprint ellipse (0.16×0.28 puck) + pedestrian keep-out discs
+  replace the inflated ellipse in the drawing; gap widened for the showcase (G1: 1.4 m h_min
+  +0.07 / 90.5 s, 1.5 m +0.06 / 82.7 s, both still sidestep; unfiltered −0.48 / −0.39) →
+  CORRIDOR_GAP = 1.5. 4×2 README layout (no filter | CBFKit rows) drafted in the preview;
+  side-by-side GIFs at 720 px: navigate 2.6, plaza 7.0, corridor 5.5, scramble 8.9 MB.

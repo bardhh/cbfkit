@@ -19,7 +19,7 @@ The four configurations (the README clips, see ``scripts/render_showcase.py``):
 
     navigate   --reduced-model di, robust 0.18 (the example default), 20 s
     plaza      defaults: distance barriers, robust 0.31, 45 s
-    corridor   --g1 --planner mppi, ellipse footprint, vanilla, gap 1.25 m, 150 s
+    corridor   --g1 --planner mppi, ellipse footprint, vanilla, gap 1.5 m (CORRIDOR_GAP), 150 s
     scramble   --robot unitree --planner mppi, disc footprint, relaxed, vanilla, 100 s,
                26 non-yielding pedestrians (SCRAMBLE_N_PED; the example's own default is 40)
 
@@ -86,6 +86,11 @@ OVERRIDES: Dict[str, Any] = {}  # CLI overrides consumed by the per-example simu
 # seed 0 keeps h_min +0.59 with the filter and -0.49 without, so the certificate has something to
 # certify. Override with --n-ped.
 SCRAMBLE_N_PED = 26
+# README configuration of the corridor: 1.5 m between the pedestrians' centres (the example's
+# GAP_G1 is 1.25). The turned footprint needs 0.92 m including the pedestrian clearance, so at
+# 1.5 m the sidestep has visible room on both sides while walking straight through (1.16 m)
+# still has none worth taking; measured G1: h_min +0.06, goal at 82.7 s, unfiltered -0.39.
+CORRIDOR_GAP = 1.5
 PLANT_KINDS = {19: "unitree12", 30: "amo23", 36: "groot29"}
 UNFILTERED_MODES = ("planner", "nominal")
 # Examples whose nominal is already a bare goal P-law: they have no local planner, so
@@ -464,7 +469,7 @@ def simulate_corridor(seed: int, duration: float, unfiltered: bool, mode: str) -
     from cbfkit.utils.user_types import PlannerData
     from examples.mujoco import g1_corridor as ex
 
-    gap = float(OVERRIDES.get("gap") or ex.GAP_G1)  # --gap overrides (metres, centre to centre)
+    gap = float(OVERRIDES.get("gap") or CORRIDOR_GAP)  # --gap overrides (metres, centre to centre)
     # The builder offers two planners and neither is a bare goal P-law: "suggest" is the
     # hand-coded heading ramp that *anticipates* the gap, "mppi" is the P-law nominal plus
     # the MPPI lookahead. So `nominal` mode takes the "mppi" branch -- whose nominal is
