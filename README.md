@@ -337,8 +337,8 @@ and `save("out.mp4")` writes the video (`.gif` also supported).
 python tutorials/multi_robot_3d_reachavoid.py
 ```
 
-<details>
-<summary><strong>More examples (13 tiles)</strong></summary>
+<details open>
+<summary><strong>More examples</strong></summary>
 
 <table>
   <tr>
