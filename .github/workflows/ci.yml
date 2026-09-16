@@ -22,6 +22,7 @@ jobs:
       JAX_COMPILATION_CACHE_DIR: /tmp/jax_cache
       JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: "0"
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
@@ -64,8 +65,10 @@ jobs:
       run: |
         uv run --no-sync mypy src/cbfkit
     - name: Test with pytest
+      # Directory paths avoid coverage's package-import probe, which can load
+      # JAX's native runtime twice and abort before test collection.
       run: |
-        uv run --no-sync pytest -m "not slow" tests -ra --durations=15 --junitxml=test-results/fast.xml --cov=cbfkit.controllers --cov=cbfkit.optimization --cov=cbfkit.simulation --cov-report=xml
+        uv run --no-sync pytest -m "not slow" tests -ra --durations=15 --junitxml=test-results/fast.xml --cov=src/cbfkit/controllers --cov=src/cbfkit/optimization --cov=src/cbfkit/simulation --cov-report=xml
     - name: Test slow tests
       if: matrix.python-version == '3.10'
       env:
