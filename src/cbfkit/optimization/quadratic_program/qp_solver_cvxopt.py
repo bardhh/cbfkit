@@ -7,15 +7,19 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
+from cbfkit.utils.user_types.solvers import QpSolution
+
 # Resolve cvxopt vs kvxopt once at import time (ARM vs x86)
 _cvxopt_available = True
 _cvxopt_error = None
 try:
     _mach = platform.machine().lower()
     if "arm" in _mach or "aarch" in _mach:
-        from kvxopt import matrix as _matrix, solvers as _solvers  # type: ignore[reportMissingImports]
+        from kvxopt import matrix as _matrix  # type: ignore[reportMissingImports]
+        from kvxopt import solvers as _solvers
     else:
-        from cvxopt import matrix as _matrix, solvers as _solvers
+        from cvxopt import matrix as _matrix
+        from cvxopt import solvers as _solvers
 except ImportError as _e:
     _cvxopt_available = False
     _cvxopt_error = _e
@@ -99,7 +103,7 @@ def solve_with_details(
     a_mat: Union[Array, None] = None,
     b_vec: Union[Array, None] = None,
     init_params: Any = None,
-):
+) -> QpSolution:
     """Solve a QP using CVXOPT, returning a unified :class:`QpSolution`.
 
     ``init_params`` is accepted for interface compatibility but ignored
@@ -109,7 +113,5 @@ def solve_with_details(
     form is ``min 1/2 x'Px + q'x``; the ``P = 2H`` conversion happens here so
     all ``get_solver()`` backends agree (see ``solver_registry`` docstring).
     """
-    from cbfkit.optimization.quadratic_program.solver_registry import QpSolution
-
     primal, success = solve(2.0 * h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
     return QpSolution(primal=primal, status=1 if success else 0, params=None)

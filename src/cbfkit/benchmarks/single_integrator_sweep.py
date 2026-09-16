@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import time
 from functools import lru_cache
+from typing import Sequence
 
 import jax
 import jax.numpy as jnp
@@ -29,12 +30,9 @@ from cbfkit.benchmarks.scenario_builders import (
     compute_sweep_metrics,
     resolve_circular_obstacles,
 )
+from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import solve_with_details as _solve_qp
 from cbfkit.simulation.monte_carlo_gpu import conduct_monte_carlo_gpu
 from cbfkit.simulation.safety_verification import compute_safety_statistics
-
-from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
-    solve_with_details as _solve_qp,
-)
 
 N_TRIALS = 1
 
@@ -110,7 +108,7 @@ def _get_sim_fn(n_obstacles: int, num_steps: int):
     return jax.jit(jax.vmap(_simulate, in_axes=(0, 0, None, None, None, None, None, None)))
 
 
-def _si_batch_runner(seeds: list[int], params: dict) -> list[dict]:
+def _si_batch_runner(seeds: Sequence[int], params: dict) -> list[dict]:
     """Optimised batch runner — one JIT compilation across all combos.
 
     On the first combo call, JAX traces and compiles the simulation kernel.

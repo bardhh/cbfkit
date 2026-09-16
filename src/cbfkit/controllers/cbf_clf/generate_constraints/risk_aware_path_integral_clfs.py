@@ -111,6 +111,7 @@ def generate_compute_ra_pi_clf_constraints(
             # Ensure array types for addition
             w_vals = integrator_states + ra_params.gamma + r_buffer
             lc_x = jnp.stack([lc(w_vals[ii]) for ii, lc in enumerate(conditions)])
+            assert lh_x is not None
             traces = batched_hessian_trace(sigma, lh_x)
 
             # Configure constraint matrix and vector (a * u <= b)

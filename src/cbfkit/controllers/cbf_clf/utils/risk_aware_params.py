@@ -30,7 +30,7 @@ Examples
 
 """
 
-from typing import Callable, Optional, Union, Tuple
+from typing import Callable, Optional, Tuple, Union
 
 from jax import Array
 

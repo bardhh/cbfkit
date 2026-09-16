@@ -35,8 +35,8 @@ try:
         ThreeDAxes,
         ThreeDScene,
         TracedPath,
-        VGroup,
         ValueTracker,
+        VGroup,
         config,
         rate_functions,
     )

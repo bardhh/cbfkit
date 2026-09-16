@@ -78,4 +78,9 @@ def right_hand_side(
     assert eta > 0
     assert 0 < time_period < jnp.inf
 
-    return lambda integral: 1 - gamma - jnp.sqrt(2 * time_period) * eta * erfinv(1 - 2 * rho) + integral
+    return (
+        lambda integral: 1
+        - gamma
+        - jnp.sqrt(2 * time_period) * eta * erfinv(1 - 2 * rho)
+        + integral
+    )

@@ -2,6 +2,7 @@
 
 # Re-export typing/jax symbols that some modules import from here (legacy leaks)
 from typing import Optional  # noqa: F401
+
 from jax import Array  # noqa: F401
 
 from .callables import (  # noqa: F401
@@ -10,8 +11,8 @@ from .callables import (  # noqa: F401
     CbfClfQpGenerator,
     ComputeCertificateConstraintFunctionGenerator,
     ControllerCallable,
-    DiscretePlant,
     ControllerCallableReturns,
+    DiscretePlant,
     DynamicsCallable,
     DynamicsCallableReturns,
     EstimatorCallable,
@@ -39,6 +40,7 @@ from .callables import (  # noqa: F401
     VectorFieldCallable,
 )
 from .certificates import (  # noqa: F401
+    EMPTY_CERTIFICATE_COLLECTION,
     BarrierTuple,
     CertificateCallable,
     CertificateCollection,
@@ -50,7 +52,6 @@ from .certificates import (  # noqa: F401
     CertificateLegacyTuple,
     CertificatePartialCallable,
     CertificateTuple,
-    EMPTY_CERTIFICATE_COLLECTION,
     LyapunovTuple,
     PredictiveBarrierCollectionCallable,
 )

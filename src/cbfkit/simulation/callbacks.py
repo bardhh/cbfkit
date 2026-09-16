@@ -60,6 +60,8 @@ class LoggingCallback:
         for i, key in enumerate(data.planner_keys):
             step_log_entry[f"planner_{key}"] = data.planner_values[i]
 
+        if not isinstance(self.log_data, list):
+            raise RuntimeError("Cannot append a step after bulk logging; call on_start first.")
         self.log_data.append(step_log_entry)
 
     def on_end(self, success: bool, message: str = "") -> None:

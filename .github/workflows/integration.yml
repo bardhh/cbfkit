@@ -1,0 +1,84 @@
+name: Optional hardware integration
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hardware-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  g1-mjx:
+    # Configure a trusted runner label with at least 24 GiB RAM before enabling.
+    if: vars.CBFKIT_MJX_RUNNER != ''
+    runs-on: ${{ vars.CBFKIT_MJX_RUNNER }}
+    timeout-minutes: 90
+    env:
+      JAX_PLATFORM_NAME: cpu
+      UV_PYTHON: "3.11"
+      CBFKIT_TEST_MODE: "1"
+      CBFKIT_REQUIRE_NO_SKIPS: "1"
+      CBFKIT_ASSET_DIR: ${{ github.workspace }}/.integration-assets
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+    - name: Verify memory and install test environment
+      run: |
+        python -c 'import os; assert os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") >= 24 * 2**30, "G1 MJX requires at least 24 GiB RAM"'
+        pip install uv==0.9.12
+        uv sync --python 3.11 --locked --extra dev --extra mujoco
+        uv pip install --python .venv/bin/python 'torch>=2.8' --index-url https://download.pytorch.org/whl/cpu
+        uv pip install --python .venv/bin/python onnx onnxruntime
+    - uses: actions/cache@v5
+      with:
+        path: .integration-assets
+        key: g1-assets-${{ hashFiles('src/cbfkit/systems/mujoco/models/g1/*manifest.json') }}
+    - name: Provision and verify pinned assets
+      run: |
+        uv run --no-sync python - <<'PY'
+        from cbfkit.systems.mujoco.assets import g1_model_dir, unitree_rl_gym_dir, amo_dir, groot_dir
+        for provision in (g1_model_dir, unitree_rl_gym_dir, amo_dir, groot_dir):
+            provision()
+            provision(offline=True)
+        PY
+    - name: Run offline plant and policy tests
+      env:
+        CBFKIT_ASSETS_OFFLINE: "1"
+      run: >-
+        uv run --no-sync pytest -ra --durations=15 --junitxml=test-results/g1.xml
+        tests/test_mujoco/test_g1.py tests/test_mujoco/test_unitree_policy.py
+        tests/test_mujoco/test_amo_policy.py tests/test_mujoco/test_groot_policy.py
+    - uses: actions/upload-artifact@v5
+      if: always()
+      with:
+        name: g1-integration-results
+        path: test-results/
+
+  cuda-bridge:
+    # Runner must provide a Python environment with CUDA JAX, CUDA Torch and pytest.
+    if: vars.CBFKIT_CUDA_RUNNER != ''
+    runs-on: ${{ vars.CBFKIT_CUDA_RUNNER }}
+    timeout-minutes: 20
+    env:
+      JAX_PLATFORM_NAME: gpu
+      JAX_PLATFORMS: cuda
+      CBFKIT_REQUIRE_NO_SKIPS: "1"
+    steps:
+    - uses: actions/checkout@v6
+    - name: Verify CUDA runtimes
+      run: |
+        python -c 'import jax, torch; assert torch.cuda.is_available(); assert any(d.platform == "gpu" for d in jax.devices())'
+        python -m pip install --no-deps -e .
+    - run: python -m pytest -ra --junitxml=test-results/cuda.xml tests/test_wrappers/test_torch_safety_filter.py
+    - uses: actions/upload-artifact@v5
+      if: always()
+      with:
+        name: cuda-integration-results
+        path: test-results/

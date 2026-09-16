@@ -8,6 +8,23 @@ import pytest
 
 # List of script paths relative to the project root
 # These are the scripts we want to verify run successfully (exit code 0)
+EXAMPLE_TIMEOUT_SECONDS = 300
+
+
+def test_example_timeout_reports_output(monkeypatch, tmp_path):
+    """A hung example must be terminated and its last output included in the failure."""
+    monkeypatch.chdir(tmp_path)
+    example_dir = tmp_path / "examples"
+    example_dir.mkdir()
+    (example_dir / "hang.py").write_text(
+        "import time\nprint('example started', flush=True)\ntime.sleep(60)\n"
+    )
+    monkeypatch.setattr(sys.modules[__name__], "EXAMPLE_TIMEOUT_SECONDS", 0.5)
+    with pytest.raises(pytest.fail.Exception, match="exceeded 0.5s") as exc:
+        test_example_script_execution("examples/hang.py", "jaxopt", tmp_path / "run")
+    assert "example started" in str(exc.value)
+
+
 SCRIPTS_TO_TEST = [
     # Unicycle examples
     "examples/unicycle/reach_goal/mppi_cbf.py",
@@ -120,8 +137,14 @@ def test_example_script_execution(script_path, solver, tmp_path):
             capture_output=True,
             text=True,
             check=True,
+            timeout=EXAMPLE_TIMEOUT_SECONDS,
         )
 
+    except subprocess.TimeoutExpired as e:
+        pytest.fail(
+            f"Script {script_path} exceeded {EXAMPLE_TIMEOUT_SECONDS}s.\n"
+            f"STDOUT:\n{e.stdout or ''}\nSTDERR:\n{e.stderr or ''}"
+        )
     except subprocess.CalledProcessError as e:
         pytest.fail(
             f"Script {script_path} failed with exit code {e.returncode}.\n"

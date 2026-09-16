@@ -54,7 +54,6 @@ from cbfkit.utils.user_types import (
     CertificatePartialCallable,
 )
 
-
 CertificateInputStyleName = Literal["concatenated", "separated", "state"]
 
 
@@ -334,6 +333,7 @@ def generate_certificate(
 
             def j_func_canonical(t: float, x: Array) -> Array:
                 return grad_x(x)
+
         else:
             # Manual grad h(x)
             def j_func_canonical(t: float, x: Array) -> Array:
@@ -345,6 +345,7 @@ def generate_certificate(
 
             def h_func_canonical(t: float, x: Array) -> Array:
                 return hess_x(x)
+
         else:
             # Manual hess h(x)
             def h_func_canonical(t: float, x: Array) -> Array:
@@ -365,6 +366,7 @@ def generate_certificate(
 
             def j_func_canonical(t: float, x: Array) -> Array:
                 return grad_x(t, x)
+
         else:
             # Manual grad h(t, x) w.r.t x?
             # Convention: if manual grad is provided for h(t, x), it should return grad_x h(t, x)
@@ -378,7 +380,9 @@ def generate_certificate(
 
             def h_func_canonical(t: float, x: Array) -> Array:
                 return hess_x(t, x)
+
         else:
+
             def h_func_canonical(t: float, x: Array) -> Array:
                 return certificate_hess(t, x)  # type: ignore
 

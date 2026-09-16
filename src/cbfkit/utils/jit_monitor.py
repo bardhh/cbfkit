@@ -2,8 +2,10 @@ import collections
 import threading
 from typing import DefaultDict, Dict
 
+
 class JitMonitor:
     """Tracks JIT compilation events across the library."""
+
     _counts: DefaultDict[str, int] = collections.defaultdict(int)
     _lock = threading.Lock()
 

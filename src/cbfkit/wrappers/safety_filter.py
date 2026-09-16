@@ -27,7 +27,7 @@ def _normalize_barriers(barriers) -> Optional[CertificateCollection]:
     if barriers is None or barriers == EMPTY_CERTIFICATE_COLLECTION:
         return None
     # Already a CertificateCollection NamedTuple
-    if isinstance(barriers, tuple) and hasattr(barriers, "functions"):
+    if isinstance(barriers, CertificateCollection):
         return barriers
     # List of CertificateCollections
     if isinstance(barriers, list):

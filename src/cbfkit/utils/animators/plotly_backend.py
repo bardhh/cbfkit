@@ -30,7 +30,9 @@ class _PlotlyMixin:
         cfg = self._config
         n_total = len(self._states)
         frame_indices, frame_duration_ms = _compute_plotly_frame_step(
-            self._dt, n_total, max_frames=cfg.plotly_max_frames,
+            self._dt,
+            n_total,
+            max_frames=cfg.plotly_max_frames,
         )
 
         # --- static layout shapes (goals + obstacles) ---
@@ -41,7 +43,8 @@ class _PlotlyMixin:
             static_shapes.append(
                 dict(
                     type="circle",
-                    xref="x", yref="y",
+                    xref="x",
+                    yref="y",
                     x0=float(pos[0]) - g["radius"],
                     y0=float(pos[1]) - g["radius"],
                     x1=float(pos[0]) + g["radius"],
@@ -66,7 +69,8 @@ class _PlotlyMixin:
                 dict(
                     type="path",
                     path=path_str,
-                    xref="x", yref="y",
+                    xref="x",
+                    yref="y",
                     fillcolor=css,
                     opacity=opacity,
                     line=dict(color=css, width=1),
@@ -101,13 +105,12 @@ class _PlotlyMixin:
                 else dict()
             )
             line_opts = (
-                dict(color=css, width=spec["linewidth"])
-                if spec["style"] != "scatter"
-                else dict()
+                dict(color=css, width=spec["linewidth"]) if spec["style"] != "scatter" else dict()
             )
             base_traces.append(
                 go.Scatter(
-                    x=[], y=[],
+                    x=[],
+                    y=[],
                     mode=mode,
                     name=spec["label"],
                     line=line_opts if line_opts else None,
@@ -122,7 +125,8 @@ class _PlotlyMixin:
             # Body marker
             base_traces.append(
                 go.Scatter(
-                    x=[], y=[],
+                    x=[],
+                    y=[],
                     mode="markers",
                     marker=dict(size=10, color=css, opacity=spec["body_alpha"]),
                     name=spec["label"],
@@ -135,7 +139,8 @@ class _PlotlyMixin:
             dash = dash_map.get(spec["trail_style"], "solid")
             base_traces.append(
                 go.Scatter(
-                    x=[], y=[],
+                    x=[],
+                    y=[],
                     mode="lines",
                     line=dict(color=trail_css, width=1.5, dash=dash),
                     opacity=spec["trail_alpha"],
@@ -153,7 +158,8 @@ class _PlotlyMixin:
                 opacity = spec["alpha"] * (1.0 - bucket / _PLOTLY_FADE_BUCKETS)
                 base_traces.append(
                     go.Scatter(
-                        x=[], y=[],
+                        x=[],
+                        y=[],
                         mode="lines",
                         line=dict(color=css, width=spec["linewidth"], dash=dash),
                         opacity=opacity,
@@ -174,9 +180,7 @@ class _PlotlyMixin:
             # 1) Goal markers (unchanged)
             for g in self._goals:
                 pos = g["position"]
-                trace_updates.append(
-                    go.Scatter(x=[float(pos[0])], y=[float(pos[1])])
-                )
+                trace_updates.append(go.Scatter(x=[float(pos[0])], y=[float(pos[1])]))
 
             # 2) Trajectory traces
             for spec in self._trajectories:
@@ -227,8 +231,10 @@ class _PlotlyMixin:
             if self._show_time:
                 layout_update["annotations"] = [
                     dict(
-                        x=0.02, y=0.98,
-                        xref="paper", yref="paper",
+                        x=0.02,
+                        y=0.98,
+                        xref="paper",
+                        yref="paper",
                         text=f"Time: {t:.1f}s",
                         showarrow=False,
                         font=dict(size=13),
@@ -249,16 +255,22 @@ class _PlotlyMixin:
                     # Body circle
                     frame_shapes.append(
                         _circle_shape(
-                            ax_pos, ay_pos, spec["body_radius"],
-                            spec["body_color"], alpha=spec["body_alpha"],
+                            ax_pos,
+                            ay_pos,
+                            spec["body_radius"],
+                            spec["body_color"],
+                            alpha=spec["body_alpha"],
                         )
                     )
                     # Safety zone
                     if spec["zone_radius"] is not None:
                         frame_shapes.append(
                             _circle_shape(
-                                ax_pos, ay_pos, spec["zone_radius"],
-                                spec["zone_color"], alpha=spec["zone_alpha"],
+                                ax_pos,
+                                ay_pos,
+                                spec["zone_radius"],
+                                spec["zone_color"],
+                                alpha=spec["zone_alpha"],
                             )
                         )
                 layout_update["shapes"] = frame_shapes
@@ -282,7 +294,8 @@ class _PlotlyMixin:
             layout=go.Layout(
                 title=dict(
                     text=self._title,
-                    x=0.5, xanchor="center",
+                    x=0.5,
+                    xanchor="center",
                     font=dict(size=16),
                 ),
                 xaxis=dict(
@@ -307,8 +320,10 @@ class _PlotlyMixin:
                 updatemenus=menus,
                 sliders=sliders,
                 legend=dict(
-                    x=1.0, y=1.0,
-                    xanchor="right", yanchor="top",
+                    x=1.0,
+                    y=1.0,
+                    xanchor="right",
+                    yanchor="top",
                     bgcolor="rgba(255,255,255,0.8)",
                     bordercolor="rgba(0,0,0,0.2)",
                     borderwidth=1,

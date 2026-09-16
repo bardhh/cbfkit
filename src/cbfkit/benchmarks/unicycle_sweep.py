@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import time
 from functools import lru_cache
+from typing import Sequence
 
 import jax
 import jax.numpy as jnp
@@ -30,9 +31,7 @@ from cbfkit.certificates.barrier_functions import ellipsoidal_barrier_factory
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
 from cbfkit.integration import forward_euler
-from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import (
-    solve_with_details as _solve_qp,
-)
+from cbfkit.optimization.quadratic_program.qp_solver_jaxopt import solve_with_details as _solve_qp
 from cbfkit.simulation.monte_carlo_gpu import (
     MonteCarloGPUResults,
     MonteCarloSetup,
@@ -106,10 +105,13 @@ def _build_setup(
 
     # Dynamics
     dynamics = unicycle.plant(l=1.0)
-    dynamics.a_max = control_limit
-    dynamics.omega_max = control_limit
-    dynamics.v_max = 2.0
-    dynamics.goal_tol = GOAL_TOL
+    for name, value in {
+        "a_max": control_limit,
+        "omega_max": control_limit,
+        "v_max": 2.0,
+        "goal_tol": GOAL_TOL,
+    }.items():
+        setattr(dynamics, name, value)
 
     # Barrier condition
     if barrier_type not in _BARRIER_TYPES:
@@ -357,7 +359,7 @@ def _get_unicycle_sim_fn(n_obstacles: int, num_steps: int):
     )
 
 
-def _unicycle_batch_runner(seeds: list[int], params: dict) -> list[dict]:
+def _unicycle_batch_runner(seeds: Sequence[int], params: dict) -> list[dict]:
     """Optimised batch runner — one JIT compilation across all combos.
 
     The first combo triggers JIT compilation of a parameterized kernel.
@@ -460,7 +462,6 @@ def unicycle_sweep(seed: int, params: dict) -> dict:
     Kp_theta = params.get("Kp_theta", 5.0)
     barrier_type = params.get("barrier_type", "linear_class_k")
     resolved = resolve_ellipsoidal_obstacles(params)
-    obs_kw = {} if resolved is None else {"obstacles": resolved[0], "ellipsoids": resolved[1]}
 
     setup = _build_setup(
         seed,
@@ -468,7 +469,8 @@ def unicycle_sweep(seed: int, params: dict) -> dict:
         Kp_pos=Kp_pos,
         Kp_theta=Kp_theta,
         barrier_type=barrier_type,
-        **obs_kw,
+        obstacles=None if resolved is None else resolved[0],
+        ellipsoids=None if resolved is None else resolved[1],
     )
 
     results = conduct_monte_carlo_gpu(setup, n_trials=N_TRIALS, seed=seed)

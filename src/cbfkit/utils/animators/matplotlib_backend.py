@@ -21,6 +21,9 @@ class _MatplotlibMixin:
     ``_y_lim``, ``_title``, ``_aspect``, and ``_compute_prediction``.
     """
 
+    _config: AnimationConfig
+    _dt: float
+
     def _build_matplotlib(self):
         self._ensure_frame_data_numpy()
 

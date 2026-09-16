@@ -7,7 +7,7 @@ __all__ = ["SweepViz"]
 import math
 from typing import Any
 
-from rich.console import Group
+from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -26,7 +26,10 @@ def _lerp_color(t: float) -> str:
 
 
 def _color_for_value(
-    val: float, lo: float, hi: float, direction: str,
+    val: float,
+    lo: float,
+    hi: float,
+    direction: str,
 ) -> str:
     """Map *val* to a red-to-green color given the finite range [lo, hi]."""
     if not math.isfinite(val):
@@ -85,7 +88,9 @@ def _render_grid(
 
     # Axis labels
     if x_label:
-        x_label_line = Text(pad + " " + " " * ((w - len(x_label)) // 2) + x_label, style="dim italic")
+        x_label_line = Text(
+            pad + " " + " " * ((w - len(x_label)) // 2) + x_label, style="dim italic"
+        )
         lines.append(x_label_line)
 
     # Color legend
@@ -160,7 +165,7 @@ class SweepViz:
             self._best_idx = idx
 
     def render(self) -> Group:
-        parts = []
+        parts: list[RenderableType] = []
         parts.append(self._render_best_line())
         scatter = self._render_scatter()
         if scatter:
@@ -171,7 +176,7 @@ class SweepViz:
 
     def render_final(self) -> Group:
         """Render the final post-sweep output with summary block."""
-        parts = []
+        parts: list[RenderableType] = []
         scatter = self._render_scatter()
         if scatter:
             parts.append(scatter)
@@ -191,7 +196,7 @@ class SweepViz:
         if self.mode == "optuna":
             mode_str = f"optuna ({self.direction} {self.objective_metric})"
 
-        parts = []
+        parts: list[str] = []
         parts.append(f"[bold blue]Mode:[/bold blue] {mode_str}")
         parts.append(f"  [bold blue]Trials:[/bold blue] {self.n_trials}")
         parts.append(f"  [bold blue]Seeds:[/bold blue] {self.n_seeds}")
@@ -223,8 +228,7 @@ class SweepViz:
         line.append(f"{self.objective_metric} = ", style="dim")
         line.append(f"{val:.4f}", style=f"bold {color}")
         params = ", ".join(
-            f"{k}={v:.3g}" if isinstance(v, float) else f"{k}={v}"
-            for k, v in combo.items()
+            f"{k}={v:.3g}" if isinstance(v, float) else f"{k}={v}" for k, v in combo.items()
         )
         line.append(f"  ({params})", style="dim")
         line.append(f"    Safe: {self._safe_count}/{len(self.trials)}", style="dim")
@@ -316,7 +320,8 @@ class SweepViz:
             return None
 
         numeric_params = [
-            p for p in self.param_names
+            p
+            for p in self.param_names
             if any(isinstance(t["combo"].get(p), (int, float)) for t in self.trials)
         ]
 
@@ -375,12 +380,23 @@ class SweepViz:
         y_range = self._safe_range(min(ys), max(ys))
 
         grid = self._populate_grid(
-            list(zip(xs, ys, objs)), x_range, y_range, W, H,
+            list(zip(xs, ys, objs)),
+            x_range,
+            y_range,
+            W,
+            H,
         )
         return _render_grid(
-            grid, W, H, f"{y_param} vs {x_param}",
-            x_range[0], x_range[1], y_range[0], y_range[1],
-            x_label=x_param, y_label=y_param,
+            grid,
+            W,
+            H,
+            f"{y_param} vs {x_param}",
+            x_range[0],
+            x_range[1],
+            y_range[0],
+            y_range[1],
+            x_label=x_param,
+            y_label=y_param,
             direction=self.direction,
         )
 
@@ -405,9 +421,16 @@ class SweepViz:
 
         grid = self._populate_grid(coords, x_range, y_range, W, H)
         return _render_grid(
-            grid, W, H, f"{self.objective_metric} vs {x_param}",
-            x_range[0], x_range[1], y_range[0], y_range[1],
-            x_label=x_param, y_label=self.objective_metric,
+            grid,
+            W,
+            H,
+            f"{self.objective_metric} vs {x_param}",
+            x_range[0],
+            x_range[1],
+            y_range[0],
+            y_range[1],
+            x_label=x_param,
+            y_label=self.objective_metric,
             label_width=9,
             direction=self.direction,
         )
@@ -461,9 +484,14 @@ class SweepViz:
                 grid[(cx, cy)] = (best, color, "\u25cf")
 
         return _render_grid(
-            grid, W, H,
+            grid,
+            W,
+            H,
             f"Convergence ({self.objective_metric})",
-            x_range[0], x_range[1], y_range[0], y_range[1],
+            x_range[0],
+            x_range[1],
+            y_range[0],
+            y_range[1],
             x_label="trial #",
             y_label=self.objective_metric,
             label_width=9,
@@ -479,10 +507,7 @@ class SweepViz:
         if not self.trials:
             return Panel("No trials completed.", border_style="dim")
 
-        objs = [
-            t["summary"].get(self.objective_metric, 0.0)
-            for t in self.trials
-        ]
+        objs = [t["summary"].get(self.objective_metric, 0.0) for t in self.trials]
         finite_objs = [o for o in objs if math.isfinite(o)]
 
         lines = []
@@ -495,7 +520,9 @@ class SweepViz:
                 f"{k}={v:.3g}" if isinstance(v, float) else f"{k}={v}"
                 for k, v in best_combo.items()
             )
-            color = _color_for_value(self._best_val, self._finite_lo, self._finite_hi, self.direction)
+            color = _color_for_value(
+                self._best_val, self._finite_lo, self._finite_hi, self.direction
+            )
             line = Text("  Best:  ", style="bold")
             line.append(f"trial #{self._best_idx + 1}", style="bold cyan")
             line.append(" \u2192 ", style="dim")
@@ -513,8 +540,10 @@ class SweepViz:
             mean_val = sum(finite_objs) / len(finite_objs)
             if len(finite_objs) > 1:
                 var = sum((x - mean_val) ** 2 for x in finite_objs) / (len(finite_objs) - 1)
-                std_val = var ** 0.5
-                stats_str = f"  Worst: {worst_val:.4f}  |  Mean: {mean_val:.4f} \u00b1 {std_val:.4f}"
+                std_val = var**0.5
+                stats_str = (
+                    f"  Worst: {worst_val:.4f}  |  Mean: {mean_val:.4f} \u00b1 {std_val:.4f}"
+                )
             else:
                 stats_str = f"  Worst: {worst_val:.4f}  |  Mean: {mean_val:.4f}"
             lines.append(Text(stats_str, style="dim"))

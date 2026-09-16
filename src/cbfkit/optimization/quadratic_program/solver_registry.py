@@ -30,42 +30,15 @@ Usage::
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+import inspect
+import warnings
+from typing import Any, Callable, Optional, Union
 
 import jax
 import jax.numpy as jnp
 from jax import Array
 
-from cbfkit.utils.user_types.callables import QpSolverCallable
-
-
-class QpSolution:
-    """Return type for all QP solvers.
-
-    Attributes:
-        primal: Solution vector.
-        status: Integer status code (1 = solved).
-        params: Solver-specific state for warm-starting.  ``None`` for
-            backends that do not support warm-starting.
-    """
-
-    __slots__ = ("primal", "status", "params")
-
-    def __init__(self, primal: Array, status: int, params: Any = None):
-        self.primal = primal
-        self.status = status
-        self.params = params
-
-    # Support tuple unpacking: primal, status, params = solution
-    def __iter__(self):
-        return iter((self.primal, self.status, self.params))
-
-    def __getitem__(self, idx):
-        return (self.primal, self.status, self.params)[idx]
-
-    def __repr__(self):
-        return f"QpSolution(primal={self.primal}, status={self.status})"
-
+from cbfkit.utils.user_types.solvers import QpSolution, QpSolverCallable, with_solver_metadata
 
 # ---------------------------------------------------------------------------
 # Factory functions — each returns a QpSolverCallable
@@ -142,9 +115,7 @@ def jaxopt_solver(
 
         return QpSolution(primal=sol.primal, status=status, params=(sol, state))
 
-    solve_with_details.jit_compatible = True
-    solve_with_details.solver_name = "jaxopt"
-    return solve_with_details
+    return with_solver_metadata(solve_with_details, name="jaxopt", jit_compatible=True)
 
 
 def cvxopt_solver() -> QpSolverCallable:
@@ -157,9 +128,7 @@ def cvxopt_solver() -> QpSolverCallable:
         solve_with_details,
     )
 
-    solve_with_details.jit_compatible = False
-    solve_with_details.solver_name = "cvxopt"
-    return solve_with_details
+    return with_solver_metadata(solve_with_details, name="cvxopt", jit_compatible=False)
 
 
 def casadi_solver() -> QpSolverCallable:
@@ -172,9 +141,7 @@ def casadi_solver() -> QpSolverCallable:
         solve_with_details,
     )
 
-    solve_with_details.jit_compatible = False
-    solve_with_details.solver_name = "casadi"
-    return solve_with_details
+    return with_solver_metadata(solve_with_details, name="casadi", jit_compatible=False)
 
 
 # ---------------------------------------------------------------------------
@@ -280,12 +247,10 @@ def fast_solver(max_iter: Optional[int] = None, tol: float = 1e-6) -> QpSolverCa
             sol, status, state = jax.lax.cond(bad, _cold, _keep, None)
         return QpSolution(primal=sol, status=status, params=(sol, state))
 
-    solve_with_details.jit_compatible = True
-    solve_with_details.solver_name = "fast"
-    return solve_with_details
+    return with_solver_metadata(solve_with_details, name="fast", jit_compatible=True)
 
 
-_SOLVER_FACTORIES = {
+_SOLVER_FACTORIES: dict[str, Callable[..., QpSolverCallable]] = {
     "jaxopt": jaxopt_solver,
     "cvxopt": cvxopt_solver,
     "casadi": casadi_solver,
@@ -318,21 +283,33 @@ def get_solver(name: str = "jaxopt", **kwargs) -> QpSolverCallable:
     """
     import os
 
+    overridden = False
     if name == "jaxopt":
         override = os.environ.get("CBFKIT_QP_SOLVER", "").strip().lower()
         if override and override != "jaxopt":
             name = override
-            # Silently drop kwargs incompatible with the override target
-            # (e.g. cvxopt/casadi factories accept no kwargs).
-            try:
-                return _SOLVER_FACTORIES[name](**kwargs)
-            except TypeError:
-                return _SOLVER_FACTORIES[name]()
+            overridden = True
 
     if name not in _SOLVER_FACTORIES:
         available = ", ".join(sorted(_SOLVER_FACTORIES))
         raise KeyError(f"Unknown QP solver {name!r}. Available: {available}")
-    return _SOLVER_FACTORIES[name](**kwargs)
+    factory = _SOLVER_FACTORIES[name]
+    if overridden:
+        signature = inspect.signature(factory)
+        accepts_kwargs = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()
+        )
+        unsupported = set(kwargs) - signature.parameters.keys() if not accepts_kwargs else set()
+        if unsupported:
+            warnings.warn(
+                f"Solver override {name!r} ignores unsupported options: "
+                + ", ".join(sorted(unsupported)),
+                UserWarning,
+                stacklevel=2,
+            )
+            kwargs = {key: value for key, value in kwargs.items() if key not in unsupported}
+    # A TypeError raised inside the factory is an actual failure, never a retry signal.
+    return factory(**kwargs)
 
 
 def list_solvers() -> list[str]:

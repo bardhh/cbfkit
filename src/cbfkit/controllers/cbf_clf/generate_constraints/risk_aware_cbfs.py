@@ -10,7 +10,6 @@ import jax.numpy as jnp
 from jax import Array, jit, lax, scipy
 
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
-
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
     CbfClfQpData,
@@ -118,6 +117,7 @@ def generate_compute_estimate_feedback_ra_cbf_constraints(
             lf_x, lj_x, lh_x, dlf_t, lc_x = compute_lyapunov_values(t, x)
             assert ra_params.varsigma is not None
             product_varsigma_and_k = jnp.matmul(ra_params.varsigma(x), k_mat)
+            assert lh_x is not None
             traces = batched_hessian_trace(product_varsigma_and_k, lh_x)
             assert ra_params.lambda_h is not None
             assert ra_params.epsilon is not None

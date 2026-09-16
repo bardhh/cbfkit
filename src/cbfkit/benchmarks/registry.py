@@ -17,7 +17,6 @@ __all__ = [
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
 
-
 BenchmarkResult = Mapping[str, float | int | bool | str]
 BenchmarkScenario = Callable[[int], BenchmarkResult]
 SweepableRunner = Callable[[int, Dict[str, Any]], BenchmarkResult]

@@ -51,11 +51,11 @@ from jax import Array
 
 from cbfkit.controllers.cbf_clf.utils.risk_aware_params import RiskAwareParams
 from cbfkit.utils.user_types import (
+    EMPTY_CERTIFICATE_COLLECTION,
     CbfClfQpGenerator,
     CertificateInput,
     ControllerCallable,
     DynamicsCallable,
-    EMPTY_CERTIFICATE_COLLECTION,
 )
 
 from .cbf_clf_qp_generator import cbf_clf_qp_generator

@@ -33,7 +33,7 @@ class CertificateCollection(NamedTuple):
     partials: List[CertificatePartialCallable]
     conditions: List[CertificateConditionsCallable]
 
-    def __add__(self, other: "CertificateCollection") -> "CertificateCollection":
+    def __add__(self, other: object) -> "CertificateCollection":
         if not isinstance(other, CertificateCollection):
             return NotImplemented
         return CertificateCollection(

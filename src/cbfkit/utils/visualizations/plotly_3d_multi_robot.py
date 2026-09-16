@@ -44,11 +44,11 @@ def _visualize_3d_plotly(
     min_dists,
     obs_dists,
 ):
+    from cbfkit.utils.animators.deps import _require_plotly
     from cbfkit.utils.animators.helpers import (
         _compute_plotly_frame_step,
         _plotly_animation_controls,
     )
-    from cbfkit.utils.animators.deps import _require_plotly
 
     _require_plotly()
 

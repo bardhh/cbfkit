@@ -1,5 +1,5 @@
-from jax import Array
 import jax.numpy as jnp
+from jax import Array
 
 from cbfkit.integration import forward_euler
 from cbfkit.integration.runge_kutta import runge_kutta_4

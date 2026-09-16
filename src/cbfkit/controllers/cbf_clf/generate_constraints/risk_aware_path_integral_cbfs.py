@@ -103,6 +103,7 @@ def generate_compute_ra_pi_cbf_constraints(
             # Ensure array types for addition
             w_vals = integrator_states
             bc_x = jnp.stack([bc(w_vals[ii]) for ii, bc in enumerate(conditions)])
+            assert bh_x is not None
             traces = batched_hessian_trace(sigma, bh_x)
 
             # Configure constraint matrix and vector (a * u <= b)

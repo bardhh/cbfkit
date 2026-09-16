@@ -115,6 +115,8 @@ def stepper(
             )
 
         if stl_trajectory_cost is not None:
+            if planner_data.xs is None:
+                raise ValueError("stl_trajectory_cost requires planner_data.xs")
             planner_data = planner_data._replace(
                 prev_robustness=stl_trajectory_cost(dt, planner_data.xs)
             )

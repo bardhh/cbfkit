@@ -11,7 +11,7 @@ from cbfkit.utils.user_types import CertificateCollection
 
 from ...models.quadrotor_6dof_dynamics import rotation_body_to_inertial
 from ...utils.rotations import rotation_body_frame_to_inertial_frame
-from .basic import N, G, V_att, V_pos, V_vel
+from .basic import G, N, V_att, V_pos, V_vel
 
 
 ###############################################################################

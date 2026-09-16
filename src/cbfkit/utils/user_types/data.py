@@ -1,9 +1,20 @@
 """Core data types and structures for CBFKit simulations."""
 
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, TypeAlias, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    SupportsIndex,
+    Tuple,
+    TypeAlias,
+    Union,
+)
 
-from jax import Array
 import jax.numpy as jnp
+from jax import Array
 
 # Define types for readability
 Time: TypeAlias = Union[float, Array]
@@ -19,7 +30,7 @@ NumSteps: TypeAlias = int
 class ControllerData(NamedTuple):
     """Data structure for controller output."""
 
-    error: bool = False
+    error: Union[bool, Array] = False
     error_data: Optional[Union[int, Array]] = None
     complete: bool = False
     sol: Optional[Array] = None
@@ -34,7 +45,7 @@ class PlannerData(NamedTuple):
     u_traj: Optional[Array] = None
     x_traj: Optional[Array] = None
     prev_robustness: Optional[Union[float, Array]] = None
-    error: bool = False
+    error: Union[bool, Array] = False
     xs: Optional[Array] = None
     sampled_x_traj: Optional[Array] = None
 
@@ -115,7 +126,7 @@ class SimulationResults(NamedTuple):
         """Returns the canonical legacy 8-tuple representation."""
         return tuple(self)  # type: ignore[return-value]
 
-    def __getitem__(self, key: Union[int, str]) -> Any:
+    def __getitem__(self, key: Union[SupportsIndex, slice, str]) -> Any:
         """Allows dictionary-like access to simulation results.
 
         Args:

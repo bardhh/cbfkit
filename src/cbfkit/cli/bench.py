@@ -35,9 +35,7 @@ def _cmd_list() -> int:
     for name in registry.names():
         spec = registry.scenario(name)
         params = (
-            ", ".join(spec.sweepable_params)
-            if spec.sweepable_params
-            else Text("--", style="dim")
+            ", ".join(spec.sweepable_params) if spec.sweepable_params else Text("--", style="dim")
         )
         sc_table.add_row(name, spec.description, params)
 
@@ -105,8 +103,7 @@ def _cmd_list() -> int:
         console.print(cfg_table)
 
     console.print(
-        f"\n  [dim]{sc_table.row_count} scenario(s), "
-        f"{len(config_files)} sweep config(s)[/dim]"
+        f"\n  [dim]{sc_table.row_count} scenario(s), " f"{len(config_files)} sweep config(s)[/dim]"
     )
 
     console.print(
@@ -140,9 +137,11 @@ def _cmd_compare(args: argparse.Namespace) -> int:
 
 
 def _cmd_sweep(args: argparse.Namespace) -> int:
-    from cbfkit.benchmarks.sweep import run_sweep, run_optuna_sweep, write_sweep_artifacts
+    from cbfkit.benchmarks.sweep import run_optuna_sweep, run_sweep, write_sweep_artifacts
     from cbfkit.benchmarks.sweep_config import (
-        load_sweep_config, resolve_param_combos, _build_obstacle_fixed_params,
+        _build_obstacle_fixed_params,
+        load_sweep_config,
+        resolve_param_combos,
     )
     from cbfkit.benchmarks.sweep_viz import SweepViz
 
@@ -153,6 +152,7 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
     if spec.sweep_runner is not None:
         runner = spec.sweep_runner
     else:
+
         def runner(seed, params):
             return spec.runner(seed)
 
@@ -170,6 +170,7 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
             return _br(seed, merged)
 
         if _base_batch is not None:
+
             def batch_runner(seeds, params, *, _bb=_base_batch, _of=_obs_fixed):
                 merged = dict(_of)
                 merged.update(params)
@@ -219,7 +220,10 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
                 n_seeds=len(config.seeds),
             )
         result = run_sweep(
-            config.scenario, config.seeds, param_combos, runner,
+            config.scenario,
+            config.seeds,
+            param_combos,
+            runner,
             falsifier=config.falsifier,
             falsifier_metric=config.falsifier_metric,
             viz=viz,
@@ -265,7 +269,9 @@ def build_parser() -> argparse.ArgumentParser:
     sweep_parser = sub.add_parser("sweep", help="Run a parameter sweep from YAML config")
     sweep_parser.add_argument("config", type=Path, help="Path to sweep YAML config file")
     sweep_parser.add_argument(
-        "--no-viz", action="store_true", default=False,
+        "--no-viz",
+        action="store_true",
+        default=False,
         help="Disable live visualization (table + scatter plot)",
     )
 
@@ -275,7 +281,9 @@ def build_parser() -> argparse.ArgumentParser:
     plot_parser.add_argument("--y-metric", required=True, help="Metric for y-axis")
     plot_parser.add_argument("--hue", default=None, help="Second parameter for grouping")
     plot_parser.add_argument(
-        "--kind", default="line", choices=["line", "heatmap", "pareto"],
+        "--kind",
+        default="line",
+        choices=["line", "heatmap", "pareto"],
     )
     plot_parser.add_argument("--output", type=Path, default=None, help="Save figure to path")
 

@@ -7,7 +7,7 @@ vectorizing the JIT-compiled simulation loop with ``jax.vmap``.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Optional, NamedTuple
+from typing import Any, Callable, NamedTuple, Optional
 
 import jax
 import jax.numpy as jnp
@@ -273,8 +273,8 @@ def conduct_monte_carlo_gpu_multiseed(
             MonteCarloGPUResults(
                 states=xs[sl],
                 controls=us[sl],
-                controller_datas=jax.tree.map(lambda a: a[sl], c_datas),
-                planner_datas=jax.tree.map(lambda a: a[sl], p_datas),
+                controller_datas=jax.tree_util.tree_map(lambda a: a[sl], c_datas),
+                planner_datas=jax.tree_util.tree_map(lambda a: a[sl], p_datas),
                 wall_time_s=per_seed_time,
                 n_trials=n_trials,
             )

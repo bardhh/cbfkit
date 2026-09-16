@@ -3,16 +3,17 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+
 from cbfkit.benchmarks.registry import register_scenario
+from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
+from cbfkit.certificates.packager import certificate_package
 from cbfkit.controllers.cbf_clf.cbf_clf_qp_generator import cbf_clf_qp_generator
 from cbfkit.controllers.cbf_clf.generate_constraints import (
     generate_compute_vanilla_clf_constraints,
     generate_compute_zeroing_cbf_constraints,
 )
-from cbfkit.certificates.packager import certificate_package
-from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
-from cbfkit.simulation import simulator
 from cbfkit.integration import forward_euler
+from cbfkit.simulation import simulator
 
 
 @register_scenario("solver_stress", description="Dense obstacle field navigation")

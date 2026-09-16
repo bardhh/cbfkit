@@ -14,7 +14,6 @@ from cbfkit.benchmarks.scenario_builders import (
 from cbfkit.simulation.monte_carlo_gpu import conduct_monte_carlo_gpu
 from cbfkit.simulation.safety_verification import compute_safety_statistics
 
-
 # ---------------------------------------------------------------------------
 # Original benchmark scenario (non-sweep)
 # ---------------------------------------------------------------------------
@@ -48,9 +47,9 @@ def monte_carlo_gpu_speedup(seed: int) -> dict[str, float | int]:
 
     # Summary fields expected by the metrics module
     metrics["success"] = 1
-    metrics["safety_violations"] = int(any(
-        metrics.get(f"violation_rate_{n}", 0) > 0 for n in TRIAL_COUNTS
-    ))
+    metrics["safety_violations"] = int(
+        any(metrics.get(f"violation_rate_{n}", 0) > 0 for n in TRIAL_COUNTS)
+    )
     metrics["solver_failures"] = 0
     metrics["avg_step_ms"] = metrics[f"time_{TRIAL_COUNTS[0]}"] / setup.num_steps * 1000.0
 

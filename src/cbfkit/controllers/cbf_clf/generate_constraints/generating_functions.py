@@ -1,5 +1,5 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 import inspect
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, cast
 
 import jax.numpy as jnp
 from jax import Array, jit, lax, vmap
@@ -11,16 +11,23 @@ from cbfkit.utils.user_types import (
     ComputeCertificateConstraintFunctionGenerator,
     DynamicsCallable,
     State,
+    Time,
 )
 
 from ..utils.utils import block_diag_matrix_from_vec, interleave_arrays
+
+
+class _ConstraintsWithDynamics(Protocol):
+    def __call__(
+        self, t: Time, x: Array, *, f: Array, g: Array
+    ) -> Tuple[Array, Array, CbfClfQpData]: ...
 
 
 ####################################################################################################
 ### Generate Input Constraints #####################################################################
 def generate_compute_input_constraints(
     control_limits: Array,
-) -> Callable[[float, State], Tuple[Array, Array]]:
+) -> Callable[[Time, State], Tuple[Array, Array]]:
     """Generator function for the callable that will compute the input constraints.
 
     Args:
@@ -28,14 +35,14 @@ def generate_compute_input_constraints(
 
     Returns
     -------
-        compute_input_constraints (Callable[[float, State], Tuple[Array, Array]]):
+        compute_input_constraints (Callable[[Time, State], Tuple[Array, Array]]):
             function to compute input constraints
     """
     a_mat = block_diag_matrix_from_vec(len(control_limits))
     b_vec = interleave_arrays(control_limits, control_limits)
 
     @jit
-    def compute_input_constraints(_t: float, _x: Array) -> Tuple[Array, Array]:
+    def compute_input_constraints(_t: Time, _x: Array) -> Tuple[Array, Array]:
         """Computes input constraints."""
         return a_mat, b_vec
 
@@ -52,7 +59,7 @@ def generate_compute_cbf_clf_constraints(
     barriers: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     lyapunovs: CertificateCollection = EMPTY_CERTIFICATE_COLLECTION,
     **kwargs,
-) -> Callable[[float, Array], Tuple[Array, Array, CbfClfQpData]]:
+) -> Callable[[Time, Array], Tuple[Array, Array, CbfClfQpData]]:
     """Combine generated CBF and CLF constraints into one stacked constraint callable."""
     compute_cbf_constraints = generate_compute_cbf_constraints(
         control_limits, dyn_func, barriers, lyapunovs, **kwargs
@@ -69,17 +76,21 @@ def generate_compute_cbf_clf_constraints(
     pass_fg_clf = "f" in sig_clf.parameters and "g" in sig_clf.parameters
 
     @jit
-    def compute_cbf_clf_constraints(t: float, x: Array) -> Tuple[Array, Array, CbfClfQpData]:
+    def compute_cbf_clf_constraints(t: Time, x: Array) -> Tuple[Array, Array, CbfClfQpData]:
         # Evaluate dynamics once to avoid double evaluation in sub-functions
         f, g = dyn_func(x)
 
         if pass_fg_cbf:
-            amat_cbf, bvec_cbf, cbf_data = compute_cbf_constraints(t, x, f=f, g=g)
+            amat_cbf, bvec_cbf, cbf_data = cast(_ConstraintsWithDynamics, compute_cbf_constraints)(
+                t, x, f=f, g=g
+            )
         else:
             amat_cbf, bvec_cbf, cbf_data = compute_cbf_constraints(t, x)
 
         if pass_fg_clf:
-            amat_clf, bvec_clf, clf_data = compute_clf_constraints(t, x, f=f, g=g)
+            amat_clf, bvec_clf, clf_data = cast(_ConstraintsWithDynamics, compute_clf_constraints)(
+                t, x, f=f, g=g
+            )
         else:
             amat_clf, bvec_clf, clf_data = compute_clf_constraints(t, x)
 
@@ -123,7 +134,7 @@ def _stack_and_validate(
 
 def generate_compute_certificate_values_list_comprehension(
     certificate_package: CertificateCollection, compute_hessians: bool = True
-) -> Callable[[float, Array], Tuple[Array, Array, Optional[Array], Array, Array]]:
+) -> Callable[[Time, Array], Tuple[Array, Array, Optional[Array], Array, Array]]:
     functions, jacobians, hessians, partials, conditions = certificate_package
 
     @jit
@@ -153,7 +164,7 @@ def generate_compute_certificate_values_list_comprehension(
 
 def generate_compute_certificate_values_vmap(
     certificate_package: CertificateCollection, compute_hessians: bool = True
-) -> Callable[[float, Array], Tuple[Array, Array, Optional[Array], Array, Array]]:
+) -> Callable[[Time, Array], Tuple[Array, Array, Optional[Array], Array, Array]]:
     """
     Computes certificate values using list comprehension (unrolling).
 

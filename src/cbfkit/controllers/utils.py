@@ -4,7 +4,7 @@ This module provides utility functions for creating and managing controllers.
 """
 
 import inspect
-from typing import Callable, Optional, Tuple, Any
+from typing import Any, Callable, Literal, Optional, Tuple
 
 from jax import Array
 
@@ -114,7 +114,11 @@ def _normalize_controller_return(
     return ret, ControllerData(u=ret, u_nom=u_nom)
 
 
-def setup_controller(controller_func: Callable[..., Any]) -> ControllerCallable:
+def setup_controller(
+    controller_func: Callable[..., Any],
+    *,
+    signature: Literal["auto", "key_data", "nominal_key"] = "auto",
+) -> ControllerCallable:
     """Adapts legacy controller signatures to ``ControllerCallable``.
 
     Supported input signatures:
@@ -124,10 +128,16 @@ def setup_controller(controller_func: Callable[..., Any]) -> ControllerCallable:
     - ``(t, x, key, data) -> u`` or ``(t, x, key, data) -> (u, data)``
     - ``(t, x, u_nom, key, data) -> u`` or ``(t, x, u_nom, key, data) -> (u, data)``
 
+    ``signature="key_data"`` or ``"nominal_key"`` explicitly selects a legacy
+    four-argument layout when parameter names are ambiguous. ``"auto"`` retains
+    the historical name-based inference.
+
     Returns:
         ControllerCallable-compatible wrapper.
     """
-    if getattr(controller_func, "__cbfkit_controller_adapter__", False):
+    if signature not in {"auto", "key_data", "nominal_key"}:
+        raise ValueError(f"Unknown controller signature {signature!r}")
+    if signature == "auto" and getattr(controller_func, "__cbfkit_controller_adapter__", False):
         return controller_func  # type: ignore[return-value]
 
     try:
@@ -138,6 +148,9 @@ def setup_controller(controller_func: Callable[..., Any]) -> ControllerCallable:
     except ValueError:
         num_args = 5
         param_names = []
+
+    if signature != "auto" and num_args != 4:
+        raise ValueError("An explicit legacy signature requires a four-argument controller")
 
     if num_args == 2:
 
@@ -175,7 +188,9 @@ def setup_controller(controller_func: Callable[..., Any]) -> ControllerCallable:
         # - (t, x, key, data)
         third = param_names[2] if len(param_names) >= 3 else ""
         fourth = param_names[3] if len(param_names) >= 4 else ""
-        treat_as_key_data = ("key" in third) and ("data" in fourth or fourth == "d")
+        treat_as_key_data = signature == "key_data" or (
+            signature == "auto" and "key" in third and ("data" in fourth or fourth == "d")
+        )
 
         if treat_as_key_data:
 
