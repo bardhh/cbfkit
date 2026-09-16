@@ -108,3 +108,53 @@ def format_return_data(
         planner_data_keys,
         planner_data_values,
     )
+
+
+def format_bulk_log(xs, us, zs, cs, c_datas, p_datas, num_steps):
+    """Convert stacked JIT outputs to the column-oriented CSV logging contract."""
+    # Optimization (Bolt): Use bulk logging instead of per-step loop
+    c_keys = list(c_datas._fields)
+    p_keys = list(p_datas._fields)
+
+    log_dict = {
+        "state": list(np.array(xs)),
+        "control": list(np.array(us)),
+        "estimate": list(np.array(zs)),
+        "covariance": list(np.array(cs)),
+    }
+
+    def process_bulk_data(keys, data_obj, prefix):
+        for k in keys:
+            val = getattr(data_obj, k)
+            # val could be Array(T, ...), Dict[str, Array(T, ...)], or None
+            if val is None:
+                log_dict[f"{prefix}_{k}"] = [None] * num_steps
+            elif isinstance(val, dict):
+                # Unstack dict of arrays -> list of dicts
+                # First convert to numpy to speed up iteration
+                val_np = {}
+                for sk, sv in val.items():
+                    try:
+                        if isinstance(sv, tuple):
+                            val_np[sk] = list(zip(*sv))
+                        else:
+                            val_np[sk] = list(np.array(sv))
+                    except Exception as exc:
+                        warnings.warn(
+                            f"Could not convert sub-data field "
+                            f"{prefix}.{k}.{sk!r} to numpy ({exc}); "
+                            f"logging Nones for this field.",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
+                        val_np[sk] = [None] * num_steps
+                # zip now works on lists of values
+                vals = [dict(zip(val_np.keys(), t)) for t in zip(*val_np.values())]
+                log_dict[f"{prefix}_{k}"] = vals
+            else:
+                log_dict[f"{prefix}_{k}"] = list(np.array(val))
+
+    process_bulk_data(c_keys, c_datas, "controller")
+    process_bulk_data(p_keys, p_datas, "planner")
+
+    return log_dict

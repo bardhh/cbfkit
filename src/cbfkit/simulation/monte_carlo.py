@@ -11,7 +11,8 @@ import inspect
 import logging
 import multiprocessing as mp
 import os
-from typing import Callable, Optional
+from typing import Callable, Optional, cast
+
 import numpy as np
 from jax import random
 
@@ -107,7 +108,7 @@ def conduct_monte_carlo(
 
     # If seed is still None (no env var or invalid), use entropy
     if seed is None:
-        seed = np.random.SeedSequence().entropy
+        seed = cast(int, np.random.SeedSequence().entropy)
         logging.getLogger(__name__).warning(
             f"Monte Carlo simulation initialized with random seed: {seed}"
         )

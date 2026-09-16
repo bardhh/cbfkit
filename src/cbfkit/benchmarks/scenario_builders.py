@@ -94,8 +94,7 @@ def build_single_integrator_setup(
 
     if obstacles is not None:
         barrier_tuples = [
-            make_circular_cbf(jnp.array(c), float(r), alpha=alpha)
-            for c, r in obstacles
+            make_circular_cbf(jnp.array(c), float(r), alpha=alpha) for c, r in obstacles
         ]
     else:
         key = random.PRNGKey(seed)
@@ -103,8 +102,7 @@ def build_single_integrator_setup(
         centers = random.uniform(key_c, (n_obstacles, 2), minval=2.0, maxval=8.0)
         radii = random.uniform(key_r, (n_obstacles,), minval=0.5, maxval=1.0)
         barrier_tuples = [
-            make_circular_cbf(centers[i], radii[i], alpha=alpha)
-            for i in range(n_obstacles)
+            make_circular_cbf(centers[i], radii[i], alpha=alpha) for i in range(n_obstacles)
         ]
     barriers = CertificateCollection(*[list(x) for x in zip(*barrier_tuples)])
 
@@ -233,9 +231,7 @@ def resolve_ellipsoidal_obstacles(
     semi_axes_list = []
     for i in range(count):
         center = params.get(f"obstacle_{i}_center", params.get(f"_obstacle_{i}_center"))
-        semi_axes = params.get(
-            f"obstacle_{i}_semi_axes", params.get(f"_obstacle_{i}_semi_axes")
-        )
+        semi_axes = params.get(f"obstacle_{i}_semi_axes", params.get(f"_obstacle_{i}_semi_axes"))
         if center is None or semi_axes is None:
             raise ValueError(f"Obstacle {i} missing center or semi_axes in params.")
         centers.append(jnp.array(center))

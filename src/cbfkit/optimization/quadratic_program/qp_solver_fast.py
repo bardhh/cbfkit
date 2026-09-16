@@ -2,7 +2,7 @@
 
 The original dual coordinate descent implementation could not converge on
 slack-relaxed CBF-CLF-QPs (verified failure on mppi_cbf_reach_avoid step 0).
-See docs/superpowers/specs/2026-05-26-fast-qp-pdipm-design.md for the rationale.
+The replacement algorithm is documented in ``qp_solver_pdipm``.
 
 This module re-exports ``solve_qp_fast`` so existing imports keep working;
 internally it just calls ``solve_qp_pdipm`` from ``qp_solver_pdipm``.

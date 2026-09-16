@@ -1,6 +1,7 @@
 """Callable type definitions and configuration types for CBFKit."""
 
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -11,18 +12,16 @@ from typing import (
     TypeAlias,
     TypedDict,
     Union,
-    TYPE_CHECKING,
 )
 
 from jax import Array
 
 from .certificates import (
+    EMPTY_CERTIFICATE_COLLECTION,
     CertificateCollection,
     CertificateInput,
-    EMPTY_CERTIFICATE_COLLECTION,
 )
-from .data import Control, Covariance, Key, State, Time, ControllerData, PlannerData
-
+from .data import Control, ControllerData, Covariance, Key, PlannerData, State, Time
 
 # Dynamics Callables
 DynamicsCallableReturns = Tuple[Array, Array]
@@ -65,7 +64,7 @@ PlannerCallable = Callable[
 # Estimator Callables
 EstimatorCallable = Callable[
     [Time, Array, Array, Optional[Array], Optional[Array]],
-    Tuple[State, Covariance],
+    Union[Tuple[State, Covariance], Tuple[State, Covariance, Array]],
 ]
 
 
@@ -103,14 +102,11 @@ class DiscretePlant(Protocol):
     state_dim: int
     dt: float
 
-    def step(self, state: Any, u: Array) -> Any:
-        ...
+    def step(self, state: Any, u: Array) -> Any: ...
 
-    def to_state(self, state: Any) -> Array:
-        ...
+    def to_state(self, state: Any) -> Array: ...
 
-    def from_state(self, x: Array) -> Any:
-        ...
+    def from_state(self, x: Array) -> Any: ...
 
 
 # QP Solver Callables
@@ -119,15 +115,11 @@ class DiscretePlant(Protocol):
 # warm-starting and returns a ``QpSolution`` (which supports tuple
 # unpacking as ``(primal, status, params)``).  Backends that do not
 # support warm-starting accept and ignore the argument.
-QpSolverCallable = Callable[
-    ...,
-    Any,  # QpSolution — typed as Any to avoid circular import
-]
-
+from .solvers import QpSolverCallable
 
 if TYPE_CHECKING:
-    from jaxopt.base import KKTSolution
     from jaxopt._src.osqp import OSQPState
+    from jaxopt.base import KKTSolution
 else:
     KKTSolution = Any
     OSQPState = Any

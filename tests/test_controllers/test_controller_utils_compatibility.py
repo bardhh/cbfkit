@@ -48,6 +48,29 @@ def test_setup_controller_four_arg_key_data_signature():
     assert data.complete
 
 
+@pytest.mark.parametrize("signature", ["key_data", "nominal_key"])
+def test_explicit_four_arg_layout_ignores_parameter_names(signature):
+    received = []
+
+    def ambiguous(a, b, c, d):
+        received.append((c, d))
+        return jnp.array([1.0])
+
+    nominal = jnp.array([2.0])
+    key = jnp.array([0, 0], dtype=jnp.uint32)
+    data = ControllerData()
+    wrapped = setup_controller(ambiguous, signature=signature)
+    wrapped(0.0, jnp.zeros(1), nominal, key, data)
+    expected = (key, data) if signature == "key_data" else (nominal, key)
+    assert received[0][0] is expected[0]
+    assert received[0][1] is expected[1]
+
+
+def test_explicit_layout_rejects_other_arities():
+    with pytest.raises(ValueError, match="four-argument"):
+        setup_controller(lambda t, x: x, signature="key_data")
+
+
 def test_setup_controller_rejects_unsupported_signature():
     def bad_controller(_t, _x, _u_nom, _key, _data, _extra):
         return jnp.array([0.0])

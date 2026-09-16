@@ -49,7 +49,7 @@ Example
 >>> )
 """
 
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional, Union, cast, overload
 
 import jax.numpy as jnp
 import numpy as np
@@ -80,8 +80,35 @@ def kwargs_wrapper(func: Callable) -> Callable:
     return wrapper
 
 
+@overload
 def rectify_relative_degree(
-    function: Callable[[Array], Array],
+    function: Union[Callable[[Array], Array], Callable[[Array, Array], Array]],
+    system_dynamics: DynamicsCallable,
+    state_dim: int,
+    roots: Union[float, Array, None] = None,
+    form: str = "exponential",
+    *,
+    certificate_conditions: CertificateConditionsCallable,
+    rng: Optional[Union[int, Array]] = None,
+    input_style: Union[str, CertificateInputStyle] = "concatenated",
+) -> CertificateCollection: ...
+
+
+@overload
+def rectify_relative_degree(
+    function: Union[Callable[[Array], Array], Callable[[Array, Array], Array]],
+    system_dynamics: DynamicsCallable,
+    state_dim: int,
+    roots: Union[float, Array, None] = None,
+    form: str = "exponential",
+    certificate_conditions: Optional[CertificateConditionsCallable] = None,
+    rng: Optional[Union[int, Array]] = None,
+    input_style: Union[str, CertificateInputStyle] = "concatenated",
+) -> Union[Callable[..., CertificateCollection], CertificateCollection]: ...
+
+
+def rectify_relative_degree(
+    function: Union[Callable[[Array], Array], Callable[[Array, Array], Array]],
     system_dynamics: DynamicsCallable,
     state_dim: int,
     roots: Union[float, Array, None] = None,
@@ -136,19 +163,23 @@ def rectify_relative_degree(
 
     # Wrap function to ensure concatenated (state + time) signature for compute_function_list
     if input_style == CertificateInputStyle.STATE:
-        _orig_func_state = function
+        _orig_func_state = cast(Callable[[Array], Array], function)
 
         def function(xt: Array) -> Array:
             return _orig_func_state(xt[:-1])
 
     elif input_style == CertificateInputStyle.SEPARATED:
-        _orig_func_sep = function
+        _orig_func_sep = cast(Callable[[Array, Array], Array], function)
 
         def function(xt: Array) -> Array:
             return _orig_func_sep(xt[-1], xt[:-1])
 
     function_list = compute_function_list(
-        function, system_dynamics, state_dim + 1, form, subkey=subkey
+        cast(Callable[[Array], Array], function),
+        system_dynamics,
+        state_dim + 1,
+        form,
+        subkey=subkey,
     )
 
     if form == "exponential":
@@ -258,9 +289,7 @@ def compute_function_list(
 
     def highorder_new_func(x: Array):
         return (
-            jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0])
-            + jacobian(x)[-1]
-            + function(x)
+            jnp.matmul(jacobian(x)[:-1], system_dynamics(x[:-1])[0]) + jacobian(x)[-1] + function(x)
         )
 
     if jnp.isnan(total):

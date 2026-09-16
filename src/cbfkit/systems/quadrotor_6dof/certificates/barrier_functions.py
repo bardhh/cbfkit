@@ -199,4 +199,3 @@ def altitude(
         [h_func],
         [p_func],
     )
-

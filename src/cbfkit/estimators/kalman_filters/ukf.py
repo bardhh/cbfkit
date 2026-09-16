@@ -10,7 +10,9 @@ from cbfkit.utils.user_types import DynamicsCallable, EstimatorCallable, Time
 
 def ct_ukf_dtmeas(
     Q: Array, R: Array, dynamics: DynamicsCallable, h: Callable, dt: float
-) -> EstimatorCallable:
+) -> Callable[
+    [Time, Array, Optional[Array], Optional[Array], Optional[Array]], Tuple[Array, Array]
+]:
     """Function defining the continuous-time UKF with discrete-time measurements.
 
     Arguments:

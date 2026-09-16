@@ -13,8 +13,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       JAX_PLATFORM_NAME: cpu
+      UV_PYTHON: ${{ matrix.python-version }}
+      MUJOCO_GL: egl
       UV_CACHE_DIR: /tmp/.uv-cache
       JAX_COMPILATION_CACHE_DIR: /tmp/jax_cache
       JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: "0"
@@ -43,40 +46,46 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-py${{ matrix.python-version }}-jax-
     - name: Install dependencies
-      env:
-        UV_SYSTEM_PYTHON: 1
       run: |
-        pip install uv
+        pip install uv==0.9.12
         if [ "${{ matrix.python-version }}" == "3.10" ]; then
-          uv pip install -e ".[dev,mujoco]" ruff mypy
+          uv sync --python "${{ matrix.python-version }}" --locked --extra dev --extra mujoco
         else
-          uv pip install -e ".[dev]"
+          uv sync --python "${{ matrix.python-version }}" --locked --extra dev
         fi
     - name: Lint with ruff
       if: matrix.python-version == '3.10'
-      env:
-        UV_SYSTEM_PYTHON: 1
       run: |
-        ruff check src
+        uv run --no-sync ruff check src/cbfkit
+        uv run --no-sync black --check src/cbfkit
+        uv run --no-sync isort --check-only src/cbfkit
     - name: Type check with mypy
       if: matrix.python-version == '3.10'
-      env:
-        UV_SYSTEM_PYTHON: 1
       run: |
-        mypy src/cbfkit || true
+        uv run --no-sync mypy src/cbfkit
     - name: Test with pytest
       run: |
-        pytest -m "not slow" tests
+        uv run --no-sync pytest -m "not slow" tests -ra --durations=15 --junitxml=test-results/fast.xml --cov=cbfkit.controllers --cov=cbfkit.optimization --cov=cbfkit.simulation --cov-report=xml
     - name: Test slow tests
       if: matrix.python-version == '3.10'
       env:
         CBFKIT_TEST_MODE: "1"
       run: |
-        pytest -m "slow" tests
+        uv run --no-sync pytest -m "slow" tests -ra --durations=15 --junitxml=test-results/slow.xml
+    - name: Upload test and coverage reports
+      if: always()
+      uses: actions/upload-artifact@v5
+      with:
+        name: tests-python-${{ matrix.python-version }}
+        path: |
+          test-results/
+          coverage.xml
+
 
   core-import:
     name: Slim-core import (no extras)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       JAX_PLATFORM_NAME: cpu
     steps:
@@ -97,7 +106,7 @@ jobs:
         from cbfkit.optimization.quadratic_program import get_solver
         get_solver("fast")
         get_solver("jaxopt")
-        heavy = {"casadi", "cvxopt", "kvxopt", "plotly", "torch", "gymnasium", "isaaclab"}
+        heavy = {"casadi", "cvxopt", "kvxopt", "plotly", "torch", "gymnasium", "isaaclab", "mujoco", "manim", "flax", "optax"}
         leaked = sorted(m for m in sys.modules if m.split(".")[0] in heavy)
         assert not leaked, f"Heavy optional deps leaked into the default import: {leaked}"
         print("OK: default import surface does not load heavy optional runtimes.")
@@ -106,6 +115,7 @@ jobs:
   jax-floor:
     name: Core JAX minimum version
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       JAX_PLATFORM_NAME: cpu
     steps:
@@ -116,11 +126,12 @@ jobs:
     - name: Install the supported JAX floor
       run: pip install -e . pytest 'jax==0.4.23' 'jaxlib==0.4.23' 'numpy<2' 'scipy<1.13'
     - name: Test scalar and batched filters on the minimum version
-      run: pytest -q tests/test_wrappers/test_safety_filter.py tests/test_wrappers/test_batched_safety_filter.py tests/test_wrappers/test_warehouse_model.py
+      run: pytest -q tests/test_wrappers/test_safety_filter.py tests/test_wrappers/test_batched_safety_filter.py tests/test_wrappers/test_warehouse_model.py tests/test_optimization/test_solver_registry.py tests/test_certificates/test_packager.py tests/test_simulation/test_backend_parity.py tests/test_simulation/test_rng_consistency.py tests/test_monte_carlo_gpu.py
 
   torch-bridge:
     name: Optional PyTorch bridge (CPU)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       JAX_PLATFORM_NAME: cpu
     steps:
@@ -135,3 +146,48 @@ jobs:
     - name: Test batch isolation, bridge ownership, and command mappings
       run: |
         pytest -q tests/test_wrappers/test_batched_safety_filter.py tests/test_wrappers/test_torch_safety_filter.py tests/test_wrappers/test_warehouse_model.py tests/test_wrappers/test_isaac_quaternion_conventions.py tests/test_wrappers/test_warehouse_video.py
+
+  latest-dependencies:
+    name: Unlocked dependency compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      JAX_PLATFORM_NAME: cpu
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.12"
+    - run: pip install -e '.[dev]'
+    - run: pytest -m "not slow" tests -ra --durations=15
+
+  distribution:
+    name: Installed wheel and sdist
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JAX_PLATFORM_NAME: cpu
+      CBFKIT_ASSETS_OFFLINE: "1"
+      UV_PYTHON: "3.11"
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+    - run: |
+        pip install uv==0.9.12
+        uv sync --python 3.11 --locked --extra dev
+        uv run --no-sync python -m build
+        uv run --no-sync twine check dist/*
+    - name: Verify wheel outside checkout
+      run: |
+        python -m venv "$RUNNER_TEMP/wheel-env"
+        "$RUNNER_TEMP/wheel-env/bin/pip" install dist/*.whl 'mujoco==3.11.0'
+        cd "$RUNNER_TEMP"
+        "$RUNNER_TEMP/wheel-env/bin/python" "$GITHUB_WORKSPACE/scripts/check_installed_package.py" --mujoco
+    - name: Verify sdist outside checkout
+      run: |
+        python -m venv "$RUNNER_TEMP/sdist-env"
+        "$RUNNER_TEMP/sdist-env/bin/pip" install dist/*.tar.gz
+        cd "$RUNNER_TEMP"
+        "$RUNNER_TEMP/sdist-env/bin/python" "$GITHUB_WORKSPACE/scripts/check_installed_package.py"

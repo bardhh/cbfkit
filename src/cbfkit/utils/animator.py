@@ -1,12 +1,12 @@
 """Backward-compatible shim — all functionality lives in :mod:`cbfkit.utils.animators`."""
 
 from cbfkit.utils.animators import (  # noqa: F401
-    AnimationConfig,
-    CBFAnimator,
-    DEFAULT_CONFIG,
     _HAS_MANIM,
     _HAS_MATPLOTLIB,
     _HAS_PLOTLY,
+    DEFAULT_CONFIG,
+    AnimationConfig,
+    CBFAnimator,
     save_animation,
 )
 

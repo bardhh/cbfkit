@@ -16,35 +16,11 @@ def prng_key():
     return jax.random.PRNGKey(0)
 
 
-def _maybe_patch_default_qp_solver():
-    """When CBFKIT_QP_SOLVER is set, reroute get_solver('jaxopt') to that solver.
-
-    Used by the integration test suite to run every example/tutorial under
-    both jaxopt and the fast solver without modifying the scripts themselves.
-    """
-    target = os.environ.get("CBFKIT_QP_SOLVER", "").strip().lower()
-    if not target or target == "jaxopt":
+def pytest_sessionfinish(session, exitstatus):
+    """Dedicated integration lanes must execute their promised tests."""
+    if os.environ.get("CBFKIT_REQUIRE_NO_SKIPS") != "1":
         return
-
-    from cbfkit.optimization.quadratic_program import solver_registry as _sr
-
-    _orig = _sr.get_solver
-
-    def _patched(name: str = "jaxopt", **kwargs):
-        if name == "jaxopt":
-            try:
-                return _orig(target, **kwargs)
-            except TypeError:
-                return _orig(target)
-        return _orig(name, **kwargs)
-
-    _sr.get_solver = _patched
-    try:
-        from cbfkit.controllers.cbf_clf import cbf_clf_qp_generator as _gen
-
-        _gen.get_solver = _patched
-    except Exception:
-        pass
-
-
-_maybe_patch_default_qp_solver()
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None and reporter.stats.get("skipped"):
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        reporter.write_sep("=", "Required integration tests were skipped", red=True)

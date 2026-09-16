@@ -18,7 +18,7 @@ Usage::
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, cast
 
 import jax
 import jax.numpy as jnp
@@ -71,7 +71,7 @@ def create_neural_cbf(
     hidden_layers: Sequence[int] = (64, 64),
     activation: str = "tanh",
     key: Optional[Array] = None,
-) -> Tuple[dict, Callable[[Array], Array]]:
+) -> Tuple[Mapping[str, Any], Callable[[Array], Array]]:
     """Create a neural CBF model and return frozen parameters + callable.
 
     Args:
@@ -93,13 +93,13 @@ def create_neural_cbf(
     return params, make_cbf_callable(model, params)
 
 
-def make_cbf_callable(model: CBFNetwork, params: dict) -> Callable[[Array], Array]:
+def make_cbf_callable(model: CBFNetwork, params: Mapping[str, Any]) -> Callable[[Array], Array]:
     """Bind trained parameters to a model, returning ``h(x) -> scalar``.
 
     Use this after training to create a fresh callable from updated params.
     """
 
     def h_func(x: Array) -> Array:
-        return model.apply(params, x)
+        return cast(Array, model.apply(params, x))
 
     return h_func

@@ -253,7 +253,9 @@ class CrowdManager:
 
     def get_nominal_controller(
         self,
-        robot_nominal_controller: ControllerCallable,
+        robot_nominal_controller: Callable[
+            [Time, State, Optional[Control], Key, ControllerData], Tuple[Array, ControllerData]
+        ],
         use_augmented_state: bool = False,
     ) -> ControllerCallable:
         """
@@ -305,7 +307,7 @@ class CrowdManager:
             # Unpack inner data if present (e.g., PlannerData for MPPI)
             # We assume data is ControllerData.
             inner_data = None
-            if hasattr(data, "sub_data"):
+            if data.sub_data is not None:
                 inner_data = data.sub_data.get("inner_controller_data", None)
 
             # If inner_data is None, fall back to data (if it wasn't ControllerData, unlikely here)
@@ -339,19 +341,10 @@ class CrowdManager:
             # 4. Combine
             u_combined = jnp.concatenate([u_robot] + u_peds)
 
-            # Pack result into ControllerData
-            # If we started with ControllerData, preserve other fields
-            if hasattr(data, "sub_data"):
-                new_sub_data = data.sub_data.copy()
-                new_sub_data["inner_controller_data"] = robot_data
-                # Create new ControllerData preserving original structure (if NamedTuple, use _replace)
-                # JAX jit compatible way: _replace
-                return u_combined, data._replace(u=u_combined, sub_data=new_sub_data)
-            else:
-                # If data was None or something else, wrap it fresh
-                return u_combined, ControllerData(
-                    u=u_combined, sub_data={"inner_controller_data": robot_data}
-                )
+            # Preserve wrapper status even when its optional sub-data starts empty.
+            new_sub_data = {} if data.sub_data is None else data.sub_data.copy()
+            new_sub_data["inner_controller_data"] = robot_data
+            return u_combined, data._replace(u=u_combined, sub_data=new_sub_data)
 
         return combined_controller
 

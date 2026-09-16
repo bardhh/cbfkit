@@ -114,7 +114,7 @@ def visualize_crowd(
         )
 
     # MPPI planned path overlay
-    if p_keys and "x_traj" in p_keys:
+    if p_keys and p_values is not None and "x_traj" in p_keys:
         mppi_idx = p_keys.index("x_traj")
         anim.add_prediction(
             source="data",

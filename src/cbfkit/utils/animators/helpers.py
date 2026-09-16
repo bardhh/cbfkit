@@ -5,7 +5,7 @@ from typing import Optional
 
 import numpy as np
 
-from .config import AnimationConfig, DEFAULT_CONFIG
+from .config import DEFAULT_CONFIG, AnimationConfig
 from .deps import _require_matplotlib
 
 # Matplotlib short color names / tab palette -> CSS hex for Plotly
@@ -77,9 +77,15 @@ def _get_fading_segments(x, y):
     return segments, alphas
 
 
-def _circle_shape(cx: float, cy: float, r: float, color: str,
-                  alpha: float = 1.0, dash: str = "solid",
-                  fill: bool = True) -> dict:
+def _circle_shape(
+    cx: float,
+    cy: float,
+    r: float,
+    color: str,
+    alpha: float = 1.0,
+    dash: str = "solid",
+    fill: bool = True,
+) -> dict:
     """Build a Plotly layout circle shape dict."""
     css = _to_css_color(color)
     if fill:
@@ -88,9 +94,12 @@ def _circle_shape(cx: float, cy: float, r: float, color: str,
         fillcolor = "rgba(0,0,0,0)"
     return dict(
         type="circle",
-        xref="x", yref="y",
-        x0=cx - r, y0=cy - r,
-        x1=cx + r, y1=cy + r,
+        xref="x",
+        yref="y",
+        x0=cx - r,
+        y0=cy - r,
+        x1=cx + r,
+        y1=cy + r,
         line=dict(color=css, dash=dash, width=1),
         fillcolor=fillcolor,
         opacity=alpha,
@@ -104,8 +113,9 @@ _PLOTLY_FADE_BUCKETS = 4
 _SCATTER_ALPHA_FACTOR = 0.55
 
 
-def _compute_plotly_frame_step(dt: float, n_total: int, max_frames: int = 200,
-                               min_frame_ms: float = 40):
+def _compute_plotly_frame_step(
+    dt: float, n_total: int, max_frames: int = 200, min_frame_ms: float = 40
+):
     """Compute downsampled frame indices and duration for Plotly animations.
 
     Returns ``(frame_indices, frame_duration_ms)``.
@@ -121,16 +131,18 @@ def _compute_plotly_frame_step(dt: float, n_total: int, max_frames: int = 200,
     return frame_indices, frame_duration_ms
 
 
-def _plotly_animation_controls(frames, frame_duration_ms: float,
-                               button_y: float = -0.32,
-                               slider_y: float = -0.08):
+def _plotly_animation_controls(
+    frames, frame_duration_ms: float, button_y: float = -0.32, slider_y: float = -0.08
+):
     """Build Plotly ``updatemenus`` (play/pause) and ``sliders`` dicts."""
     updatemenus = [
         dict(
             type="buttons",
             showactive=False,
-            y=button_y, x=0.5,
-            xanchor="center", yanchor="top",
+            y=button_y,
+            x=0.5,
+            xanchor="center",
+            yanchor="top",
             direction="left",
             pad=dict(t=0, r=10),
             buttons=[
@@ -180,8 +192,10 @@ def _plotly_animation_controls(frames, frame_duration_ms: float,
                 )
                 for f in frames
             ],
-            x=0.1, len=0.8,
-            y=slider_y, yanchor="top",
+            x=0.1,
+            len=0.8,
+            y=slider_y,
+            yanchor="top",
             currentvalue=dict(prefix="Time: ", visible=True, xanchor="center"),
             transition=dict(duration=0),
         )

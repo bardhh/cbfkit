@@ -4,10 +4,10 @@ Provides ``execute()`` to run a full simulation pipeline:
 Planner -> Nominal Controller -> Safety Controller (CBF-CLF-QP) -> Plant Dynamics -> Integrator -> Sensor -> Estimator.
 """
 
-import warnings
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 import os
 import time
+import warnings
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -32,12 +32,13 @@ from cbfkit.utils.user_types import (
     StlTrajectoryCostCallable,
 )
 
+from ._setup import _validate_dynamics_shapes, validate_setup
 from .backend import stepper
 from .callbacks import LoggingCallback, ProgressCallback, SimulationCallback
-from .formatting import format_return_data
+from .formatting import format_bulk_log, format_return_data
 from .simulator_jit import INTEGRATION_NAN_ERROR, simulator_jit
 from .status import (
-    SOLVER_STATUS_MAP,  # noqa: F401  (re-exported; external code imports it from here)
+    SOLVER_STATUS_MAP,
     _check_simulation_status,
     _default_estimator,
     _default_perturbation,
@@ -266,39 +267,6 @@ def simulator(
     return simulate_iter
 
 
-def _validate_dynamics_shapes(x0: Array, f_check: Array, g_check: Array) -> None:
-    """Shape checks for the (f, g) returned by ``dynamics(x0)`` on the flat-state path."""
-    if f_check.shape != x0.shape:
-        msg = (
-            f"Shape mismatch: Initial state 'x0' has shape {x0.shape}, "
-            f"but dynamics drift 'f' has shape {f_check.shape}.\n"
-            "The state vector must match the dynamics output shape."
-        )
-        if x0.ndim == 2 and x0.shape[1] == 1 and f_check.ndim == 1:
-            msg += "\nTip: Pass a 1D array for 'x0' (e.g., use x0.ravel() or x0.flatten())."
-        elif x0.shape[0] < f_check.shape[0]:
-            msg += f"\nTip: System expects {f_check.shape[0]} states, but got {x0.shape[0]}."
-        raise ValueError(msg)
-
-    if f_check.ndim != 1:
-        msg = (
-            f"Dynamics function returned `f` with shape {f_check.shape}. "
-            "Expected 1D array (shape (n,)).\n"
-        )
-        if f_check.ndim == 2 and f_check.shape[1] == 1:
-            msg += (
-                "It appears `f` is a column vector (n, 1). "
-                "Please squeeze it to (n,) (e.g., using jnp.squeeze or .flatten())."
-            )
-        raise ValueError(msg)
-
-    if g_check.ndim != 2:
-        raise ValueError(
-            f"Dynamics function returned `g` with shape {g_check.shape}. "
-            "Expected 2D array (shape (n, m))."
-        )
-
-
 def execute(
     x0: State,
     dt: float,
@@ -403,46 +371,9 @@ def execute(
             - planner_keys (List[str]): Names of logged planner data fields.
             - planner_values (List[Array]): Logged planner data values.
     """
-    # Validate dynamics output — single call, reused for all checks
-    x0 = jnp.atleast_1d(jnp.asarray(x0))
-    if plant is not None:
-        if dynamics is not None or integrator is not None:
-            warnings.warn(
-                "plant= given: 'dynamics' and 'integrator' are ignored.", UserWarning, stacklevel=2
-            )
-        if x0.shape != (plant.state_dim,):
-            raise ValueError(
-                f"x0 has shape {x0.shape} but plant.state_dim is {plant.state_dim} "
-                f"(expected [qpos | qvel | com_xyz] for MujocoPlant)."
-            )
-        if abs(float(dt) - float(plant.dt)) > 1e-9:
-            raise ValueError(
-                f"dt={dt} must equal plant.dt={plant.dt} "
-                "(use MujocoPlant(substeps=...) to change it)."
-            )
-        if perturbation is not None:
-            raise NotImplementedError(
-                "perturbation is not supported on the plant path (v1); "
-                "use the plant's own domain randomisation."
-            )
-        if stl_trajectory_cost is not None:
-            raise NotImplementedError(
-                "stl_trajectory_cost requires the eager path, which is debug-only for plants."
-            )
-        g_check = None
-    elif dynamics is None or integrator is None:
-        raise ValueError("Either plant= or both dynamics= and integrator= must be given.")
-    else:
-        try:
-            f_check, g_check = dynamics(x0)
-        except Exception as e:
-            raise ValueError(
-                f"Dynamics evaluation failed for initial state 'x0' with shape {x0.shape}.\n"
-                f"Ensure 'x0' has the correct dimensions for the system.\n"
-                f"Original error: {e}"
-            ) from e
-
-        _validate_dynamics_shapes(x0, f_check, g_check)
+    x0, g_check = validate_setup(
+        x0, dt, dynamics, integrator, plant, perturbation, stl_trajectory_cost
+    )
 
     # Setup callbacks
     callbacks: List[SimulationCallback] = []
@@ -646,52 +577,7 @@ def execute(
         if logging_callback:
             logging_callback.on_start(num_steps, dt)
 
-            # Optimization (Bolt): Use bulk logging instead of per-step loop
-            c_keys = list(c_datas._fields)
-            p_keys = list(p_datas._fields)
-
-            log_dict = {
-                "state": list(np.array(xs)),
-                "control": list(np.array(us)),
-                "estimate": list(np.array(zs)),
-                "covariance": list(np.array(cs)),
-            }
-
-            def process_bulk_data(keys, data_obj, prefix):
-                for k in keys:
-                    val = getattr(data_obj, k)
-                    # val could be Array(T, ...), Dict[str, Array(T, ...)], or None
-                    if val is None:
-                        log_dict[f"{prefix}_{k}"] = [None] * num_steps
-                    elif isinstance(val, dict):
-                        # Unstack dict of arrays -> list of dicts
-                        # First convert to numpy to speed up iteration
-                        val_np = {}
-                        for sk, sv in val.items():
-                            try:
-                                if isinstance(sv, tuple):
-                                    val_np[sk] = list(zip(*sv))
-                                else:
-                                    val_np[sk] = list(np.array(sv))
-                            except Exception as exc:
-                                warnings.warn(
-                                    f"Could not convert sub-data field "
-                                    f"{prefix}.{k}.{sk!r} to numpy ({exc}); "
-                                    f"logging Nones for this field.",
-                                    RuntimeWarning,
-                                    stacklevel=2,
-                                )
-                                val_np[sk] = [None] * num_steps
-                        # zip now works on lists of values
-                        vals = [dict(zip(val_np.keys(), t)) for t in zip(*val_np.values())]
-                        log_dict[f"{prefix}_{k}"] = vals
-                    else:
-                        log_dict[f"{prefix}_{k}"] = list(np.array(val))
-
-            process_bulk_data(c_keys, c_datas, "controller")
-            process_bulk_data(p_keys, p_datas, "planner")
-
-            logging_callback.log_bulk(log_dict)
+            logging_callback.log_bulk(format_bulk_log(xs, us, zs, cs, c_datas, p_datas, num_steps))
             logging_callback.on_end(success=True)
 
         # Fast return path for JIT: Extract data directly from stacked arrays
@@ -793,16 +679,14 @@ def execute(
     ) = formatted_data
 
     # Check states for NaNs
-    nan_detected = False
-    if len(formatted_data.states) > 0:
-        nan_detected = jnp.any(jnp.isnan(formatted_data.states))
+    eager_nan_detected = bool(jnp.any(jnp.isnan(formatted_data.states)))
 
     _check_simulation_status(
         controller_data_keys,
         controller_data_values,
         planner_data_keys,
         planner_data_values,
-        nan_detected=bool(nan_detected),
+        nan_detected=eager_nan_detected,
     )
 
     return formatted_data

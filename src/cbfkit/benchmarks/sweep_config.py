@@ -89,8 +89,7 @@ def _parse_obstacles(raw_obstacles: dict) -> ObstaclesSpec:
     obs_type = raw_obstacles.get("type")
     if obs_type not in _VALID_OBSTACLE_TYPES:
         raise SweepConfigError(
-            f"obstacles.type must be one of {sorted(_VALID_OBSTACLE_TYPES)}, "
-            f"got: {obs_type!r}"
+            f"obstacles.type must be one of {sorted(_VALID_OBSTACLE_TYPES)}, " f"got: {obs_type!r}"
         )
 
     raw_items = raw_obstacles.get("items")
@@ -205,16 +204,12 @@ def load_sweep_config(path: str | Path) -> SweepConfig:
 
     sc_raw = sweep_block.get("safety_constraint")
     safety_constraint = (
-        SafetyConstraint(metric=sc_raw["metric"], max=float(sc_raw["max"]))
-        if sc_raw
-        else None
+        SafetyConstraint(metric=sc_raw["metric"], max=float(sc_raw["max"])) if sc_raw else None
     )
 
     # Accept both canonical names (falsifier/falsifier_metric) and legacy
     # aliases (skip_on_failure/failure_metric) for backward compatibility.
-    falsifier = sweep_block.get(
-        "falsifier", sweep_block.get("skip_on_failure", False)
-    )
+    falsifier = sweep_block.get("falsifier", sweep_block.get("skip_on_failure", False))
     falsifier_metric = sweep_block.get(
         "falsifier_metric", sweep_block.get("failure_metric", "safety_violations")
     )

@@ -32,7 +32,8 @@ def stepper(
         y = sensor()
 
         # Compute state estimate using estimator
-        z, p = estimator(t, y, z, u, p)
+        estimate = estimator(t, y, z, u, p)
+        z, p = estimate[:2]
 
         # Compute control input using controller
         # this is wrapped in a function to publish

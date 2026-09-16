@@ -40,6 +40,42 @@ def _feasible_problem_with_cost():
 
 
 class TestRegistry:
+    def test_override_preserves_factory_type_error(self, monkeypatch):
+        from cbfkit.optimization.quadratic_program import solver_registry
+
+        calls = []
+
+        def broken_factory(tol=1e-4):
+            calls.append(tol)
+            raise TypeError("internal factory failure")
+
+        monkeypatch.setitem(solver_registry._SOLVER_FACTORIES, "broken", broken_factory)
+        monkeypatch.setenv("CBFKIT_QP_SOLVER", "broken")
+        with pytest.raises(TypeError, match="internal factory failure"):
+            get_solver(tol=1e-3)
+        assert calls == [1e-3]
+
+    def test_override_warns_only_for_unsupported_options(self, monkeypatch):
+        from cbfkit.optimization.quadratic_program import solver_registry
+
+        received = []
+        sentinel = object()
+
+        def factory(tol=1e-4):
+            received.append(tol)
+            return sentinel
+
+        monkeypatch.setitem(solver_registry._SOLVER_FACTORIES, "limited", factory)
+        monkeypatch.setenv("CBFKIT_QP_SOLVER", "limited")
+        with pytest.warns(UserWarning, match="ignores unsupported options: max_iter"):
+            assert get_solver(tol=1e-3, max_iter=10) is sentinel
+        assert received == [1e-3]
+
+    def test_invalid_override_has_actionable_error(self, monkeypatch):
+        monkeypatch.setenv("CBFKIT_QP_SOLVER", "missing")
+        with pytest.raises(KeyError, match="Unknown QP solver.*Available"):
+            get_solver()
+
     def test_list_solvers(self):
         names = list_solvers()
         assert "jaxopt" in names

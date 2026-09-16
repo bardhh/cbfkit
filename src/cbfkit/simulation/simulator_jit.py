@@ -9,9 +9,9 @@ from jax import lax, random
 # Hermes: Error code for NaN detected during integration
 INTEGRATION_NAN_ERROR = -10
 
-from cbfkit.utils.jit_monitor import JitMonitor
 from cbfkit.simulation.integration_utils import integrate_with_cached_dynamics
 from cbfkit.simulation.utils import resolve_nominal_control
+from cbfkit.utils.jit_monitor import JitMonitor
 from cbfkit.utils.user_types import (
     ControllerCallable,
     ControllerData,
@@ -190,7 +190,9 @@ def _make_scan_step(
 
         # If NaN is detected, revert to previous state to freeze simulation at last valid
         # point. Hold the *carry leaf*; tree.map covers both the flat array and mjx.Data.
-        s_next = jax.tree.map(lambda a, b: jnp.where(nan_in_next, a, b), s, s_next_candidate)
+        s_next = jax.tree_util.tree_map(
+            lambda a, b: jnp.where(nan_in_next, a, b), s, s_next_candidate
+        )
 
         # If NaN is detected, force controller error to True.
         # This ensures the next iteration's 'stop' condition is triggered.

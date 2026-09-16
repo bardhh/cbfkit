@@ -52,7 +52,7 @@ def write_log(filepath: str, data: Union[List[LogEntry], Dict[str, Any]]) -> Non
     if isinstance(data, list):
         if not data:
             return
-        keys = data[0].keys()
+        keys = list(data[0].keys())
         with open(filepath, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=keys)
             writer.writeheader()
@@ -70,9 +70,9 @@ def write_log(filepath: str, data: Union[List[LogEntry], Dict[str, Any]]) -> Non
 
         rows = zip(*[data[k] for k in keys])
         with open(filepath, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(keys)
-            writer.writerows(rows)
+            row_writer = csv.writer(f)
+            row_writer.writerow(keys)
+            row_writer.writerows(rows)
     else:
         raise ValueError("data must be a list of dicts or a dict of lists")
 

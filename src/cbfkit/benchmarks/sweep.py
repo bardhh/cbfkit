@@ -25,9 +25,10 @@ from typing import Any
 import numpy as np
 from rich.console import Group
 from rich.live import Live
-from rich.progress import Progress
+from rich.progress import Progress, TaskID
 
-from ._progress import console as _console, make_progress as _make_progress
+from ._progress import console as _console
+from ._progress import make_progress as _make_progress
 from .metrics import summarize
 from .registry import BatchSweepableRunner, SweepableRunner
 from .sweep_viz import SweepViz
@@ -136,7 +137,7 @@ def _run_combo(
     falsifier: bool = False,
     falsifier_metric: str = "safety_violations",
     progress: Progress | None = None,
-    seed_task_id: int | None = None,
+    seed_task_id: TaskID | None = None,
     batch_runner: BatchSweepableRunner | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Run a single parameter combo across seeds.
@@ -228,8 +229,8 @@ def _process_combo(
     falsifier: bool,
     falsifier_metric: str,
     progress: Progress,
-    seed_task_id: int,
-    combo_task_id: int,
+    seed_task_id: TaskID,
+    combo_task_id: TaskID,
     batch_runner: BatchSweepableRunner | None,
     viz: SweepViz | None,
     live: Live | None,
@@ -315,13 +316,16 @@ def run_sweep(
             return Group(viz.render_header(), progress, viz.render())
         return progress
 
-    with Live(
-        _build_live_renderable(),
-        console=_console,
-        refresh_per_second=4,
-        transient=True,
-        vertical_overflow="visible",
-    ) as live, _quiet_stdout():
+    with (
+        Live(
+            _build_live_renderable(),
+            console=_console,
+            refresh_per_second=4,
+            transient=True,
+            vertical_overflow="visible",
+        ) as live,
+        _quiet_stdout(),
+    ):
         combo_task = progress.add_task("Combos", total=len(param_combos))
         seed_task = progress.add_task("  Seeds", total=len(seeds))
 
@@ -455,8 +459,8 @@ def run_optuna_sweep(
 
     progress = _make_progress()
     live_instance: Live | None = None
-    trial_task: int | None = None
-    seed_task: int | None = None
+    trial_task: TaskID | None = None
+    seed_task: TaskID | None = None
 
     def _build_live_renderable():
         if viz is not None:
@@ -464,6 +468,7 @@ def run_optuna_sweep(
         return progress
 
     def objective(trial) -> float:
+        assert seed_task is not None and trial_task is not None
         combo = {pname: _suggest_param(trial, pname, pspec) for pname, pspec in parameters.items()}
         param_combos.append(combo)
 
@@ -495,6 +500,7 @@ def run_optuna_sweep(
             summary_with_obj = dict(summary)
             summary_with_obj[objective_metric] = obj_val
             viz.add_result(combo, summary_with_obj)
+            assert live_instance is not None
             live_instance.update(_build_live_renderable())
 
         return obj_val
@@ -506,13 +512,16 @@ def run_optuna_sweep(
     sampler = optuna.samplers.TPESampler(seed=seed) if seed is not None else None
     study = optuna.create_study(direction=direction, sampler=sampler)
 
-    with Live(
-        _build_live_renderable(),
-        console=_console,
-        refresh_per_second=4,
-        transient=True,
-        vertical_overflow="visible",
-    ) as live, _quiet_stdout():
+    with (
+        Live(
+            _build_live_renderable(),
+            console=_console,
+            refresh_per_second=4,
+            transient=True,
+            vertical_overflow="visible",
+        ) as live,
+        _quiet_stdout(),
+    ):
         live_instance = live
         trial_task = progress.add_task("Trials", total=n_trials)
         seed_task = progress.add_task("  Seeds", total=len(seeds))

@@ -13,6 +13,8 @@ except ImportError:
     ca = None
 from jax import Array
 
+from cbfkit.utils.user_types.solvers import QpSolution
+
 
 def solve(
     h_mat: Array,
@@ -103,14 +105,12 @@ def solve_with_details(
     a_mat: Union[Array, None] = None,
     b_vec: Union[Array, None] = None,
     init_params: Any = None,
-):
+) -> QpSolution:
     """Solve a QP using CasADi/qpOASES, returning a unified :class:`QpSolution`.
 
     ``init_params`` is accepted for interface compatibility but ignored
     (CasADi does not support warm-starting).
     """
-    from cbfkit.optimization.quadratic_program.solver_registry import QpSolution
-
     primal, success = solve(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
     if not success:
         primal = jnp.zeros(len(f_vec))

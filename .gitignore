@@ -23,7 +23,6 @@ devel/
 
 # Distribution / packaging
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
@@ -127,7 +126,6 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 .venv
 env/
 venv/
@@ -170,7 +168,6 @@ tutorials/mppi_cbf_stl/
 # pyc files
 *.pyc
 tutorials/multi_augmented_single_integrators/
-tutorials/generated/
 strategy.md
 tasks.md
 tutorials/models
@@ -181,9 +178,6 @@ tutorials/multi_augmented_single_integrators
 examples/unicycle/reach_goal/results/bh_mppi_cbf_control.eps
 examples/unicycle/reach_goal/results/bh_mppi_cbf_control.mp4
 gemini.md
-examples/unicycle/reach_goal/results/bh_mppi_cbf_control.eps
-examples/unicycle/reach_goal/results/bh_mppi_cbf_control.mp4
-examples/unicycle/reach_goal/results/bh_mppi_cbf_control.eps
 examples/differential_drive/obstacle_avoidance/results/augmented_dynamic_animation.mp4
 tutorials/tutorials/van_der_pol_oscillator
 tutorials/tutorials/mppi_cbf_stl
@@ -211,10 +205,6 @@ examples/van_der_pol/regulation/perfect_state_measurements/test.py
 tutorials/test.py
 REFACTORING_REPORT.md
 examples/differential_drive/obstacle_avoidance/results/navigation_animation.mp4
-examples/unicycle/reach_goal/results/bh_mppi_cbf_control.eps
-examples/unicycle/reach_goal/results/bh_mppi_cbf_control.mp4
-examples/unicycle/reach_goal/results/bh_mppi_cbf_control.eps
-examples/unicycle/reach_goal/results/bh_mppi_cbf_control.mp4
 
 # JAX cache
 jax_cache/
@@ -231,3 +221,11 @@ results/
 
 # Local-only launch notes (not published to the repo)
 docs/launch/
+
+# Local orchestration/browser state and verified integration asset cache
+.omc/
+.playwright-mcp/
+.integration-assets/
+
+# Local agent implementation plans and session logs
+docs/superpowers/

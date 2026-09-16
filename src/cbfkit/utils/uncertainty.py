@@ -1,5 +1,5 @@
-from typing import Any, List, Optional, Tuple, Union
 import warnings
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 from numpy.random import Generator

@@ -9,27 +9,30 @@ repos:
         # README showcase recordings are the intentional large source assets.
         exclude: ^media/showcase/(warehouse-safety|g1_[a-z_]+)\.gif$
 
-  - repo: https://github.com/psf/black
-    rev: 25.11.0
-    hooks:
-      - id: black
-
-  - repo: https://github.com/pycqa/isort
-    rev: 7.0.0
-    hooks:
-      - id: isort
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.6
-    hooks:
-      - id: ruff
-
-
+  # Run the exact same pinned tools and source scope as CI. Run uv sync --locked --extra dev first.
   - repo: local
     hooks:
+      - id: black
+        name: black
+        entry: uv run --no-sync black --check src/cbfkit
+        language: system
+        pass_filenames: false
+        files: ^(src/cbfkit/|pyproject.toml)
+      - id: isort
+        name: isort
+        entry: uv run --no-sync isort --check-only src/cbfkit
+        language: system
+        pass_filenames: false
+        files: ^(src/cbfkit/|pyproject.toml)
+      - id: ruff
+        name: ruff
+        entry: uv run --no-sync ruff check src/cbfkit
+        language: system
+        pass_filenames: false
+        files: ^(src/cbfkit/|pyproject.toml)
       - id: mypy
         name: mypy
-        entry: mypy
+        entry: uv run --no-sync mypy src/cbfkit
         language: system
-        types: [python]
-        exclude: ^(examples/|tutorials/|tutorials/wip/|build/)
+        pass_filenames: false
+        files: ^(src/cbfkit/|mypy.ini|pyproject.toml)

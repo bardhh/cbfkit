@@ -394,6 +394,8 @@ class _ManimMixin:
     ``_compute_prediction``.
     """
 
+    _manim_quality: str | None
+
     def _build_manim(self):
         """Inject animator state into :class:`CBFAnimator2DScene`; return it."""
         _require_manim()

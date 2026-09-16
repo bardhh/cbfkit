@@ -15,7 +15,9 @@ def ct_ekf_dtmeas(
     h: Callable,
     dhdx: Callable,
     dt: float,
-) -> EstimatorCallable:
+) -> Callable[
+    [Time, Array, Optional[Array], Optional[Array], Optional[Array]], Tuple[Array, Array, Array]
+]:
     """Function defining the continuous-time EKF with discrete-time measurements.
 
     Arguments:

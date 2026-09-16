@@ -14,6 +14,7 @@ from cbfkit.simulation.monte_carlo_gpu import (
     MonteCarloGPUResults,
     MonteCarloSetup,
     conduct_monte_carlo_gpu,
+    conduct_monte_carlo_gpu_multiseed,
 )
 from cbfkit.simulation.safety_verification import SafetyStatistics, compute_safety_statistics
 from cbfkit.utils.user_types import CertificateCollection, ControllerData, PlannerData
@@ -108,6 +109,17 @@ def _build_test_setup(n_obstacles: int = 3) -> MonteCarloSetup:
 
 
 class TestConductMonteCarloGPU:
+    def test_multiseed_preserves_each_seed_trajectory_and_telemetry(self):
+        setup = _build_test_setup()
+        seeds = [3, 7]
+        batched = conduct_monte_carlo_gpu_multiseed(setup, n_trials=2, seeds=seeds)
+        assert len(batched) == len(seeds)
+        for seed, result in zip(seeds, batched):
+            scalar = conduct_monte_carlo_gpu(setup, n_trials=2, seed=seed)
+            assert jnp.allclose(result.states, scalar.states)
+            assert jnp.allclose(result.controls, scalar.controls)
+            assert jnp.array_equal(result.controller_datas.error, scalar.controller_datas.error)
+
     def test_output_shapes(self):
         setup = _build_test_setup()
         n_trials = 4
