@@ -98,7 +98,7 @@ dev = [
     "python-dotenv>=1.2.1",
     "mypy==1.18.2",
     "jupyter>=1.0.0,<2.0",
-    "ruff==0.14.6",
+    "ruff==0.16.7",
     "black==25.11.0",
     "isort==7.0.0",
     "pre-commit==4.3.0",
