@@ -789,6 +789,7 @@ def test_hud_cache_is_bounded_and_closes_what_it_evicts():
     showcase._HUD_CACHE.clear()
 
 
+@needs_ffmpeg
 def test_frame_writer_removes_a_half_written_file_on_error(tmp_path):
     out = tmp_path / "aborted.mp4"
     with pytest.raises(RuntimeError, match="boom"):

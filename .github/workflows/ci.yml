@@ -17,11 +17,12 @@ jobs:
     env:
       JAX_PLATFORM_NAME: cpu
       UV_PYTHON: ${{ matrix.python-version }}
-      MUJOCO_GL: egl
+      MUJOCO_GL: osmesa
       UV_CACHE_DIR: /tmp/.uv-cache
       JAX_COMPILATION_CACHE_DIR: /tmp/jax_cache
       JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: "0"
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
@@ -53,6 +54,17 @@ jobs:
         else
           uv sync --python "${{ matrix.python-version }}" --locked --extra dev
         fi
+    - name: Install headless MuJoCo rendering and video runtimes
+      if: matrix.python-version == '3.10'
+      run: |
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends -y libosmesa6 ffmpeg
+    - name: Verify video encoding before the full suites
+      if: matrix.python-version == '3.10'
+      env:
+        CBFKIT_REQUIRE_NO_SKIPS: "1"
+      run: |
+        uv run --no-sync pytest -q tests/test_mujoco/test_showcase.py::test_frame_writer_mp4 tests/test_mujoco/test_showcase.py::test_frame_writer_gif tests/test_mujoco/test_showcase_render.py::test_frame_writer_removes_a_half_written_file_on_error
     - name: Lint with ruff
       if: matrix.python-version == '3.10'
       run: |
@@ -64,8 +76,10 @@ jobs:
       run: |
         uv run --no-sync mypy src/cbfkit
     - name: Test with pytest
+      # Directory paths avoid coverage's package-import probe, which can load
+      # JAX's native runtime twice and abort before test collection.
       run: |
-        uv run --no-sync pytest -m "not slow" tests -ra --durations=15 --junitxml=test-results/fast.xml --cov=cbfkit.controllers --cov=cbfkit.optimization --cov=cbfkit.simulation --cov-report=xml
+        uv run --no-sync pytest -m "not slow" tests -ra --durations=15 --junitxml=test-results/fast.xml --cov=src/cbfkit/controllers --cov=src/cbfkit/optimization --cov=src/cbfkit/simulation --cov-report=xml
     - name: Test slow tests
       if: matrix.python-version == '3.10'
       env:
