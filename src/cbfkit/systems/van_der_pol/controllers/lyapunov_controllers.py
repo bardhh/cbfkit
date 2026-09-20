@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional
 
 import jax.numpy as jnp
-from jax import Array, jit, scipy
+from jax import jit, scipy
 
 from cbfkit.utils.user_types import (
     Control,

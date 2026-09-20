@@ -2,7 +2,6 @@
 
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
-import jax
 import jax.numpy as jnp
 from jax import Array, random
 

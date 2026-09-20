@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Tuple, Union, cast
+from typing import Callable, Optional, Tuple
 
 import jax.numpy as jnp
 from jax import Array

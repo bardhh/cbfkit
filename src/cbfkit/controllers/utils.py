@@ -4,7 +4,7 @@ This module provides utility functions for creating and managing controllers.
 """
 
 import inspect
-from typing import Any, Callable, Literal, Optional, Tuple
+from typing import Any, Callable, Literal, Optional, Tuple, cast
 
 from jax import Array
 
@@ -86,7 +86,7 @@ def setup_nominal_controller(
             ret = controller_func(t, x, key, ref)
             if isinstance(ret, tuple) and len(ret) == 2:
                 # Assume it's (u, data)
-                return ret  # type: ignore
+                return cast(Tuple[Array, ControllerData], ret)
             return ret, ControllerData(u_nom=ret)
 
         return nominal_controller_4
@@ -138,7 +138,7 @@ def setup_controller(
     if signature not in {"auto", "key_data", "nominal_key"}:
         raise ValueError(f"Unknown controller signature {signature!r}")
     if signature == "auto" and getattr(controller_func, "__cbfkit_controller_adapter__", False):
-        return controller_func  # type: ignore[return-value]
+        return cast(ControllerCallable, controller_func)
 
     try:
         sig = inspect.signature(controller_func)
@@ -164,7 +164,7 @@ def setup_controller(
             ret = controller_func(t, x)
             return _normalize_controller_return(ret, u_nom)
 
-        wrapped_controller_2.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+        setattr(wrapped_controller_2, "__cbfkit_controller_adapter__", True)
         return wrapped_controller_2
 
     if num_args == 3:
@@ -179,7 +179,7 @@ def setup_controller(
             ret = controller_func(t, x, u_nom)
             return _normalize_controller_return(ret, u_nom)
 
-        wrapped_controller_3.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+        setattr(wrapped_controller_3, "__cbfkit_controller_adapter__", True)
         return wrapped_controller_3
 
     if num_args == 4:
@@ -204,7 +204,7 @@ def setup_controller(
                 ret = controller_func(t, x, key, data)
                 return _normalize_controller_return(ret, u_nom)
 
-            wrapped_controller_4_key_data.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+            setattr(wrapped_controller_4_key_data, "__cbfkit_controller_adapter__", True)
             return wrapped_controller_4_key_data
 
         def wrapped_controller_4_u_key(
@@ -217,7 +217,7 @@ def setup_controller(
             ret = controller_func(t, x, u_nom, key)
             return _normalize_controller_return(ret, u_nom)
 
-        wrapped_controller_4_u_key.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+        setattr(wrapped_controller_4_u_key, "__cbfkit_controller_adapter__", True)
         return wrapped_controller_4_u_key
 
     if num_args == 5:
@@ -232,7 +232,7 @@ def setup_controller(
             ret = controller_func(t, x, u_nom, key, data)
             return _normalize_controller_return(ret, u_nom)
 
-        wrapped_controller_5.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
+        setattr(wrapped_controller_5, "__cbfkit_controller_adapter__", True)
         return wrapped_controller_5
 
     raise ValueError(

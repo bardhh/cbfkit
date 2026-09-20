@@ -1,7 +1,7 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import jax.numpy as jnp
-from jax import Array, jit, random
+from jax import Array, random
 
 from cbfkit.utils.user_types import (
     Control,

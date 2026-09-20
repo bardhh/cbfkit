@@ -1,8 +1,8 @@
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, cast
+from typing import Callable, List, Optional, Protocol, Tuple, cast
 
 import jax.numpy as jnp
-from jax import Array, jit, lax, vmap
+from jax import Array, jit
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,

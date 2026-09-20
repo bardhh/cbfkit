@@ -1,12 +1,13 @@
 """Internal output helpers; public API is cbfkit.systems.mujoco.showcase."""
 
+import math
 import os
 import shutil
 import subprocess
 import tempfile
 from importlib.util import find_spec
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import BinaryIO, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -150,7 +151,8 @@ class FrameWriter:
     can be resampled to a smaller file.
 
     Frames must all be the same size; an odd width or height is padded by one pixel
-    because ``yuv420p`` needs even dimensions.
+    because ``yuv420p`` needs even dimensions. ``timeout`` bounds encoder shutdown
+    and GIF conversion (seconds); it does not limit the duration of a streaming session.
     """
 
     def __init__(
@@ -163,9 +165,13 @@ class FrameWriter:
         gif_width: int = 480,
         gif_colors: int = 64,
         gif_fps: Optional[float] = None,
+        timeout: float = 30.0,
     ) -> None:
         if kind not in ("mp4", "gif"):
             raise ValueError(f"kind must be 'mp4' or 'gif', got {kind!r}")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be finite and positive")
+        self.timeout = timeout
         self.path = Path(path)
         self.fps = float(fps)
         self.kind = kind
@@ -175,7 +181,8 @@ class FrameWriter:
         self.gif_fps = None if gif_fps is None else float(gif_fps)
         self.n_frames = 0
         self._size: Optional[Tuple[int, int]] = None
-        self._proc: Optional[subprocess.Popen] = None
+        self._proc: Optional[subprocess.Popen[bytes]] = None
+        self._stderr: Optional[BinaryIO] = None
         self._tmp: Optional[Path] = None
         self._closed = False
 
@@ -220,7 +227,18 @@ class FrameWriter:
             f"{self.fps:g}",
             str(self._target()),
         ]
-        self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        # A file cannot fill a pipe and deadlock the encoder while we write frames.
+        self._stderr = tempfile.TemporaryFile()
+        try:
+            self._proc = subprocess.Popen(
+                cmd, stdin=subprocess.PIPE, stderr=self._stderr, bufsize=0
+            )
+        except OSError:
+            self._stderr.close()
+            self._stderr = None
+            self._remove_partial()
+            self._closed = True
+            raise
 
     def _gif_pass(self, src: Path) -> None:
         # The time-compressed stream runs at ``fps * speed``; ``gif_fps`` resamples that to a
@@ -238,7 +256,10 @@ class FrameWriter:
                 [ffmpeg_exe(), "-y", "-v", "error", "-i", str(src), "-vf", vf, str(self.path)],
                 check=True,
                 capture_output=True,
+                timeout=self.timeout,
             )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"ffmpeg GIF pass timed out for {self.path}") from exc
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or b"").decode(errors="replace")[:2000]
             raise RuntimeError(
@@ -259,52 +280,99 @@ class FrameWriter:
         h, w = frame.shape[:2]
         if self._size is None:
             self._size = (w, h)
-            self._start(w, h)
+            try:
+                self._start(w, h)
+            except BaseException:
+                self._abort()
+                raise
         elif self._size != (w, h):
             raise ValueError(f"frame size changed from {self._size} to {(w, h)}")
         assert self._proc is not None and self._proc.stdin is not None
         try:
-            self._proc.stdin.write(frame.tobytes())
+            # Unbuffered writes can be short; send the complete frame.
+            remaining = memoryview(frame.tobytes())
+            while remaining:
+                written = self._proc.stdin.write(remaining)
+                if not written:
+                    raise BrokenPipeError("encoder stopped accepting frames")
+                remaining = remaining[written:]
         except BrokenPipeError as exc:
             # ffmpeg died mid-stream; its stderr says why, and without it the traceback is
             # just "broken pipe" on frame N.
-            raise RuntimeError(f"ffmpeg exited while writing {self.path}: {self._drain()}") from exc
+            self._abort()
+            raise RuntimeError(
+                f"ffmpeg exited while writing {self.path}: {self._error_detail}"
+            ) from exc
         self.n_frames += 1
 
-    def _drain(self) -> str:
-        """Whatever ffmpeg wrote to stderr, once it has exited."""
-        if self._proc is None:
+    def _diagnostics(self) -> str:
+        if self._stderr is None:
             return ""
+        self._stderr.seek(0)
+        return self._stderr.read(2000).decode(errors="replace")
+
+    def _stop(self) -> None:
+        """Reap the child, escalating from terminate to kill with bounded waits."""
+        if self._proc is None or self._proc.poll() is not None:
+            return
+        self._proc.terminate()
         try:
-            err = self._proc.stderr.read() if self._proc.stderr is not None else b""
-            self._proc.wait(timeout=10)
-        except (OSError, ValueError, subprocess.TimeoutExpired):  # pragma: no cover - defensive
-            return ""
-        return err.decode(errors="replace")[:2000]
+            self._proc.wait(timeout=self.timeout)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
+            self._proc.wait(timeout=self.timeout)
+
+    def _release(self) -> None:
+        if self._proc is not None and self._proc.stdin is not None:
+            self._proc.stdin.close()
+        if self._stderr is not None:
+            self._stderr.close()
+            self._stderr = None
+        if self._tmp is not None:
+            self._tmp.unlink(missing_ok=True)
+
+    def _remove_partial(self) -> None:
+        if self._tmp is not None:
+            self._tmp.unlink(missing_ok=True)
+        # Do not remove a pre-existing target if no encoder was ever started.
+        if self._proc is not None:
+            self.path.unlink(missing_ok=True)
+
+    def _abort(self) -> None:
+        self._closed = True
+        try:
+            self._stop()
+        finally:
+            self._error_detail = self._diagnostics()
+            try:
+                self._remove_partial()
+            finally:
+                self._release()
 
     def close(self) -> str:
-        """Finish the encode (and the GIF palette pass) and return the output path."""
+        """Finish encoding; ``timeout`` bounds shutdown and the GIF palette pass."""
         if self._closed:
             return str(self.path)
         self._closed = True
-        if self._proc is None:
-            raise RuntimeError(f"no frames were added, nothing to write to {self.path}")
-        assert self._proc.stdin is not None
         try:
+            if self._proc is None:
+                raise RuntimeError(f"no frames were added, nothing to write to {self.path}")
+            assert self._proc.stdin is not None
             self._proc.stdin.close()
-        except BrokenPipeError as exc:
-            raise RuntimeError(f"ffmpeg exited while closing {self.path}: {self._drain()}") from exc
-        err = self._proc.stderr.read() if self._proc.stderr is not None else b""
-        code = self._proc.wait()
-        if code != 0:
-            raise RuntimeError(f"ffmpeg failed ({code}): {err.decode(errors='replace')[:2000]}")
-        try:
+            try:
+                code = self._proc.wait(timeout=self.timeout)
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError(f"ffmpeg timed out while closing {self.path}") from exc
+            if code != 0:
+                raise RuntimeError(f"ffmpeg failed ({code}): {self._diagnostics()}")
             if self.kind == "gif":
                 assert self._tmp is not None
                 self._gif_pass(self._tmp)
+        except BaseException:
+            self._abort()
+            raise
         finally:
-            if self._tmp is not None and self._tmp.exists():
-                self._tmp.unlink()
+            self._release()
         return str(self.path)
 
     def __enter__(self) -> "FrameWriter":
@@ -312,17 +380,10 @@ class FrameWriter:
 
     def __exit__(self, exc_type, exc, tb) -> None:
         if exc_type is not None:
-            if self._proc is not None and self._proc.stdin is not None:
-                try:
-                    self._proc.stdin.close()
-                except BrokenPipeError:  # ffmpeg already gone
-                    pass
-                self._proc.wait()
-            self._closed = True
-            if self._tmp is not None and self._tmp.exists():
-                self._tmp.unlink()
-            # A half-written file is worse than none: a later run would read it as a result.
-            if self.path.exists():
-                self.path.unlink()
-            return
-        self.close()
+            # Preserve the user's original error even if process cleanup also fails.
+            try:
+                self._abort()
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        else:
+            self.close()

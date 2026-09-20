@@ -117,27 +117,3 @@ def cbf_hess(state: Array, *, obstacle: Array, r: float, tfuture: float) -> Arra
 # Future-Focused CBF (Constant Velocity)
 ###############################################################################
 obstacle_ff = certificate_package(cbf, cbf_grad, cbf_hess, N)
-
-
-# def obstacle_ff(obstacle: Array, r: float, tfuture: float) -> BarrierTuple:
-#     """Function for packaging and later creating ff-CBF executables.
-
-#     Args:
-#         obstacle (Array): _description_
-#         r (float): _description_
-#         tfuture (float): _description_
-
-#     Returns:
-#         BarrierTuple: _description_
-#     """
-#     b_func: BarrierCallable = lambda t, x: cbf(jnp.hstack([x, t]), obstacle, r, tfuture)  # type: ignore[return-value]
-#     j_func: BarrierJacobianCallable = lambda t, x: cbf_grad(jnp.hstack([x, t]), obstacle, r, tfuture)[:N]  # type: ignore[return-value]
-#     h_func: BarrierHessianCallable = lambda t, x: cbf_hess(jnp.hstack([x, t]), obstacle, r, tfuture)[:N, :N]  # type: ignore[return-value]
-#     p_func: BarrierPartialCallable = lambda t, x: cbf_grad(jnp.hstack([x, t]), obstacle, r, tfuture)[-1]  # type: ignore[return-value]
-
-#     return (
-#         b_func,
-#         j_func,
-#         h_func,
-#         p_func,
-#     )

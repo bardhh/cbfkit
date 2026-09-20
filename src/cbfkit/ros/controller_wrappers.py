@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Optional, Tuple, cast
+from typing import Callable, Dict, Optional, Tuple
 
 import rospy
 from jax import Array

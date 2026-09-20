@@ -8,7 +8,7 @@ This policy models pedestrian behavior based on two main forces:
 The policy returns the acceleration input for a single integrator pedestrian model.
 """
 
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Optional
 
 import jax
 import jax.numpy as jnp

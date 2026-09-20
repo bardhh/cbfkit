@@ -6,11 +6,17 @@ This is a filter microbenchmark, not an Isaac Lab robot benchmark.
 
 import argparse
 import json
+import sys
 import time
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+
+try:
+    import resource
+except ImportError:  # Windows has no getrusage; report unavailable rather than zero.
+    resource = None
 
 from cbfkit.certificates import generate_certificate
 from cbfkit.certificates.conditions.barrier_conditions.zeroing_barriers import linear_class_k
@@ -35,6 +41,8 @@ def main():
     args = parser.parse_args()
     if args.steps <= 0:
         parser.error("--steps must be positive")
+    if any(batch <= 0 for batch in args.batches):
+        parser.error("--batches must be positive")
     for batch in args.batches:
         sf = BatchedSafetyFilter.from_cbf_qp(
             num_envs=batch,
@@ -76,11 +84,25 @@ def main():
                 return jax.block_until_ready(sf.filter(state, action))
 
         initial = prepare(x)
-        start = time.perf_counter()
-        # Compile cold and steady-state signatures before measurement.
-        for _ in range(2):
-            run(initial)
-        warmup = time.perf_counter() - start
+        compile_durations = []
+
+        def record_compile(event, duration, **metadata):
+            if event == "/jax/core/compile/backend_compile_duration":
+                compile_durations.append(duration)
+
+        # Older supported JAX releases cannot unregister a listener safely.
+        can_measure_compile = hasattr(jax.monitoring, "unregister_event_duration_listener")
+        if can_measure_compile:
+            jax.monitoring.register_event_duration_secs_listener(record_compile)
+        try:
+            start = time.perf_counter()
+            # Compile cold and steady-state signatures before measurement.
+            for _ in range(2):
+                run(initial)
+            warmup = time.perf_counter() - start
+        finally:
+            if can_measure_compile:
+                jax.monitoring.unregister_event_duration_listener(record_compile)
         durations, violations, failures = [], 0, 0
         for step in range(args.steps):
             # Vary the active bound to exercise changing QPs, outside timing.
@@ -98,6 +120,12 @@ def main():
             else:
                 failures += int(jnp.sum(info["fallback_used"]))
                 violations += int(jnp.sum(u[:, 0] + state[:, 0] < -1e-5))
+        # ru_maxrss is process-wide host memory, not GPU VRAM. Use a fresh process
+        # per batch for comparisons (see baseline.py).
+        peak_rss = None
+        if resource is not None:
+            peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            peak_rss *= 1 if sys.platform == "darwin" else 1024
         print(
             json.dumps(
                 dict(
@@ -111,6 +139,9 @@ def main():
                     filter_dtype=str(info["u_nom"].dtype).removeprefix("torch."),
                     output_dtype=str(u.dtype).removeprefix("torch."),
                     warmup_s=warmup,
+                    warmup_backend_compile_s=sum(compile_durations) if compile_durations else None,
+                    warmup_backend_compile_events=len(compile_durations),
+                    peak_process_rss_bytes=peak_rss,
                     mean_batch_ms=1000 * sum(durations) / len(durations),
                     p95_batch_ms=1000 * float(np.percentile(durations, 95)),
                     controls_per_second=batch * len(durations) / sum(durations),

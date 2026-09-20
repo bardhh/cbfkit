@@ -22,14 +22,8 @@ the geom *centre* above the floor, and the defaults stack in a fixed order so ov
 never z-fight: disc 4 mm, ellipse 5 mm, ring 6 mm, trail 8 mm, path 10 mm.
 """
 
-import os
-import shutil
-import subprocess
-import tempfile
-from collections import OrderedDict
-from importlib.util import find_spec
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Sequence, Tuple, Union
 
 import mujoco
 import numpy as np
@@ -287,17 +281,17 @@ def render_model(plant_kind: str, *, offline: bool = False, floor: str = "grid")
 from ._showcase_camera import (
     CameraSchedule,
 )
+from ._showcase_geometry import _AMBER as _AMBER
+from ._showcase_geometry import _GREEN as _GREEN
+from ._showcase_geometry import _RED as _RED
+from ._showcase_geometry import BEACON_POLE_ALPHA as BEACON_POLE_ALPHA
+from ._showcase_geometry import BEACON_POLE_HEIGHT as BEACON_POLE_HEIGHT
+from ._showcase_geometry import BEACON_POLE_RADIUS as BEACON_POLE_RADIUS
+from ._showcase_geometry import _connector as _connector
+from ._showcase_geometry import _init_geom as _init_geom
+from ._showcase_geometry import _rgb as _rgb
+from ._showcase_geometry import _rot_z as _rot_z
 from ._showcase_geometry import (
-    _AMBER,
-    _GREEN,
-    _RED,
-    BEACON_POLE_ALPHA,
-    BEACON_POLE_HEIGHT,
-    BEACON_POLE_RADIUS,
-    _connector,
-    _init_geom,
-    _rgb,
-    _rot_z,
     arrow,
     beacon,
     disc,
@@ -308,33 +302,35 @@ from ._showcase_geometry import (
     ring,
     trail,
 )
+from ._showcase_hud import _BAND_RGB as _BAND_RGB
+from ._showcase_hud import _DIM as _DIM
+from ._showcase_hud import _FONT as _FONT
+from ._showcase_hud import _GRID as _GRID
+from ._showcase_hud import _HUD_CACHE as _HUD_CACHE
+from ._showcase_hud import _HUD_CACHE_MAX as _HUD_CACHE_MAX
+from ._showcase_hud import _HUD_WINDOW_S as _HUD_WINDOW_S
+from ._showcase_hud import _INTERVENTION_FULL_SCALE as _INTERVENTION_FULL_SCALE
+from ._showcase_hud import _MAX_PILLS as _MAX_PILLS
+from ._showcase_hud import _MIN_PILL_SCALE as _MIN_PILL_SCALE
+from ._showcase_hud import _PILL_BG as _PILL_BG
+from ._showcase_hud import _PILL_X0 as _PILL_X0
+from ._showcase_hud import _PILL_X1 as _PILL_X1
+from ._showcase_hud import _PILL_Y_ROWS as _PILL_Y_ROWS
+from ._showcase_hud import _PILL_Y_SINGLE as _PILL_Y_SINGLE
+from ._showcase_hud import _TEXT as _TEXT
 from ._showcase_hud import (
-    _BAND_RGB,
-    _DIM,
-    _FONT,
-    _GRID,
-    _HUD_CACHE,
-    _HUD_CACHE_MAX,
-    _HUD_WINDOW_S,
-    _INTERVENTION_FULL_SCALE,
-    _MAX_PILLS,
-    _MIN_PILL_SCALE,
-    _PILL_BG,
-    _PILL_X0,
-    _PILL_X1,
-    _PILL_Y_ROWS,
-    _PILL_Y_SINGLE,
-    _TEXT,
     HudRenderer,
     hud_strip,
 )
 from ._showcase_output import (
     FrameWriter,
-    _dejavu_candidates,
-    _label_font,
-    compose_panels,
-    ffmpeg_exe,
 )
+from ._showcase_output import _dejavu_candidates as _dejavu_candidates
+from ._showcase_output import _label_font as _label_font
+from ._showcase_output import (
+    compose_panels,
+)
+from ._showcase_output import ffmpeg_exe as ffmpeg_exe
 
 
 # --------------------------------------------------------------------------- kinematics

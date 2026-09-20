@@ -9,7 +9,7 @@ The G1's 29 actuators are **position servos** (``<position kp="500">``), so a
 control vector is a joint-position target, not a torque.
 """
 
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 import jax
 import jax.numpy as jnp

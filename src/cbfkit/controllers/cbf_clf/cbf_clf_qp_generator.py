@@ -32,7 +32,6 @@ import jax.debug as jdebug
 import jax.numpy as jnp
 from jax import Array, jit, lax, tree_util
 
-from cbfkit.certificates import concatenate_certificates
 from cbfkit.optimization.quadratic_program.solver_registry import (
     get_solver,
 )
@@ -40,7 +39,6 @@ from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
     CbfClfQpData,
     CbfClfQpGenerator,
-    CertificateCollection,
     CertificateInput,
     Control,
     ControllerCallable,

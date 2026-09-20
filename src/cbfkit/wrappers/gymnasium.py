@@ -8,7 +8,7 @@ except ImportError as exc:
         "SafetyFilterWrapper requires gymnasium. " "Install with: pip install cbfkit[gymnasium]"
     ) from exc
 
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 import numpy as np
 

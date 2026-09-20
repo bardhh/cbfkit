@@ -10,7 +10,6 @@ import warnings
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
-import numpy as np
 from jax import Array, random
 
 from cbfkit.controllers.utils import setup_controller
@@ -32,13 +31,14 @@ from cbfkit.utils.user_types import (
     StlTrajectoryCostCallable,
 )
 
-from ._setup import _validate_dynamics_shapes, validate_setup
+from ._setup import _validate_dynamics_shapes as _validate_dynamics_shapes
+from ._setup import validate_setup as validate_setup
 from .backend import stepper
 from .callbacks import LoggingCallback, ProgressCallback, SimulationCallback
 from .formatting import format_bulk_log, format_return_data
 from .simulator_jit import INTEGRATION_NAN_ERROR, simulator_jit
+from .status import SOLVER_STATUS_MAP as SOLVER_STATUS_MAP
 from .status import (
-    SOLVER_STATUS_MAP,
     _check_simulation_status,
     _default_estimator,
     _default_perturbation,

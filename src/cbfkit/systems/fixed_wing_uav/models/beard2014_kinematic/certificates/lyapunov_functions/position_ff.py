@@ -88,26 +88,3 @@ def clf_hess(state: Array, goal: Array, T: float) -> Array:
 # Future-Focused CBF (Constant Velocity)
 ###############################################################################
 position_ff = certificate_package(clf, clf_grad, clf_hess, N)
-
-
-# def position_ff(goal: Array, T: float) -> LyapunovTuple:
-#     """Callable that generates Lyapunov function and its associated
-
-#     Args:
-#         goal (Array): goal position in inertial frame
-#         T (float): lookahead time horizon
-
-#     Returns:
-#         LyapunovTuple: _description_
-#     """
-#     v_func: LyapunovCallable = lambda t, x: V_posff(jnp.hstack([x, t]), goal, T)  # type: ignore[return-value]
-#     j_func: LyapunovJacobianCallable = lambda t, x: dV_posff_dx(jnp.hstack([x, t]), goal, T)[:N]  # type: ignore[return-value]
-#     h_func: LyapunovHessianCallable = lambda t, x: dV2_posff_dx2(jnp.hstack([x, t]), goal, T)[:N, :N]  # type: ignore[return-value]
-#     p_func: LyapunovPartialCallable = lambda t, x: dV_posff_dx(jnp.hstack([x, t]), goal, T)[-1]  # type: ignore[return-value]
-
-#     return (
-#         [v_func],
-#         [j_func],
-#         [h_func],
-#         [p_func],
-#     )

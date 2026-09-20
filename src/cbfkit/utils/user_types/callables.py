@@ -5,7 +5,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    List,
     Optional,
     Protocol,
     Tuple,
@@ -115,7 +114,7 @@ class DiscretePlant(Protocol):
 # warm-starting and returns a ``QpSolution`` (which supports tuple
 # unpacking as ``(primal, status, params)``).  Backends that do not
 # support warm-starting accept and ignore the argument.
-from .solvers import QpSolverCallable
+from .solvers import QpSolverCallable as QpSolverCallable
 
 if TYPE_CHECKING:
     from jaxopt._src.osqp import OSQPState

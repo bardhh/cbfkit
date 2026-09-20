@@ -18,7 +18,7 @@ Two tricks make this work with CBFKit's stock CBF-QP generator and barriers:
   free-joint position, not the CoM.
 """
 
-from typing import Any, Optional, Sequence, Tuple, cast
+from typing import Any, Sequence, Tuple, cast
 
 import jax.numpy as jnp
 from jax import Array

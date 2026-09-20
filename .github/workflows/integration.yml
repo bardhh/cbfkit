@@ -33,7 +33,7 @@ jobs:
       run: |
         python -c 'import os; assert os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") >= 24 * 2**30, "G1 MJX requires at least 24 GiB RAM"'
         pip install uv==0.9.12
-        uv sync --python 3.11 --locked --extra dev --extra mujoco
+        uv sync --python 3.11 --locked --extra test --extra mujoco
         uv pip install --python .venv/bin/python 'torch>=2.8' --index-url https://download.pytorch.org/whl/cpu
         uv pip install --python .venv/bin/python onnx onnxruntime
     - uses: actions/cache@v5

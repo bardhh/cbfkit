@@ -48,6 +48,7 @@ import mujoco
 import numpy as np
 from jax import Array
 
+from cbfkit.systems.mujoco._policy_commands import normalize_torso_command
 from cbfkit.systems.mujoco.assets import amo_dir
 from cbfkit.systems.mujoco.plant import MujocoPlant
 from cbfkit.systems.mujoco.unitree_policy import _wrap, _yaw, load_torchscript_tensors
@@ -415,19 +416,8 @@ class AmoWholeBodyPolicy:
         along the facing that the safety layer cannot model (a constant bump walked the
         corridor robot 0.6 m into a pedestrian's keep-out).
         """
-        import inspect
+        torso_fn = normalize_torso_command(torso_command, size=4)
 
-        if torso_command is None:
-            torso_fn = lambda t, x, sub: jnp.zeros(4)  # noqa: E731
-        elif callable(torso_command):
-            n_args = len(inspect.signature(torso_command).parameters)
-            if n_args >= 3:
-                torso_fn = torso_command
-            else:
-                torso_fn = lambda t, x, sub: torso_command(t)  # noqa: E731
-        else:
-            const = jnp.asarray(torso_command, dtype=float)
-            torso_fn = lambda t, x, sub: const  # noqa: E731
         r = AMO_COMMAND_RANGES
 
         def controller(t, x, u_nom, key, data):

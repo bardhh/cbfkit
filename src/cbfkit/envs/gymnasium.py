@@ -8,9 +8,8 @@ except ImportError as exc:
         "CBFKit environments require gymnasium. " "Install with: pip install cbfkit[gymnasium]"
     ) from exc
 
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
-import jax.numpy as jnp
 import numpy as np
 
 from cbfkit.certificates import concatenate_certificates, generate_certificate

@@ -1,6 +1,6 @@
 """Solver contracts shared by controller types and backend implementations."""
 
-from typing import Any, Callable, Optional, Protocol, Union, cast
+from typing import Any, Optional, Protocol, Union, cast
 
 from jax import Array
 
