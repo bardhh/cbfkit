@@ -128,9 +128,9 @@ def solver_stress(seed: int) -> dict:
         if k.endswith("solver_status"):
             status_key = k
 
-    avg_iter = 0.0
-    max_iter = 0.0
-    failures = 0
+    avg_iter = None
+    max_iter = None
+    failures = None
 
     if iter_key and len(values) > 0:
         idx = keys.index(iter_key)
@@ -153,6 +153,8 @@ def solver_stress(seed: int) -> dict:
         "avg_solver_iter": avg_iter,
         "max_solver_iter": max_iter,
         "solver_failures": failures,
-        "success": int(failures == 0),  # Simple success definition
+        "success": None if failures is None else int(failures == 0),
+        # This scenario measures solver behavior, not barrier violations.
+        "safety_violations": None,
         "final_dist": float(jnp.linalg.norm(results.states[-1, :2] - jnp.array([10.0, 10.0]))),
     }

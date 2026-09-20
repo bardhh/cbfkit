@@ -26,10 +26,10 @@ repos:
         files: ^(src/cbfkit/|pyproject.toml)
       - id: ruff
         name: ruff
-        entry: uv run --no-sync ruff check src/cbfkit
+        entry: uv run --no-sync ruff check src/cbfkit scripts tests/test_optimization tests/test_benchmarks
         language: system
         pass_filenames: false
-        files: ^(src/cbfkit/|pyproject.toml)
+        files: ^(src/cbfkit/|scripts/|tests/test_optimization/|tests/test_benchmarks/|pyproject.toml)
       - id: mypy
         name: mypy
         entry: uv run --no-sync mypy src/cbfkit

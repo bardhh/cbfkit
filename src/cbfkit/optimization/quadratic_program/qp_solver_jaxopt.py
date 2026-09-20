@@ -30,6 +30,8 @@ with warnings.catch_warnings():
 
 from cbfkit.utils.jit_monitor import JitMonitor
 
+from ._validation import validate_qp_shapes
+
 # Instantiate QP solver objects
 MAX_ITER = 10000
 QP = OSQP(maxiter=MAX_ITER, tol=1e-4)
@@ -121,6 +123,9 @@ def solve_inequality_constrained_qp(
     )
 
     # We return the raw status code to allow callers to inspect failure reason.
+    status = jnp.where(
+        (status == QpStatus.SOLVED) & ~jnp.all(jnp.isfinite(sol.primal)), QpStatus.UNSOLVED, status
+    )
     return QpSolution(primal=sol.primal, status=status, params=(sol, state))
 
 
@@ -151,33 +156,7 @@ def solve_with_details(
     """
     JitMonitor.increment("qp_solver_jaxopt.solve_with_details")
 
-    if f_vec.ndim != 1:
-        raise ValueError(
-            f"Linear cost 'f_vec' must be a 1D array of shape (n_vars,), but got {f_vec.shape}. "
-            "Ensure it is a flat array, not a column vector."
-        )
-    if h_mat.ndim != 2:
-        raise ValueError(
-            f"Quadratic cost 'h_mat' must be a 2D array of shape (n_vars, n_vars), but got {h_mat.shape}."
-        )
-    if h_vec is not None and h_vec.ndim != 1:
-        raise ValueError(
-            f"Inequality constraint bounds 'h_vec' must be a 1D array of shape (n_ineq,), but got {h_vec.shape}. "
-            "Ensure it is a flat array, not a column vector."
-        )
-    if g_mat is not None and g_mat.ndim != 2:
-        raise ValueError(
-            f"Inequality constraint matrix 'g_mat' must be a 2D array of shape (n_ineq, n_vars), but got {g_mat.shape}."
-        )
-    if b_vec is not None and b_vec.ndim != 1:
-        raise ValueError(
-            f"Equality constraint bounds 'b_vec' must be a 1D array of shape (n_eq,), but got {b_vec.shape}. "
-            "Ensure it is a flat array, not a column vector."
-        )
-    if a_mat is not None and a_mat.ndim != 2:
-        raise ValueError(
-            f"Equality constraint matrix 'a_mat' must be a 2D array of shape (n_eq, n_vars), but got {a_mat.shape}."
-        )
+    validate_qp_shapes(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
 
     params_obj = (h_mat, 0.5 * f_vec)
     params_eq = None if (a_mat is None or b_vec is None) else (a_mat, b_vec)

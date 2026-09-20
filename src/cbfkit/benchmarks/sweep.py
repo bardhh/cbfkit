@@ -29,7 +29,7 @@ from rich.progress import Progress, TaskID
 
 from ._progress import console as _console
 from ._progress import make_progress as _make_progress
-from .metrics import summarize
+from .metrics import metric_value, summarize
 from .registry import BatchSweepableRunner, SweepableRunner
 from .sweep_viz import SweepViz
 
@@ -121,10 +121,7 @@ def _resolve_falsifier_kwargs(
 
 def _is_failure(result: dict[str, Any], metric: str) -> bool:
     """Check if a result indicates a failure."""
-    val = result.get(metric, 0)
-    if isinstance(val, bool):
-        return val
-    return float(val) > 0
+    return metric_value(result, metric) > 0
 
 
 def _run_combo(
@@ -158,6 +155,8 @@ def _run_combo(
     # Use batch runner when available and falsifier is off
     if batch_runner is not None and not falsifier:
         batch_results = batch_runner(seeds, combo)
+        if len(batch_results) != len(seeds):
+            raise ValueError("Batch runner must return one result per requested seed.")
         for seed, result in zip(seeds, batch_results):
             result = dict(result)
             result["seed"] = seed
@@ -298,12 +297,18 @@ def run_sweep(
         Optional live visualization.  When provided the sweep renders a
         colour-coded results table and scatter plot in the terminal.
     """
+    if not seeds:
+        raise ValueError("A benchmark sweep requires at least one seed.")
+
     falsifier, falsifier_metric = _resolve_falsifier_kwargs(
         falsifier,
         falsifier_metric,
         skip_on_failure,
         failure_metric,
     )
+
+    if not param_combos:
+        raise ValueError("A benchmark sweep requires at least one parameter combination.")
 
     records: list[dict[str, Any]] = []
     per_combo_summaries: list[dict[str, Any]] = []
@@ -437,12 +442,18 @@ def run_optuna_sweep(
 
     Requires ``pip install cbfkit[optuna]``.
     """
+    if not seeds:
+        raise ValueError("A benchmark sweep requires at least one seed.")
+
     falsifier, falsifier_metric = _resolve_falsifier_kwargs(
         falsifier,
         falsifier_metric,
         skip_on_failure,
         failure_metric,
     )
+
+    if n_trials <= 0:
+        raise ValueError("An Optuna sweep requires at least one trial.")
 
     try:
         import optuna
@@ -490,10 +501,10 @@ def run_optuna_sweep(
         )
 
         summary = per_combo_summaries[-1]
-        obj_val = summary.get(objective_metric, 0.0)
+        obj_val = metric_value(summary, objective_metric)
         if safety_constraint is not None:
             sc_metric, sc_max = safety_constraint
-            if summary.get(sc_metric, 0.0) > sc_max:
+            if metric_value(summary, sc_metric) > sc_max:
                 obj_val = float("inf")
 
         if viz is not None:

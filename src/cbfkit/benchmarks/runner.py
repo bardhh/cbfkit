@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from ._progress import make_progress
-from .metrics import summarize
+from .metrics import metric_value, summarize
 from .registry import registry
 
 
@@ -18,24 +18,29 @@ from .registry import registry
 class BenchmarkRun:
     scenario: str
     seeds: Sequence[int]
-    records: list[dict[str, float | int | bool | str]]
-    summary: dict[str, float]
+    records: list[dict[str, float | int | bool | str | None]]
+    summary: dict[str, float | None]
 
 
 def _parse_seeds(seeds: str | Iterable[int]) -> list[int]:
     if isinstance(seeds, str):
         if ":" in seeds:
             start, end = seeds.split(":", maxsplit=1)
-            return list(range(int(start), int(end) + 1))
-        return [int(token) for token in seeds.split(",") if token]
-    return [int(seed) for seed in seeds]
+            parsed = list(range(int(start), int(end) + 1))
+        else:
+            parsed = [int(token) for token in seeds.split(",")]
+    else:
+        parsed = [int(seed) for seed in seeds]
+    if not parsed:
+        raise ValueError("A benchmark run requires at least one seed.")
+    return parsed
 
 
 def run_scenario(name: str, seeds: str | Iterable[int]) -> BenchmarkRun:
     parsed_seeds = _parse_seeds(seeds)
     spec = registry.scenario(name)
 
-    records: list[dict[str, float | int | bool | str]] = []
+    records: list[dict[str, float | int | bool | str | None]] = []
     with make_progress() as progress:
         task = progress.add_task(f"Seeds ({name})", total=len(parsed_seeds))
         for seed in parsed_seeds:
@@ -62,7 +67,9 @@ def write_artifacts(run: BenchmarkRun, output_dir: str | Path) -> None:
         "summary": run.summary,
         "records": run.records,
     }
-    (out / "results.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    (out / "results.json").write_text(
+        json.dumps(payload, indent=2, allow_nan=False), encoding="utf-8"
+    )
 
     keys = sorted({key for rec in run.records for key in rec.keys()})
     with (out / "records.csv").open("w", newline="", encoding="utf-8") as handle:
@@ -76,8 +83,8 @@ def compare_runs(
     right: BenchmarkRun,
     metric: str,
 ) -> dict[str, float]:
-    left_value = float(left.summary.get(metric, 0.0))
-    right_value = float(right.summary.get(metric, 0.0))
+    left_value = metric_value(left.summary, metric)
+    right_value = metric_value(right.summary, metric)
     return {
         "left": left_value,
         "right": right_value,

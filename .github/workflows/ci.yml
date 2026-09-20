@@ -24,7 +24,7 @@ jobs:
         pip install uv==0.9.12
         uv sync --python 3.10 --locked --extra quality --extra all --extra mujoco
     - run: |
-        uv run --no-sync ruff check src/cbfkit
+        uv run --no-sync ruff check src/cbfkit scripts tests/test_optimization tests/test_benchmarks
         uv run --no-sync black --check src/cbfkit
         uv run --no-sync isort --check-only src/cbfkit
         uv run --no-sync mypy src/cbfkit

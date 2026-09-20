@@ -294,16 +294,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "list":
-        return _cmd_list()
-    if args.command == "run":
-        return _cmd_run(args)
-    if args.command == "compare":
-        return _cmd_compare(args)
-    if args.command == "sweep":
-        return _cmd_sweep(args)
-    if args.command == "sweep-plot":
-        return _cmd_sweep_plot(args)
+    try:
+        if args.command == "list":
+            return _cmd_list()
+        if args.command == "run":
+            return _cmd_run(args)
+        if args.command == "compare":
+            return _cmd_compare(args)
+        if args.command == "sweep":
+            return _cmd_sweep(args)
+        if args.command == "sweep-plot":
+            return _cmd_sweep_plot(args)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     parser.error(f"Unsupported command: {args.command}")
     return 2

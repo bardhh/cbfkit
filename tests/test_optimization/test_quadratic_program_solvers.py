@@ -1,36 +1,8 @@
-"""
-Test Module for cbfkit.optimization.quadratic_program solvers.
+"""Legacy JAXopt tuple API regression tests.
 
-=========================
-
-This module contains unit tests for functionalities in 'quadratic_program'
-from 'cbfkit.optimization'.
-
-Tests
------
-The following test that the given solver correctly computes the solution,
-or lack thereof, of the posed optimization problem:
-- test_qp_cvxopt_feasible_inequality_only: feasible QP with inequality constraints
-- test_qp_jaxopt_feasible_inequality_only: feasible QP with inequality constraints
-- test_qp_casadi_feasible_inequality_only: feasible QP with inequality constraints
-- test_qp_cvxopt_feasible_equality_only: feasible QP with equality constraints
-- test_qp_jaxopt_feasible_iquality_only: feasible QP with equality constraints
-- test_qp_casadi_feasible_iquality_only: feasible QP with equality constraints
-- test_qp_cvxopt_feasible: feasible QP with inequality and equality constraints
-- test_qp_jaxopt_feasible: feasible QP with inequality and equality constraints
-- test_qp_casadi_feasible: feasible QP with inequality and equality constraints
-- test_qp_cvxopt_infeasible: infeasible QP with inequality and equality constraints
-- test_qp_jaxopt_infeasible: infeasible QP with inequality and equality constraints
-- test_qp_casadi_infeasible: infeasible QP with inequality and equality constraints
-
-Setup
------
-- No set up required
-
-Examples
---------
-To run all tests in this module (from the root of the repository):
-    $ python -m unittest tests.test_optimization.test_quadratic_program_solvers
+Registry backend parity, equality feasibility, and infeasibility are covered in
+``test_solver_convention_parity.py`` and ``test_solver_constraint_cases.py``.
+These tests retain coverage for the native JAXopt solve/solve_with_state APIs.
 """
 
 import os
@@ -53,55 +25,20 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
 
     eps = 1e-2
 
-    # def test_qp_cvxopt_feasible_inequality_only(self):
-    #     """Tests that the CVXOPT-based quadratic program solver computes
-    #     the correct solution for a sequence of problems with inequality constraints only."""
-    #     self._test_qp_feasible_inequality_only(qp_cvxopt.solve)
-
     def test_qp_jaxopt_feasible_inequality_only(self):
         """Tests that the JAXOPT-based quadratic program solver computes the correct solution for a
         sequence of problems with inequality constraints only."""
         self._test_qp_feasible_inequality_only(qp_jaxopt.solve)
-
-    # def test_qp_casadi_feasible_inequality_only(self):
-    #     """Tests that the Casadi-based quadratic program solver computes
-    #     the correct solution for a sequence of problems with inequality constraints only."""
-    #     self._test_qp_feasible_inequality_only(qp_casadi.solve)
-
-    # def test_qp_cvxopt_feasible_equality_only(self):
-    #     """Tests that the CVXOPT-based quadratic program solver computes the correct solution
-    #     for a sequence of problems with equality constraints only."""
-    #     self._test_qp_feasible_equality_only(qp_cvxopt.solve)
 
     def test_qp_jaxopt_feasible_equality_only(self):
         """Tests that the JAXOPT-based quadratic program solver computes the correct solution for a
         sequence of problems with equality constraints only."""
         self._test_qp_feasible_equality_only(qp_jaxopt.solve)
 
-    # def test_qp_casadi_feasible_equality_only(self):
-    #     """Tests that the Casadi-based quadratic program solver computes the correct solution
-    #     for a sequence of problems with equality constraints only."""
-    #     self._test_qp_feasible_equality_only(qp_casadi.solve)
-
-    # def test_qp_cvxopt_feasible(self):
-    #     """Tests that the CVXOPT-based quadratic program solver computes the correct solution
-    #     for a sequence of problems with both inequality and equality constraints."""
-    #     self._test_qp_feasible(qp_cvxopt.solve)
-
     def test_qp_jaxopt_feasible(self):
         """Tests that the JAXOPT-based quadratic program solver computes the correct solution for a
         sequence of problems with both inequality and equality constraints."""
         self._test_qp_feasible(qp_jaxopt.solve)
-
-    # def test_qp_casadi_feasible(self):
-    #     """Tests that the Casadi-based quadratic program solver computes the correct solution
-    #     for a sequence of problems with both inequality and equality constraints."""
-    #     self._test_qp_feasible(qp_casadi.solve)
-
-    # def test_qp_cvxopt_infeasible(self):
-    #     """Tests that the CVXOPT-based quadratic program solver correctly identifies that
-    #     the posed inequality/equality constrained problem is infeasible."""
-    #     self._test_qp_infeasible(qp_cvxopt.solve)
 
     def test_qp_jaxopt_infeasible(self):
         """Tests that the JAXOPT-based quadratic program solver correctly identifies that the posed
@@ -112,11 +49,6 @@ class TestQuadraticProgramSolvers(unittest.TestCase):
         """Tests that the JAXOPT-based quadratic program solver computes the correct solution
         and returns state when using solve_with_state."""
         self._test_qp_feasible_with_state(qp_jaxopt.solve_with_state)
-
-    # def test_qp_casadi_infeasible(self):
-    #     """Tests that the Casadi-based quadratic program solver correctly identifies that
-    #     the posed inequality/equality constrained problem is infeasible."""
-    #     self._test_qp_infeasible(qp_casadi.solve)
 
     def _test_qp_feasible_inequality_only(self, solver: QpSolverCallable):
         """Tests that the quadratic program solver computes the correct solution for a sequence of

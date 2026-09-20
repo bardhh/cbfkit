@@ -144,10 +144,14 @@ class SweepViz:
         self.n_seeds = n_seeds
 
     def add_result(self, combo: dict[str, Any], summary: dict[str, Any]) -> None:
+        val = summary.get(self.objective_metric)
+        if not isinstance(val, (int, float)):
+            raise ValueError(
+                f"Objective metric {self.objective_metric!r} is missing or unavailable."
+            )
         idx = len(self.trials)
         self.trials.append({"combo": dict(combo), "summary": dict(summary)})
-        val = summary.get(self.objective_metric, 0.0)
-        if summary.get("safety_violations", 0) == 0:
+        if summary.get("safety_violation_rate", summary.get("safety_violations")) == 0:
             self._safe_count += 1
         if not math.isfinite(val):
             return
@@ -260,8 +264,8 @@ class SweepViz:
         for i, trial in enumerate(self.trials):
             combo = trial["combo"]
             summary = trial["summary"]
-            obj_val = summary.get(self.objective_metric, 0.0)
-            violations = summary.get("safety_violations", 0)
+            obj_val = summary[self.objective_metric]
+            violations = summary.get("safety_violation_rate", summary.get("safety_violations"))
             safe = violations == 0
             color = _color_for_value(obj_val, lo, hi, self.direction)
             is_best = i == self._best_idx
@@ -301,11 +305,12 @@ class SweepViz:
                 row.append(Text("--", style="dim"))
 
             # Safety with violation count
-            if safe:
+            if violations is None or not math.isfinite(violations):
+                row.append(Text("N/A", style="dim"))
+            elif safe:
                 row.append(Text("\u2713", style="green"))
             else:
-                count = int(violations) if isinstance(violations, (int, float)) else violations
-                row.append(Text(f"\u2717 {count}", style="red bold"))
+                row.append(Text(f"\u2717 {violations:g}", style="red bold"))
 
             table.add_row(*row)
 
@@ -374,7 +379,7 @@ class SweepViz:
         W, H = 50, 15
         xs = [float(t["combo"][x_param]) for t in self.trials]
         ys = [float(t["combo"][y_param]) for t in self.trials]
-        objs = [t["summary"].get(self.objective_metric, 0.0) for t in self.trials]
+        objs = [t["summary"][self.objective_metric] for t in self.trials]
 
         x_range = self._safe_range(min(xs), max(xs))
         y_range = self._safe_range(min(ys), max(ys))
@@ -403,7 +408,7 @@ class SweepViz:
     def _scatter_1d(self, x_param: str) -> Text:
         W, H = 50, 10
         xs = [float(t["combo"][x_param]) for t in self.trials]
-        objs = [t["summary"].get(self.objective_metric, 0.0) for t in self.trials]
+        objs = [t["summary"][self.objective_metric] for t in self.trials]
 
         if not math.isfinite(self._finite_lo):
             return Text("")
@@ -438,7 +443,7 @@ class SweepViz:
     def _scatter_convergence(self) -> Text:
         """Render a convergence plot: trial # on x-axis, best-so-far on y-axis."""
         W, H = 50, 12
-        objs = [t["summary"].get(self.objective_metric, 0.0) for t in self.trials]
+        objs = [t["summary"][self.objective_metric] for t in self.trials]
         if not math.isfinite(self._finite_lo):
             return Text("")
 
@@ -507,7 +512,7 @@ class SweepViz:
         if not self.trials:
             return Panel("No trials completed.", border_style="dim")
 
-        objs = [t["summary"].get(self.objective_metric, 0.0) for t in self.trials]
+        objs = [t["summary"][self.objective_metric] for t in self.trials]
         finite_objs = [o for o in objs if math.isfinite(o)]
 
         lines = []

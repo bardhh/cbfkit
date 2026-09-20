@@ -1,5 +1,4 @@
 
-import pytest
 import jax.numpy as jnp
 from jax import random
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
