@@ -1,9 +1,17 @@
 version: 2
 updates:
-  - package-ecosystem: "pip"
+  # Keep pyproject.toml and uv.lock in sync for CI's uv sync --locked.
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # These packages must be upgraded together to avoid incompatible pins.
+      mujoco:
+        applies-to: "version-updates"
+        patterns:
+          - "mujoco"
+          - "mujoco-mjx"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
