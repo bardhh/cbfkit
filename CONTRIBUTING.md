@@ -48,14 +48,18 @@ separate pytest processes and report that limitation.
 ## Linting, formatting and type checks
 
 ```bash
-uv run --no-sync ruff check src/cbfkit
+uv run --no-sync ruff check src/cbfkit scripts tests/test_optimization tests/test_benchmarks
 uv run --no-sync black --check src/cbfkit
 uv run --no-sync isort --check-only src/cbfkit
 uv run --no-sync mypy src/cbfkit
 uv run --no-sync pre-commit run --all-files
 ```
 
-All four source checks are blocking in CI and use the same scope in pre-commit. To apply
+Ruff also checks maintained scripts and the optimization/benchmark tests. Formatting
+and type checks remain scoped to the library; extend those checks to other test
+directories incrementally as they are maintained.
+
+All four checks are blocking in CI and use the same scope in pre-commit. To apply
 formatting, run `uv run --no-sync isort src/cbfkit` followed by
 `uv run --no-sync black src/cbfkit`. Ruff checks unused imports (F401); declare intentional
 re-exports with `__all__` or explicit aliases, and use a local suppression only for import
@@ -139,6 +143,14 @@ Reports include revision, dirty state, Python/JAX versions and platform; keep lo
 under ignored `results/`. Do not compare absolute times across different hardware or enforce
 noisy latency thresholds on shared CI runners. Compare safety failures and constraint
 violations alongside speed; the baseline command fails if either count is nonzero.
+
+For `cbfkit-bench` scenarios, every result must declare `success`, `safety_violations`,
+`solver_failures`, and `avg_step_ms`. Use `None` for an unavailable measurement;
+summaries preserve it as JSON `null`, including when only some seeds have a value.
+Missing required keys, non-finite values, and empty runs are errors. Comparisons,
+optimization objectives, and safety decisions require a measured, finite metric.
+Optional numeric metrics are collected across all records and remain unavailable
+when any seed lacks a measurement.
 
 ## Submitting a change
 

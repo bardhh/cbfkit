@@ -965,7 +965,6 @@ def render_fixed_wing_3d() -> str:
     """Fixed-wing UAV 3D reach-avoid — load cached pickle or run a short sim."""
     import pickle
 
-    import jax.numpy as jnp
     import matplotlib.pyplot as plt
     import numpy as np
     from matplotlib.animation import FuncAnimation, PillowWriter
