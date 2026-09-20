@@ -100,7 +100,7 @@ quality = [
     "black==25.11.0",
     "isort==7.0.0",
     "pre-commit==4.3.0",
-    "types-PyYAML==6.0.12.20250915",
+    "types-PyYAML==6.0.12.20260906",
 ]
 build = ["build>=1.0", "twine>=5.0"]
 dev = [
