@@ -96,7 +96,7 @@ test = ["pytest>=8.0.2", "pytest-cov", "python-dotenv>=1.2.1"]
 test-all = ["cbfkit[test]", "cbfkit[all]"]
 quality = [
     "mypy==1.18.2",
-    "ruff==0.14.6",
+    "ruff==0.16.8",
     "black==25.11.0",
     "isort==7.0.0",
     "pre-commit==4.3.0",
