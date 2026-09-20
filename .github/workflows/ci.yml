@@ -69,7 +69,7 @@ jobs:
         -ra --durations=15 --junitxml=test-results/core.xml
         --cov=src/cbfkit/controllers --cov=src/cbfkit/optimization
         --cov=src/cbfkit/simulation --cov-report=xml
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: core-python-${{ matrix.python-version }}
@@ -95,7 +95,7 @@ jobs:
     - run: >-
         uv run --no-sync pytest -m slow tests --ignore=tests/test_mujoco
         -ra --durations=15 --junitxml=test-results/examples.xml
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: examples
@@ -131,7 +131,7 @@ jobs:
     - run: >-
         uv run --no-sync pytest tests/test_mujoco
         -ra --durations=15 --junitxml=test-results/mujoco.xml
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: mujoco
