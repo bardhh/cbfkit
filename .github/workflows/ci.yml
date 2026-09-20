@@ -11,13 +11,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    name: Source quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.10"
+    - run: |
+        pip install uv==0.9.12
+        uv sync --python 3.10 --locked --extra quality --extra all --extra mujoco
+    - run: |
+        uv run --no-sync ruff check src/cbfkit
+        uv run --no-sync black --check src/cbfkit
+        uv run --no-sync isort --check-only src/cbfkit
+        uv run --no-sync mypy src/cbfkit
+
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       JAX_PLATFORM_NAME: cpu
       UV_PYTHON: ${{ matrix.python-version }}
-      MUJOCO_GL: osmesa
       UV_CACHE_DIR: /tmp/.uv-cache
       JAX_COMPILATION_CACHE_DIR: /tmp/jax_cache
       JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: "0"
@@ -25,76 +42,100 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-
     steps:
     - uses: actions/checkout@v6
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7
+    - uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Cache uv
-      uses: actions/cache@v5
+    - uses: actions/cache@v5
       with:
         path: /tmp/.uv-cache
         key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
         restore-keys: |
           ${{ runner.os }}-uv-
-    - name: Cache JAX compilation
-      uses: actions/cache@v5
+    - uses: actions/cache@v5
       with:
         path: /tmp/jax_cache
-        key: ${{ runner.os }}-py${{ matrix.python-version }}-jax-${{ hashFiles('src/**/*.py') }}
+        key: ${{ runner.os }}-py${{ matrix.python-version }}-jax-${{ hashFiles('uv.lock', 'src/**/*.py') }}
         restore-keys: |
           ${{ runner.os }}-py${{ matrix.python-version }}-jax-
-    - name: Install dependencies
-      run: |
+    - run: |
         pip install uv==0.9.12
-        if [ "${{ matrix.python-version }}" == "3.10" ]; then
-          uv sync --python "${{ matrix.python-version }}" --locked --extra dev --extra mujoco
-        else
-          uv sync --python "${{ matrix.python-version }}" --locked --extra dev
-        fi
-    - name: Install headless MuJoCo rendering and video runtimes
-      if: matrix.python-version == '3.10'
-      run: |
-        sudo apt-get update
-        sudo apt-get install --no-install-recommends -y libosmesa6 ffmpeg
-    - name: Verify video encoding before the full suites
-      if: matrix.python-version == '3.10'
-      env:
-        CBFKIT_REQUIRE_NO_SKIPS: "1"
-      run: |
-        uv run --no-sync pytest -q tests/test_mujoco/test_showcase.py::test_frame_writer_mp4 tests/test_mujoco/test_showcase.py::test_frame_writer_gif tests/test_mujoco/test_showcase_render.py::test_frame_writer_removes_a_half_written_file_on_error
-    - name: Lint with ruff
-      if: matrix.python-version == '3.10'
-      run: |
-        uv run --no-sync ruff check src/cbfkit
-        uv run --no-sync black --check src/cbfkit
-        uv run --no-sync isort --check-only src/cbfkit
-    - name: Type check with mypy
-      if: matrix.python-version == '3.10'
-      run: |
-        uv run --no-sync mypy src/cbfkit
-    - name: Test with pytest
-      # Directory paths avoid coverage's package-import probe, which can load
-      # JAX's native runtime twice and abort before test collection.
-      run: |
-        uv run --no-sync pytest -m "not slow" tests -ra --durations=15 --junitxml=test-results/fast.xml --cov=src/cbfkit/controllers --cov=src/cbfkit/optimization --cov=src/cbfkit/simulation --cov-report=xml
-    - name: Test slow tests
-      if: matrix.python-version == '3.10'
-      env:
-        CBFKIT_TEST_MODE: "1"
-      run: |
-        uv run --no-sync pytest -m "slow" tests -ra --durations=15 --junitxml=test-results/slow.xml
-    - name: Upload test and coverage reports
+        uv sync --python "${{ matrix.python-version }}" --locked --extra test-all
+    - name: Core regression tests
+      # Directory paths avoid coverage's package-import probe loading JAX twice.
+      run: >-
+        uv run --no-sync pytest -m "not slow" tests --ignore=tests/test_mujoco
+        -ra --durations=15 --junitxml=test-results/core.xml
+        --cov=src/cbfkit/controllers --cov=src/cbfkit/optimization
+        --cov=src/cbfkit/simulation --cov-report=xml
+    - uses: actions/upload-artifact@v5
       if: always()
-      uses: actions/upload-artifact@v5
       with:
-        name: tests-python-${{ matrix.python-version }}
+        name: core-python-${{ matrix.python-version }}
         path: |
           test-results/
           coverage.xml
 
+  examples:
+    name: Examples and slow core tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      JAX_PLATFORM_NAME: cpu
+      CBFKIT_TEST_MODE: "1"
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.10"
+    - run: |
+        pip install uv==0.9.12
+        uv sync --python 3.10 --locked --extra test-all
+    - run: >-
+        uv run --no-sync pytest -m slow tests --ignore=tests/test_mujoco
+        -ra --durations=15 --junitxml=test-results/examples.xml
+    - uses: actions/upload-artifact@v5
+      if: always()
+      with:
+        name: examples
+        path: test-results/
+
+  mujoco:
+    name: MuJoCo and rendering
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      JAX_PLATFORM_NAME: cpu
+      MUJOCO_GL: osmesa
+      CBFKIT_TEST_MODE: "1"
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.10"
+    - name: Install runtime and test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends -y libosmesa6 ffmpeg
+        pip install uv==0.9.12
+        uv sync --python 3.10 --locked --extra test --extra mujoco
+    - name: Verify rendering and video prerequisites
+      env:
+        CBFKIT_REQUIRE_NO_SKIPS: "1"
+      run: >-
+        uv run --no-sync pytest -q
+        tests/test_mujoco/test_showcase.py::test_frame_writer_mp4
+        tests/test_mujoco/test_showcase.py::test_frame_writer_gif
+        tests/test_mujoco/test_showcase_render.py::test_frame_writer_removes_a_half_written_file_on_error
+    - run: >-
+        uv run --no-sync pytest tests/test_mujoco
+        -ra --durations=15 --junitxml=test-results/mujoco.xml
+    - uses: actions/upload-artifact@v5
+      if: always()
+      with:
+        name: mujoco
+        path: test-results/
 
   core-import:
     name: Slim-core import (no extras)
@@ -172,7 +213,7 @@ jobs:
     - uses: actions/setup-python@v7
       with:
         python-version: "3.12"
-    - run: pip install -e '.[dev]'
+    - run: pip install -e '.[test-all]'
     - run: pytest -m "not slow" tests -ra --durations=15
 
   distribution:
@@ -190,7 +231,7 @@ jobs:
         python-version: "3.11"
     - run: |
         pip install uv==0.9.12
-        uv sync --python 3.11 --locked --extra dev
+        uv sync --python 3.11 --locked --extra build
         uv run --no-sync python -m build
         uv run --no-sync twine check dist/*
     - name: Verify wheel outside checkout

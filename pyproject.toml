@@ -91,20 +91,23 @@ all = [
     "cbfkit[codegen]",
 ]
 
-dev = [
-    "cbfkit[all]",
-    "pytest>=8.0.2",
-    "pytest-cov",
-    "python-dotenv>=1.2.1",
+# Focused environments for independent CI jobs and local development.
+test = ["pytest>=8.0.2", "pytest-cov", "python-dotenv>=1.2.1"]
+test-all = ["cbfkit[test]", "cbfkit[all]"]
+quality = [
     "mypy==1.18.2",
-    "jupyter>=1.0.0,<2.0",
     "ruff==0.14.6",
     "black==25.11.0",
     "isort==7.0.0",
     "pre-commit==4.3.0",
     "types-PyYAML==6.0.12.20250915",
-    "build>=1.0",
-    "twine>=5.0",
+]
+build = ["build>=1.0", "twine>=5.0"]
+dev = [
+    "cbfkit[test-all]",
+    "cbfkit[quality]",
+    "cbfkit[build]",
+    "jupyter>=1.0.0,<2.0",
 ]
 
 [build-system]
