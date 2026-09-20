@@ -55,7 +55,7 @@ jobs:
         uv run --no-sync pytest -ra --durations=15 --junitxml=test-results/g1.xml
         tests/test_mujoco/test_g1.py tests/test_mujoco/test_unitree_policy.py
         tests/test_mujoco/test_amo_policy.py tests/test_mujoco/test_groot_policy.py
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: g1-integration-results
@@ -77,7 +77,7 @@ jobs:
         python -c 'import jax, torch; assert torch.cuda.is_available(); assert any(d.platform == "gpu" for d in jax.devices())'
         python -m pip install --no-deps -e .
     - run: python -m pytest -ra --junitxml=test-results/cuda.xml tests/test_wrappers/test_torch_safety_filter.py
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: cuda-integration-results
