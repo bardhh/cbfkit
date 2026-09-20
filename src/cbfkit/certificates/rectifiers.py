@@ -53,7 +53,7 @@ from typing import Callable, List, Optional, Union, cast, overload
 
 import jax.numpy as jnp
 import numpy as np
-from jax import Array, jacfwd, jacrev, jit, random
+from jax import Array, jacfwd, jit, random
 
 from cbfkit.certificates import certificate_package
 from cbfkit.utils.user_types import (

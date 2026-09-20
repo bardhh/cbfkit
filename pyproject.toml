@@ -144,7 +144,7 @@ exclude = ["tutorials"]
 
 [tool.ruff.lint]
 select = ["E", "F"]
-ignore = ["D", "D104", "D401", "F401", "E402", "D205", "D209","E501"]
+ignore = ["D", "D104", "D401", "E402", "D205", "D209","E501"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

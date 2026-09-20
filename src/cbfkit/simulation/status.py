@@ -1,6 +1,6 @@
 """Simulation status checking, error formatting, and default callables."""
 
-from typing import Any, List, Optional
+from typing import Any, List
 
 import jax.numpy as jnp
 import numpy as np

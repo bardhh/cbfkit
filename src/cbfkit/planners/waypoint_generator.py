@@ -1,6 +1,6 @@
 """Functions for generating waypoint laws."""
 
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional
 
 import jax.numpy as jnp
 from jax import Array, jit

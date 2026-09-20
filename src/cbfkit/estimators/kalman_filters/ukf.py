@@ -5,7 +5,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from cbfkit.integration import forward_euler as integrate
-from cbfkit.utils.user_types import DynamicsCallable, EstimatorCallable, Time
+from cbfkit.utils.user_types import DynamicsCallable, Time
 
 
 def ct_ukf_dtmeas(

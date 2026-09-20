@@ -1,6 +1,6 @@
 """unpack.py."""
 
-from typing import Any, Dict
+from typing import Any
 
 import jax.numpy as jnp
 from jax import Array

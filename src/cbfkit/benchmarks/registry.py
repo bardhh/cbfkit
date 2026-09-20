@@ -14,7 +14,7 @@ __all__ = [
     "registry",
 ]
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
 
 BenchmarkResult = Mapping[str, float | int | bool | str]

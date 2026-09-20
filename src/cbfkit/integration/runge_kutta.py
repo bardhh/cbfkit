@@ -12,7 +12,7 @@ runge_kutta_4(x, vector_field, dt): Classical RK4 integration step.
 
 from typing import Callable
 
-from jax import Array, jit
+from jax import Array
 
 
 def runge_kutta_4(x: Array, vector_field: Callable[[Array], Array], dt: float) -> Array:

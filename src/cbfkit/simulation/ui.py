@@ -7,15 +7,12 @@ file logging (no ANSI codes).
 
 from __future__ import annotations
 
-from typing import Optional
-
 from rich.console import Console
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
     Progress,
     SpinnerColumn,
-    TaskID,
     TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,

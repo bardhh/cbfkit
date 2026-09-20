@@ -2,7 +2,6 @@
 
 from typing import Any, Callable, Tuple
 
-import jax.numpy as jnp
 from jax import Array
 
 from cbfkit.utils.user_types import (

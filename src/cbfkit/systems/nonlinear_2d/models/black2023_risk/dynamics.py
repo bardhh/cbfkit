@@ -1,9 +1,7 @@
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple
 
 import jax.numpy as jnp
 from jax import Array, jit
-
-from cbfkit.utils.user_types import DynamicsCallable
 
 
 def velocity_with_flow(

@@ -3,8 +3,6 @@ from typing import Callable, Optional, Tuple, Union
 import jax.numpy as jnp
 from jax import Array, jit
 
-from cbfkit.utils.user_types import DynamicsCallable, DynamicsCallableReturns
-
 g_accel = 9.81
 
 

@@ -38,29 +38,39 @@ Examples
 
 """
 
-from typing import Any, Callable, Dict, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union, cast
 
 import jax.numpy as jnp
 from jax import Array, grad, hessian, jit
 
 from cbfkit.utils.user_types import (
     EMPTY_CERTIFICATE_COLLECTION,
-    CertificateCallable,
     CertificateCollection,
     CertificateConditionsCallable,
-    CertificateHessianCallable,
     CertificateInputStyle,
-    CertificateJacobianCallable,
-    CertificatePartialCallable,
 )
+
+# Factories and direct functions both support state-only and (time, state) input.
+CertificateFunction = Callable[..., Array]
+CertificateFactory = Callable[..., CertificateFunction]
+CertificateSource = Union[CertificateFunction, CertificateFactory]
+
+
+def _resolve_function(
+    source: CertificateSource, use_factory: bool, kwargs: dict[str, Any]
+) -> CertificateFunction:
+    if use_factory:
+        return cast(CertificateFactory, source)(**kwargs)
+    return cast(CertificateFunction, source)
+
 
 CertificateInputStyleName = Literal["concatenated", "separated", "state"]
 
 
 def certificate_package(
-    func: Callable[..., Callable[[Array], Array]],
-    func_grad: Optional[Callable[..., Callable[[Array], Array]]] = None,
-    func_hess: Optional[Callable[..., Callable[[Array], Array]]] = None,
+    func: CertificateSource,
+    func_grad: Optional[CertificateSource] = None,
+    func_hess: Optional[CertificateSource] = None,
     n: int = 0,
     input_style: Union[
         CertificateInputStyleName, CertificateInputStyle
@@ -98,7 +108,7 @@ def certificate_package(
 
     def package(
         certificate_conditions: CertificateConditionsCallable,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> CertificateCollection:
         """
 
@@ -110,21 +120,18 @@ def certificate_package(
         Returns
         -------
         """
-        if use_factory:
-            v_func = func(**kwargs)
-        else:
-            v_func = func  # type: ignore[assignment]
+        v_func = _resolve_function(func, use_factory, kwargs)
 
         if input_style == CertificateInputStyle.SEPARATED:
             _orig_v_sep = v_func
 
-            def v_func(xt):
+            def v_func(xt: Array) -> Array:
                 return _orig_v_sep(xt[-1], xt[:-1])
 
         elif input_style == CertificateInputStyle.STATE:
             _orig_v_state = v_func
 
-            def v_func(xt):
+            def v_func(xt: Array) -> Array:
                 return _orig_v_state(xt[:-1])
 
         if func_grad is None:
@@ -132,15 +139,12 @@ def certificate_package(
             j_func = grad(v_func)
             t_func = j_func
         else:
-            if use_factory:
-                user_grad = func_grad(**kwargs)
-            else:
-                user_grad = func_grad  # type: ignore[assignment]
+            user_grad = _resolve_function(func_grad, use_factory, kwargs)
 
             # Wrap manual gradient to accept concatenated input 'xt'
             if input_style == CertificateInputStyle.STATE:
                 # User provided grad(x). We need j_func(xt) -> [grad(x), 0]
-                def j_func(xt):
+                def j_func(xt: Array) -> Array:
                     gx = user_grad(xt[:-1])
                     gx = jnp.atleast_1d(gx)
                     return jnp.append(gx, 0.0)
@@ -156,7 +160,7 @@ def certificate_package(
                 # Capture _orig_v_sep for temporal partial derivative (defined above)
                 grad_t_auto = grad(_orig_v_sep, argnums=0)
 
-                def j_func(xt):
+                def j_func(xt: Array) -> Array:
                     t = xt[-1]
                     x = xt[:-1]
                     gx = user_grad(t, x)
@@ -188,20 +192,17 @@ def certificate_package(
             # Auto-differentiate
             h_func = hessian(v_func)
         else:
-            if use_factory:
-                user_hess = func_hess(**kwargs)
-            else:
-                user_hess = func_hess  # type: ignore[assignment]
+            user_hess = _resolve_function(func_hess, use_factory, kwargs)
 
             # Wrap manual hessian to accept concatenated input 'xt'
             if input_style == CertificateInputStyle.STATE:
                 # User provided hess(x). We need h_func(xt)
-                def h_func(xt):
+                def h_func(xt: Array) -> Array:
                     return user_hess(xt[:-1])
 
             elif input_style == CertificateInputStyle.SEPARATED:
                 # User provided hess(t, x). We need h_func(xt)
-                def h_func(xt):
+                def h_func(xt: Array) -> Array:
                     return user_hess(xt[-1], xt[:-1])
 
             else:
@@ -336,8 +337,10 @@ def generate_certificate(
 
         else:
             # Manual grad h(x)
+            manual_grad = certificate_grad
+
             def j_func_canonical(t: float, x: Array) -> Array:
-                return certificate_grad(x)  # type: ignore
+                return manual_grad(x)
 
         # Hessian w.r.t x
         if certificate_hess is None:
@@ -348,8 +351,10 @@ def generate_certificate(
 
         else:
             # Manual hess h(x)
+            manual_hess = certificate_hess
+
             def h_func_canonical(t: float, x: Array) -> Array:
-                return certificate_hess(x)  # type: ignore
+                return manual_hess(x)
 
         # Partial w.r.t t (always 0 for state-only function)
         def t_func_canonical(t: float, x: Array) -> Array:
@@ -368,11 +373,11 @@ def generate_certificate(
                 return grad_x(t, x)
 
         else:
-            # Manual grad h(t, x) w.r.t x?
-            # Convention: if manual grad is provided for h(t, x), it should return grad_x h(t, x)
-            # Or should it return full gradient? Let's assume it matches the auto-diff output: dh/dx.
+            # Manual gradients match the spatial auto-diff output: dh/dx.
+            manual_grad = certificate_grad
+
             def j_func_canonical(t: float, x: Array) -> Array:
-                return certificate_grad(t, x)  # type: ignore
+                return manual_grad(t, x)
 
         # Hessian w.r.t x (arg 1)
         if certificate_hess is None:
@@ -382,17 +387,12 @@ def generate_certificate(
                 return hess_x(t, x)
 
         else:
+            manual_hess = certificate_hess
 
             def h_func_canonical(t: float, x: Array) -> Array:
-                return certificate_hess(t, x)  # type: ignore
+                return manual_hess(t, x)
 
-        # Partial w.r.t t (arg 0)
-        # Note: If user provides manual grad, we still need partial t.
-        # Currently, if manual grad is provided, we assume partial t is handled separately or user only cared about x?
-        # CertificateCollection needs partials.
-        # If manual grad is provided, we can't infer partial t unless user provides it?
-        # For now, let's auto-diff partial t unless we add a `certificate_partial` argument.
-        # Let's keep it simple: always auto-diff partial t for now, as it's rarely manually optimized.
+        # Temporal derivatives are always computed automatically.
         grad_t = grad(certificate, argnums=0)
 
         def t_func_canonical(t: float, x: Array) -> Array:

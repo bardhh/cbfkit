@@ -43,6 +43,7 @@ import mujoco
 import numpy as np
 from jax import Array
 
+from cbfkit.systems.mujoco._policy_commands import normalize_torso_command
 from cbfkit.systems.mujoco.assets import groot_dir
 from cbfkit.systems.mujoco.plant import MujocoPlant
 from cbfkit.systems.mujoco.unitree_policy import _gravity_in_body, _wrap, _yaw
@@ -352,18 +353,7 @@ class GrootGearWbcPolicy:
         ``(t, x, sub) -> (3,)``. Carry in ``sub_data["_groot"]``; the assembled
         7-command is logged as ``groot_cmd``.
         """
-        import inspect
-
-        if torso_command is None:
-            torso_fn = lambda t, x, sub: jnp.zeros(3)  # noqa: E731
-        elif callable(torso_command):
-            n_args = len(inspect.signature(torso_command).parameters)
-            torso_fn = (
-                torso_command if n_args >= 3 else (lambda t, x, sub: torso_command(t))  # noqa: E731
-            )
-        else:
-            const = jnp.asarray(torso_command, dtype=float)
-            torso_fn = lambda t, x, sub: const  # noqa: E731
+        torso_fn = normalize_torso_command(torso_command, size=3)
 
         def controller(t, x, u_nom, key, data):
             sub = dict(data.sub_data) if data.sub_data is not None else {}

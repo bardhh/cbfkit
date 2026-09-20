@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Union
+from typing import Callable
 
 from jax import Array
 

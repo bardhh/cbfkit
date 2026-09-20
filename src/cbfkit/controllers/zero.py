@@ -5,7 +5,7 @@ Used as a default when no nominal controller is needed.
 """
 
 import jax.numpy as jnp
-from jax import Array, jit
+from jax import jit
 
 from cbfkit.utils.user_types import (
     ControllerCallableReturns,
