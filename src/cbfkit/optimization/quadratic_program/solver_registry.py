@@ -40,6 +40,8 @@ from jax import Array
 
 from cbfkit.utils.user_types.solvers import QpSolution, QpSolverCallable, with_solver_metadata
 
+from ._validation import validate_qp_shapes
+
 # ---------------------------------------------------------------------------
 # Factory functions — each returns a QpSolverCallable
 # ---------------------------------------------------------------------------
@@ -80,16 +82,7 @@ def jaxopt_solver(
     ) -> QpSolution:
         JitMonitor.increment("qp_solver_jaxopt.solve_with_details")
 
-        if f_vec.ndim != 1:
-            raise ValueError(
-                f"Linear cost 'f_vec' must be a 1D array of shape (n_vars,), "
-                f"but got {f_vec.shape}."
-            )
-        if h_mat.ndim != 2:
-            raise ValueError(
-                f"Quadratic cost 'h_mat' must be a 2D array of shape (n_vars, n_vars), "
-                f"but got {h_mat.shape}."
-            )
+        validate_qp_shapes(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
 
         params_obj = (h_mat, 0.5 * f_vec)
         params_eq = None if (a_mat is None or b_vec is None) else (a_mat, b_vec)
@@ -113,6 +106,7 @@ def jaxopt_solver(
             status,
         )
 
+        status = jnp.where((status == 1) & ~jnp.all(jnp.isfinite(sol.primal)), 0, status)
         return QpSolution(primal=sol.primal, status=status, params=(sol, state))
 
     return with_solver_metadata(solve_with_details, name="jaxopt", jit_compatible=True)
@@ -200,10 +194,14 @@ def fast_solver(max_iter: Optional[int] = None, tol: float = 1e-6) -> QpSolverCa
                 "support equality constraints."
             )
 
-        if g_mat is None or h_vec is None:
+        validate_qp_shapes(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
+
+        if g_mat is None or g_mat.shape[0] == 0:
             # Registry convention min x'Hx + f'x  =>  2H x* = -f.
             x = jnp.linalg.solve(2.0 * h_mat, -f_vec)
-            return QpSolution(primal=x, status=1, params=None)
+            return QpSolution(
+                primal=x, status=jnp.where(jnp.all(jnp.isfinite(x)), 1, 0), params=None
+            )
 
         # Extract warm-start state from previous QpSolution.params
         warm: Optional[PdipmState] = None
@@ -245,6 +243,7 @@ def fast_solver(max_iter: Optional[int] = None, tol: float = 1e-6) -> QpSolverCa
 
             bad = (status != 1) | ~jnp.all(jnp.isfinite(sol))
             sol, status, state = jax.lax.cond(bad, _cold, _keep, None)
+        status = jnp.where((status == 1) & ~jnp.all(jnp.isfinite(sol)), 0, status)
         return QpSolution(primal=sol, status=status, params=(sol, state))
 
     return with_solver_metadata(solve_with_details, name="fast", jit_compatible=True)

@@ -15,6 +15,8 @@ from jax import Array
 
 from cbfkit.utils.user_types.solvers import QpSolution
 
+from ._validation import validate_qp_shapes
+
 
 def solve(
     h_mat: Array,
@@ -39,6 +41,7 @@ def solve(
         solution: Solution to the QP
         status: True if optimal solution found
     """
+    validate_qp_shapes(h_mat, f_vec, g_mat, h_vec, a_mat, b_vec)
     if ca is None:
         raise ImportError(
             "CasADi is not installed. Please install it with `pip install cbfkit[casadi]`."
@@ -94,7 +97,9 @@ def solve(
         solution = solver(lbg=lbg, ubg=ubg)
         success = solver.stats()["success"]
 
-    return success * jnp.array(solution["x"]).reshape((n,)), success
+    primal = jnp.array(solution["x"]).reshape((n,))
+    success = success and bool(np.all(np.isfinite(primal)))
+    return success * primal, success
 
 
 def solve_with_details(

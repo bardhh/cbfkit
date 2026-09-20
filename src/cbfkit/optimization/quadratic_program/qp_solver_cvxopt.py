@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
+from cbfkit.optimization.quadratic_program._validation import validate_qp_shapes
 from cbfkit.utils.user_types.solvers import QpSolution
 
 # Resolve the optional, platform-specific backend once at import time. Keep its
@@ -54,6 +55,7 @@ def solve(
     -------
         (sol, success): Solution array and boolean success flag.
     """
+    validate_qp_shapes(p_mat, q_vec, g_mat, h_vec, a_mat, b_vec)
     backend = _ensure_cvxopt()
     matrix, solvers = backend.matrix, backend.solvers
 
@@ -89,7 +91,8 @@ def solve(
         if sol["status"] == "unknown":
             success = bool(np.all(np.array(g_mat) @ np.array(sol["x"]) - np.array(h_vec) <= 0))
 
-    return jnp.array(sol["x"]).reshape((len(sol["x"]),)), success
+    primal = jnp.array(sol["x"]).reshape((len(sol["x"]),))
+    return primal, success and bool(np.all(np.isfinite(primal)))
 
 
 def solve_with_details(
