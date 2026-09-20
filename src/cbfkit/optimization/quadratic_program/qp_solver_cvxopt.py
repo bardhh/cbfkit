@@ -1,6 +1,8 @@
 """Quadratic program solver using the CVXOPT library."""
 
 import platform
+from importlib import import_module
+from types import ModuleType
 from typing import Any, Dict, Tuple, Union
 
 import jax.numpy as jnp
@@ -9,30 +11,25 @@ from jax import Array
 
 from cbfkit.utils.user_types.solvers import QpSolution
 
-# Resolve cvxopt vs kvxopt once at import time (ARM vs x86)
-_cvxopt_available = True
-_cvxopt_error = None
+# Resolve the optional, platform-specific backend once at import time. Keep its
+# native matrix types behind the module boundary: cvxopt and kvxopt ship
+# different stubs even though both accept NumPy arrays at runtime.
+_cvxopt_backend: ModuleType | None = None
+_cvxopt_error: ImportError | None = None
 try:
     _mach = platform.machine().lower()
-    if "arm" in _mach or "aarch" in _mach:
-        from kvxopt import matrix as _matrix  # type: ignore[reportMissingImports]
-        from kvxopt import solvers as _solvers
-    else:
-        from cvxopt import matrix as _matrix
-        from cvxopt import solvers as _solvers
+    _cvxopt_backend = import_module("kvxopt" if "arm" in _mach or "aarch" in _mach else "cvxopt")
 except ImportError as _e:
-    _cvxopt_available = False
     _cvxopt_error = _e
-    _matrix = None  # type: ignore[assignment]
-    _solvers = None  # type: ignore[assignment]
 
 
-def _ensure_cvxopt():
-    if not _cvxopt_available:
+def _ensure_cvxopt() -> ModuleType:
+    if _cvxopt_backend is None:
         raise ImportError(
             "To use the cvxopt solver, please install the 'cvxopt' extra: "
             "pip install 'cbfkit[cvxopt]'"
         ) from _cvxopt_error
+    return _cvxopt_backend
 
 
 def solve(
@@ -57,8 +54,8 @@ def solve(
     -------
         (sol, success): Solution array and boolean success flag.
     """
-    _ensure_cvxopt()
-    matrix, solvers = _matrix, _solvers
+    backend = _ensure_cvxopt()
+    matrix, solvers = backend.matrix, backend.solvers
 
     # Use the cvxopt library to solve the quadratic program
     p_mat = matrix(np.array(p_mat, dtype=float))

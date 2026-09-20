@@ -69,7 +69,7 @@ jobs:
         -ra --durations=15 --junitxml=test-results/core.xml
         --cov=src/cbfkit/controllers --cov=src/cbfkit/optimization
         --cov=src/cbfkit/simulation --cov-report=xml
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: core-python-${{ matrix.python-version }}
@@ -95,7 +95,7 @@ jobs:
     - run: >-
         uv run --no-sync pytest -m slow tests --ignore=tests/test_mujoco
         -ra --durations=15 --junitxml=test-results/examples.xml
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: examples
@@ -131,7 +131,7 @@ jobs:
     - run: >-
         uv run --no-sync pytest tests/test_mujoco
         -ra --durations=15 --junitxml=test-results/mujoco.xml
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: mujoco
@@ -237,7 +237,9 @@ jobs:
     - name: Verify wheel outside checkout
       run: |
         python -m venv "$RUNNER_TEMP/wheel-env"
-        "$RUNNER_TEMP/wheel-env/bin/pip" install dist/*.whl 'mujoco==3.11.0'
+        for wheel in dist/*.whl; do
+          "$RUNNER_TEMP/wheel-env/bin/pip" install "${wheel}[mujoco]"
+        done
         cd "$RUNNER_TEMP"
         "$RUNNER_TEMP/wheel-env/bin/python" "$GITHUB_WORKSPACE/scripts/check_installed_package.py" --mujoco
     - name: Verify sdist outside checkout
