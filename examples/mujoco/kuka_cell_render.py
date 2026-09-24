@@ -166,9 +166,43 @@ def _sphere(scn: mujoco.MjvScene, centre: np.ndarray, r: float, rgba) -> int:
     return 0 if g is None else 1
 
 
-def _keepout_capsules(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, Any]) -> None:
-    a, b, r = _capsules_world(prep["worker"][k])
-    h = run.h[k].reshape(prep["n_spheres"], kc.N_CAPSULES)
+def _lerp(x: np.ndarray, kf: float) -> np.ndarray:
+    """Linear interpolation of a per-step array at the fractional step ``kf``."""
+    k0 = int(np.floor(kf))
+    k1 = min(k0 + 1, len(x) - 1)
+    a = float(kf - k0)
+    return (1.0 - a) * np.asarray(x[k0], dtype=float) + a * np.asarray(x[k1], dtype=float)
+
+
+def _view(run: Run, prep: Dict[str, Any], kf: float) -> Dict[str, Any]:
+    """Everything the overlays and the HUD need at a (possibly fractional) logged step.
+
+    Slow motion asks for frames between logged steps; joint angles, the worker pose, the
+    tool and the barrier values are interpolated linearly (the log is at 50 Hz, so this is
+    invisible), the contact flag is true if either neighbouring step touched.
+    """
+    kf = float(min(max(kf, 0.0), run.T - 1))
+    k0 = int(np.floor(kf))
+    k1 = min(k0 + 1, run.T - 1)
+    trail = prep["tool"][max(0, k0 - prep["trail_n"]) : k0 + 1]
+    return dict(
+        kf=kf,
+        k0=k0,
+        t=float(kf * run.dt),
+        q=_lerp(run.states[:, : run.nq], kf),
+        worker=_lerp(prep["worker"], kf),
+        h=_lerp(run.h, kf),
+        tool=_lerp(prep["tool"], kf),
+        trail=np.vstack([trail, _lerp(prep["tool"], kf)[None]]) if len(trail) else _lerp(prep["tool"], kf)[None],
+        p_ref=_lerp(prep["p_ref"], kf),
+        contact=bool(prep["contact"][k0] or prep["contact"][k1]),
+        intervention=float(_lerp(prep["intervention"], kf)),
+    )
+
+
+def _keepout_capsules(scn: mujoco.MjvScene, view: Dict[str, Any], prep: Dict[str, Any]) -> None:
+    a, b, r = _capsules_world(view["worker"])
+    h = view["h"].reshape(prep["n_spheres"], kc.N_CAPSULES)
     for j in range(kc.N_CAPSULES):
         rgba = h_rgba(float(h[:, j].min()), KEEPOUT_ALPHA)
         radius = float(r[j] + prep["d0"])
@@ -178,24 +212,23 @@ def _keepout_capsules(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, An
             _connector(scn, mujoco.mjtGeom.mjGEOM_CAPSULE, radius, a[j], b[j], rgba)
 
 
-def _active_pair(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, Any]) -> None:
+def _active_pair(scn: mujoco.MjvScene, view: Dict[str, Any], prep: Dict[str, Any]) -> None:
     geo: _Geometry = prep["geometry"]
-    centres = geo.spheres(run.states[k, : run.nq])
-    h = run.h[k]
+    centres = geo.spheres(view["q"])
+    h = view["h"]
     idx = int(np.argmin(h))
     i, j = divmod(idx, kc.N_CAPSULES)
-    a, b, _r = _capsules_world(prep["worker"][k])
+    a, b, _r = _capsules_world(view["worker"])
     rgba = h_rgba(float(h[idx]), PAIR_ALPHA)
     _sphere(scn, centres[i], float(geo.arm_r[i]) + 0.004, rgba)
     target = _closest_on_segment(centres[i], a[j], b[j])
     _connector(scn, mujoco.mjtGeom.mjGEOM_CAPSULE, CONNECTOR_R, centres[i], target, rgba)
-    if prep["contact"][k]:
+    if view["contact"]:
         _sphere(scn, centres[i], float(geo.arm_r[i]) + 0.05, CONTACT_RGBA)
 
 
-def _tool_trail(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, Any]) -> None:
-    lo = max(0, k - prep["trail_n"])
-    pts = prep["tool"][lo : k + 1]
+def _tool_trail(scn: mujoco.MjvScene, view: Dict[str, Any], prep: Dict[str, Any]) -> None:
+    pts = view["trail"]
     if len(pts) > TRAIL_POINTS:
         sel = np.linspace(0, len(pts) - 1, TRAIL_POINTS).round().astype(int)
         pts = pts[sel]
@@ -203,13 +236,13 @@ def _tool_trail(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, Any]) ->
     for s, (p, q) in enumerate(zip(pts[:-1], pts[1:])):
         rgba = (*TRAIL_RGBA[:3], TRAIL_RGBA[3] * (s + 1) / n_seg)
         _connector(scn, mujoco.mjtGeom.mjGEOM_CAPSULE, TRAIL_R, p, q, rgba)
-    _sphere(scn, prep["p_ref"][k], GHOST_R, GHOST_RGBA)
+    _sphere(scn, view["p_ref"], GHOST_R, GHOST_RGBA)
 
 
-def overlay(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, Any]) -> None:
-    _keepout_capsules(scn, run, k, prep)
-    _tool_trail(scn, run, k, prep)
-    _active_pair(scn, run, k, prep)
+def overlay(scn: mujoco.MjvScene, view: Dict[str, Any], prep: Dict[str, Any]) -> None:
+    _keepout_capsules(scn, view, prep)
+    _tool_trail(scn, view, prep)
+    _active_pair(scn, view, prep)
 
 
 # --------------------------------------------------------------------------- panels
@@ -223,16 +256,12 @@ class _Panel:
         height: int,
         offline: bool,
         floor: str,
-        azimuths: np.ndarray,
-        k0: int,
     ) -> None:
         self.run = run
         self.model = kc.build_spec(offline=offline, showcase_floor=floor).compile()
         self.data = mujoco.MjData(self.model)
         self.renderer = mujoco.Renderer(self.model, height=height, width=width, max_geom=MAX_GEOM)
         self.prep = _prepare(run, offline)
-        self.k0 = int(k0)
-        self.azimuths = azimuths
         self.freeze_at = min(int(run.n_live), run.T - 1)
         self._cam = mujoco.MjvCamera()
         self._cam.type = mujoco.mjtCamera.mjCAMERA_FREE
@@ -241,26 +270,24 @@ class _Panel:
         self._cam.distance = CAM_DISTANCE
         self._cam.elevation = CAM_ELEVATION
 
-    def step(self, k: int) -> int:
-        return self.run.clip(min(int(k), self.freeze_at))
+    def step(self, kf: float) -> float:
+        """The (fractional) step this panel shows for ``kf`` (frozen once its run has ended)."""
+        return float(min(max(float(kf), 0.0), self.freeze_at))
 
-    def frozen(self, k: int) -> bool:
-        return int(k) > self.freeze_at
+    def frozen(self, kf: float) -> bool:
+        return float(kf) > self.freeze_at
 
-    def frame(self, k: int) -> np.ndarray:
-        kk = self.step(k)
-        self._cam.azimuth = float(
-            self.azimuths[min(max(int(k) - self.k0, 0), len(self.azimuths) - 1)]
-        )
-        nq, nv = self.run.nq, self.run.nv
-        self.data.qpos[:] = self.run.states[kk, :nq]
-        self.data.qvel[:] = self.run.states[kk, nq : nq + nv]
-        pos, quat, _yaw = _worker_pose(self.prep["worker"][kk])
+    def frame(self, kf: float, azimuth: float) -> np.ndarray:
+        view = _view(self.run, self.prep, self.step(kf))
+        self._cam.azimuth = float(azimuth)
+        self.data.qpos[:] = view["q"]
+        self.data.qvel[:] = 0.0
+        pos, quat, _yaw = _worker_pose(view["worker"])
         self.data.mocap_pos[0] = pos
         self.data.mocap_quat[0] = quat
         mujoco.mj_forward(self.model, self.data)
         self.renderer.update_scene(self.data, camera=self._cam)
-        overlay(self.renderer.scene, self.run, kk, self.prep)
+        overlay(self.renderer.scene, view, self.prep)
         return self.renderer.render()
 
     def close(self) -> None:
@@ -272,24 +299,29 @@ def _end_caption(run: Run) -> str:
     return f"QP error at {t_end:.1f} s, frozen" if run.n_live < run.T else "frozen"
 
 
-def _hud_kwargs(run: Run, prep: Dict[str, Any], k: int, mode: str) -> Dict[str, Any]:
-    kk = run.clip(k)
-    value = float(prep["intervention"][kk])
+def _hud_kwargs(
+    run: Run, prep: Dict[str, Any], kf: float, mode: str, slow: Optional[float] = None
+) -> Dict[str, Any]:
+    view = _view(run, prep, kf)
+    k0 = view["k0"]
+    value = view["intervention"]
     status = run.get("solver_status")
-    flags: Dict[str, bool] = {"CONTACT": bool(prep["contact"][kk])}
+    flags: Dict[str, bool] = {"CONTACT": view["contact"]}
+    if slow is not None:
+        flags[f"SLOW-MO x{slow:g}"] = True
     if status is not None:
-        flags["QP not converged"] = int(np.asarray(status).reshape(-1)[kk]) != 1
+        flags["QP not converged"] = int(np.asarray(status).reshape(-1)[k0]) != 1
     # A relaxed run logs one slack column per barrier after the n_u velocity columns.
     slack: Optional[float] = None
     sol = run.get("sol")
     if run.relax and sol is not None and sol.ndim == 2 and sol.shape[1] > run.n_u:
-        slack = float(np.max(np.asarray(sol[kk], dtype=float)[run.n_u :]))
+        slack = float(np.max(np.asarray(sol[k0], dtype=float)[run.n_u :]))
     return dict(
         slack=slack,
-        t=float(run.t[kk]),
-        h_min=float(run.h_min[kk]),
-        h_hist=run.h_min[: kk + 1],
-        t_hist=run.t[: kk + 1],
+        t=view["t"],
+        h_min=float(view["h"].min()),
+        h_hist=np.append(run.h_min[: k0 + 1], view["h"].min()),
+        t_hist=np.append(run.t[: k0 + 1], view["t"]),
         intervention=value,
         active=value > 1e-3,
         flags=flags,
@@ -314,7 +346,7 @@ def _hud_ylim(run: Run, k0: int, k1: int) -> Tuple[float, float]:
 def _composites(
     runs: List[Run],
     labels: List[str],
-    ks: Sequence[int],
+    ks: Sequence[float],
     *,
     panel_wh: Tuple[int, int],
     hud_wh: Tuple[int, int],
@@ -325,21 +357,24 @@ def _composites(
     offline: bool,
     floor: str,
     k0: int,
-    k1: int,
     need_hud: bool,
     plain_too: bool,
     drift: float,
+    slowmo: Optional[Tuple[float, float, float]] = None,
 ):
-    """Yield ``(k, hud_frame, plain_frame)`` per ``k``; each 3-D frame rendered once."""
+    """Yield ``(k, hud_frame, plain_frame)`` per ``k``; each 3-D frame rendered once.
+
+    ``ks`` may hold fractional steps (slow motion); the camera azimuth drifts with the
+    *frame count*, not the simulated clock, so the shot keeps moving at the same rate on
+    screen while the action slows. ``slowmo`` is ``(k_a, k_b, factor)`` in steps and only
+    labels the HUD; the density of ``ks`` is what actually slows the clip.
+    """
     from PIL import Image
 
-    azimuths = CAM_AZIMUTH0 + drift * hud_run.dt * np.arange(max(k1 - k0, 1))
     with contextlib.ExitStack() as stack:
         panels = [
             stack.enter_context(
-                contextlib.closing(
-                    _Panel(r, panel_wh[0], panel_wh[1], offline, floor, azimuths, k0)
-                )
+                contextlib.closing(_Panel(r, panel_wh[0], panel_wh[1], offline, floor))
             )
             for r in runs
         ]
@@ -350,8 +385,10 @@ def _composites(
         )
         hud_prep = next(p.prep for p in panels if p.run is hud_run)
         mode = MODE_UNFILTERED if hud_run.unfiltered else MODE_CBF
-        for k in ks:
-            images = [p.frame(k) for p in panels]
+        _, fps_mp4, _, _ = _strides(hud_run.dt)
+        for n, k in enumerate(ks):
+            azimuth = CAM_AZIMUTH0 + drift * n / fps_mp4
+            images = [p.frame(k, azimuth) for p in panels]
             if downscale is not None:
                 images = [
                     np.asarray(Image.fromarray(im).resize(downscale, Image.LANCZOS))
@@ -366,10 +403,13 @@ def _composites(
                 else None
             )
             if hud is not None:
-                kwargs = _hud_kwargs(hud_run, hud_prep, k, mode)
+                slow = None
+                if slowmo is not None and slowmo[0] <= k < slowmo[1]:
+                    slow = slowmo[2]
+                kwargs = _hud_kwargs(hud_run, hud_prep, k, mode, slow)
                 kwargs["ylim"] = ylim
                 if compare_run is not None:
-                    kk2 = compare_run.clip(k)
+                    kk2 = compare_run.clip(int(np.floor(k)))
                     kwargs["h_hist2"] = compare_run.h_min[: kk2 + 1]
                 main = showcase.compose_panels(
                     images, labels, hud.draw(**kwargs), captions=captions
@@ -378,6 +418,20 @@ def _composites(
                 assert plain is not None
                 main = plain
             yield k, main, (plain if plain_too and plain is not None else main)
+
+
+def _schedule(k0: int, k1: int, stride: int, slowmo: Optional[Tuple[float, float, float]]) -> List[float]:
+    """Frame positions in steps: ``stride`` apart, ``factor`` times denser inside the window."""
+    if slowmo is None:
+        return [float(k) for k in range(k0, k1, stride)]
+    ka, kb, factor = slowmo
+    ka, kb = max(float(ka), float(k0)), min(float(kb), float(k1))
+    if kb <= ka:
+        return [float(k) for k in range(k0, k1, stride)]
+    before = np.arange(k0, ka, stride, dtype=float)
+    inside = np.arange(ka, kb, stride / float(factor), dtype=float)
+    after = np.arange(kb, k1, stride, dtype=float)
+    return [round(float(v), 6) for v in np.concatenate([before, inside, after])]
 
 
 # --------------------------------------------------------------------------- public API
@@ -397,8 +451,15 @@ def render(
     gif_no_hud: bool = False,
     no_drift: bool = False,
     floor: str = "grid",
+    slowmo: Optional[Tuple[float, float, float]] = None,
 ) -> List[str]:
-    """Render ``npz`` (and with ``side_by_side`` its unfiltered twin); return the output paths."""
+    """Render ``npz`` (and with ``side_by_side`` its unfiltered twin); return the output paths.
+
+    ``slowmo = (t0, t1, factor)`` plays the simulated seconds ``t0..t1`` ``factor`` times
+    slower: frames are taken ``factor`` times as densely there, interpolating the 50 Hz log
+    between steps, so the strike is not a two-frame blink. The HUD clock slows with it and a
+    ``SLOW-MO`` pill says so.
+    """
     offline = bool(os.environ.get("CBFKIT_ASSETS_OFFLINE"))
     cbf = Run(npz)
     if cbf.example and cbf.example != EXAMPLE:
@@ -443,12 +504,16 @@ def render(
         out_base = os.path.join(out_dir, f"{EXAMPLE}{spec['suffix']}")
         if stills:
             hi = min(k1, max(k0 + 1, int(cbf.n_live)))
-            still_ks = [k0 + int(round(f * (hi - 1 - k0))) for f in STILL_FRACTIONS]
+            still_ks = [float(k0 + int(round(f * (hi - 1 - k0)))) for f in STILL_FRACTIONS]
             ks = sorted(set(still_ks))
+            window = None
         else:
             stride_mp4, _, stride_gif, _ = _strides(cbf.dt)
-            ks_mp4 = set(range(k0, k1, stride_mp4)) if mp4 else set()
-            ks_gif = set(range(k0, k1, stride_gif)) if gif else set()
+            window = None
+            if slowmo is not None:
+                window = (slowmo[0] / cbf.dt, slowmo[1] / cbf.dt, float(slowmo[2]))
+            ks_mp4 = set(_schedule(k0, k1, stride_mp4, window)) if mp4 else set()
+            ks_gif = set(_schedule(k0, k1, stride_gif, window)) if gif else set()
             ks = sorted(ks_mp4 | ks_gif)
             if not ks:
                 continue
@@ -465,10 +530,10 @@ def render(
             offline=offline,
             floor=floor,
             k0=k0,
-            k1=k1,
             need_hud=stills or mp4 or not gif_no_hud,
             plain_too=gif_no_hud and gif and not stills,
             drift=0.0 if no_drift else DRIFT_DEG_PER_S,
+            slowmo=window,
         )
         if stills:
             outputs += _write_stills(frames, out_base, still_ks, STILL_FRACTIONS)
@@ -509,6 +574,14 @@ def main(argv=None) -> List[str]:
     g.add_argument("--gif-no-hud", action="store_true", help="GIF without the HUD strip")
     g.add_argument("--no-drift", action="store_true", help="hold the camera azimuth still")
     g.add_argument("--floor", choices=showcase.FLOOR_STYLES, default="grid")
+    p.add_argument(
+        "--slowmo",
+        nargs=3,
+        type=float,
+        metavar=("T0", "T1", "FACTOR"),
+        default=None,
+        help="play simulated seconds T0..T1 FACTOR times slower (interpolated frames)",
+    )
     args = p.parse_args(argv)
     outputs = render(
         args.npz,
@@ -525,6 +598,7 @@ def main(argv=None) -> List[str]:
         gif_no_hud=args.gif_no_hud,
         no_drift=args.no_drift,
         floor=args.floor,
+        slowmo=tuple(args.slowmo) if args.slowmo else None,
     )
     for path in outputs:
         print(path)

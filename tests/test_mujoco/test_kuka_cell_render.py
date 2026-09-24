@@ -97,6 +97,10 @@ def test_render_single_and_side_by_side(tmp_path):
             "--side-by-side",
             "--gif-width",
             "240",
+            "--slowmo",
+            "2.7",
+            "2.9",
+            "4",
         ]
     )
     names = sorted(Path(p).name for p in out)
@@ -107,6 +111,14 @@ def test_render_single_and_side_by_side(tmp_path):
         "kuka_cell_side_by_side.mp4",
     ]
     assert all(Path(p).stat().st_size > 0 for p in out)
+
+
+def test_schedule_densifies_the_window():
+    ks = renderer._schedule(0, 100, 2, (40.0, 50.0, 4.0))
+    assert ks[:3] == [0.0, 2.0, 4.0] and ks[-1] == 98.0
+    inside = [k for k in ks if 40.0 <= k < 50.0]
+    assert len(inside) == 20 and abs(inside[1] - inside[0] - 0.5) < 1e-9
+    assert renderer._schedule(0, 10, 2, None) == [0.0, 2.0, 4.0, 6.0, 8.0]
 
 
 def test_stills_and_bad_example(tmp_path):
