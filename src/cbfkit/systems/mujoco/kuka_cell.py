@@ -95,13 +95,13 @@ PEDESTAL_H = 0.30
 PEDESTAL_R = 0.15
 TOOL_OFFSET = 0.12  # gripper stand-in below the flange
 TOOL_R = 0.07
-BIN_XY = (0.45, -0.45)
-BIN_HALF = (0.20, 0.20, 0.175)  # top at 0.35
+BIN_XY = (0.40, -0.45)
+BIN_HALF = (0.20, 0.20, 0.175)  # top at 0.35, spans x 0.20..0.60
 CONVEYOR_XY = (0.45, 0.60)
 CONVEYOR_HALF = (0.35, 0.20, 0.20)  # top at 0.40, spans x -0.10..0.80
 
 # Worker path: enters walking +y along x = WORKER_X, pauses inside the sweep, walks back.
-WORKER_X = 0.85
+WORKER_X = 0.72  # torso surface at x 0.56, arms at 0.48: on the transfer path
 WORKER_Y0 = -2.4
 WORKER_Y_PAUSE = 0.15
 WORKER_SPEED = 1.1
@@ -165,7 +165,7 @@ Z_ABOVE_CONV = 0.85
 Z_CONV = 0.52
 # Joint configuration with the tool at bin_above pointing down (solved once with
 # ``_solve_home`` below and frozen here so the example does not run IK at import).
-Q_HOME = (-0.7881, 0.5980, 0.0051, -0.9881, -0.0029, 1.5555, -0.8000)
+Q_HOME = (-0.8350, 0.5044, -0.0153, -1.1332, 0.0074, 1.5040, -0.8000)
 
 
 # --------------------------------------------------------------------------- worker script

@@ -183,3 +183,33 @@ def test_safe_controller_blocks_motion_toward_worker():
     dh_dt_nom = float(dh[0] * qd_nom[0])
     # Either the constraint is inactive at this distance, or the QP cut the command.
     assert dh_dt_nom >= -kc.CLASS_K * h_min - 1e-6 or abs(float(u[0])) < kc.QD_MAX - 1e-3
+
+
+# --------------------------------------------------------------------------- Task 7
+@pytest.mark.g1_mjx  # not the G1, but the same "compiles an MJX step + QP" cost class
+def test_simulate_writes_showcase_npz(tmp_path):
+    env = dict(
+        os.environ,
+        CBFKIT_TEST_MODE="1",
+        JAX_PLATFORM_NAME="cpu",
+        CBFKIT_ASSETS_OFFLINE="1",
+        MPLBACKEND="Agg",
+    )
+    for flag in ([], ["--unfiltered"]):
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "simulate", "--out", str(tmp_path), *flag],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=1800,
+        )
+        assert proc.returncode == 0, proc.stderr[-3000:]
+    with np.load(tmp_path / "kuka_cell.npz") as a:
+        assert a["states"].shape == (5, 17) and a["h"].shape == (5, 40)
+        assert str(a["plant_kind"]) == "iiwa14" and a["contact"].dtype == bool
+        assert a["worker"].shape == (5, 4) and a["tool"].shape == (5, 3)
+        assert a["com"].shape == (5, 2) and not bool(a["unfiltered"])
+    with np.load(tmp_path / "kuka_cell_unfiltered.npz") as b:
+        assert float(b["qp_dev_max"]) < 1e-3 and bool(b["unfiltered"])
+        assert "bfs" not in b.files
