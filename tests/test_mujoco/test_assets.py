@@ -48,3 +48,21 @@ def test_g1_model_dir_loads_in_mujoco():
     assert (d / "scene.xml").exists() and (d / "g1.xml").exists() and (d / "assets").is_dir()
     m = mujoco.MjModel.from_xml_path(str(d / "scene.xml"))
     assert (m.nq, m.nv, m.nu) == (36, 35, 29)
+
+
+def test_iiwa14_manifest_and_offline_error(tmp_path, monkeypatch):
+    man = json.loads(assets.IIWA14_MANIFEST.read_text())
+    assert man["robot"] == "kuka_iiwa_14" and len(man["files"]) == 13
+    assert man["commit"] == json.loads(MANIFEST.read_text())["commit"]
+    monkeypatch.setenv("CBFKIT_ASSET_DIR", str(tmp_path))
+    with pytest.raises(RuntimeError, match="kuka_iiwa_14"):
+        assets.iiwa14_model_dir(offline=True)
+
+
+def test_iiwa14_model_dir_loads_in_mujoco():
+    try:
+        d = assets.iiwa14_model_dir()
+    except (RuntimeError, urllib.error.URLError) as exc:  # no cache and no network
+        pytest.skip(f"iiwa14 assets unavailable: {exc}")
+    m = mujoco.MjModel.from_xml_path(str(d / "iiwa14.xml"))
+    assert (m.nq, m.nv, m.nu) == (7, 7, 7)

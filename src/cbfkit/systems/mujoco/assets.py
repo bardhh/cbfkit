@@ -30,6 +30,7 @@ _RAW = "https://raw.githubusercontent.com/google-deepmind/mujoco_menagerie/{comm
 
 MODELS_DIR = Path(__file__).parent / "models"
 G1_MANIFEST = MODELS_DIR / "g1" / "assets_manifest.json"
+IIWA14_MANIFEST = MODELS_DIR / "iiwa14" / "assets_manifest.json"
 UNITREE_RL_GYM_MANIFEST = MODELS_DIR / "g1" / "unitree_rl_gym_manifest.json"
 AMO_MANIFEST = MODELS_DIR / "g1" / "amo_manifest.json"
 GROOT_MANIFEST = MODELS_DIR / "g1" / "groot_manifest.json"
@@ -131,6 +132,12 @@ def g1_model_dir(offline: bool = False) -> Path:
     """Directory containing ``scene.xml``, ``g1.xml`` and verified ``assets/`` for the G1."""
     assets_dir = ensure_menagerie_assets("unitree_g1", manifest=G1_MANIFEST, offline=offline)
     return _materialise_model_dir(MODELS_DIR / "g1", assets_dir)
+
+
+def iiwa14_model_dir(offline: bool = False) -> Path:
+    """Directory containing ``iiwa14.xml`` and verified ``assets/`` for the KUKA iiwa14."""
+    assets_dir = ensure_menagerie_assets("kuka_iiwa_14", manifest=IIWA14_MANIFEST, offline=offline)
+    return _materialise_model_dir(MODELS_DIR / "iiwa14", assets_dir)
 
 
 def ensure_repo_files(manifest: Path, *, offline: bool = False) -> Path:
