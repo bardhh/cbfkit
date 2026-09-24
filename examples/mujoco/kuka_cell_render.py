@@ -70,8 +70,8 @@ MODE_CBF = "CBF-QP on joint velocities"
 MODE_UNFILTERED = "no filter (nominal)"
 
 # Camera: fixed look-at over the cell, slow azimuth drift so the shot is not a still.
-LOOKAT = (0.40, 0.05, 0.55)
-CAM_DISTANCE = 2.7
+LOOKAT = (0.40, 0.05, 0.72)
+CAM_DISTANCE = 3.0
 CAM_ELEVATION = -18.0
 CAM_AZIMUTH0 = 60.0  # camera on the bin side; the worker crosses behind the arm
 DRIFT_DEG_PER_S = 0.5
