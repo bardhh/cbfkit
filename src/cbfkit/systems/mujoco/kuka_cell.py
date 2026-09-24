@@ -174,6 +174,7 @@ SLACK_PENALTY = 2e3
 # t = 2.7 s: status 5, relaxed or not); the registry's "fast" solver converges in ~16.
 QP_SOLVER = "fast"
 QP_TOL = 1e-8  # the fast solver's default 1e-6 leaves a 1e-3 rad/s residue on a pure projection
+QP_MAX_ITER = 48  # the default 16 Newton steps cannot always reach 1e-8 (status 2); 48 does
 
 # Nominal task.
 V_TOOL = 1.2
@@ -732,7 +733,7 @@ def build(*, unfiltered: bool = False, offline: bool = False):
         barriers=barriers,
         relaxable_cbf=not unfiltered,
         slack_penalty_cbf=SLACK_PENALTY,
-        solver=get_solver(QP_SOLVER, tol=QP_TOL),
+        solver=get_solver(QP_SOLVER, tol=QP_TOL, max_iter=QP_MAX_ITER),
     )
     x0 = plant.to_state(plant._template.replace(qpos=jnp.asarray(Q_HOME)))
     return plant, x0, safe_arm_controller(cbf_qp, plant), osc_nominal(plant)
