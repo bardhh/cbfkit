@@ -305,7 +305,9 @@ def _hud_ylim(run: Run, k0: int, k1: int) -> Tuple[float, float]:
     if segment.size == 0:
         segment = run.h_min
     lo = min(-0.25, 1.1 * float(segment.min()))
-    hi = max(0.6, float(np.percentile(segment, 90.0)))
+    # Capped at 1 m: the barriers open to 2 m+ with the worker off-stage, and letting that
+    # set the top flattens the part of the trace that matters, the approach to zero.
+    hi = min(max(0.6, float(np.percentile(segment, 90.0))), 1.0)
     return lo, hi
 
 

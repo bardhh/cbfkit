@@ -104,8 +104,8 @@ TOOL_OFFSET = 0.12  # gripper stand-in below the flange
 TOOL_R = 0.07
 BIN_XY = (0.40, -0.45)
 BIN_HALF = (0.20, 0.20, 0.175)  # top at 0.35, spans x 0.20..0.60
-CONVEYOR_XY = (0.45, 0.60)
-CONVEYOR_HALF = (0.35, 0.20, 0.20)  # top at 0.40, spans x -0.10..0.80
+CONVEYOR_XY = (0.42, 0.55)
+CONVEYOR_HALF = (0.35, 0.20, 0.20)  # top at 0.40, spans x 0.07..0.77
 
 # Worker path: enters walking +y along x = WORKER_X, pauses inside the sweep, walks back.
 WORKER_X = 0.72  # torso surface at x 0.56, arms at 0.48: on the transfer path
@@ -188,11 +188,15 @@ KP_NULL = 1.0
 CATCHUP_R = 0.30
 CATCHUP_BAND = 0.15
 JOINT_LIMIT_MARGIN = 0.05  # rad, joint-limit barriers h = (q_max - m) - q and q - (q_min + m)
+JOINT_LIMIT_CLASS_K = 5.0  # a joint 0.3 rad from its stop may still move at 1.5 rad/s toward it
 DWELL_S = 0.3
 Z_ABOVE_BIN = 0.80
 Z_BIN = 0.47
-Z_ABOVE_CONV = 0.85
-Z_CONV = 0.52
+# Drop point (0.42, 0.52): the earlier (0.45, 0.60, 0.85) hover needed 98 % of joint 6's
+# range to keep the tool vertical, so the joint-limit barriers clipped the nominal there.
+DROP_XY = (0.42, 0.52)
+Z_ABOVE_CONV = 0.78
+Z_CONV = 0.56
 # Joint configuration with the tool at bin_above pointing down (solved once with
 # ``_solve_home`` below and frozen here so the example does not run IK at import).
 Q_HOME = (-0.8350, 0.5044, -0.0153, -1.1332, 0.0074, 1.5040, -0.8000)
@@ -501,7 +505,9 @@ def arm_worker_barriers(
     )
 
 
-def joint_limit_barriers(plant: CellPlant, *, margin: float = JOINT_LIMIT_MARGIN, class_k_gain: float = CLASS_K) -> CertificateCollection:
+def joint_limit_barriers(
+    plant: CellPlant, *, margin: float = JOINT_LIMIT_MARGIN, class_k_gain: float = JOINT_LIMIT_CLASS_K
+) -> CertificateCollection:
     """Fourteen relative-degree-1 barriers keeping each joint ``margin`` inside its range."""
     n = plant.state_dim + 4
     q_min = np.asarray(plant.q_min) + margin
@@ -553,8 +559,8 @@ def _segments() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """The pick-place cycle as ``(t_start, duration, p0, p1)`` arrays; dwell = ``p0 == p1``."""
     bin_above = np.array([BIN_XY[0], BIN_XY[1], Z_ABOVE_BIN])
     bin_pt = np.array([BIN_XY[0], BIN_XY[1], Z_BIN])
-    conv_above = np.array([CONVEYOR_XY[0], CONVEYOR_XY[1], Z_ABOVE_CONV])
-    conv_pt = np.array([CONVEYOR_XY[0], CONVEYOR_XY[1], Z_CONV])
+    conv_above = np.array([DROP_XY[0], DROP_XY[1], Z_ABOVE_CONV])
+    conv_pt = np.array([DROP_XY[0], DROP_XY[1], Z_CONV])
     legs = [
         (bin_above, conv_above),
         (conv_above, conv_pt),
