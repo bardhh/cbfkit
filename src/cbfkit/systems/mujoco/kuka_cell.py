@@ -32,6 +32,7 @@ from mujoco import mjx
 from cbfkit.certificates import certificate_package, concatenate_certificates
 from cbfkit.certificates.conditions.barrier_conditions import zeroing_barriers
 from cbfkit.controllers.cbf_clf import vanilla_cbf_clf_qp_controller
+from cbfkit.optimization.quadratic_program.solver_registry import get_solver
 from cbfkit.systems.mujoco.plant import MujocoPlant
 from cbfkit.utils.user_types import (
     CertificateCollection,
@@ -61,6 +62,7 @@ __all__ = [
     "QD_MAX",
     "QD_LIMITS",
     "SLACK_PENALTY",
+    "QP_SOLVER",
     "CLASS_K",
     "V_TOOL",
     "A_TOOL",
@@ -82,7 +84,10 @@ __all__ = [
     "embedded_arm_worker",
     "tool_pose",
     "pick_place_reference",
+    "osc_velocity",
+    "phase_rate",
     "osc_nominal",
+    "joint_limit_barriers",
     "safe_arm_controller",
     "build",
 ]
@@ -152,7 +157,7 @@ H_NAMES: Tuple[str, ...] = tuple(f"{a}/{c}" for a in ARM_SPHERE_NAMES for c in W
 
 # Safety filter.
 D0 = 0.10
-TAU = 0.25
+TAU = 0.15
 # iiwa14 datasheet joint speed limits (85, 85, 100, 75, 130, 135, 135 deg/s).
 QD_LIMITS = (1.48, 1.48, 1.75, 1.31, 2.27, 2.36, 2.36)
 QD_MAX = max(QD_LIMITS)
@@ -160,10 +165,15 @@ QD_MAX = max(QD_LIMITS)
 # closes at 1.1 m/s and the base joint only turns at 1.48 rad/s, so a late start saturates
 # the joints and leaves the QP infeasible.
 CLASS_K = 1.0
-# The CBF rows are soft with this penalty: a fixed-base arm can be walked into faster than
-# it can fold away, and a hard QP then has no solution at all (status 5) and the run stops.
-# With the penalty the QP always answers, and the slack is logged so a clip can show it.
-SLACK_PENALTY = 1e4
+# The CBF rows are soft with this penalty (the generator's default): a fixed-base arm can be
+# walked into faster than it can fold away, and a hard QP then has no solution. With the
+# penalty the QP always answers, and the slack is logged so a clip can show it.
+SLACK_PENALTY = 2e3
+# jaxopt's OSQP hits its 10 000-iteration cap on this QP once the arm is folded back and
+# the box limits and several barrier rows are active together (measured 2026-09-23 at
+# t = 2.7 s: status 5, relaxed or not); the registry's "fast" solver converges in ~16.
+QP_SOLVER = "fast"
+QP_TOL = 1e-8  # the fast solver's default 1e-6 leaves a 1e-3 rad/s residue on a pure projection
 
 # Nominal task.
 V_TOOL = 1.2
@@ -171,6 +181,12 @@ A_TOOL = 3.0
 KP_POS = 6.0
 KP_ORI = 4.0
 KP_NULL = 1.0
+# The cycle clock only advances while the tool is within CATCHUP_R of its reference (a
+# smooth ramp to zero over CATCHUP_BAND): a blocked arm holds its place in the cycle and
+# resumes from there instead of chasing a reference that ran on without it.
+CATCHUP_R = 0.30
+CATCHUP_BAND = 0.15
+JOINT_LIMIT_MARGIN = 0.05  # rad, joint-limit barriers h = (q_max - m) - q and q - (q_min + m)
 DWELL_S = 0.3
 Z_ABOVE_BIN = 0.80
 Z_BIN = 0.47
@@ -484,6 +500,29 @@ def arm_worker_barriers(
     )
 
 
+def joint_limit_barriers(plant: CellPlant, *, margin: float = JOINT_LIMIT_MARGIN, class_k_gain: float = CLASS_K) -> CertificateCollection:
+    """Fourteen relative-degree-1 barriers keeping each joint ``margin`` inside its range."""
+    n = plant.state_dim + 4
+    q_min = np.asarray(plant.q_min) + margin
+    q_max = np.asarray(plant.q_max) - margin
+
+    def factory(i: int, upper: bool):
+        def h(x):
+            return (q_max[i] - x[i]) if upper else (x[i] - q_min[i])
+
+        return h
+
+    package = certificate_package(factory, n=n, input_style="state")
+    conditions = zeroing_barriers.linear_class_k(class_k_gain)
+    return concatenate_certificates(
+        *[
+            package(certificate_conditions=conditions, i=i, upper=upper)
+            for i in range(N_ARM)
+            for upper in (False, True)
+        ]
+    )
+
+
 def embedded_arm_worker(state_dim: int) -> DynamicsCallable:
     """Reduced model on ``[x | px, py, vx, vy]``: ``d/dt qpos = u`` and a constant-velocity worker."""
     n = state_dim + 4
@@ -580,57 +619,95 @@ def pick_place_reference(t) -> Tuple[Array, Array]:
     return p0 + s * direction, v * direction
 
 
-def osc_nominal(plant: CellPlant):
-    """Resolved-rate operational-space controller tracking :func:`pick_place_reference`.
+def osc_velocity(plant: CellPlant, q, phase) -> Array:
+    """Resolved-rate joint velocity toward :func:`pick_place_reference` at cycle time ``phase``.
 
-    Task: tool position plus tool axis pointing down; damped pseudo-inverse with a
-    null-space pull toward :data:`Q_HOME`; clipped to ``+/- QD_MAX``. Signature matches
-    ``simulator.execute(nominal_controller=...)``: ``(t, x, key, ref) -> (qdot, ControllerData)``.
+    Task: tool position plus tool axis pointing down. The position command
+    ``KP_POS * e + v_des`` is saturated at ``V_TOOL`` so a distant reference asks for the
+    cycle speed, not more; damped pseudo-inverse with a null-space pull toward
+    :data:`Q_HOME`; clipped to the datasheet joint speeds.
     """
     q_home = jnp.asarray(Q_HOME)
     a_des = jnp.array([0.0, 0.0, -1.0])
     lam2 = 1e-3
 
-    def task(q):
-        p, a = tool_pose(plant, q)
+    def task(qq):
+        p, a = tool_pose(plant, qq)
         return jnp.concatenate([p, a])
 
+    y = task(q)
+    jac = jax.jacfwd(task)(q)
+    p_des, v_des = pick_place_reference(phase)
+    v_cmd = KP_POS * (p_des - y[:3]) + v_des
+    speed = _safe_norm(v_cmd)
+    v_cmd = jnp.where(speed > V_TOOL, v_cmd * (V_TOOL / speed), v_cmd)
+    err = jnp.concatenate([v_cmd, KP_ORI * (a_des - y[3:])])
+    jjt = jac @ jac.T + lam2 * jnp.eye(6)
+    j_pinv = jac.T @ jnp.linalg.solve(jjt, jnp.eye(6))
+    qd = j_pinv @ err + (jnp.eye(N_ARM) - j_pinv @ jac) @ (KP_NULL * (q_home - q))
+    lim = jnp.asarray(QD_LIMITS)
+    return jnp.clip(qd, -lim, lim)
+
+
+def phase_rate(plant: CellPlant, q, phase) -> Array:
+    """How fast the cycle clock runs (0..1) given the tool's distance to its reference."""
+    p_des, _ = pick_place_reference(phase)
+    e = _safe_norm(p_des - tool_pose(plant, q)[0])
+    return jnp.clip(1.0 - (e - CATCHUP_R) / CATCHUP_BAND, 0.0, 1.0)
+
+
+def osc_nominal(plant: CellPlant):
+    """Stateless variant of :func:`osc_velocity` on the wall clock, for tests and the simulator.
+
+    Signature matches ``simulator.execute(nominal_controller=...)``:
+    ``(t, x, key, ref) -> (qdot, ControllerData)``. :func:`safe_arm_controller` does not use
+    this value -- it recomputes the nominal from the cycle phase it carries -- but
+    ``execute`` needs a nominal and this keeps ``u_nom`` meaningful in the log.
+    """
+
     def nominal(t, x, key=None, ref=None):
-        q = x[:N_ARM]
-        y = task(q)
-        jac = jax.jacfwd(task)(q)
-        p_des, v_des = pick_place_reference(t)
-        err = jnp.concatenate([KP_POS * (p_des - y[:3]) + v_des, KP_ORI * (a_des - y[3:])])
-        jjt = jac @ jac.T + lam2 * jnp.eye(6)
-        j_pinv = jac.T @ jnp.linalg.solve(jjt, jnp.eye(6))
-        qd = j_pinv @ err + (jnp.eye(N_ARM) - j_pinv @ jac) @ (KP_NULL * (q_home - q))
-        return jnp.clip(qd, -jnp.asarray(QD_LIMITS), jnp.asarray(QD_LIMITS)), ControllerData()
+        return osc_velocity(plant, x[:N_ARM], t), ControllerData()
 
     return nominal
 
 
 # --------------------------------------------------------------------------- safety layer
 def safe_arm_controller(cbf_qp: ControllerCallable, plant: CellPlant) -> ControllerCallable:
-    """Filter ``qdot_nom`` through ``cbf_qp`` on ``[x | worker]`` and assemble the plant input.
+    """Filter the phase-held OSC nominal through ``cbf_qp`` on ``[x | worker]`` and build ``u``.
+
+    The cycle phase is carried in ``sub_data["_phase"]`` and advances at
+    :func:`phase_rate` (1 while the tool tracks, 0 when it is held away from its
+    reference), so the nominal resumes the cycle where it left off. The ``qdot_nom`` the
+    simulator passes in is ignored (see :func:`osc_nominal`).
 
     Logged in ``sub_data``: ``qdot_nom``, ``qdot_safe`` (7 each), ``worker`` (4), ``tool``
-    (3) and ``h`` (40, :data:`H_NAMES` order) plus whatever the QP logs.
+    (3), ``phase`` (1) and ``h`` (35, :data:`H_NAMES` order) plus whatever the QP logs.
     """
 
-    def controller(t, x, qdot_nom, key, data):
+    def controller(t, x, _qdot_nom_unused, key, data):
+        prev = data.sub_data if data.sub_data is not None else {}
+        phase = prev.get("_phase")
+        if phase is None:
+            phase = jnp.asarray(0.0)
+        q = x[:N_ARM]
         w = worker_state(t)
-        qdot_nom = jnp.asarray(qdot_nom, dtype=float)[:N_ARM]
+        qdot_nom = osc_velocity(plant, q, phase)
         xa = jnp.concatenate([x, w])
         qdot_safe, d1 = cbf_qp(t, xa, qdot_nom, key, data)
         qdot_safe = jnp.asarray(qdot_safe)[:N_ARM]
         yaw = worker_yaw(w[2:])
         u = jnp.concatenate([qdot_safe, jnp.array([w[0], w[1], 0.0]), worker_quat(yaw)])
         sub = dict(d1.sub_data) if d1.sub_data is not None else {}
+        for k, val in prev.items():
+            if k.startswith("_") and k not in sub:
+                sub[k] = val
+        sub["_phase"] = phase + plant.dt * phase_rate(plant, q, phase)
+        sub["phase"] = phase
         sub["qdot_nom"] = qdot_nom
         sub["qdot_safe"] = qdot_safe
         sub["worker"] = w
-        sub["tool"] = tool_pose(plant, x[:N_ARM])[0]
-        sub["h"] = barrier_values(plant, x[:N_ARM], w)
+        sub["tool"] = tool_pose(plant, q)[0]
+        sub["h"] = barrier_values(plant, q, w)
         return u, d1._replace(sub_data=sub, u=u, u_nom=qdot_nom)
 
     controller.__cbfkit_controller_adapter__ = True  # type: ignore[attr-defined]
@@ -644,13 +721,18 @@ def build(*, unfiltered: bool = False, offline: bool = False):
     projection onto the velocity box and ``qdot_safe == clip(qdot_nom)``.
     """
     plant = make_plant(offline=offline)
-    barriers = concatenate_certificates() if unfiltered else arm_worker_barriers(plant)
+    barriers = (
+        concatenate_certificates()
+        if unfiltered
+        else joint_limit_barriers(plant) + arm_worker_barriers(plant)
+    )
     cbf_qp = vanilla_cbf_clf_qp_controller(
         control_limits=jnp.asarray(QD_LIMITS),
         dynamics_func=embedded_arm_worker(plant.state_dim),
         barriers=barriers,
         relaxable_cbf=not unfiltered,
         slack_penalty_cbf=SLACK_PENALTY,
+        solver=get_solver(QP_SOLVER, tol=QP_TOL),
     )
     x0 = plant.to_state(plant._template.replace(qpos=jnp.asarray(Q_HOME)))
     return plant, x0, safe_arm_controller(cbf_qp, plant), osc_nominal(plant)

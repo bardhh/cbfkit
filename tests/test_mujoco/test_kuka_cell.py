@@ -162,8 +162,30 @@ def test_safe_controller_passes_through_when_unfiltered():
     qd, _ = nom(0.0, x0, None, None)
     u, d = ctrl(0.0, x0, qd, jax.random.PRNGKey(0), ControllerData())
     assert u.shape == (14,) and not bool(d.error)
-    assert np.allclose(np.asarray(u[:7]), np.clip(np.asarray(qd), -np.array(kc.QD_LIMITS), np.array(kc.QD_LIMITS)), atol=1e-3)
+    lim = np.array(kc.QD_LIMITS)
+    qd_nom = np.asarray(d.sub_data["qdot_nom"])
+    assert np.allclose(qd_nom, np.asarray(qd), atol=1e-9)  # phase 0 == wall clock 0
+    assert np.allclose(np.asarray(u[:7]), np.clip(qd_nom, -lim, lim), atol=1e-3)
     assert d.sub_data["h"].shape == (35,) and d.sub_data["worker"].shape == (4,)
+    # the cycle clock advances at full rate while the tool tracks its reference
+    assert abs(float(d.sub_data["_phase"]) - plant.dt) < 1e-9
+
+
+def test_phase_holds_when_the_tool_is_far_from_its_reference(plant):
+    q = jnp.asarray(kc.Q_HOME)
+    assert float(kc.phase_rate(plant, q, 0.0)) == 1.0  # at bin_above, on the reference
+    far_phase = kc._SEG_START[1] + 0.1  # reference is over the conveyor, a metre away
+    assert float(kc.phase_rate(plant, q, far_phase)) == 0.0
+
+
+def test_joint_limit_barriers_sign(plant):
+    coll = kc.joint_limit_barriers(plant)
+    assert len(coll.functions) == 14
+    x = jnp.concatenate([plant.to_state(plant.make_data()), jnp.zeros(4)])
+    h = np.array([float(f(0.0, x)) for f in coll.functions])
+    assert (h > 0).all()  # q = 0 is inside every range
+    x_hi = x.at[0].set(float(plant.q_max[0]))
+    assert float(coll.functions[1](0.0, x_hi)) < 0  # joint 1 at its upper stop
 
 
 def test_safe_controller_blocks_motion_toward_worker():
