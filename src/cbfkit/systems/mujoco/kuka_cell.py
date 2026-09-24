@@ -59,6 +59,8 @@ __all__ = [
     "D0",
     "TAU",
     "QD_MAX",
+    "QD_LIMITS",
+    "SLACK_PENALTY",
     "CLASS_K",
     "V_TOOL",
     "A_TOOL",
@@ -123,8 +125,11 @@ N_CAPSULES = len(WORKER_CAPSULES)
 
 # Representative arm collision spheres: (body name, index among that body's collision
 # geoms in the menagerie file). ``("link7", 1)`` is the tool sphere added by build_spec.
+# The shoulder sphere on link2 is deliberately absent: it sits 0.2 m from the base axis and
+# cannot get out of a walking worker's inflated keep-out, so a barrier on it makes the QP
+# infeasible the moment the worker passes the pedestal (measured 2026-09-23). The pedestal
+# is a fixed hazard the worker walks around; the arm's job is to keep its moving links clear.
 ARM_SPHERE_GEOMS: Tuple[Tuple[str, int], ...] = (
-    ("link2", 8),  # shoulder end of the upper arm
     ("link3", 7),  # upper-arm tip
     ("link4", 5),  # elbow
     ("link4", 2),  # forearm mid
@@ -134,7 +139,6 @@ ARM_SPHERE_GEOMS: Tuple[Tuple[str, int], ...] = (
     ("link7", 1),  # tool
 )
 ARM_SPHERE_NAMES = (
-    "shoulder",
     "upperarm",
     "elbow",
     "forearm",
@@ -149,8 +153,17 @@ H_NAMES: Tuple[str, ...] = tuple(f"{a}/{c}" for a in ARM_SPHERE_NAMES for c in W
 # Safety filter.
 D0 = 0.10
 TAU = 0.25
-QD_MAX = 1.5
-CLASS_K = 3.0
+# iiwa14 datasheet joint speed limits (85, 85, 100, 75, 130, 135, 135 deg/s).
+QD_LIMITS = (1.48, 1.48, 1.75, 1.31, 2.27, 2.36, 2.36)
+QD_MAX = max(QD_LIMITS)
+# Linear class-K gain. 1.0 (not 3.0) so the retreat starts about a metre out: the worker
+# closes at 1.1 m/s and the base joint only turns at 1.48 rad/s, so a late start saturates
+# the joints and leaves the QP infeasible.
+CLASS_K = 1.0
+# The CBF rows are soft with this penalty: a fixed-base arm can be walked into faster than
+# it can fold away, and a hard QP then has no solution at all (status 5) and the run stops.
+# With the penalty the QP always answers, and the slack is logged so a clip can show it.
+SLACK_PENALTY = 1e4
 
 # Nominal task.
 V_TOOL = 1.2
@@ -591,7 +604,7 @@ def osc_nominal(plant: CellPlant):
         jjt = jac @ jac.T + lam2 * jnp.eye(6)
         j_pinv = jac.T @ jnp.linalg.solve(jjt, jnp.eye(6))
         qd = j_pinv @ err + (jnp.eye(N_ARM) - j_pinv @ jac) @ (KP_NULL * (q_home - q))
-        return jnp.clip(qd, -QD_MAX, QD_MAX), ControllerData()
+        return jnp.clip(qd, -jnp.asarray(QD_LIMITS), jnp.asarray(QD_LIMITS)), ControllerData()
 
     return nominal
 
@@ -633,9 +646,11 @@ def build(*, unfiltered: bool = False, offline: bool = False):
     plant = make_plant(offline=offline)
     barriers = concatenate_certificates() if unfiltered else arm_worker_barriers(plant)
     cbf_qp = vanilla_cbf_clf_qp_controller(
-        control_limits=QD_MAX * jnp.ones(N_ARM),
+        control_limits=jnp.asarray(QD_LIMITS),
         dynamics_func=embedded_arm_worker(plant.state_dim),
         barriers=barriers,
+        relaxable_cbf=not unfiltered,
+        slack_penalty_cbf=SLACK_PENALTY,
     )
     x0 = plant.to_state(plant._template.replace(qpos=jnp.asarray(Q_HOME)))
     return plant, x0, safe_arm_controller(cbf_qp, plant), osc_nominal(plant)

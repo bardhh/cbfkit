@@ -92,14 +92,16 @@ CONTACT_RGBA = (0.90, 0.10, 0.10, 0.55)
 class _Geometry:
     """Kinematics on the *physics* model, so the arm sphere ids match the simulation's."""
 
-    def __init__(self, offline: bool) -> None:
+    def __init__(self, offline: bool, arm_geoms: Optional[np.ndarray] = None) -> None:
         self.model = kc.load_cell(offline=offline)
         self.data = mujoco.MjData(self.model)
-        plant_geoms = []
-        for body, k in kc.ARM_SPHERE_GEOMS:
-            geoms = kc._collision_geoms(self.model, body)
-            plant_geoms.append(int(geoms[k]))
-        self.arm_geoms = np.asarray(plant_geoms, dtype=int)
+        if arm_geoms is None:  # a log that predates the ``arm_geoms`` key: the current set
+            plant_geoms = []
+            for body, k in kc.ARM_SPHERE_GEOMS:
+                geoms = kc._collision_geoms(self.model, body)
+                plant_geoms.append(int(geoms[k]))
+            arm_geoms = np.asarray(plant_geoms)
+        self.arm_geoms = np.asarray(arm_geoms, dtype=int).reshape(-1)
         self.arm_r = np.asarray(self.model.geom_size[self.arm_geoms, 0], dtype=float)
 
     def spheres(self, q: np.ndarray) -> np.ndarray:
@@ -152,7 +154,8 @@ def _prepare(run: Run, offline: bool) -> Dict[str, Any]:
         p_ref=p_ref,
         intervention=intervention,
         d0=d0,
-        geometry=_Geometry(offline),
+        geometry=_Geometry(offline, run.get("arm_geoms")),
+        n_spheres=run.h.shape[1] // kc.N_CAPSULES,  # the log's sphere set, not the module's
         trail_n=max(2, int(round(TRAIL_S / run.dt))),
     )
 
@@ -165,7 +168,7 @@ def _sphere(scn: mujoco.MjvScene, centre: np.ndarray, r: float, rgba) -> int:
 
 def _keepout_capsules(scn: mujoco.MjvScene, run: Run, k: int, prep: Dict[str, Any]) -> None:
     a, b, r = _capsules_world(prep["worker"][k])
-    h = run.h[k].reshape(kc.N_SPHERES, kc.N_CAPSULES)
+    h = run.h[k].reshape(prep["n_spheres"], kc.N_CAPSULES)
     for j in range(kc.N_CAPSULES):
         rgba = h_rgba(float(h[:, j].min()), KEEPOUT_ALPHA)
         radius = float(r[j] + prep["d0"])
@@ -276,7 +279,13 @@ def _hud_kwargs(run: Run, prep: Dict[str, Any], k: int, mode: str) -> Dict[str, 
     flags: Dict[str, bool] = {"CONTACT": bool(prep["contact"][kk])}
     if status is not None:
         flags["QP not converged"] = int(np.asarray(status).reshape(-1)[kk]) != 1
+    # A relaxed run logs one slack column per barrier after the n_u velocity columns.
+    slack: Optional[float] = None
+    sol = run.get("sol")
+    if run.relax and sol is not None and sol.ndim == 2 and sol.shape[1] > run.n_u:
+        slack = float(np.max(np.asarray(sol[kk], dtype=float)[run.n_u :]))
     return dict(
+        slack=slack,
         t=float(run.t[kk]),
         h_min=float(run.h_min[kk]),
         h_hist=run.h_min[: kk + 1],
@@ -287,7 +296,7 @@ def _hud_kwargs(run: Run, prep: Dict[str, Any], k: int, mode: str) -> Dict[str, 
         mode=mode,
         intervention_caption=f"intervention  {value:.2f} rad/s",
         h_label="h_min (m)",
-        full_scale=kc.QD_MAX,
+        full_scale=float(kc.QD_MAX),
     )
 
 

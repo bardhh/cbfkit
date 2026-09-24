@@ -105,16 +105,16 @@ def test_plant_layout_and_ctrl_map_moves_worker(plant):
 def test_barriers_are_positive_far_and_negative_in_contact(plant):
     q = jnp.asarray(kc.Q_HOME)
     far = kc.barrier_values(plant, q, jnp.array([0.85, -2.4, 0.0, 0.0]))
-    assert far.shape == (40,) and bool((far > 0).all())
+    assert far.shape == (35,) and bool((far > 0).all())
     tool = np.asarray(kc.tool_pose(plant, q)[0])
     inside = kc.barrier_values(plant, q, jnp.array([tool[0], tool[1], 0.0, 0.0]))
     assert bool((inside < 0).any())
-    assert len(kc.H_NAMES) == 40 and kc.H_NAMES[-1] == "tool/r_arm"
+    assert len(kc.H_NAMES) == 35 and kc.H_NAMES[-1] == "tool/r_arm"
 
 
 def test_certificate_collection_matches_barrier_values(plant):
     coll = kc.arm_worker_barriers(plant)
-    assert len(coll.functions) == 40
+    assert len(coll.functions) == 35
     x = plant.to_state(plant.make_data().replace(qpos=jnp.asarray(kc.Q_HOME)))
     w = jnp.array([0.85, -0.3, 0.0, 1.1])
     xa = jnp.concatenate([x, w])
@@ -151,7 +151,7 @@ def test_osc_drives_tool_toward_reference(plant):
     p0, _ = kc.tool_pose(plant, q)
     pd, _ = kc.pick_place_reference(0.0)
     qd, _ = nom(0.0, x, None, None)
-    assert qd.shape == (7,) and float(jnp.abs(qd).max()) <= kc.QD_MAX + 1e-6
+    assert qd.shape == (7,) and bool((jnp.abs(qd) <= jnp.asarray(kc.QD_LIMITS) + 1e-6).all())
     p1, _ = kc.tool_pose(plant, q + 0.05 * qd)
     assert float(jnp.linalg.norm(p1 - pd)) < float(jnp.linalg.norm(p0 - pd))
 
@@ -162,8 +162,8 @@ def test_safe_controller_passes_through_when_unfiltered():
     qd, _ = nom(0.0, x0, None, None)
     u, d = ctrl(0.0, x0, qd, jax.random.PRNGKey(0), ControllerData())
     assert u.shape == (14,) and not bool(d.error)
-    assert np.allclose(np.asarray(u[:7]), np.clip(np.asarray(qd), -kc.QD_MAX, kc.QD_MAX), atol=1e-3)
-    assert d.sub_data["h"].shape == (40,) and d.sub_data["worker"].shape == (4,)
+    assert np.allclose(np.asarray(u[:7]), np.clip(np.asarray(qd), -np.array(kc.QD_LIMITS), np.array(kc.QD_LIMITS)), atol=1e-3)
+    assert d.sub_data["h"].shape == (35,) and d.sub_data["worker"].shape == (4,)
 
 
 def test_safe_controller_blocks_motion_toward_worker():
@@ -176,13 +176,13 @@ def test_safe_controller_blocks_motion_toward_worker():
     q = x0[:7]
     dh = jax.grad(lambda qq: kc.barrier_values(plant, qq, w).min())(q)
     sign = -np.sign(float(dh[0]))
-    qd_nom = jnp.zeros(7).at[0].set(sign * kc.QD_MAX)
+    qd_nom = jnp.zeros(7).at[0].set(sign * kc.QD_LIMITS[0])
     u, d = ctrl(t, x0, qd_nom, jax.random.PRNGKey(0), ControllerData())
     assert not bool(d.error)
     h_min = float(np.asarray(d.sub_data["h"]).min())
     dh_dt_nom = float(dh[0] * qd_nom[0])
     # Either the constraint is inactive at this distance, or the QP cut the command.
-    assert dh_dt_nom >= -kc.CLASS_K * h_min - 1e-6 or abs(float(u[0])) < kc.QD_MAX - 1e-3
+    assert dh_dt_nom >= -kc.CLASS_K * h_min - 1e-6 or abs(float(u[0])) < kc.QD_LIMITS[0] - 1e-3
 
 
 # --------------------------------------------------------------------------- Task 7
@@ -206,7 +206,7 @@ def test_simulate_writes_showcase_npz(tmp_path):
         )
         assert proc.returncode == 0, proc.stderr[-3000:]
     with np.load(tmp_path / "kuka_cell.npz") as a:
-        assert a["states"].shape == (5, 17) and a["h"].shape == (5, 40)
+        assert a["states"].shape == (5, 17) and a["h"].shape == (5, 35)
         assert str(a["plant_kind"]) == "iiwa14" and a["contact"].dtype == bool
         assert a["worker"].shape == (5, 4) and a["tool"].shape == (5, 3)
         assert a["com"].shape == (5, 2) and not bool(a["unfiltered"])

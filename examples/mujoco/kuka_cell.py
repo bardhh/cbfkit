@@ -75,7 +75,8 @@ def _passthrough_dev(cd: Dict[str, Any], enforce: bool) -> float:
     live = ~np.asarray(cd["error"], dtype=bool)
     if not live.any():
         raise RuntimeError("the controller errored on every step")
-    dev = float(np.abs(safe[live] - np.clip(nom[live], -kc.QD_MAX, kc.QD_MAX)).max())
+    lim = np.asarray(kc.QD_LIMITS)
+    dev = float(np.abs(safe[live] - np.clip(nom[live], -lim, lim)).max())
     if enforce:
         print(f"unfiltered check: max |qdot_safe - clip(qdot_nom)| = {dev:.2e}")
         if not np.isfinite(dev) or dev > UNFILTERED_TOL:
@@ -166,7 +167,7 @@ def simulate(
         duration=np.float64(duration),
         wall_s=np.float64(wall),
         n_u=np.int64(kc.N_ARM),
-        relax=np.bool_(False),
+        relax=np.bool_(not unfiltered),
         contact=contact,
         qp_dev_max=np.float64(dev),
         worker_capsules_r=np.array([r for _, _, r in kc.WORKER_CAPSULES]),
@@ -174,7 +175,8 @@ def simulate(
         arm_geoms=np.asarray(plant.arm_geoms, dtype=np.int64),
         d0=np.float64(kc.D0),
         tau=np.float64(kc.TAU),
-        qd_max=np.float64(kc.QD_MAX),
+        qd_limits=np.asarray(kc.QD_LIMITS, dtype=float),
+        class_k=np.float64(kc.CLASS_K),
         worker_enter=np.float64(kc.WORKER_T_ENTER),
         config=np.array(
             f"kuka_cell.py simulate{' --unfiltered' if unfiltered else ''} "
