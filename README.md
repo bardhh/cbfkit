@@ -242,7 +242,7 @@ and states what the experiment does and does not establish.
 
 ### MuJoCo/MJX: humanoid locomotion under reduced-order CBFs
 
-Left: the same walking policy with no safety filter. Right: CBFKit.
+Left: the same nominal controller with no safety filter. Right: CBFKit.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_navigate_side_by_side.gif" width="100%" alt="Goal past an obstacle. Left: the walking policy alone walks through the keep-out. Right: the robust CoM CBF bends the path around it.">
@@ -260,6 +260,10 @@ Left: the same walking policy with no safety filter. Right: CBFKit.
   <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/g1_scramble_side_by_side.gif" width="100%" alt="26 pedestrians who never yield to the robot. Left: the goal-directed policy collides in the crush. Right: social MPPI in front of a relaxed CBF-QP crosses with the barrier positive throughout.">
 </p>
 <p align="center"><em>26 pedestrians who never yield to the robot. Left: the goal-directed policy collides in the crush. Right: social MPPI in front of a relaxed CBF-QP crosses with the barrier positive throughout.</em></p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/bardhh/cbfkit/main/media/showcase/kuka_cell_side_by_side.gif" width="100%" alt="KUKA iiwa14 palletising cell with a worker walking through the transfer arc. Left: the pick-and-place controller strikes the worker (slow motion around the impact). Right: a CBF-QP on the commanded joint velocities folds the arm back, holds, and resumes the cycle once the worker has passed.">
+</p>
+<p align="center"><em>KUKA iiwa14 palletising cell with a worker walking through the transfer arc. Left: the pick-and-place controller strikes the worker (slow motion around the impact). Right: a CBF-QP on the commanded joint velocities folds the arm back, holds, and resumes the cycle once the worker has passed.</em></p>
 
 A Unitree G1 runs in MJX through `sim.execute(plant=MujocoPlant(...))` with a pretrained
 walking policy underneath and a CBF-QP on the centre-of-mass command above it: keep-out
@@ -274,6 +278,15 @@ barrier value of both runs. The clips are rendered from logged runs by
 `render --side-by-side`); the scramble uses 26 pedestrians and the corridor a 1.5 m gap,
 where the examples' own defaults are 40 and 1.25 m.
 
+The fifth clip is a fixed-base arm, [`examples/mujoco/kuka_cell.py`](examples/mujoco/kuka_cell.py):
+a KUKA iiwa14 on a pedestal cycling parts from a bin to a conveyor while a worker walks
+through its sweep. The nominal is an operational-space pick-and-place controller; the filter
+is a CBF-QP on the commanded joint velocities with one barrier per arm collision sphere and
+worker capsule (surface distance minus a margin that grows with the worker's speed), plus
+joint-limit barriers. The worker is a kinematic MuJoCo body, so the strike on the left is a
+physical contact; on the right the barrier never goes negative and the cycle resumes where it
+was held. The clip slows to a quarter speed around the impact.
+
 ```bash
 pip install "cbfkit[mujoco] @ git+https://github.com/bardhh/cbfkit.git"
 python examples/mujoco/g1_navigate.py
@@ -283,6 +296,7 @@ python examples/mujoco/g1_navigate.py
 [Certified sidestep](examples/mujoco/g1_corridor.py) ·
 [Plaza among pedestrians](examples/mujoco/g1_plaza.py) ·
 [Goal past an obstacle](examples/mujoco/g1_navigate.py) ·
+[KUKA cell with a crossing worker](examples/mujoco/kuka_cell.py) ·
 [Sampling MPC over MJX rollouts](src/cbfkit/controllers/mjx_sampling_mpc/)
 
 ### ROS2
