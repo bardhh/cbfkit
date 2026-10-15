@@ -20,7 +20,7 @@ Layers, from the plant up:
   wrapped for ``simulator.execute(plant=...)``.
 """
 
-from typing import Any, Optional, Sequence, Tuple
+from typing import Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -506,7 +506,10 @@ def arm_worker_barriers(
 
 
 def joint_limit_barriers(
-    plant: CellPlant, *, margin: float = JOINT_LIMIT_MARGIN, class_k_gain: float = JOINT_LIMIT_CLASS_K
+    plant: CellPlant,
+    *,
+    margin: float = JOINT_LIMIT_MARGIN,
+    class_k_gain: float = JOINT_LIMIT_CLASS_K,
 ) -> CertificateCollection:
     """Fourteen relative-degree-1 barriers keeping each joint ``margin`` inside its range."""
     n = plant.state_dim + 4
