@@ -449,3 +449,14 @@ def test_render_model_unitree12_applies_the_showcase_look(monkeypatch):
     data = mujoco.MjData(model)
     data.qpos[:] = np.zeros(model.nq)
     mujoco.mj_kinematics(model, data)
+
+
+def test_apply_showcase_look_on_a_bare_spec():
+    xml = "<mujoco><worldbody><light pos='0 0 1'/><body><geom size='0.1'/></body></worldbody></mujoco>"
+    spec = mujoco.MjSpec.from_string(xml)
+    showcase.apply_showcase_look(spec, floor="plain")
+    m = spec.compile()
+    assert m.nlight == 2  # key + fill; the source light is gone
+    assert mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_MATERIAL, "cbfkit_showcase_ground") >= 0
+    with pytest.raises(ValueError, match="floor"):
+        showcase.apply_showcase_look(spec, floor="lava")

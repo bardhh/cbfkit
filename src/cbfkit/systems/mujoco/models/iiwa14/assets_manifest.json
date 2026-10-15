@@ -1,0 +1,19 @@
+{
+ "commit": "da76818e269b82289eba39808e2fb91d679d6994",
+ "robot": "kuka_iiwa_14",
+ "files": {
+  "band.obj": "02cf16a93140489da3b05ce6bb30c5498bedaa5e5a77e56850ddbedb8d1ed23e",
+  "kuka.obj": "204a82d597d450f2a207731f8e3c17089f2de5a54c0d61feac454e96e325b834",
+  "link_0.obj": "6b607f6b5a601874863897ebfbb9821eb0c831c3115bca8350bf7856db6aaeee",
+  "link_1.obj": "47a82247b647639c3e1f384ce5b980d374323ca737d6ebc87447667a71981798",
+  "link_2_grey.obj": "842b8c3a9148b2fdf9c57ddfd80b595f8251792f94b71276dc9ce9a16674ba1a",
+  "link_2_orange.obj": "0d2d8829d89aa888ee04b0d97bed5f215fa0d9fd03d0d4cee2b2e0c8dd3c0124",
+  "link_3.obj": "b02d157e8090d82bfb78e7fd4dcd351033e0a5d7bb1937da01e66e7ff91a03a8",
+  "link_4_grey.obj": "e4555ea6954fffa40174baee25e6dd1b9efcc3eaf830b6e91d13e2ddc10b414a",
+  "link_4_orange.obj": "ef4cf2102e9df98636ff03b82d49d914a6e730b299b0a982d64947f038136cb7",
+  "link_5.obj": "f0eef60cddf06e46bd943abcc49ada87510f095f2840bc9c117ed7a2b1a6a787",
+  "link_6_grey.obj": "5b5f9883d4fc181c7aa06cb2037debfa4ca857fa0c3a5d55f8fd3e34d38c3100",
+  "link_6_orange.obj": "54aa0141e7f48497302f45daf074fd5c69320c620618c12fa76e8841c2a8a9fc",
+  "link_7.obj": "7307d0c852715ea234e575a0617ea2d8faf053469e7b823ac0c7c6c4dff36dad"
+ }
+}

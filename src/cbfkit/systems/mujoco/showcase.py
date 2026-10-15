@@ -34,6 +34,7 @@ Vec = Union[Sequence[float], np.ndarray]
 __all__ = [
     "PLANT_KINDS",
     "render_model",
+    "apply_showcase_look",
     "source_xml",
     "h_rgba",
     "disc",
@@ -242,6 +243,24 @@ def _set_showcase_visual(spec: mujoco.MjSpec) -> None:
     spec.visual.global_.offheight = OFFHEIGHT
 
 
+def apply_showcase_look(spec: mujoco.MjSpec, floor: str = "grid") -> None:
+    """Give a spec the showcase studio look in place: sky, floor, key/fill lights, visual settings.
+
+    Existing lights and skybox textures are removed first so the look is the same whatever
+    the source scene shipped with. ``floor`` is one of :data:`FLOOR_STYLES`. This is what
+    :func:`render_model` applies to a plant's own MJCF; scenes assembled from a spec at
+    runtime (the KUKA cell) call it directly.
+    """
+    if floor not in FLOOR_STYLES:
+        raise ValueError(f"unknown floor {floor!r}; expected one of {FLOOR_STYLES}")
+    _clear_lights(spec)
+    _clear_skyboxes(spec)
+    _add_showcase_sky(spec)
+    _add_showcase_floor(spec, floor)
+    _add_showcase_lights(spec)
+    _set_showcase_visual(spec)
+
+
 def render_model(plant_kind: str, *, offline: bool = False, floor: str = "grid") -> mujoco.MjModel:
     """Compile a render-only ``MjModel`` for ``plant_kind`` with the showcase studio look.
 
@@ -263,12 +282,7 @@ def render_model(plant_kind: str, *, offline: bool = False, floor: str = "grid")
     spec = mujoco.MjSpec.from_file(str(src))
     reference = spec.compile()
     source_layout = (reference.nq, reference.nv)
-    _clear_lights(spec)
-    _clear_skyboxes(spec)
-    _add_showcase_sky(spec)
-    _add_showcase_floor(spec, floor)
-    _add_showcase_lights(spec)
-    _set_showcase_visual(spec)
+    apply_showcase_look(spec, floor)
     model = spec.compile()
     if (model.nq, model.nv) != source_layout:
         raise RuntimeError(
