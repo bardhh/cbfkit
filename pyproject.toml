@@ -99,7 +99,7 @@ quality = [
     "ruff==0.16.8",
     "black==25.11.0",
     "isort==7.0.0",
-    "pre-commit==4.3.0",
+    "pre-commit==4.6.2",
     "types-PyYAML==6.0.12.20260906",
 ]
 build = ["build>=1.0", "twine>=5.0"]
